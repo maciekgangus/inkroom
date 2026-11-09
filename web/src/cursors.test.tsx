@@ -33,12 +33,24 @@ describe("Cursors", () => {
 		viewport.x = 100;
 		viewport.y = 50;
 		viewport.scale = 2;
-		render(<Cursors viewport={viewport} cursors={[{ id: "a", name: "Ola", x: 150, y: 80 }]} />, root);
+		render(
+			<Cursors
+				viewport={viewport}
+				cursors={[{ id: "a", name: "Ola", x: 150, y: 80 }]}
+			/>,
+			root,
+		);
 		expect(items()[0].style.transform).toBe("translate(100px, 60px)");
 	});
 
 	test("colours a cursor by its owner", () => {
-		render(<Cursors viewport={viewport} cursors={[{ id: "a", name: "Ola", x: 0, y: 0 }]} />, root);
+		render(
+			<Cursors
+				viewport={viewport}
+				cursors={[{ id: "a", name: "Ola", x: 0, y: 0 }]}
+			/>,
+			root,
+		);
 		const probe = document.createElement("span");
 		probe.style.color = cursorColor("a");
 		expect(items()[0].style.color).toBe(probe.style.color);
@@ -46,6 +58,8 @@ describe("Cursors", () => {
 
 	test("never intercepts the pointer, so drawing under it still works", () => {
 		render(<Cursors viewport={viewport} cursors={[]} />, root);
-		expect(root.querySelector(".cursors")?.getAttribute("aria-hidden")).toBe("true");
+		expect(root.querySelector(".cursors")?.getAttribute("aria-hidden")).toBe(
+			"true",
+		);
 	});
 });

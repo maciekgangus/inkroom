@@ -248,7 +248,9 @@ describe("SyncClient", () => {
 			connectAndJoin();
 			client.cursorMove(12.5, 40);
 			flush();
-			expect(cursorsSent()).toEqual([{ t: "cursor", id: "me", name: "Ola", x: 12.5, y: 40 }]);
+			expect(cursorsSent()).toEqual([
+				{ t: "cursor", id: "me", name: "Ola", x: 12.5, y: 40 },
+			]);
 		});
 
 		test("only the latest position is sent per flush, and an unchanged one is not repeated", () => {
@@ -285,7 +287,9 @@ describe("SyncClient", () => {
 			flush();
 			client.cursorHide();
 			client.cursorHide();
-			expect(cursorsSent().filter((m) => m.hidden)).toEqual([{ t: "cursor", id: "me", hidden: true }]);
+			expect(cursorsSent().filter((m) => m.hidden)).toEqual([
+				{ t: "cursor", id: "me", hidden: true },
+			]);
 		});
 
 		test("nothing is sent while disconnected", () => {
@@ -305,14 +309,18 @@ describe("SyncClient", () => {
 			connectAndJoin();
 			const before = (onUpdate as ReturnType<typeof vi.fn>).mock.calls.length;
 			sock().receive({ t: "cursor", id: "b", name: "Kuba", x: 5, y: 6 });
-			expect((onUpdate as ReturnType<typeof vi.fn>).mock.calls.length).toBe(before);
+			expect((onUpdate as ReturnType<typeof vi.fn>).mock.calls.length).toBe(
+				before,
+			);
 		});
 
 		test("a newer position replaces the older one", () => {
 			connectAndJoin();
 			sock().receive({ t: "cursor", id: "b", name: "Kuba", x: 5, y: 6 });
 			sock().receive({ t: "cursor", id: "b", name: "Kuba", x: 50, y: 60 });
-			expect(client.cursors()).toEqual([{ id: "b", name: "Kuba", x: 50, y: 60 }]);
+			expect(client.cursors()).toEqual([
+				{ id: "b", name: "Kuba", x: 50, y: 60 },
+			]);
 		});
 
 		test("hidden and cursor_drop remove cursors", () => {

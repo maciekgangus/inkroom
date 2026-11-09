@@ -13,7 +13,9 @@ describe("cursorColor", () => {
 	});
 
 	test("different people usually get different colours", () => {
-		const colours = new Set(Array.from({ length: 40 }, (_, i) => cursorColor(`user-${i}`)));
+		const colours = new Set(
+			Array.from({ length: 40 }, (_, i) => cursorColor(`user-${i}`)),
+		);
 		expect(colours.size).toBeGreaterThan(3);
 	});
 });
