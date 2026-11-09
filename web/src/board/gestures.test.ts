@@ -3,7 +3,13 @@ import { TouchGestures } from "./gestures";
 import { Viewport } from "./viewport";
 
 function touch(id: number, x: number, y: number) {
-	return { pointerId: id, pointerType: "touch", clientX: x, clientY: y, pressure: 0.5 };
+	return {
+		pointerId: id,
+		pointerType: "touch",
+		clientX: x,
+		clientY: y,
+		pressure: 0.5,
+	};
 }
 
 describe("TouchGestures", () => {
