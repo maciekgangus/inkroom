@@ -231,3 +231,32 @@ func TestUserFromRequest(t *testing.T) {
 		t.Fatal("no cookie should mean no user")
 	}
 }
+
+func TestErrorMessagesArePolish(t *testing.T) {
+	e := setup(t)
+	e.do(e.svc.Register, creds)
+
+	cases := []struct {
+		name string
+		w    *httptest.ResponseRecorder
+		want string
+	}{
+		{"wrong password", e.do(e.svc.Login, `{"email":"ola@example.com","password":"wrongwrong"}`), "Nieprawidłowy e-mail lub hasło"},
+		{"duplicate", e.do(e.svc.Register, creds), "już zarejestrowany"},
+		{"short password", e.do(e.svc.Register, `{"email":"b@example.com","password":"x"}`), "min. 8 znaków"},
+		{"not logged in", e.me(), "Nie jesteś zalogowany"},
+	}
+	for _, c := range cases {
+		if !strings.Contains(c.w.Body.String(), c.want) {
+			t.Errorf("%s: body %q does not contain %q", c.name, c.w.Body.String(), c.want)
+		}
+	}
+
+	bad := `{"email":"ola@example.com","password":"wrongwrong"}`
+	for i := 0; i < 10; i++ {
+		e.do(e.svc.Login, bad)
+	}
+	if w := e.do(e.svc.Login, bad); !strings.Contains(w.Body.String(), "Zbyt wiele prób") {
+		t.Errorf("rate limit: body %q", w.Body.String())
+	}
+}
