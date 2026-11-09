@@ -4,7 +4,7 @@ Własna, tania tablica interaktywna do prowadzenia korepetycji online, zamiennik
 Źródło prawdy o wymaganiach: @SPEC.md. Decyzje architektoniczne: `docs/decisions/`.
 
 ## Stan projektu
-Etap 1 (tablica lokalna) zakończony: stos wybrany w `docs/decisions/0001-stack.md` (własny canvas + Go + SQLite), plany w `docs/plan-stage-0.md` i `docs/plan-stage-1.md`. Następny jest Etap 2 (współpraca na żywo, R-002, R-003, R-006), zgodnie z `SPEC.md`.
+Etapy 0 do 2 zakończone (szkielet, tablica lokalna, współpraca na żywo): stos w `docs/decisions/0001-stack.md` (własny canvas + Go + SQLite), protokół w `docs/decisions/0004-sync-protocol.md`, plany w `docs/plan-stage-*.md`. Następny jest Etap 3 (konta i zapis, R-001, R-007, R-009, R-017, R-019), zgodnie z `SPEC.md`.
 
 ## Priorytety (w tej kolejności)
 1. Responsywność: kreska pojawia się natychmiast lokalnie, u drugiej osoby bez zauważalnego opóźnienia. Wygoda użytkownika ponad wszystko.
