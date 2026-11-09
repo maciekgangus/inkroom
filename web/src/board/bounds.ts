@@ -15,6 +15,15 @@ export function strokeBounds(stroke: Stroke): Rect {
 			maxY: box.maxY + pad,
 		};
 	}
+	if (stroke.kind === "image") {
+		const [a, b] = stroke.points;
+		return {
+			minX: Math.min(a[0], b[0]),
+			minY: Math.min(a[1], b[1]),
+			maxX: Math.max(a[0], b[0]),
+			maxY: Math.max(a[1], b[1]),
+		};
+	}
 	if (stroke.kind === "circle") {
 		const [c, edge] = stroke.points;
 		const r = Math.hypot(edge[0] - c[0], edge[1] - c[1]) + stroke.size;

@@ -148,7 +148,19 @@ describe("strokeHit for shapes and text", () => {
 
 describe("images and the eraser", () => {
 	test("the eraser never hits an image, so writing over a photo cannot delete it", () => {
-		const img: Stroke = { id: "i", authorId: "a", color: "#000", size: 1, z: 0, kind: "image", src: "x", points: [[0, 0, 0.5], [200, 100, 0.5]] };
+		const img: Stroke = {
+			id: "i",
+			authorId: "a",
+			color: "#000",
+			size: 1,
+			z: 0,
+			kind: "image",
+			src: "x",
+			points: [
+				[0, 0, 0.5],
+				[200, 100, 0.5],
+			],
+		};
 		expect(strokeHit(img, 100, 50, 10)).toBe(false);
 		expect(strokeHit(img, 0, 0, 10)).toBe(false);
 	});

@@ -1,9 +1,29 @@
 import { describe, expect, test } from "vitest";
 import type { Stroke } from "./board";
-import { defaultSize, fitWithin, hitHandle, imageRect, moveRect, placeCentered, resizeFromCorner } from "./image-geometry";
+import {
+	defaultSize,
+	fitWithin,
+	hitHandle,
+	imageRect,
+	moveRect,
+	placeCentered,
+	resizeFromCorner,
+} from "./image-geometry";
 
 function image(a: [number, number], b: [number, number]): Stroke {
-	return { id: "i", authorId: "a", color: "#000", size: 1, z: 0, kind: "image", src: "x", points: [[...a, 0.5], [...b, 0.5]] };
+	return {
+		id: "i",
+		authorId: "a",
+		color: "#000",
+		size: 1,
+		z: 0,
+		kind: "image",
+		src: "x",
+		points: [
+			[...a, 0.5],
+			[...b, 0.5],
+		],
+	};
 }
 
 describe("fitWithin", () => {
@@ -19,8 +39,18 @@ describe("fitWithin", () => {
 
 describe("imageRect", () => {
 	test("is the box between the two corners, whichever way they were stored", () => {
-		expect(imageRect(image([10, 20], [110, 80]))).toEqual({ minX: 10, minY: 20, maxX: 110, maxY: 80 });
-		expect(imageRect(image([110, 80], [10, 20]))).toEqual({ minX: 10, minY: 20, maxX: 110, maxY: 80 });
+		expect(imageRect(image([10, 20], [110, 80]))).toEqual({
+			minX: 10,
+			minY: 20,
+			maxX: 110,
+			maxY: 80,
+		});
+		expect(imageRect(image([110, 80], [10, 20]))).toEqual({
+			minX: 10,
+			minY: 20,
+			maxX: 110,
+			maxY: 80,
+		});
 	});
 });
 
@@ -44,13 +74,23 @@ describe("defaultSize", () => {
 
 describe("placeCentered", () => {
 	test("returns the top-left corner that centres the image in the view", () => {
-		expect(placeCentered({ w: 200, h: 100 }, { minX: 100, minY: 0, maxX: 500, maxY: 300 })).toEqual([200, 100]);
+		expect(
+			placeCentered(
+				{ w: 200, h: 100 },
+				{ minX: 100, minY: 0, maxX: 500, maxY: 300 },
+			),
+		).toEqual([200, 100]);
 	});
 });
 
 describe("moveRect", () => {
 	test("shifts the rectangle", () => {
-		expect(moveRect({ minX: 0, minY: 0, maxX: 10, maxY: 20 }, 5, -3)).toEqual({ minX: 5, minY: -3, maxX: 15, maxY: 17 });
+		expect(moveRect({ minX: 0, minY: 0, maxX: 10, maxY: 20 }, 5, -3)).toEqual({
+			minX: 5,
+			minY: -3,
+			maxX: 15,
+			maxY: 17,
+		});
 	});
 });
 

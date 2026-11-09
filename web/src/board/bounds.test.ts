@@ -97,7 +97,19 @@ describe("strokeBounds for shapes and text", () => {
 
 describe("strokeBounds for images", () => {
 	test("an image is bounded by its two corners, with no padding", () => {
-		const b = strokeBounds({ id: "i", authorId: "a", color: "#000", size: 1, z: 0, kind: "image", src: "x", points: [[300, 200, 0.5], [100, 50, 0.5]] });
+		const b = strokeBounds({
+			id: "i",
+			authorId: "a",
+			color: "#000",
+			size: 1,
+			z: 0,
+			kind: "image",
+			src: "x",
+			points: [
+				[300, 200, 0.5],
+				[100, 50, 0.5],
+			],
+		});
 		expect(b).toEqual({ minX: 100, minY: 50, maxX: 300, maxY: 200 });
 	});
 });

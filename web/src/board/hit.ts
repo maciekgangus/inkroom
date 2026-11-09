@@ -48,6 +48,8 @@ export function strokeHit(
 	const reach = radius + stroke.size / 2;
 	const pts = stroke.points;
 	switch (stroke.kind) {
+		case "image":
+			return false; // photos are removed by selecting them, never by erasing over them
 		case "rect": {
 			const [a, b] = pts;
 			const corners = [

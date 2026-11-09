@@ -2,7 +2,13 @@
 export type Point = [x: number, y: number, pressure: number];
 
 /** What an element is; a missing kind means a freehand stroke (ADR 0006). */
-export type ElementKind = "stroke" | "line" | "rect" | "circle" | "text";
+export type ElementKind =
+	| "stroke"
+	| "line"
+	| "rect"
+	| "circle"
+	| "text"
+	| "image";
 
 /**
  * One element on the board: a freehand stroke, a shape or a text. Immutable once added.
@@ -14,6 +20,8 @@ export interface Stroke {
 	kind?: ElementKind;
 	/** The content, for kind "text". */
 	text?: string;
+	/** The uploaded image's id, for kind "image" (ADR 0007). */
+	src?: string;
 	id: string;
 	authorId: string;
 	color: string;
@@ -25,11 +33,15 @@ export interface Stroke {
 /** A change to the set of strokes, as sent between clients (ADR 0004). */
 export type BoardOp =
 	| { t: "add"; stroke: Stroke }
+	| { t: "update"; stroke: Stroke }
 	| { t: "remove"; id: string };
 
 interface Action {
-	type: "add" | "erase";
+	type: "add" | "erase" | "update";
+	/** The element as it was added or erased, or its new version for an update. */
 	stroke: Stroke;
+	/** For an update: the version it replaced. */
+	before?: Stroke;
 }
 
 interface History {
@@ -73,12 +85,32 @@ export class Board {
 		return true;
 	}
 
+	/**
+	 * Replaces an existing element with a new version (move, resize); the action goes to
+	 * `authorId`'s history. Returns false if the element is gone.
+	 */
+	updateElement(authorId: string, next: Stroke): boolean {
+		const before = this.strokes.find((s) => s.id === next.id);
+		if (!before) return false;
+		this.replace(next);
+		this.record(authorId, { type: "update", stroke: next, before });
+		this.onOp?.({ t: "update", stroke: next });
+		return true;
+	}
+
 	/** Undoes `authorId`'s last action. Returns false if there is none. */
 	undo(authorId: string): boolean {
 		const h = this.history(authorId);
 		const action = h.undo.pop();
 		if (!action) return false;
-		this.apply(action, action.type === "add" ? "remove" : "add");
+		this.apply(
+			action,
+			action.type === "add"
+				? "remove"
+				: action.type === "erase"
+					? "add"
+					: "revert",
+		);
 		h.redo.push(action);
 		return true;
 	}
@@ -88,7 +120,14 @@ export class Board {
 		const h = this.history(authorId);
 		const action = h.redo.pop();
 		if (!action) return false;
-		this.apply(action, action.type === "add" ? "add" : "remove");
+		this.apply(
+			action,
+			action.type === "add"
+				? "add"
+				: action.type === "erase"
+					? "remove"
+					: "reapply",
+		);
 		h.undo.push(action);
 		return true;
 	}
@@ -96,6 +135,7 @@ export class Board {
 	/** Applies an operation from the server. Idempotent; not reported via onOp, not in any history. */
 	applyRemote(op: BoardOp): void {
 		if (op.t === "add") this.insert(op.stroke);
+		else if (op.t === "update") this.replace(op.stroke);
 		else this.remove(op.id);
 	}
 
@@ -110,8 +150,16 @@ export class Board {
 		h.redo.length = 0;
 	}
 
-	private apply(action: Action, what: "add" | "remove"): void {
-		if (what === "add") {
+	private apply(
+		action: Action,
+		what: "add" | "remove" | "revert" | "reapply",
+	): void {
+		if (what === "revert" || what === "reapply") {
+			const version =
+				what === "revert" ? (action.before as Stroke) : action.stroke;
+			this.replace(version);
+			this.onOp?.({ t: "update", stroke: version });
+		} else if (what === "add") {
 			this.insert(action.stroke);
 			this.onOp?.({ t: "add", stroke: action.stroke });
 		} else {
@@ -125,6 +173,12 @@ export class Board {
 		let i = this.strokes.length;
 		while (i > 0 && byOrder(this.strokes[i - 1], stroke) > 0) i--;
 		this.strokes.splice(i, 0, stroke);
+	}
+
+	/** Swaps in a new version of an element that is on the board; ignores unknown ids. */
+	private replace(stroke: Stroke): void {
+		const i = this.strokes.findIndex((s) => s.id === stroke.id);
+		if (i >= 0) this.strokes[i] = stroke;
 	}
 
 	private remove(id: string): void {

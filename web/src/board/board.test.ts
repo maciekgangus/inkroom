@@ -145,7 +145,10 @@ describe("Board", () => {
 	});
 
 	describe("updating an element", () => {
-		const moved = (id: string, authorId = "a"): Stroke => ({ ...stroke(id, authorId), points: [[9, 9, 0.5]] });
+		const moved = (id: string, authorId = "a"): Stroke => ({
+			...stroke(id, authorId),
+			points: [[9, 9, 0.5]],
+		});
 
 		test("updateElement replaces the element in place and reports an update", () => {
 			const ops: unknown[] = [];
@@ -192,10 +195,10 @@ describe("Board", () => {
 		test("any author may update, and it lands in that author's history", () => {
 			board.addStroke(stroke("1", "a"));
 			board.updateElement("b", moved("1", "a"));
-			expect(board.undo("a")).toBe(true); // a's own add
-			board.addStroke(stroke("2", "a"));
-			expect(board.undo("b")).toBe(true); // b's update
-			expect(board.strokes.find((s) => s.id === "1")?.points[0]).toEqual([0, 0, 0.5]);
+			expect(board.undo("b")).toBe(true); // b's update is reverted
+			expect(board.strokes[0].points[0]).toEqual([0, 0, 0.5]);
+			expect(board.undo("a")).toBe(true); // a's own add is still in a's history
+			expect(ids(board)).toEqual([]);
 		});
 
 		test("applyRemote update replaces an existing element without touching history", () => {
