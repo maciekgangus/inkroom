@@ -232,4 +232,110 @@ describe("Controller", () => {
 			expect(c.busy).toBe(false);
 		});
 	});
+
+	describe("shapes", () => {
+		test("the line tool draws a two-point line from press to release", () => {
+			settings.tool = "line";
+			c.pointerDown(ev("pen", 10, 20));
+			c.pointerMove(ev("pen", 50, 30));
+			c.pointerMove(ev("pen", 100, 80));
+			c.pointerUp(ev("pen", 100, 80));
+			const s = board.strokes[0];
+			expect(s.kind).toBe("line");
+			expect(s.points.map((p) => [p[0], p[1]])).toEqual([[10, 20], [100, 80]]);
+			expect([s.color, s.size, s.authorId]).toEqual(["#c00", 4, "me"]);
+		});
+
+		test("the rect tool stores two corners", () => {
+			settings.tool = "rect";
+			c.pointerDown(ev("mouse", 5, 5));
+			c.pointerMove(ev("mouse", 65, 45));
+			c.pointerUp(ev("mouse", 65, 45));
+			expect(board.strokes[0].kind).toBe("rect");
+			expect(board.strokes[0].points.map((p) => [p[0], p[1]])).toEqual([[5, 5], [65, 45]]);
+		});
+
+		test("the circle tool stores the centre and a point on the circle", () => {
+			settings.tool = "circle";
+			c.pointerDown(ev("pen", 100, 100));
+			c.pointerMove(ev("pen", 130, 140));
+			c.pointerUp(ev("pen", 130, 140));
+			expect(board.strokes[0].kind).toBe("circle");
+			expect(board.strokes[0].points.map((p) => [p[0], p[1]])).toEqual([[100, 100], [130, 140]]);
+		});
+
+		test("a preview is shown while dragging and cleared on release", () => {
+			settings.tool = "rect";
+			c.pointerDown(ev("pen", 0, 0));
+			c.pointerMove(ev("pen", 40, 40));
+			expect(renderer.drawLive).toHaveBeenLastCalledWith(expect.objectContaining({ kind: "rect" }));
+			c.pointerUp(ev("pen", 40, 40));
+			expect(renderer.drawLive).toHaveBeenLastCalledWith(null);
+		});
+
+		test("a click without dragging does not create a shape", () => {
+			settings.tool = "circle";
+			c.pointerDown(ev("pen", 10, 10));
+			c.pointerUp(ev("pen", 10, 10));
+			expect(board.strokes).toHaveLength(0);
+		});
+
+		test("shapes use board coordinates in a moved and zoomed view", () => {
+			viewport.x = 100;
+			viewport.y = 0;
+			viewport.scale = 2;
+			settings.tool = "line";
+			c.pointerDown(ev("pen", 0, 0));
+			c.pointerMove(ev("pen", 100, 50));
+			c.pointerUp(ev("pen", 100, 50));
+			expect(board.strokes[0].points.map((p) => [p[0], p[1]])).toEqual([[100, 0], [150, 25]]);
+		});
+
+		test("a shape can be undone and erased like a stroke", () => {
+			settings.tool = "rect";
+			c.pointerDown(ev("pen", 0, 0));
+			c.pointerMove(ev("pen", 100, 60));
+			c.pointerUp(ev("pen", 100, 60));
+			settings.tool = "eraser";
+			c.pointerDown(ev("pen", 50, 0)); // on the top edge
+			c.pointerUp(ev("pen", 50, 0));
+			expect(board.strokes).toHaveLength(0);
+			c.undo();
+			expect(board.strokes).toHaveLength(1);
+		});
+	});
+
+	describe("text", () => {
+		test("a tap with the text tool asks for a text at that board position", () => {
+			const onTextRequest = vi.fn();
+			c.onTextRequest = onTextRequest;
+			viewport.x = 100;
+			viewport.scale = 2;
+			settings.tool = "text";
+			c.pointerDown(ev("pen", 40, 20));
+			c.pointerUp(ev("pen", 40, 20));
+			expect(onTextRequest).toHaveBeenCalledWith([120, 10]);
+			expect(board.strokes).toHaveLength(0);
+		});
+
+		test("addText creates a text element with the current colour and size", () => {
+			settings.size = 10;
+			c.addText("Hello", 30, 40);
+			const t = board.strokes[0];
+			expect(t).toMatchObject({ kind: "text", text: "Hello", color: "#c00", size: 10, authorId: "me" });
+			expect([t.points[0][0], t.points[0][1]]).toEqual([30, 40]);
+		});
+
+		test("addText ignores empty and whitespace-only text", () => {
+			c.addText("", 0, 0);
+			c.addText("  \n ", 0, 0);
+			expect(board.strokes).toHaveLength(0);
+		});
+
+		test("text can be undone", () => {
+			c.addText("Hi", 0, 0);
+			c.undo();
+			expect(board.strokes).toHaveLength(0);
+		});
+	});
 });

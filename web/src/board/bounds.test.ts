@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import type { Stroke } from "./board";
 import { intersects, strokeBounds } from "./bounds";
+import { textBox } from "./text";
 
 function stroke(pts: [number, number][], size = 4): Stroke {
 	return {
@@ -35,6 +36,35 @@ describe("strokeBounds", () => {
 			maxX: 16,
 			maxY: 16,
 		});
+	});
+});
+
+describe("strokeBounds for shapes and text", () => {
+	const base = { id: "s", authorId: "a", color: "#111", size: 4, z: 0 };
+
+	test("a line is bounded like a two-point stroke", () => {
+		const b = strokeBounds({ ...base, kind: "line", points: [[10, 20, 0.5], [50, 5, 0.5]] });
+		expect(b).toEqual({ minX: 6, minY: 1, maxX: 54, maxY: 24 });
+	});
+
+	test("a rectangle is bounded by its two corners, whichever way they were dragged", () => {
+		const b = strokeBounds({ ...base, kind: "rect", points: [[50, 40, 0.5], [10, 10, 0.5]] });
+		expect(b).toEqual({ minX: 6, minY: 6, maxX: 54, maxY: 44 });
+	});
+
+	test("a circle is bounded by its centre and radius", () => {
+		const b = strokeBounds({ ...base, kind: "circle", points: [[100, 100, 0.5], [130, 140, 0.5]] }); // r = 50
+		expect(b).toEqual({ minX: 46, minY: 46, maxX: 154, maxY: 154 });
+	});
+
+	test("text is bounded by its box plus some slack for the estimated width", () => {
+		const t = { ...base, kind: "text" as const, text: "hello", size: 5, points: [[10, 10, 0.5]] as [number, number, number][] };
+		const box = textBox(t);
+		const b = strokeBounds(t);
+		expect(b.minX).toBeLessThanOrEqual(box.minX);
+		expect(b.minY).toBeLessThanOrEqual(box.minY);
+		expect(b.maxX).toBeGreaterThan(box.maxX);
+		expect(b.maxY).toBeGreaterThan(box.maxY);
 	});
 });
 
