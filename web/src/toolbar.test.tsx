@@ -1,4 +1,5 @@
 import { render } from "preact";
+import { act } from "preact/test-utils";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { Settings } from "./board/controller";
 import { COLORS, SIZES, Toolbar } from "./toolbar";
@@ -26,6 +27,28 @@ describe("Toolbar", () => {
 	test("has 5 colors and 3 sizes", () => {
 		expect(COLORS).toHaveLength(5);
 		expect(SIZES).toHaveLength(3);
+	});
+
+	test("tool buttons show an icon and a Polish tooltip instead of a text label", () => {
+		const pen = root.querySelector('[aria-label="pen"]') as HTMLElement;
+		expect(pen.querySelector("svg")).not.toBeNull();
+		expect(pen.textContent).toBe("");
+		expect(pen.title).toBe("Pióro");
+		expect(root.querySelector('[aria-label="undo"] svg')).not.toBeNull();
+	});
+
+	test("the chosen tool, colour and size are marked as pressed", () => {
+		const pressed = () =>
+			[...root.querySelectorAll('[aria-pressed="true"]')].map((b) =>
+				b.getAttribute("aria-label"),
+			);
+		expect(pressed()).toEqual([
+			"pen",
+			`color ${COLORS[0]}`,
+			`size ${SIZES[1]}`,
+		]);
+		act(() => click("eraser"));
+		expect(pressed()).toEqual(["eraser", `size ${SIZES[1]}`]);
 	});
 
 	test("eraser and pen buttons switch the tool", () => {
