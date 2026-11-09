@@ -187,3 +187,18 @@ func TestJoinFailsWhenTheBoardCannotBeLoaded(t *testing.T) {
 		t.Fatal("expected an error")
 	}
 }
+
+func TestUpdatesAreWrittenAsReplaceOperations(t *testing.T) {
+	f := newFake()
+	h := hubFor(t, f)
+	r, c := joinHub(t, h, "b1")
+	recv(t, c)
+	_ = r.Handle(c, []byte(add1))
+	_ = r.Handle(c, []byte(add1v2))
+	_ = r.Handle(c, []byte(`{"t":"update","stroke":{"id":"ghost","points":[]}}`)) // missing: not written
+	h.Flush()
+	ops := f.ops("b1")
+	if len(ops) != 2 || !ops[0].Add || !ops[1].Replace || ops[1].ID != "s1" {
+		t.Fatalf("got %+v", ops)
+	}
+}
