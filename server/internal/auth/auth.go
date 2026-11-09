@@ -108,21 +108,21 @@ func (s *Service) Register(w http.ResponseWriter, r *http.Request) {
 	}
 	email, err := normalizeEmail(c.Email)
 	if err != nil || len(c.Password) < minPassword || len(c.Password) > maxPassword {
-		fail(w, http.StatusBadRequest, "invalid e-mail or password (min. 8 characters)")
+		fail(w, http.StatusBadRequest, "Podaj poprawny e-mail i hasło (min. 8 znaków)")
 		return
 	}
 	hash, err := HashPassword(c.Password)
 	if err != nil {
-		fail(w, http.StatusInternalServerError, "internal error")
+		fail(w, http.StatusInternalServerError, "Błąd serwera")
 		return
 	}
 	u, err := s.store.CreateUser(email, hash)
 	if errors.Is(err, store.ErrEmailTaken) {
-		fail(w, http.StatusConflict, "this e-mail is already registered")
+		fail(w, http.StatusConflict, "Ten e-mail jest już zarejestrowany")
 		return
 	}
 	if err != nil {
-		fail(w, http.StatusInternalServerError, "internal error")
+		fail(w, http.StatusInternalServerError, "Błąd serwera")
 		return
 	}
 	s.startSession(w, r, u)
@@ -137,12 +137,12 @@ func (s *Service) Login(w http.ResponseWriter, r *http.Request) {
 	}
 	email, err := normalizeEmail(c.Email)
 	if err != nil {
-		fail(w, http.StatusUnauthorized, "wrong e-mail or password")
+		fail(w, http.StatusUnauthorized, "Nieprawidłowy e-mail lub hasło")
 		return
 	}
 	ipKey, emailKey := "ip:"+clientIP(r), "email:"+email
 	if s.blocked(ipKey) || s.blocked(emailKey) {
-		fail(w, http.StatusTooManyRequests, "too many attempts, try again later")
+		fail(w, http.StatusTooManyRequests, "Zbyt wiele prób, spróbuj ponownie za kilkanaście minut")
 		return
 	}
 	u, err := s.store.UserByEmail(email)
@@ -153,7 +153,7 @@ func (s *Service) Login(w http.ResponseWriter, r *http.Request) {
 	if !VerifyPassword(hash, c.Password) || err != nil {
 		s.recordFail(ipKey)
 		s.recordFail(emailKey)
-		fail(w, http.StatusUnauthorized, "wrong e-mail or password")
+		fail(w, http.StatusUnauthorized, "Nieprawidłowy e-mail lub hasło")
 		return
 	}
 	s.clearFails(emailKey)
@@ -177,13 +177,13 @@ func (s *Service) Logout(w http.ResponseWriter, r *http.Request) {
 func (s *Service) Me(w http.ResponseWriter, r *http.Request) {
 	c, err := r.Cookie(cookieName)
 	if err != nil {
-		fail(w, http.StatusUnauthorized, "not logged in")
+		fail(w, http.StatusUnauthorized, "Nie jesteś zalogowany")
 		return
 	}
 	th := hashToken(c.Value)
 	u, err := s.store.SessionUser(th, s.Now())
 	if err != nil {
-		fail(w, http.StatusUnauthorized, "not logged in")
+		fail(w, http.StatusUnauthorized, "Nie jesteś zalogowany")
 		return
 	}
 	_ = s.store.ExtendSession(th, s.Now().Add(sessionTTL))
@@ -203,13 +203,13 @@ func (s *Service) User(r *http.Request) (store.User, bool) {
 func (s *Service) startSession(w http.ResponseWriter, r *http.Request, u store.User) {
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
-		fail(w, http.StatusInternalServerError, "internal error")
+		fail(w, http.StatusInternalServerError, "Błąd serwera")
 		return
 	}
 	token := base64.RawURLEncoding.EncodeToString(raw)
 	exp := s.Now().Add(sessionTTL)
 	if err := s.store.CreateSession(hashToken(token), u.ID, exp); err != nil {
-		fail(w, http.StatusInternalServerError, "internal error")
+		fail(w, http.StatusInternalServerError, "Błąd serwera")
 		return
 	}
 	http.SetCookie(w, &http.Cookie{
@@ -295,7 +295,7 @@ func clientIP(r *http.Request) string {
 func RequireJSON(w http.ResponseWriter, r *http.Request) bool {
 	mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil || mt != "application/json" {
-		fail(w, http.StatusUnsupportedMediaType, "expected application/json")
+		fail(w, http.StatusUnsupportedMediaType, "Oczekiwano application/json")
 		return false
 	}
 	return true
@@ -307,7 +307,7 @@ func readCredentials(w http.ResponseWriter, r *http.Request) (credentials, bool)
 		return c, false
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBody)).Decode(&c); err != nil {
-		fail(w, http.StatusBadRequest, "invalid request")
+		fail(w, http.StatusBadRequest, "Nieprawidłowe żądanie")
 		return c, false
 	}
 	return c, true

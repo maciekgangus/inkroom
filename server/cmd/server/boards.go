@@ -51,7 +51,7 @@ func readName(w http.ResponseWriter, r *http.Request, allowEmpty bool) (string, 
 		Name string `json:"name"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodyBytes)).Decode(&body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request")
+		writeError(w, http.StatusBadRequest, "Nieprawidłowe żądanie")
 		return "", false
 	}
 	name := strings.TrimSpace(body.Name)
@@ -59,7 +59,7 @@ func readName(w http.ResponseWriter, r *http.Request, allowEmpty bool) (string, 
 		name = defaultBoardName
 	}
 	if name == "" || utf8.RuneCountInString(name) > maxBoardName {
-		writeError(w, http.StatusBadRequest, "name must be 1 to 100 characters")
+		writeError(w, http.StatusBadRequest, "Nazwa musi mieć od 1 do 100 znaków")
 		return "", false
 	}
 	return name, true
@@ -68,7 +68,7 @@ func readName(w http.ResponseWriter, r *http.Request, allowEmpty bool) (string, 
 func (a *app) createBoard(w http.ResponseWriter, r *http.Request) {
 	u, ok := a.auth.User(r)
 	if !ok {
-		writeError(w, http.StatusUnauthorized, "log in to create a board")
+		writeError(w, http.StatusUnauthorized, "Zaloguj się, aby utworzyć tablicę")
 		return
 	}
 	name, ok := readName(w, r, true)
@@ -77,7 +77,7 @@ func (a *app) createBoard(w http.ResponseWriter, r *http.Request) {
 	}
 	b, err := a.st.CreateBoard(newBoardID(), u.ID, name)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal error")
+		writeError(w, http.StatusInternalServerError, "Błąd serwera")
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]string{"id": b.ID, "name": b.Name})
@@ -86,13 +86,13 @@ func (a *app) createBoard(w http.ResponseWriter, r *http.Request) {
 func (a *app) listBoards(w http.ResponseWriter, r *http.Request) {
 	u, ok := a.auth.User(r)
 	if !ok {
-		writeError(w, http.StatusUnauthorized, "not logged in")
+		writeError(w, http.StatusUnauthorized, "Nie jesteś zalogowany")
 		return
 	}
 	owned, err1 := a.st.BoardsOwnedBy(u.ID)
 	visited, err2 := a.st.BoardsVisitedBy(u.ID)
 	if err1 != nil || err2 != nil {
-		writeError(w, http.StatusInternalServerError, "internal error")
+		writeError(w, http.StatusInternalServerError, "Błąd serwera")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"owned": toJSON(owned), "visited": toJSON(visited)})
@@ -102,11 +102,11 @@ func (a *app) listBoards(w http.ResponseWriter, r *http.Request) {
 func (a *app) getBoard(w http.ResponseWriter, r *http.Request) {
 	b, err := a.st.Board(r.PathValue("id"))
 	if errors.Is(err, store.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "no such board")
+		writeError(w, http.StatusNotFound, "Nie ma takiej tablicy")
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal error")
+		writeError(w, http.StatusInternalServerError, "Błąd serwera")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"id": b.ID, "name": b.Name})
@@ -116,20 +116,20 @@ func (a *app) getBoard(w http.ResponseWriter, r *http.Request) {
 func (a *app) ownedBoard(w http.ResponseWriter, r *http.Request) (store.Board, bool) {
 	u, ok := a.auth.User(r)
 	if !ok {
-		writeError(w, http.StatusUnauthorized, "not logged in")
+		writeError(w, http.StatusUnauthorized, "Nie jesteś zalogowany")
 		return store.Board{}, false
 	}
 	b, err := a.st.Board(r.PathValue("id"))
 	if errors.Is(err, store.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "no such board")
+		writeError(w, http.StatusNotFound, "Nie ma takiej tablicy")
 		return store.Board{}, false
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal error")
+		writeError(w, http.StatusInternalServerError, "Błąd serwera")
 		return store.Board{}, false
 	}
 	if b.OwnerID != u.ID {
-		writeError(w, http.StatusForbidden, "only the owner can do this")
+		writeError(w, http.StatusForbidden, "Tylko właściciel może to zrobić")
 		return store.Board{}, false
 	}
 	return b, true
@@ -145,7 +145,7 @@ func (a *app) renameBoard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := a.st.RenameBoard(b.ID, name); err != nil {
-		writeError(w, http.StatusInternalServerError, "internal error")
+		writeError(w, http.StatusInternalServerError, "Błąd serwera")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -158,7 +158,7 @@ func (a *app) deleteBoard(w http.ResponseWriter, r *http.Request) {
 	}
 	a.hub.Delete(b.ID) // disconnect everyone and drop unsaved changes first
 	if err := a.st.DeleteBoard(b.ID); err != nil && !errors.Is(err, store.ErrNotFound) {
-		writeError(w, http.StatusInternalServerError, "internal error")
+		writeError(w, http.StatusInternalServerError, "Błąd serwera")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
