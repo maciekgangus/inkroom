@@ -2,36 +2,18 @@
 package main
 
 import (
-	"encoding/json"
+	"context"
+	"errors"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
+	"time"
 
-	"github.com/maciekgangus/inkroom/server/internal/room"
+	"github.com/maciekgangus/inkroom/server/internal/store"
 )
-
-// newHandler returns the HTTP handler: health check, board API, board WebSocket and
-// static files from staticDir (index.html also serves /b/<id>, the client route).
-func newHandler(staticDir string) http.Handler {
-	hub := room.NewHub()
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
-	})
-	mux.HandleFunc("POST /api/boards", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(map[string]string{"id": hub.Create()})
-	})
-	mux.HandleFunc("GET /ws/{id}", serveWS(hub))
-	mux.HandleFunc("GET /b/{id}", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, filepath.Join(staticDir, "index.html"))
-	})
-	mux.Handle("/", http.FileServer(http.Dir(staticDir)))
-	return mux
-}
 
 func getenv(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
@@ -41,7 +23,32 @@ func getenv(key, fallback string) string {
 }
 
 func main() {
-	addr := ":" + getenv("PORT", "8080")
-	log.Printf("listening on %s", addr)
-	log.Fatal(http.ListenAndServe(addr, newHandler(getenv("STATIC_DIR", "../web/dist"))))
+	dataDir := getenv("DATA_DIR", "./data")
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		log.Fatal(err)
+	}
+	st, err := store.Open(filepath.Join(dataDir, "inkroom.db"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer st.Close()
+
+	a := newApp(getenv("STATIC_DIR", "../web/dist"), st)
+	srv := &http.Server{Addr: ":" + getenv("PORT", "8080"), Handler: a.Handler()}
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	go func() {
+		<-ctx.Done()
+		shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(shutdown)
+	}()
+
+	log.Printf("listening on %s", srv.Addr)
+	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Fatal(err)
+	}
+	a.Close() // save pending board changes before the store closes
+	log.Print("stopped")
 }
