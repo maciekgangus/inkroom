@@ -1,6 +1,6 @@
 # 0001. Wybór stosu technologicznego
 
-- Status: accepted (warunek: spike na iPadzie z Apple Pencil, krok 2 w `docs/plan-stage-0.md`)
+- Status: accepted (warunek spełniony: spike na iPadzie z Apple Pencil zdany 2026-11-09, patrz „Wynik spike'u”)
 - Data: 2026-11-09
 
 ## Kontekst
@@ -50,3 +50,13 @@ Stos:
 - Wszystkie narzędzia P2/P3 (figury, tekst, strony, obrazy, eksport: R-010 do R-015) piszemy sami. Jeśli ich koszt zacznie boleć w Etapie 5, przeglądamy tę decyzję (nowy ADR).
 - Dwa języki (Go i TS) to więcej narzędzi niż samo Node; świadomy kompromis na rzecz niskiego CPU i małego obrazu.
 - Sekcja "Komendy" w CLAUDE.md i hooki (format, lint, testy) powstają w Etapie 0.
+
+## Wynik spike'u (2026-11-09)
+Jednorazowy plik HTML (Pointer Events, `getCoalescedEvents`, `perfect-freehand`, osobna warstwa żywej kreski) przetestowany na iPadzie z Apple Pencil w Safari. Zdał wszystkie ustalone kryteria:
+- opóźnienie: kreska równo za Pencilem, bez przełamań (ocena subiektywna),
+- palm rejection: dotyk (`pointerType=touch`) nie rysuje, rysik rysuje,
+- nacisk Pencila wyraźnie wpływa na grubość kreski,
+- kreska z warstwy żywej przechodzi na zatwierdzoną bez migotania,
+- brak konfliktów z gestami Safari (`touch-action: none`, blokada `gesture*`/`touchmove`).
+
+Decyzja o własnym canvasie pozostaje bez zmian. Kod spike'u usunięto; wzorzec (dwie warstwy canvas, odrzucanie `touch`, coalesced events) wykorzystamy w Etapie 1.
