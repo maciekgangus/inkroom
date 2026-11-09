@@ -5,6 +5,7 @@ import { Controller, type Renderer, type Settings } from "./board/controller";
 import { TouchGestures } from "./board/gestures";
 import { fontSizeFor } from "./board/text";
 import { Viewport } from "./board/viewport";
+import { Cursors } from "./cursors";
 import { type SocketLike, SyncClient } from "./sync/sync";
 import { TextEditor } from "./text-editor";
 import { COLORS, SIZES, Toolbar } from "./toolbar";
@@ -20,12 +21,14 @@ const LINE_HEIGHT_PX = 16;
 
 interface Props {
 	authorId: string;
+	/** Shown next to our cursor on other people's screens. */
+	name: string;
 	/** Opens the board's websocket. */
 	connect: () => SocketLike;
 }
 
 /** A shared infinite board: two canvas layers, a tool palette, zoom buttons and live sync. */
-export function BoardView({ authorId, connect }: Props) {
+export function BoardView({ authorId, name, connect }: Props) {
 	const committedRef = useRef<HTMLCanvasElement>(null);
 	const liveRef = useRef<HTMLCanvasElement>(null);
 	const settings = useMemo<Settings>(
@@ -38,6 +41,7 @@ export function BoardView({ authorId, connect }: Props) {
 	const [textAt, setTextAt] = useState<{ x: number; y: number } | null>(null);
 	const [, setTick] = useState(0); // bumped when the view changes, so the text field follows it
 	const ctl = useRef<Controller | null>(null);
+	const syncRef = useRef<SyncClient | null>(null);
 	/** Repaints after the view changed (set up by the effect below). */
 	const viewChanged = useRef<() => void>(() => {});
 
@@ -50,11 +54,14 @@ export function BoardView({ authorId, connect }: Props) {
 		const board = new Board();
 		const sync = new SyncClient(board, {
 			createSocket: connect,
+			self: { authorId, name },
+			onCursors: () => setTick((t) => t + 1),
 			onUpdate: () => {
 				canvas.redraw(board.strokes);
 				canvas.setRemoteLive(sync.liveStrokes());
 			},
 		});
+		syncRef.current = sync;
 		const renderer: Renderer = {
 			drawLive: (stroke) => {
 				canvas.drawLive(stroke);
@@ -98,8 +105,16 @@ export function BoardView({ authorId, connect }: Props) {
 			live.setPointerCapture(e.pointerId);
 			controller.pointerDown(e);
 		};
-		const move = (e: PointerEvent) =>
-			e.pointerType === "touch" ? gestures.move(e) : controller.pointerMove(e);
+		const move = (e: PointerEvent) => {
+			if (e.pointerType === "touch") return gestures.move(e);
+			// Mouse and pen are shared as a cursor, also while hovering without pressing.
+			const [x, y] = viewport.toWorld(e.clientX, e.clientY);
+			sync.cursorMove(x, y);
+			controller.pointerMove(e);
+		};
+		const leave = (e: PointerEvent) => {
+			if (e.pointerType !== "touch") sync.cursorHide();
+		};
 		const up = (e: PointerEvent) =>
 			e.pointerType === "touch" ? gestures.up(e) : controller.pointerUp(e);
 		const cancel = (e: PointerEvent) =>
@@ -140,6 +155,7 @@ export function BoardView({ authorId, connect }: Props) {
 		live.addEventListener("pointermove", move);
 		live.addEventListener("pointerup", up);
 		live.addEventListener("pointercancel", cancel);
+		live.addEventListener("pointerleave", leave);
 		live.addEventListener("wheel", wheel, { passive: false });
 		live.addEventListener("mousedown", middle);
 		// Block Safari gestures and the context menu over the board.
@@ -154,12 +170,19 @@ export function BoardView({ authorId, connect }: Props) {
 			live.removeEventListener("pointermove", move);
 			live.removeEventListener("pointerup", up);
 			live.removeEventListener("pointercancel", cancel);
+			live.removeEventListener("pointerleave", leave);
 			live.removeEventListener("wheel", wheel);
 			live.removeEventListener("mousedown", middle);
 			for (const ev of gestureEvents) document.removeEventListener(ev, prevent);
 			document.removeEventListener("touchmove", prevent);
 		};
-	}, [settings, viewport, authorId, connect]);
+	}, [settings, viewport, authorId, name, connect]);
+
+	// Expired cursors vanish even if nothing else happens on the board.
+	useEffect(() => {
+		const timer = setInterval(() => setTick((t) => t + 1), 5000);
+		return () => clearInterval(timer);
+	}, []);
 
 	// The buttons zoom around the centre of the screen.
 	const zoomTo = (next: (current: number) => number) => {
@@ -185,6 +208,7 @@ export function BoardView({ authorId, connect }: Props) {
 					onCancel={() => setTextAt(null)}
 				/>
 			)}
+			<Cursors cursors={syncRef.current?.cursors() ?? []} viewport={viewport} />
 			<Toolbar
 				settings={settings}
 				onUndo={() => ctl.current?.undo()}

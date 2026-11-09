@@ -9,8 +9,22 @@ export interface SocketLike {
 	onclose: (() => void) | null;
 }
 
+/** Another person's pointer, in board coordinates. */
+export interface RemoteCursor {
+	id: string;
+	name: string;
+	x: number;
+	y: number;
+}
+
 interface Options {
 	createSocket: () => SocketLike;
+	/** Who we are, for the cursor we publish. */
+	self?: { authorId: string; name: string };
+	/** Called when other people's cursors changed (no need to repaint the board). */
+	onCursors?: () => void;
+	/** Clock in ms; tests replace it. */
+	now?: () => number;
 	/** Called whenever the board or the remote live strokes changed (time to redraw). */
 	onUpdate: () => void;
 	/** Runs `fn` on the next frame; used to send live strokes at most once per frame. */
@@ -22,6 +36,8 @@ interface LiveOut {
 	sent: number;
 }
 
+const CURSOR_INTERVAL_MS = 33; // about 30 updates per second
+const CURSOR_TTL_MS = 15_000; // a cursor that stopped updating disappears
 const BASE_DELAY_MS = 500;
 const MAX_DELAY_MS = 5000;
 
@@ -40,6 +56,11 @@ export class SyncClient {
 	private liveOut = new Map<string, LiveOut>();
 	private liveIn = new Map<string, Stroke>();
 	private flushScheduled = false;
+	private cursorsIn = new Map<string, RemoteCursor & { seen: number }>();
+	private cursorOut: { x: number; y: number } | null = null; // latest position not yet sent
+	private cursorSent: { x: number; y: number } | null = null;
+	private cursorScheduled = false;
+	private cursorLastSent = Number.NEGATIVE_INFINITY;
 	private schedule: (fn: () => void) => void;
 
 	constructor(
@@ -67,6 +88,74 @@ export class SyncClient {
 		this.closed = true;
 		if (this.timer) clearTimeout(this.timer);
 		this.socket?.close();
+	}
+
+	/** Reports our pointer position (board coordinates); sent at most about 30 times a second. */
+	cursorMove(x: number, y: number): void {
+		this.cursorOut = { x, y };
+		this.scheduleCursor();
+	}
+
+	/** Tells the others to hide our cursor (the pointer left the board). */
+	cursorHide(): void {
+		this.cursorOut = null;
+		if (!this.cursorSent) return;
+		this.cursorSent = null;
+		this.send({
+			t: "cursor",
+			id: this.opts.self?.authorId ?? "",
+			hidden: true,
+		});
+	}
+
+	/** Other people's cursors that updated recently. */
+	cursors(): RemoteCursor[] {
+		const cutoff = this.now() - CURSOR_TTL_MS;
+		for (const [id, c] of this.cursorsIn)
+			if (c.seen < cutoff) this.cursorsIn.delete(id);
+		return [...this.cursorsIn.values()].map(({ id, name, x, y }) => ({
+			id,
+			name,
+			x,
+			y,
+		}));
+	}
+
+	private now(): number {
+		return this.opts.now?.() ?? Date.now();
+	}
+
+	private scheduleCursor(): void {
+		if (this.cursorScheduled) return;
+		this.cursorScheduled = true;
+		this.schedule(() => this.flushCursor());
+	}
+
+	private flushCursor(): void {
+		this.cursorScheduled = false;
+		const pos = this.cursorOut;
+		if (
+			!pos ||
+			(this.cursorSent &&
+				pos.x === this.cursorSent.x &&
+				pos.y === this.cursorSent.y)
+		)
+			return;
+		if (this.now() - this.cursorLastSent < CURSOR_INTERVAL_MS) {
+			this.scheduleCursor(); // too soon, try again next frame
+			return;
+		}
+		if (!this.isOpen || !this.opts.self) return;
+		this.send({
+			t: "cursor",
+			id: this.opts.self.authorId,
+			name: this.opts.self.name,
+			x: pos.x,
+			y: pos.y,
+		});
+		this.cursorSent = pos;
+		this.cursorOut = null;
+		this.cursorLastSent = this.now();
 	}
 
 	/** Other people's unfinished strokes, to be drawn on the live layer. */
@@ -115,6 +204,10 @@ export class SyncClient {
 
 	private receive(data: string): void {
 		let m: {
+			name?: string;
+			x?: number;
+			y?: number;
+			hidden?: boolean;
 			t: string;
 			strokes?: Stroke[];
 			stroke?: Stroke;
@@ -152,6 +245,25 @@ export class SyncClient {
 			case "live_drop":
 				for (const id of m.ids ?? []) this.liveIn.delete(id);
 				break;
+			case "cursor":
+				if (!m.id) return;
+				if (m.hidden) {
+					this.cursorsIn.delete(m.id);
+				} else if (typeof m.x === "number" && typeof m.y === "number") {
+					this.cursorsIn.set(m.id, {
+						id: m.id,
+						name: m.name ?? "",
+						x: m.x,
+						y: m.y,
+						seen: this.now(),
+					});
+				}
+				this.opts.onCursors?.();
+				return; // cursors never repaint the board
+			case "cursor_drop":
+				for (const id of m.ids ?? []) this.cursorsIn.delete(id);
+				this.opts.onCursors?.();
+				return;
 			default:
 				return;
 		}
@@ -182,6 +294,9 @@ export class SyncClient {
 
 	private dropped(): void {
 		this.isOpen = false;
+		this.cursorSent = null;
+		this.cursorsIn.clear();
+		this.opts.onCursors?.();
 		this.liveIn.clear();
 		this.liveOut.clear();
 		this.opts.onUpdate();

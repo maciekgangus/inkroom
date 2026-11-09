@@ -151,5 +151,5 @@ func (r *Room) shutdown() {
 	for c := range r.clients {
 		c.drop()
 	}
-	r.clients = map[*Client]map[string]struct{}{}
+	r.clients = map[*Client]*presence{}
 }
