@@ -32,7 +32,7 @@ Priorytety: P1 do pierwszej lekcji, P2 zaraz po niej, P3 później. Statusy: pro
 | R-009 | Panel twórcy z listą jego tablic (nazwa, data ostatniej zmiany, kopiowanie linku, otwarcie, usunięcie) | P1 | done |
 | R-010 | Nieskończone lub przewijane płótno, przesuwanie i powiększanie | P2 | done |
 | R-011 | Kilka stron (kart) w jednej tablicy | P2 | proposed |
-| R-012 | Narzędzia: linia, prostokąt, okrąg, tekst | P2 | accepted |
+| R-012 | Narzędzia: linia, prostokąt, okrąg, tekst | P2 | done |
 | R-013 | Wskaźniki kursorów pozostałych osób na tablicy | P2 | proposed |
 | R-014 | Eksport tablicy do PNG lub PDF | P2 | proposed |
 | R-015 | Wstawianie obrazu (np. zadanie ze zdjęcia) | P3 | proposed |
@@ -83,3 +83,4 @@ Miary to propozycje startowe, do potwierdzenia po pierwszych testach na prawdziw
 - 2026-11-09: Etap 2 zakończony testem PC + iPad: R-006 i R-018 `done`; R-002 i R-003 `accepted` (link i wejście gościa działają, tworzenie w panelu i konta w Etapie 3); protokół w ADR 0004.
 - 2026-11-09: Etap 3 zakończony testem PC + iPad: R-001, R-002, R-003, R-007, R-009, R-017, R-019 `done`; konta, sesje i zapis w ADR 0005.
 - 2026-11-09: R-010 (nieskończone płótno) `done` po teście na iPadzie: widok lokalny (przesuwanie, zoom 10–500%), przyciski zoomu w rogu, dwa palce, Ctrl + kółko, narzędzie Ręka; plan w `docs/plan-infinite-canvas.md`.
+- 2026-11-09: R-012 (linia, prostokąt, okrąg, tekst) `done` po teście ręcznym; elementy z polem `kind` w ADR 0006, plan w `docs/plan-shapes-and-text.md`.
