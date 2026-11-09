@@ -65,6 +65,8 @@ type Room struct {
 	strokes map[string]entry
 	seq     int
 	clients map[*Client]*presence
+	// background is shared by everyone; only the server changes it (ADR 0007).
+	background string
 
 	// Persistence (only for rooms created by a Hub): changes wait in pending until flushed.
 	track   bool
@@ -85,13 +87,15 @@ func newPresence() *presence {
 
 // New returns an empty room that is not persisted.
 func New() *Room {
-	return &Room{strokes: map[string]entry{}, clients: map[*Client]*presence{}}
+	return &Room{strokes: map[string]entry{}, clients: map[*Client]*presence{}, background: store.DefaultBackground}
 }
 
-// newPersisted returns a room holding the saved strokes, recording further changes for the store.
-func newPersisted(saved [][]byte) *Room {
+// newPersisted returns a room holding the saved strokes and background, recording further
+// stroke changes for the store.
+func newPersisted(saved [][]byte, background string) *Room {
 	r := New()
 	r.track = true
+	r.background = background
 	for _, raw := range saved {
 		id, err := strokeID(raw)
 		if err != nil {
@@ -126,6 +130,16 @@ func (r *Room) Leave(c *Client) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.leaveLocked(c)
+}
+
+// SetBackground changes the board's background and tells everyone. The caller has already
+// checked that the board's owner asked for it and saved the value.
+func (r *Room) SetBackground(value string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.background = value
+	b, _ := json.Marshal(map[string]string{"t": "background", "value": value})
+	r.broadcastLocked(b, nil)
 }
 
 // Handle applies one message from c. An error means the client misbehaved.
@@ -206,7 +220,7 @@ func (r *Room) snapshotLocked() []byte {
 	for i, e := range entries {
 		strokes[i] = e.raw
 	}
-	b, _ := json.Marshal(map[string]any{"t": "snapshot", "strokes": strokes})
+	b, _ := json.Marshal(map[string]any{"t": "snapshot", "strokes": strokes, "background": r.background})
 	return b
 }
 

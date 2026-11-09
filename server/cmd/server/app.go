@@ -50,6 +50,7 @@ func (a *app) Handler() http.Handler {
 	mux.HandleFunc("GET /api/boards", a.listBoards)
 	mux.HandleFunc("GET /api/boards/{id}", a.getBoard)
 	mux.HandleFunc("PATCH /api/boards/{id}", a.renameBoard)
+	mux.HandleFunc("PUT /api/boards/{id}/background", a.setBackground)
 	mux.HandleFunc("DELETE /api/boards/{id}", a.deleteBoard)
 	mux.HandleFunc("GET /ws/{id}", a.serveWS)
 	mux.HandleFunc("GET /b/{id}", func(w http.ResponseWriter, r *http.Request) {
