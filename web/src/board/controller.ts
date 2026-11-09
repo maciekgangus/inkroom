@@ -1,5 +1,6 @@
-import type { Board, Stroke } from "./board";
+import type { Board, Point, Stroke } from "./board";
 import { findHit } from "./hit";
+import type { Viewport } from "./viewport";
 
 /** The subset of PointerEvent the controller reads. */
 export interface PointerInput {
@@ -8,6 +9,8 @@ export interface PointerInput {
 	clientX: number;
 	clientY: number;
 	pressure: number;
+	/** Which button changed state (1 = middle mouse button). */
+	button?: number;
 	getCoalescedEvents?: () => PointerInput[];
 }
 
@@ -19,7 +22,7 @@ export interface Renderer {
 
 /** Current tool settings, mutated by the toolbar. */
 export interface Settings {
-	tool: "pen" | "eraser";
+	tool: "pen" | "eraser" | "pan";
 	color: string;
 	size: number;
 }
@@ -31,18 +34,29 @@ export class Controller {
 	private activeId: number | null = null;
 	private current: Stroke | null = null;
 	private lastZ = 0;
+	private panFrom: { x: number; y: number } | null = null;
 
 	constructor(
 		private board: Board,
 		private renderer: Renderer,
 		private settings: Settings,
+		private viewport: Viewport,
 		private authorId: string,
 		private newId: () => string,
 	) {}
 
+	/** True while a pen or mouse pointer is down (touch gestures must then be ignored). */
+	get busy(): boolean {
+		return this.activeId !== null;
+	}
+
 	pointerDown(e: PointerInput): void {
 		if (e.pointerType === "touch" || this.activeId !== null) return;
 		this.activeId = e.pointerId;
+		if (e.button === 1 || this.settings.tool === "pan") {
+			this.panFrom = { x: e.clientX, y: e.clientY };
+			return;
+		}
 		if (this.settings.tool === "eraser") {
 			this.erase(e);
 			return;
@@ -53,13 +67,22 @@ export class Controller {
 			color: this.settings.color,
 			size: this.settings.size,
 			z: this.nextZ(),
-			points: [[e.clientX, e.clientY, e.pressure || 0.5]],
+			points: [this.point(e)],
 		};
 		this.renderer.drawLive(this.current);
 	}
 
 	pointerMove(e: PointerInput): void {
 		if (e.pointerId !== this.activeId) return;
+		if (this.panFrom) {
+			this.viewport.panBy(
+				e.clientX - this.panFrom.x,
+				e.clientY - this.panFrom.y,
+			);
+			this.panFrom = { x: e.clientX, y: e.clientY };
+			this.renderer.redraw(this.board.strokes);
+			return;
+		}
 		if (this.settings.tool === "eraser") {
 			this.erase(e);
 			return;
@@ -67,7 +90,7 @@ export class Controller {
 		if (!this.current) return;
 		const events = e.getCoalescedEvents?.() ?? [];
 		for (const p of events.length ? events : [e]) {
-			this.current.points.push([p.clientX, p.clientY, p.pressure || 0.5]);
+			this.current.points.push(this.point(p));
 		}
 		this.renderer.drawLive(this.current);
 	}
@@ -75,6 +98,7 @@ export class Controller {
 	pointerUp(e: PointerInput): void {
 		if (e.pointerId !== this.activeId) return;
 		this.activeId = null;
+		this.panFrom = null;
 		if (!this.current) return;
 		this.board.addStroke(this.current);
 		this.current = null;
@@ -96,6 +120,12 @@ export class Controller {
 			this.renderer.redraw(this.board.strokes);
 	}
 
+	/** A pointer position as a stroke point in board coordinates. */
+	private point(e: PointerInput): Point {
+		const [x, y] = this.viewport.toWorld(e.clientX, e.clientY);
+		return [x, y, e.pressure || 0.5];
+	}
+
 	/** Client clock in ms, strictly increasing so this client's strokes never tie. */
 	private nextZ(): number {
 		this.lastZ = Math.max(Date.now(), this.lastZ + 1);
@@ -103,11 +133,13 @@ export class Controller {
 	}
 
 	private erase(e: PointerInput): void {
+		const [x, y] = this.viewport.toWorld(e.clientX, e.clientY);
+		// The eraser is a fixed size on screen, whatever the zoom.
 		const hit = findHit(
 			this.board.strokes,
-			e.clientX,
-			e.clientY,
-			ERASER_RADIUS,
+			x,
+			y,
+			ERASER_RADIUS / this.viewport.scale,
 		);
 		if (hit && this.board.eraseStroke(this.authorId, hit.id)) {
 			this.renderer.redraw(this.board.strokes);

@@ -35,6 +35,13 @@ describe("Toolbar", () => {
 		expect(settings.tool).toBe("pen");
 	});
 
+	test("the hand button switches to panning", () => {
+		click("pan");
+		expect(settings.tool).toBe("pan");
+		click(`color ${COLORS[1]}`);
+		expect(settings.tool).toBe("pen");
+	});
+
 	test("color buttons set the color and switch back to the pen", () => {
 		click("eraser");
 		click(`color ${COLORS[2]}`);
