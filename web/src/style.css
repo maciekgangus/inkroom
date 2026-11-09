@@ -196,3 +196,17 @@ button.danger {
 	min-width: 64px;
 	font-size: 15px;
 }
+.text-editor {
+	position: fixed;
+	z-index: 2;
+	margin: -1px 0 0 -1px;
+	padding: 0;
+	border: 1px dashed #1976d2;
+	border-radius: 3px;
+	background: #fff9;
+	outline: none;
+	resize: none;
+	overflow: hidden;
+	min-width: 6em;
+	font-family: system-ui, sans-serif;
+}

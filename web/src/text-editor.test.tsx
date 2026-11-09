@@ -10,7 +10,12 @@ describe("TextEditor", () => {
 
 	const field = () => root.querySelector("textarea") as HTMLTextAreaElement;
 	const press = (key: string, shiftKey = false) => {
-		const e = new KeyboardEvent("keydown", { key, shiftKey, bubbles: true, cancelable: true });
+		const e = new KeyboardEvent("keydown", {
+			key,
+			shiftKey,
+			bubbles: true,
+			cancelable: true,
+		});
 		field().dispatchEvent(e);
 		return e;
 	};
@@ -21,7 +26,17 @@ describe("TextEditor", () => {
 		onCommit = vi.fn();
 		onCancel = vi.fn();
 		await act(async () => {
-			render(<TextEditor x={120} y={80} fontSize={30} color="#d32f2f" onCommit={onCommit} onCancel={onCancel} />, root);
+			render(
+				<TextEditor
+					x={120}
+					y={80}
+					fontSize={30}
+					color="#d32f2f"
+					onCommit={onCommit}
+					onCancel={onCancel}
+				/>,
+				root,
+			);
 		});
 	});
 
@@ -32,7 +47,11 @@ describe("TextEditor", () => {
 
 	test("is placed at the given screen position with the given size and colour, and takes focus", () => {
 		const style = field().style;
-		expect([style.left, style.top, style.fontSize]).toEqual(["120px", "80px", "30px"]);
+		expect([style.left, style.top, style.fontSize]).toEqual([
+			"120px",
+			"80px",
+			"30px",
+		]);
 		expect(style.color).toBe("rgb(211, 47, 47)");
 		expect(document.activeElement).toBe(field());
 	});

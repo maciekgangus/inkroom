@@ -64,8 +64,10 @@ function drawElement(
 		ctx.font = `${fs}px system-ui, sans-serif`;
 		ctx.textBaseline = "top";
 		const [x, y] = s.points[0];
+		const lineHeight = fs * LINE_HEIGHT;
+		const halfLeading = (lineHeight - fs) / 2; // where a text field puts the first line
 		(s.text ?? "").split("\n").forEach((line, i) => {
-			ctx.fillText(line, x, y + i * fs * LINE_HEIGHT);
+			ctx.fillText(line, x, y + i * lineHeight + halfLeading);
 		});
 	} else if (path && isFilled(s)) {
 		ctx.fillStyle = s.color;

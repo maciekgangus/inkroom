@@ -3,8 +3,10 @@ import { Board } from "./board/board";
 import { CanvasRenderer } from "./board/canvas-renderer";
 import { Controller, type Renderer, type Settings } from "./board/controller";
 import { TouchGestures } from "./board/gestures";
+import { fontSizeFor } from "./board/text";
 import { Viewport } from "./board/viewport";
 import { type SocketLike, SyncClient } from "./sync/sync";
+import { TextEditor } from "./text-editor";
 import { COLORS, SIZES, Toolbar } from "./toolbar";
 import { ZoomControls } from "./zoom-controls";
 
@@ -32,6 +34,9 @@ export function BoardView({ authorId, connect }: Props) {
 	);
 	const viewport = useMemo(() => new Viewport(), []);
 	const [scale, setScale] = useState(1);
+	/** Board position of the text being typed, if any. */
+	const [textAt, setTextAt] = useState<{ x: number; y: number } | null>(null);
+	const [, setTick] = useState(0); // bumped when the view changes, so the text field follows it
 	const ctl = useRef<Controller | null>(null);
 	/** Repaints after the view changed (set up by the effect below). */
 	const viewChanged = useRef<() => void>(() => {});
@@ -53,7 +58,8 @@ export function BoardView({ authorId, connect }: Props) {
 		const renderer: Renderer = {
 			drawLive: (stroke) => {
 				canvas.drawLive(stroke);
-				if (stroke) sync.liveUpdate(stroke);
+				// Shapes and text are only shared once finished (ADR 0006).
+				if (stroke && !stroke.kind) sync.liveUpdate(stroke);
 			},
 			redraw: (strokes) => canvas.redraw(strokes),
 		};
@@ -66,10 +72,12 @@ export function BoardView({ authorId, connect }: Props) {
 			newId,
 		);
 		ctl.current = controller;
+		controller.onTextRequest = ([x, y]) => setTextAt({ x, y });
 
 		const changed = () => {
 			canvas.redraw(board.strokes);
 			setScale(viewport.scale);
+			setTick((t) => t + 1);
 		};
 		viewChanged.current = changed;
 		const gestures = new TouchGestures(
@@ -118,6 +126,7 @@ export function BoardView({ authorId, connect }: Props) {
 			if (e.button === 1) e.preventDefault();
 		};
 		const key = (e: KeyboardEvent) => {
+			if ((e.target as HTMLElement | null)?.tagName === "TEXTAREA") return; // typing, not undoing the board
 			if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "z") return;
 			e.preventDefault();
 			if (e.shiftKey) controller.redo();
@@ -162,6 +171,20 @@ export function BoardView({ authorId, connect }: Props) {
 		<>
 			<canvas id="board" ref={committedRef} />
 			<canvas id="live" ref={liveRef} />
+			{textAt && (
+				<TextEditor
+					key={`${textAt.x},${textAt.y}`}
+					x={viewport.toScreen(textAt.x, textAt.y)[0]}
+					y={viewport.toScreen(textAt.x, textAt.y)[1]}
+					fontSize={fontSizeFor(settings.size) * viewport.scale}
+					color={settings.color}
+					onCommit={(text) => {
+						ctl.current?.addText(text, textAt.x, textAt.y);
+						setTextAt(null);
+					}}
+					onCancel={() => setTextAt(null)}
+				/>
+			)}
 			<Toolbar
 				settings={settings}
 				onUndo={() => ctl.current?.undo()}
