@@ -173,12 +173,25 @@ describe("SyncClient", () => {
 			expect(live).toHaveLength(2);
 			expect((live[0].points as unknown[]).length).toBe(2);
 			expect((live[1].points as unknown[]).length).toBe(1);
-			expect(live[0]).toMatchObject({ id: "7", authorId: "me", color: "#111", size: 4, z: 7 });
+			expect(live[0]).toMatchObject({
+				id: "7",
+				authorId: "me",
+				color: "#111",
+				size: 4,
+				z: 7,
+			});
 		});
 
 		test("remote live chunks accumulate into one stroke", () => {
 			connectAndJoin();
-			const base = { t: "live", id: "x", authorId: "o", color: "#c00", size: 5, z: 3 };
+			const base = {
+				t: "live",
+				id: "x",
+				authorId: "o",
+				color: "#c00",
+				size: 5,
+				z: 3,
+			};
 			sock().receive({ ...base, points: [[0, 0, 0.5]] });
 			sock().receive({ ...base, points: [[1, 1, 0.5]] });
 			const live = client.liveStrokes();
@@ -189,7 +202,14 @@ describe("SyncClient", () => {
 
 		test("a finished stroke (add) or live_drop removes the live version", () => {
 			connectAndJoin();
-			const base = { t: "live", authorId: "o", color: "#c00", size: 5, z: 3, points: [[0, 0, 0.5]] };
+			const base = {
+				t: "live",
+				authorId: "o",
+				color: "#c00",
+				size: 5,
+				z: 3,
+				points: [[0, 0, 0.5]],
+			};
 			sock().receive({ ...base, id: "x" });
 			sock().receive({ ...base, id: "y" });
 			sock().receive({ t: "add", stroke: stroke("x", 3, "o") });
@@ -200,7 +220,15 @@ describe("SyncClient", () => {
 
 		test("live strokes are forgotten when the connection drops", () => {
 			connectAndJoin();
-			sock().receive({ t: "live", id: "x", authorId: "o", color: "#c00", size: 5, z: 3, points: [[0, 0, 0.5]] });
+			sock().receive({
+				t: "live",
+				id: "x",
+				authorId: "o",
+				color: "#c00",
+				size: 5,
+				z: 3,
+				points: [[0, 0, 0.5]],
+			});
 			sock().drop();
 			expect(client.liveStrokes()).toEqual([]);
 		});
