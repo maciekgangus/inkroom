@@ -2,6 +2,21 @@ import { useState } from "preact/hooks";
 import type { Settings } from "./board/controller";
 
 export const COLORS = ["#111111", "#d32f2f", "#1976d2", "#388e3c", "#f57c00"];
+/** Extra colours behind the palette button (R-021). */
+export const MORE_COLORS = [
+	"#6b7280",
+	"#8d5a2b",
+	"#e91e63",
+	"#c026d3",
+	"#7c3aed",
+	"#3f51b5",
+	"#0ea5e9",
+	"#0d9488",
+	"#22c55e",
+	"#84cc16",
+	"#eab308",
+	"#ff7043",
+];
 export const SIZES = [2, 5, 10];
 
 interface Props {
@@ -22,6 +37,7 @@ const ICONS = {
 	pan: "M18 11V6a2 2 0 0 0-4 0M14 10V4a2 2 0 0 0-4 0v2M10 10.5V6a2 2 0 0 0-4 0v8M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15",
 	undo: "M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11",
 	redo: "m15 14 5-5-5-5M20 9H9.5a5.5 5.5 0 0 0 0 11H13",
+	plus: "M12 5v14M5 12h14",
 };
 
 function Icon({ name }: { name: keyof typeof ICONS }) {
@@ -68,8 +84,30 @@ export function Toolbar({ settings, onUndo, onRedo }: Props) {
 		Object.assign(settings, patch);
 		rerender((n) => n + 1);
 	};
+	const [paletteOpen, setPaletteOpen] = useState(false);
 	const on = (active: boolean) => (active ? "active" : "");
 	const drawing = colourTools.includes(settings.tool);
+	const custom = !COLORS.includes(settings.color);
+	// Picking a colour while erasing or panning goes back to the pen; shapes and text stay.
+	const pick = (color: string) =>
+		set({
+			color,
+			tool: colourTools.includes(settings.tool) ? settings.tool : "pen",
+		});
+	const swatch = (c: string, after?: () => void) => (
+		<button
+			type="button"
+			key={c}
+			aria-label={`color ${c}`}
+			aria-pressed={drawing && settings.color === c}
+			class={`swatch ${on(drawing && settings.color === c)}`}
+			style={{ background: c }}
+			onClick={() => {
+				pick(c);
+				after?.();
+			}}
+		/>
+	);
 
 	return (
 		<div class="toolbar">
@@ -89,25 +127,35 @@ export function Toolbar({ settings, onUndo, onRedo }: Props) {
 				))}
 			</div>
 			<div class="group">
-				{COLORS.map((c) => (
-					<button
-						type="button"
-						key={c}
-						aria-label={`color ${c}`}
-						aria-pressed={drawing && settings.color === c}
-						class={`swatch ${on(drawing && settings.color === c)}`}
-						style={{ background: c }}
-						// Picking a colour while erasing or panning goes back to the pen; shapes and text stay.
-						onClick={() =>
-							set({
-								color: c,
-								tool: colourTools.includes(settings.tool)
-									? settings.tool
-									: "pen",
-							})
-						}
-					/>
-				))}
+				{COLORS.map((c) => swatch(c))}
+				<button
+					type="button"
+					aria-label="more colors"
+					aria-pressed={drawing && custom}
+					aria-expanded={paletteOpen}
+					title="Więcej kolorów"
+					class={`swatch more ${on(drawing && custom)}`}
+					style={custom ? { background: settings.color } : undefined}
+					onClick={() => setPaletteOpen(!paletteOpen)}
+				>
+					{!custom && <Icon name="plus" />}
+				</button>
+				{paletteOpen && (
+					<div class="palette">
+						{MORE_COLORS.map((c) => swatch(c, () => setPaletteOpen(false)))}
+						<label class="custom">
+							Własny kolor
+							<input
+								type="color"
+								aria-label="custom color"
+								value={custom ? settings.color : "#5b5bf0"}
+								onInput={(e) =>
+									pick((e.currentTarget as HTMLInputElement).value)
+								}
+							/>
+						</label>
+					</div>
+				)}
 			</div>
 			<div class="group">
 				{SIZES.map((s) => (

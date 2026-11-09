@@ -2,7 +2,7 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { Settings } from "./board/controller";
-import { COLORS, SIZES, Toolbar } from "./toolbar";
+import { COLORS, MORE_COLORS, SIZES, Toolbar } from "./toolbar";
 
 describe("Toolbar", () => {
 	let root: HTMLElement;
@@ -49,6 +49,42 @@ describe("Toolbar", () => {
 		]);
 		act(() => click("eraser"));
 		expect(pressed()).toEqual(["eraser", `size ${SIZES[1]}`]);
+	});
+
+	describe("extended palette", () => {
+		const q = (label: string) =>
+			root.querySelector(`[aria-label="${label}"]`) as HTMLElement | null;
+
+		test("the extra colours stay hidden until the palette is opened", () => {
+			expect(MORE_COLORS).toHaveLength(12);
+			expect(q(`color ${MORE_COLORS[0]}`)).toBeNull();
+			act(() => click("more colors"));
+			for (const c of MORE_COLORS) expect(q(`color ${c}`)).not.toBeNull();
+			expect(q("custom color")?.getAttribute("type")).toBe("color");
+		});
+
+		test("picking an extra colour sets it, closes the palette and marks the palette button", () => {
+			act(() => click("more colors"));
+			act(() => click(`color ${MORE_COLORS[3]}`));
+			expect(settings.color).toBe(MORE_COLORS[3]);
+			expect(q(`color ${MORE_COLORS[3]}`)).toBeNull();
+			expect(q("more colors")?.getAttribute("aria-pressed")).toBe("true");
+			expect(q(`color ${COLORS[0]}`)?.getAttribute("aria-pressed")).toBe(
+				"false",
+			);
+		});
+
+		test("the picker sets any colour and goes back to the pen from the eraser", () => {
+			click("eraser");
+			act(() => click("more colors"));
+			const input = q("custom color") as HTMLInputElement;
+			input.value = "#123456";
+			act(() => {
+				input.dispatchEvent(new Event("input", { bubbles: true }));
+			});
+			expect(settings.color).toBe("#123456");
+			expect(settings.tool).toBe("pen");
+		});
 	});
 
 	test("eraser and pen buttons switch the tool", () => {

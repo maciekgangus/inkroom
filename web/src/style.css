@@ -298,6 +298,51 @@ canvas {
 		0 0 0 3px var(--surface),
 		0 0 0 5px var(--accent);
 }
+.toolbar .swatch.more {
+	border: 1px dashed var(--muted);
+	color: var(--muted);
+}
+.more svg {
+	width: 14px;
+	height: 14px;
+}
+.toolbar .swatch.more[style] {
+	border-color: transparent;
+}
+.palette {
+	position: absolute;
+	top: calc(100% + 8px);
+	left: 50%;
+	transform: translateX(-50%);
+	display: grid;
+	grid-template-columns: repeat(6, auto);
+	padding: 8px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--surface);
+	box-shadow: var(--shadow);
+}
+.palette .custom {
+	grid-column: 1 / -1;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	margin: 4px 8px 2px;
+	padding-top: 10px;
+	border-top: 1px solid var(--border);
+	font-size: 13px;
+	color: var(--muted);
+}
+.palette input[type="color"] {
+	width: 44px;
+	height: 28px;
+	padding: 0;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	background: none;
+	cursor: pointer;
+}
 .toolbar .dot {
 	background: currentColor;
 	border-radius: 50%;
