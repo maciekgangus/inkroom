@@ -4,7 +4,7 @@ Własna, tania tablica interaktywna do prowadzenia korepetycji online, zamiennik
 Źródło prawdy o wymaganiach: @SPEC.md. Decyzje architektoniczne: `docs/decisions/`.
 
 ## Stan projektu
-Etap 0 w toku (szkielet działa, zostały hooki i PR): stos wybrany w `docs/decisions/0001-stack.md` (własny canvas + Go + SQLite). Plan w `docs/plan-stage-0.md`. Kod aplikacji dopiero po spike'u na iPadzie i zgodnie z tym planem.
+Etap 0 prawie gotowy (szkielet i hooki działają, zostaje PR): stos wybrany w `docs/decisions/0001-stack.md` (własny canvas + Go + SQLite). Plan w `docs/plan-stage-0.md`. Kod aplikacji dopiero po spike'u na iPadzie i zgodnie z tym planem.
 
 ## Priorytety (w tej kolejności)
 1. Responsywność: kreska pojawia się natychmiast lokalnie, u drugiej osoby bez zauważalnego opóźnienia. Wygoda użytkownika ponad wszystko.
