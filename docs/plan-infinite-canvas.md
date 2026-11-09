@@ -14,7 +14,7 @@ Zasady: najpierw test i potwierdzenie, że pada; potem implementacja. Małe comm
    - PC: kółko myszy lub dwa palce na gładziku przesuwają, Ctrl + kółko (i szczypanie na gładziku) powiększa, środkowy przycisk myszy przeciąga widok, nowe narzędzie "Ręka" w panelu przeciąga widok lewym przyciskiem.
    - iPad: **dwa palce** przesuwają i powiększają (szczypanie). Jeden palec nadal niczego nie robi (palm rejection, N-010). Gdy rysik dotyka ekranu, dotyk jest ignorowany.
 5. **Wydajność (priorytet 1):** kontury `perfect-freehand` liczone raz na kreskę i trzymane jako `Path2D`, a przy przerysowaniu pomijamy kreski spoza widoku (porównanie z ramką kreski). Przerysowanie przy każdej klatce przesuwania.
-6. **Interfejs:** w panelu przyciski `-`, wskaźnik powiększenia (klik wraca do 100% i początku) i `+`.
+6. **Interfejs:** w prawym dolnym rogu ekranu przyciski `-` (oddal), `+` (przybliż) i środkowy przycisk z aktualnym powiększeniem w procentach, który **resetuje powiększenie do 100%** (wokół środka ekranu, bez przesuwania widoku na początek tablicy). Krok powiększenia 25%. Narzędzie "Ręka" zostaje w panelu narzędzi.
 7. **Poza zakresem:** zapamiętywanie widoku, "dopasuj do zawartości", minimapa, ograniczenie obszaru, kursory innych osób (R-013).
 
 ## Kroki
@@ -23,7 +23,7 @@ Zasady: najpierw test i potwierdzenie, że pada; potem implementacja. Małe comm
 3. **Gesty dotykowe (`gestures.ts`)**, testy najpierw: dwa palce dają przesunięcie i zoom wokół środka, jeden palec nic, dotyk ignorowany gdy rysik aktywny, koniec gestu po podniesieniu palca.
 4. **Kontroler we współrzędnych tablicy**, testy najpierw: punkty kresek i gumka przeliczane przez widok, narzędzie "Ręka" i środkowy przycisk przesuwają widok, stare zachowanie przy widoku startowym bez zmian.
 5. **Renderer:** transformacja widoku, `Path2D` w pamięci podręcznej, pomijanie kresek spoza widoku, warstwa żywa też z widokiem (testy czystych części: ramka kreski i test widoczności).
-6. **Podpięcie w `BoardView`:** kółko myszy (`preventDefault`, żeby nie powiększać strony), Ctrl + kółko, gesty dotykowe, przyciski zoomu i narzędzie "Ręka" w panelu.
+6. **Podpięcie w `BoardView`:** kółko myszy (`preventDefault`, żeby nie powiększać strony), Ctrl + kółko, gesty dotykowe, przyciski zoomu w rogu ekranu (z testem komponentu) i narzędzie "Ręka" w panelu.
 7. **Sprawdzenie w Chrome** (przeglądarka z moich narzędzi): przesuwanie, zoom, rysowanie po przesunięciu, druga karta widzi kreski w tych samych miejscach.
 8. **Test na PC + iPadzie:** rysowanie, dwa palce, płynność przy większej liczbie kresek. Wynik do SPEC.md (R-010 `done`), CLAUDE.md i PR.
 
