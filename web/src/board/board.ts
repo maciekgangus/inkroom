@@ -1,8 +1,19 @@
 /** A point of a stroke: x, y and pen pressure (0..1). */
 export type Point = [x: number, y: number, pressure: number];
 
-/** One drawn element. Immutable once added. `z` (client clock, ms) orders drawing; ties break by id. */
+/** What an element is; a missing kind means a freehand stroke (ADR 0006). */
+export type ElementKind = "stroke" | "line" | "rect" | "circle" | "text";
+
+/**
+ * One element on the board: a freehand stroke, a shape or a text. Immutable once added.
+ * `z` (client clock, ms) orders drawing; ties break by id. Geometry is in `points`
+ * (board coordinates): line = start and end, rect = two corners, circle = centre and a
+ * point on it, text = the top-left anchor.
+ */
 export interface Stroke {
+	kind?: ElementKind;
+	/** The content, for kind "text". */
+	text?: string;
 	id: string;
 	authorId: string;
 	color: string;

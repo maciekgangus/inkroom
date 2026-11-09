@@ -2,7 +2,11 @@ import { getStroke } from "perfect-freehand";
 import type { Stroke } from "./board";
 import { intersects, strokeBounds } from "./bounds";
 import type { Renderer } from "./controller";
+import { fontSizeFor, LINE_HEIGHT } from "./text";
 import type { Rect, Viewport } from "./viewport";
+
+/** Freehand strokes are filled outlines; shapes are stroked paths; text is drawn directly. */
+const isFilled = (s: Stroke) => !s.kind || s.kind === "stroke";
 
 function outlinePath(stroke: Stroke): Path2D | null {
 	const outline = getStroke(stroke.points, {
@@ -19,6 +23,62 @@ function outlinePath(stroke: Stroke): Path2D | null {
 		path.lineTo(outline[i][0], outline[i][1]);
 	path.closePath();
 	return path;
+}
+
+/** The path of a line, rectangle or circle; null for anything else. */
+function shapePath(s: Stroke): Path2D | null {
+	const [a, b] = s.points;
+	if (!b) return null;
+	const path = new Path2D();
+	if (s.kind === "line") {
+		path.moveTo(a[0], a[1]);
+		path.lineTo(b[0], b[1]);
+	} else if (s.kind === "rect") {
+		path.rect(
+			Math.min(a[0], b[0]),
+			Math.min(a[1], b[1]),
+			Math.abs(b[0] - a[0]),
+			Math.abs(b[1] - a[1]),
+		);
+	} else if (s.kind === "circle") {
+		path.arc(a[0], a[1], Math.hypot(b[0] - a[0], b[1] - a[1]), 0, Math.PI * 2);
+	} else {
+		return null;
+	}
+	return path;
+}
+
+function elementPath(s: Stroke): Path2D | null {
+	return isFilled(s) ? outlinePath(s) : shapePath(s);
+}
+
+/** Draws one element; `path` is its (cached) path, unused for text. */
+function drawElement(
+	ctx: CanvasRenderingContext2D,
+	s: Stroke,
+	path: Path2D | null,
+): void {
+	if (s.kind === "text") {
+		const fs = fontSizeFor(s.size);
+		ctx.fillStyle = s.color;
+		ctx.font = `${fs}px system-ui, sans-serif`;
+		ctx.textBaseline = "top";
+		const [x, y] = s.points[0];
+		const lineHeight = fs * LINE_HEIGHT;
+		const halfLeading = (lineHeight - fs) / 2; // where a text field puts the first line
+		(s.text ?? "").split("\n").forEach((line, i) => {
+			ctx.fillText(line, x, y + i * lineHeight + halfLeading);
+		});
+	} else if (path && isFilled(s)) {
+		ctx.fillStyle = s.color;
+		ctx.fill(path);
+	} else if (path) {
+		ctx.strokeStyle = s.color;
+		ctx.lineWidth = s.size;
+		ctx.lineCap = "round";
+		ctx.lineJoin = "round";
+		ctx.stroke(path);
+	}
 }
 
 interface Cached {
@@ -110,10 +170,8 @@ export class CanvasRenderer implements Renderer {
 				this.cache.set(s, c);
 			}
 			if (!intersects(c.bounds, view)) continue;
-			if (c.path === undefined) c.path = outlinePath(s);
-			if (!c.path) continue;
-			ctx.fillStyle = s.color;
-			ctx.fill(c.path);
+			if (c.path === undefined) c.path = elementPath(s);
+			drawElement(ctx, s, c.path);
 		}
 	}
 
@@ -121,12 +179,9 @@ export class CanvasRenderer implements Renderer {
 		const ctx = this.live;
 		if (!ctx) return;
 		this.begin(ctx);
-		// Unfinished strokes keep changing, so their outlines are not cached.
+		// Unfinished elements keep changing, so their paths are not cached.
 		for (const s of [...this.remote, ...(this.local ? [this.local] : [])]) {
-			const path = outlinePath(s);
-			if (!path) continue;
-			ctx.fillStyle = s.color;
-			ctx.fill(path);
+			drawElement(ctx, s, elementPath(s));
 		}
 	}
 }

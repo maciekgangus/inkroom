@@ -42,6 +42,26 @@ describe("Toolbar", () => {
 		expect(settings.tool).toBe("pen");
 	});
 
+	test("shape and text buttons select their tools", () => {
+		for (const tool of ["line", "rect", "circle", "text"] as const) {
+			click(tool);
+			expect(settings.tool).toBe(tool);
+		}
+	});
+
+	test("picking a colour keeps a shape or text tool, but leaves the eraser and the hand", () => {
+		click("rect");
+		click(`color ${COLORS[3]}`);
+		expect(settings.tool).toBe("rect");
+		expect(settings.color).toBe(COLORS[3]);
+		click("text");
+		click(`color ${COLORS[1]}`);
+		expect(settings.tool).toBe("text");
+		click("eraser");
+		click(`color ${COLORS[2]}`);
+		expect(settings.tool).toBe("pen");
+	});
+
 	test("color buttons set the color and switch back to the pen", () => {
 		click("eraser");
 		click(`color ${COLORS[2]}`);
