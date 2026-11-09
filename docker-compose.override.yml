@@ -1,0 +1,10 @@
+# Local development only: Docker Compose merges this file automatically into
+# `docker compose up`, so a test account always exists and nobody has to register.
+#
+# On a server run `docker compose -f docker-compose.yml up` (naming the files
+# explicitly skips this one), so this public test account never exists there.
+services:
+  app:
+    environment:
+      SEED_USER_EMAIL: test@example.test
+      SEED_USER_PASSWORD: test-user-1234

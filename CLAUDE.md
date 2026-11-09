@@ -32,5 +32,6 @@ Stos: serwer w Go (`server/`), klient w TypeScript + Vite + Preact (`web/`). Kom
 - Kod, nazwy, komentarze i commit messages po angielsku. Dokumenty (`SPEC.md`, ADR, README) po polsku.
 - Małe commity, jeden po każdej działającej części. Commituj po przejściu testów i moim przeglądzie diffu.
 - Nie czytaj ani nie ruszaj plików `.env`.
+- Lokalnie `docker compose up` ładuje `docker-compose.override.yml`, który tworzy publiczne konto testowe (`test@example.test`, hasło w tym pliku). Na serwerze uruchamiać z jawnym `-f docker-compose.yml`, żeby tego konta tam nie było.
 - Wdrożenie: docker compose, najpierw lokalnie, później na domowym VPS (ADR 0002). Sekrety w `.env`, nigdy w obrazach ani w repo.
 - Plugin lub serwer MCP dodawaj dopiero pod konkretny problem, a po dodaniu sprawdź `/context`.
