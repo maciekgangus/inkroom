@@ -6,6 +6,7 @@ import {
 	type Renderer,
 	type Settings,
 } from "./controller";
+import { Viewport } from "./viewport";
 
 function ev(
 	type: string,
@@ -27,14 +28,16 @@ describe("Controller", () => {
 	let board: Board;
 	let renderer: Renderer;
 	let settings: Settings;
+	let viewport: Viewport;
 	let c: Controller;
 
 	beforeEach(() => {
 		board = new Board();
 		renderer = { drawLive: vi.fn(), redraw: vi.fn() };
 		settings = { tool: "pen", color: "#c00", size: 4 };
+		viewport = new Viewport();
 		let n = 0;
-		c = new Controller(board, renderer, settings, "me", () => `s${++n}`);
+		c = new Controller(board, renderer, settings, viewport, "me", () => `s${++n}`);
 	});
 
 	test("pen draws a stroke with the current color and size on release", () => {
@@ -145,5 +148,81 @@ describe("Controller", () => {
 		const z = board.strokes.map((s) => s.z);
 		expect(z[1]).toBeGreaterThan(z[0]);
 		expect(z[2]).toBeGreaterThan(z[1]);
+	});
+
+	describe("with a moved and zoomed view", () => {
+		beforeEach(() => {
+			viewport.x = 100;
+			viewport.y = 50;
+			viewport.scale = 2;
+		});
+
+		test("stroke points are stored in board coordinates", () => {
+			c.pointerDown(ev("pen", 20, 10));
+			c.pointerMove(ev("pen", 40, 30));
+			c.pointerUp(ev("pen", 40, 30));
+			expect(board.strokes[0].points.map((p) => [p[0], p[1]])).toEqual([
+				[110, 55],
+				[120, 65],
+			]);
+		});
+
+		test("the eraser radius stays constant on screen", () => {
+			c.pointerDown(ev("pen", 0, 0)); // board (100, 50)
+			c.pointerMove(ev("pen", 100, 0)); // board (150, 50)
+			c.pointerUp(ev("pen", 100, 0));
+			settings.tool = "eraser";
+			// 8 screen px away from the line = 4 board units: inside a 10 px eraser (5 units + half the stroke).
+			c.pointerDown(ev("pen", 50, 8));
+			c.pointerUp(ev("pen", 50, 8));
+			expect(board.strokes).toHaveLength(0);
+		});
+
+		test("the eraser misses a stroke that is far away on screen", () => {
+			c.pointerDown(ev("pen", 0, 0));
+			c.pointerMove(ev("pen", 100, 0));
+			c.pointerUp(ev("pen", 100, 0));
+			settings.tool = "eraser";
+			c.pointerDown(ev("pen", 50, 40)); // 20 board units away
+			c.pointerUp(ev("pen", 50, 40));
+			expect(board.strokes).toHaveLength(1);
+		});
+	});
+
+	describe("panning", () => {
+		test("the pan tool drags the view and draws nothing", () => {
+			settings.tool = "pan";
+			c.pointerDown(ev("mouse", 100, 100));
+			c.pointerMove(ev("mouse", 130, 90));
+			c.pointerUp(ev("mouse", 130, 90));
+			expect(board.strokes).toHaveLength(0);
+			expect(viewport.toScreen(0, 0)).toEqual([30, -10]);
+			expect(renderer.redraw).toHaveBeenCalled();
+		});
+
+		test("the middle mouse button pans whatever the tool", () => {
+			c.pointerDown(ev("mouse", 100, 100, { button: 1 }));
+			c.pointerMove(ev("mouse", 120, 100));
+			c.pointerUp(ev("mouse", 120, 100));
+			expect(board.strokes).toHaveLength(0);
+			expect(viewport.toScreen(0, 0)).toEqual([20, 0]);
+		});
+
+		test("panning follows the pointer at any zoom", () => {
+			viewport.scale = 4;
+			settings.tool = "pan";
+			c.pointerDown(ev("pen", 10, 10));
+			c.pointerMove(ev("pen", 50, 10));
+			c.pointerUp(ev("pen", 50, 10));
+			expect(viewport.toScreen(0, 0)[0]).toBeCloseTo(40);
+		});
+
+		test("reports whether a pointer is busy (so touches can be ignored)", () => {
+			expect(c.busy).toBe(false);
+			c.pointerDown(ev("pen", 0, 0));
+			expect(c.busy).toBe(true);
+			c.pointerUp(ev("pen", 0, 0));
+			expect(c.busy).toBe(false);
+		});
 	});
 });
