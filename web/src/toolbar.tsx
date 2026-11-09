@@ -10,7 +10,26 @@ interface Props {
 	onRedo: () => void;
 }
 
-/** Tool palette: pen/eraser, color, size, undo/redo. Mutates `settings` in place. */
+const TOOLS: { tool: Settings["tool"]; label: string }[] = [
+	{ tool: "pen", label: "Pióro" },
+	{ tool: "line", label: "Linia" },
+	{ tool: "rect", label: "Prostokąt" },
+	{ tool: "circle", label: "Okrąg" },
+	{ tool: "text", label: "Tekst" },
+	{ tool: "eraser", label: "Gumka" },
+	{ tool: "pan", label: "Ręka" },
+];
+
+/** Tools that draw something in the chosen colour. */
+const colourTools: Settings["tool"][] = [
+	"pen",
+	"line",
+	"rect",
+	"circle",
+	"text",
+];
+
+/** Tool palette: tools, color, size, undo/redo. Mutates `settings` in place. */
 export function Toolbar({ settings, onUndo, onRedo }: Props) {
 	const [, rerender] = useState(0);
 	const set = (patch: Partial<Settings>) => {
@@ -18,41 +37,35 @@ export function Toolbar({ settings, onUndo, onRedo }: Props) {
 		rerender((n) => n + 1);
 	};
 	const on = (active: boolean) => (active ? "active" : "");
+	const drawing = colourTools.includes(settings.tool);
 
 	return (
 		<div class="toolbar">
-			<button
-				type="button"
-				aria-label="pen"
-				class={on(settings.tool === "pen")}
-				onClick={() => set({ tool: "pen" })}
-			>
-				Pióro
-			</button>
-			<button
-				type="button"
-				aria-label="eraser"
-				class={on(settings.tool === "eraser")}
-				onClick={() => set({ tool: "eraser" })}
-			>
-				Gumka
-			</button>
-			<button
-				type="button"
-				aria-label="pan"
-				class={on(settings.tool === "pan")}
-				onClick={() => set({ tool: "pan" })}
-			>
-				Ręka
-			</button>
+			{TOOLS.map(({ tool, label }) => (
+				<button
+					type="button"
+					key={tool}
+					aria-label={tool}
+					class={on(settings.tool === tool)}
+					onClick={() => set({ tool })}
+				>
+					{label}
+				</button>
+			))}
 			{COLORS.map((c) => (
 				<button
 					type="button"
 					key={c}
 					aria-label={`color ${c}`}
-					class={`swatch ${on(settings.tool === "pen" && settings.color === c)}`}
+					class={`swatch ${on(drawing && settings.color === c)}`}
 					style={{ background: c }}
-					onClick={() => set({ color: c, tool: "pen" })}
+					// Picking a colour while erasing or panning goes back to the pen; shapes and text stay.
+					onClick={() =>
+						set({
+							color: c,
+							tool: colourTools.includes(settings.tool) ? settings.tool : "pen",
+						})
+					}
 				/>
 			))}
 			{SIZES.map((s) => (

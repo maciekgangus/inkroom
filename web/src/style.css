@@ -35,6 +35,10 @@ canvas {
 	user-select: none;
 }
 .toolbar {
+	flex-wrap: wrap;
+	justify-content: center;
+	max-width: calc(100vw - 16px);
+	box-sizing: border-box;
 	position: fixed;
 	top: 8px;
 	left: 50%;
