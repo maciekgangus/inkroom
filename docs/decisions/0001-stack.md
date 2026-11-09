@@ -10,7 +10,7 @@ Stos nie jest jeszcze wybrany. Kryteria wynikają z SPEC.md, w kolejności ważn
 2. Pełna obsługa iPada i innych tabletów z rysikiem, w tym Safari na iPadOS (N-003, R-005).
 3. Niskie zużycie CPU na serwerze, RAM nie jest ograniczeniem (N-008).
 4. Gotowa biblioteka tablicy zamiast własnej, jeśli jest warta uwagi i działa.
-5. Własny serwer synchronizacji możliwy do uruchomienia u siebie (N-006), konta i zapis stanu (R-001, R-007).
+5. Własny serwer synchronizacji możliwy do uruchomienia u siebie i zapakowania w kontener Docker (N-006, N-009, ADR 0002), konta i zapis stanu (R-001, R-007).
 6. Licencja pozwalająca na użycie w prowadzeniu płatnych korepetycji.
 
 Język jest dowolny.
