@@ -52,15 +52,16 @@ function elementPath(s: Stroke): Path2D | null {
 	return isFilled(s) ? outlinePath(s) : shapePath(s);
 }
 
-/** Draws one element; `path` is its (cached) path, unused for text. */
+/** Draws one element in `color`; `path` is its (cached) path, unused for text. */
 function drawElement(
 	ctx: CanvasRenderingContext2D,
 	s: Stroke,
 	path: Path2D | null,
+	color: string,
 ): void {
 	if (s.kind === "text") {
 		const fs = fontSizeFor(s.size);
-		ctx.fillStyle = s.color;
+		ctx.fillStyle = color;
 		ctx.font = `${fs}px system-ui, sans-serif`;
 		ctx.textBaseline = "top";
 		const [x, y] = s.points[0];
@@ -70,10 +71,10 @@ function drawElement(
 			ctx.fillText(line, x, y + i * lineHeight + halfLeading);
 		});
 	} else if (path && isFilled(s)) {
-		ctx.fillStyle = s.color;
+		ctx.fillStyle = color;
 		ctx.fill(path);
 	} else if (path) {
-		ctx.strokeStyle = s.color;
+		ctx.strokeStyle = color;
 		ctx.lineWidth = s.size;
 		ctx.lineCap = "round";
 		ctx.lineJoin = "round";
@@ -99,6 +100,8 @@ export class CanvasRenderer implements Renderer {
 	private remote: Stroke[] = [];
 	private strokes: Stroke[] = [];
 	private cache = new WeakMap<Stroke, Cached>();
+	/** Maps a stored ink colour to the colour painted (dark mode swaps black and white). */
+	ink: (color: string) => string = (c) => c;
 
 	constructor(
 		private committedCanvas: HTMLCanvasElement,
@@ -171,7 +174,7 @@ export class CanvasRenderer implements Renderer {
 			}
 			if (!intersects(c.bounds, view)) continue;
 			if (c.path === undefined) c.path = elementPath(s);
-			drawElement(ctx, s, c.path);
+			drawElement(ctx, s, c.path, this.ink(s.color));
 		}
 	}
 
@@ -181,7 +184,7 @@ export class CanvasRenderer implements Renderer {
 		this.begin(ctx);
 		// Unfinished elements keep changing, so their paths are not cached.
 		for (const s of [...this.remote, ...(this.local ? [this.local] : [])]) {
-			drawElement(ctx, s, elementPath(s));
+			drawElement(ctx, s, elementPath(s), this.ink(s.color));
 		}
 	}
 }

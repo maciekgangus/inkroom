@@ -2,6 +2,7 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { Settings } from "./board/controller";
+import { setTheme } from "./theme";
 import { COLORS, MORE_COLORS, SIZES, Toolbar } from "./toolbar";
 
 describe("Toolbar", () => {
@@ -15,9 +16,11 @@ describe("Toolbar", () => {
 		settings = { tool: "pen", color: COLORS[0], size: SIZES[1] };
 		onUndo = vi.fn();
 		onRedo = vi.fn();
-		render(
-			<Toolbar settings={settings} onUndo={onUndo} onRedo={onRedo} />,
-			root,
+		act(() =>
+			render(
+				<Toolbar settings={settings} onUndo={onUndo} onRedo={onRedo} />,
+				root,
+			),
 		);
 	});
 
@@ -85,6 +88,17 @@ describe("Toolbar", () => {
 			expect(settings.color).toBe("#123456");
 			expect(settings.tool).toBe("pen");
 		});
+	});
+
+	test("in dark mode the black swatch is shown as white (the stored colour stays black)", () => {
+		act(() => setTheme("dark"));
+		const black = root.querySelector(
+			`[aria-label="color ${COLORS[0]}"]`,
+		) as HTMLElement;
+		expect(black.style.background).toMatch(/#ffffff|rgb\(255, 255, 255\)/);
+		act(() => black.click());
+		expect(settings.color).toBe(COLORS[0]);
+		act(() => setTheme("light"));
 	});
 
 	test("eraser and pen buttons switch the tool", () => {

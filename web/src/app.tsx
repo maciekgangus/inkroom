@@ -4,6 +4,7 @@ import { AuthForms } from "./auth-forms";
 import { BoardView, newId } from "./board-view";
 import { Panel } from "./panel";
 import type { SocketLike } from "./sync/sync";
+import { ThemeToggle } from "./theme";
 
 const BOARD_PATH = /^\/b\/([0-9a-f]{32})$/;
 const NAME_KEY = "inkroom.name";
@@ -42,8 +43,18 @@ export function App({
 	createSocket = realSocket,
 }: Props) {
 	const match = BOARD_PATH.exec(path);
-	if (!match) return <Home navigate={navigate} />;
-	return <BoardPage id={match[1]} createSocket={createSocket} />;
+	return (
+		<>
+			{match ? (
+				<BoardPage id={match[1]} createSocket={createSocket} />
+			) : (
+				<Home navigate={navigate} />
+			)}
+			<div class="corner">
+				<ThemeToggle />
+			</div>
+		</>
+	);
 }
 
 function Home({ navigate }: { navigate: (to: string) => void }) {

@@ -8,6 +8,7 @@ import { Viewport } from "./board/viewport";
 import { Cursors } from "./cursors";
 import { type SocketLike, SyncClient } from "./sync/sync";
 import { TextEditor } from "./text-editor";
+import { currentTheme, displayColor, useTheme } from "./theme";
 import { COLORS, SIZES, Toolbar } from "./toolbar";
 import { ZoomControls } from "./zoom-controls";
 
@@ -42,6 +43,8 @@ export function BoardView({ authorId, name, connect }: Props) {
 	const [, setTick] = useState(0); // bumped when the view changes, so the text field follows it
 	const ctl = useRef<Controller | null>(null);
 	const syncRef = useRef<SyncClient | null>(null);
+	const rendererRef = useRef<CanvasRenderer | null>(null);
+	const theme = useTheme();
 	/** Repaints after the view changed (set up by the effect below). */
 	const viewChanged = useRef<() => void>(() => {});
 
@@ -51,6 +54,8 @@ export function BoardView({ authorId, name, connect }: Props) {
 		if (!committed || !live) return;
 
 		const canvas = new CanvasRenderer(committed, live, viewport);
+		canvas.ink = (c) => displayColor(c, currentTheme());
+		rendererRef.current = canvas;
 		const board = new Board();
 		const sync = new SyncClient(board, {
 			createSocket: connect,
@@ -178,6 +183,11 @@ export function BoardView({ authorId, name, connect }: Props) {
 		};
 	}, [settings, viewport, authorId, name, connect]);
 
+	// The ink colours depend on the theme (black and white swap in dark mode).
+	useEffect(() => {
+		if (theme) viewChanged.current();
+	}, [theme]);
+
 	// Expired cursors vanish even if nothing else happens on the board.
 	useEffect(() => {
 		const timer = setInterval(() => setTick((t) => t + 1), 5000);
@@ -200,7 +210,7 @@ export function BoardView({ authorId, name, connect }: Props) {
 					x={viewport.toScreen(textAt.x, textAt.y)[0]}
 					y={viewport.toScreen(textAt.x, textAt.y)[1]}
 					fontSize={fontSizeFor(settings.size) * viewport.scale}
-					color={settings.color}
+					color={displayColor(settings.color, theme)}
 					onCommit={(text) => {
 						ctl.current?.addText(text, textAt.x, textAt.y);
 						setTextAt(null);
