@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { Board } from "./board";
-import { Controller, type PointerInput, type Renderer, type Settings } from "./controller";
+import {
+	Controller,
+	type PointerInput,
+	type Renderer,
+	type Settings,
+} from "./controller";
 
 function ev(
 	type: string,
@@ -8,7 +13,14 @@ function ev(
 	y: number,
 	extra: Partial<PointerInput> = {},
 ): PointerInput {
-	return { pointerId: 1, pointerType: type, clientX: x, clientY: y, pressure: 0.5, ...extra };
+	return {
+		pointerId: 1,
+		pointerType: type,
+		clientX: x,
+		clientY: y,
+		pressure: 0.5,
+		...extra,
+	};
 }
 
 describe("Controller", () => {
@@ -52,7 +64,11 @@ describe("Controller", () => {
 	test("uses coalesced events for extra points", () => {
 		c.pointerDown(ev("pen", 0, 0));
 		const move = ev("pen", 3, 3, {
-			getCoalescedEvents: () => [ev("pen", 1, 1), ev("pen", 2, 2), ev("pen", 3, 3)],
+			getCoalescedEvents: () => [
+				ev("pen", 1, 1),
+				ev("pen", 2, 2),
+				ev("pen", 3, 3),
+			],
 		});
 		c.pointerMove(move);
 		c.pointerUp(ev("pen", 3, 3));
@@ -62,7 +78,9 @@ describe("Controller", () => {
 	test("shows the live stroke while drawing and clears it on release", () => {
 		c.pointerDown(ev("pen", 0, 0));
 		c.pointerMove(ev("pen", 2, 2));
-		expect(renderer.drawLive).toHaveBeenLastCalledWith(expect.objectContaining({ id: "s1" }));
+		expect(renderer.drawLive).toHaveBeenLastCalledWith(
+			expect.objectContaining({ id: "s1" }),
+		);
 		c.pointerUp(ev("pen", 2, 2));
 		expect(renderer.drawLive).toHaveBeenLastCalledWith(null);
 		expect(renderer.redraw).toHaveBeenCalled();
