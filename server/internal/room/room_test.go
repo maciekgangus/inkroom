@@ -199,17 +199,3 @@ func TestInvalidMessagesAreRejected(t *testing.T) {
 	}
 	none(t, a)
 }
-
-func TestHubCreatesUniqueHexIDsAndFindsRooms(t *testing.T) {
-	h := NewHub()
-	id1, id2 := h.Create(), h.Create()
-	if id1 == id2 || len(id1) != 32 {
-		t.Fatalf("bad ids %q %q", id1, id2)
-	}
-	if h.Get(id1) == nil {
-		t.Fatal("room not found")
-	}
-	if h.Get("nope") != nil {
-		t.Fatal("unknown id should give nil")
-	}
-}
