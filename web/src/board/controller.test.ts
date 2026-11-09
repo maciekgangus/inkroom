@@ -242,7 +242,10 @@ describe("Controller", () => {
 			c.pointerUp(ev("pen", 100, 80));
 			const s = board.strokes[0];
 			expect(s.kind).toBe("line");
-			expect(s.points.map((p) => [p[0], p[1]])).toEqual([[10, 20], [100, 80]]);
+			expect(s.points.map((p) => [p[0], p[1]])).toEqual([
+				[10, 20],
+				[100, 80],
+			]);
 			expect([s.color, s.size, s.authorId]).toEqual(["#c00", 4, "me"]);
 		});
 
@@ -252,7 +255,10 @@ describe("Controller", () => {
 			c.pointerMove(ev("mouse", 65, 45));
 			c.pointerUp(ev("mouse", 65, 45));
 			expect(board.strokes[0].kind).toBe("rect");
-			expect(board.strokes[0].points.map((p) => [p[0], p[1]])).toEqual([[5, 5], [65, 45]]);
+			expect(board.strokes[0].points.map((p) => [p[0], p[1]])).toEqual([
+				[5, 5],
+				[65, 45],
+			]);
 		});
 
 		test("the circle tool stores the centre and a point on the circle", () => {
@@ -261,14 +267,19 @@ describe("Controller", () => {
 			c.pointerMove(ev("pen", 130, 140));
 			c.pointerUp(ev("pen", 130, 140));
 			expect(board.strokes[0].kind).toBe("circle");
-			expect(board.strokes[0].points.map((p) => [p[0], p[1]])).toEqual([[100, 100], [130, 140]]);
+			expect(board.strokes[0].points.map((p) => [p[0], p[1]])).toEqual([
+				[100, 100],
+				[130, 140],
+			]);
 		});
 
 		test("a preview is shown while dragging and cleared on release", () => {
 			settings.tool = "rect";
 			c.pointerDown(ev("pen", 0, 0));
 			c.pointerMove(ev("pen", 40, 40));
-			expect(renderer.drawLive).toHaveBeenLastCalledWith(expect.objectContaining({ kind: "rect" }));
+			expect(renderer.drawLive).toHaveBeenLastCalledWith(
+				expect.objectContaining({ kind: "rect" }),
+			);
 			c.pointerUp(ev("pen", 40, 40));
 			expect(renderer.drawLive).toHaveBeenLastCalledWith(null);
 		});
@@ -288,7 +299,10 @@ describe("Controller", () => {
 			c.pointerDown(ev("pen", 0, 0));
 			c.pointerMove(ev("pen", 100, 50));
 			c.pointerUp(ev("pen", 100, 50));
-			expect(board.strokes[0].points.map((p) => [p[0], p[1]])).toEqual([[100, 0], [150, 25]]);
+			expect(board.strokes[0].points.map((p) => [p[0], p[1]])).toEqual([
+				[100, 0],
+				[150, 25],
+			]);
 		});
 
 		test("a shape can be undone and erased like a stroke", () => {
@@ -322,7 +336,13 @@ describe("Controller", () => {
 			settings.size = 10;
 			c.addText("Hello", 30, 40);
 			const t = board.strokes[0];
-			expect(t).toMatchObject({ kind: "text", text: "Hello", color: "#c00", size: 10, authorId: "me" });
+			expect(t).toMatchObject({
+				kind: "text",
+				text: "Hello",
+				color: "#c00",
+				size: 10,
+				authorId: "me",
+			});
 			expect([t.points[0][0], t.points[0][1]]).toEqual([30, 40]);
 		});
 

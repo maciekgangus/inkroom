@@ -1,14 +1,29 @@
 import { describe, expect, test } from "vitest";
 import type { Stroke } from "./board";
-import { LINE_HEIGHT, fontSizeFor, textBox } from "./text";
+import { fontSizeFor, LINE_HEIGHT, textBox } from "./text";
 
-function text(content: string, size = 5, at: [number, number] = [100, 50]): Stroke {
-	return { id: "t", authorId: "a", color: "#111", size, z: 0, kind: "text", text: content, points: [[at[0], at[1], 0.5]] };
+function text(
+	content: string,
+	size = 5,
+	at: [number, number] = [100, 50],
+): Stroke {
+	return {
+		id: "t",
+		authorId: "a",
+		color: "#111",
+		size,
+		z: 0,
+		kind: "text",
+		text: content,
+		points: [[at[0], at[1], 0.5]],
+	};
 }
 
 describe("fontSizeFor", () => {
 	test("maps the three pen sizes to readable font sizes", () => {
-		expect([fontSizeFor(2), fontSizeFor(5), fontSizeFor(10)]).toEqual([16, 24, 40]);
+		expect([fontSizeFor(2), fontSizeFor(5), fontSizeFor(10)]).toEqual([
+			16, 24, 40,
+		]);
 	});
 
 	test("falls back to a proportional size for other values", () => {

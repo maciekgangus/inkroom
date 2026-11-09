@@ -68,12 +68,39 @@ describe("findHit", () => {
 
 describe("strokeHit for shapes and text", () => {
 	const base = { id: "s", authorId: "a", color: "#111", size: 4, z: 0 };
-	const rect: Stroke = { ...base, kind: "rect", points: [[0, 0, 0.5], [100, 60, 0.5]] };
-	const circle: Stroke = { ...base, kind: "circle", points: [[0, 0, 0.5], [50, 0, 0.5]] }; // r = 50
-	const textEl: Stroke = { ...base, kind: "text", text: "hello", size: 5, points: [[10, 10, 0.5]] };
+	const rect: Stroke = {
+		...base,
+		kind: "rect",
+		points: [
+			[0, 0, 0.5],
+			[100, 60, 0.5],
+		],
+	};
+	const circle: Stroke = {
+		...base,
+		kind: "circle",
+		points: [
+			[0, 0, 0.5],
+			[50, 0, 0.5],
+		],
+	}; // r = 50
+	const textEl: Stroke = {
+		...base,
+		kind: "text",
+		text: "hello",
+		size: 5,
+		points: [[10, 10, 0.5]],
+	};
 
 	test("a line is hit like a segment", () => {
-		const line: Stroke = { ...base, kind: "line", points: [[0, 0, 0.5], [100, 0, 0.5]] };
+		const line: Stroke = {
+			...base,
+			kind: "line",
+			points: [
+				[0, 0, 0.5],
+				[100, 0, 0.5],
+			],
+		};
 		expect(strokeHit(line, 50, 3, 4)).toBe(true);
 		expect(strokeHit(line, 50, 30, 4)).toBe(false);
 	});
@@ -87,7 +114,13 @@ describe("strokeHit for shapes and text", () => {
 	});
 
 	test("a rectangle dragged from bottom-right to top-left is the same rectangle", () => {
-		const flipped: Stroke = { ...rect, points: [[100, 60, 0.5], [0, 0, 0.5]] };
+		const flipped: Stroke = {
+			...rect,
+			points: [
+				[100, 60, 0.5],
+				[0, 0, 0.5],
+			],
+		};
 		expect(strokeHit(flipped, 50, 0, 4)).toBe(true);
 		expect(strokeHit(flipped, 50, 30, 4)).toBe(false);
 	});
@@ -101,7 +134,14 @@ describe("strokeHit for shapes and text", () => {
 
 	test("text is hit anywhere inside its box", () => {
 		const box = textBox(textEl);
-		expect(strokeHit(textEl, (box.minX + box.maxX) / 2, (box.minY + box.maxY) / 2, 4)).toBe(true);
+		expect(
+			strokeHit(
+				textEl,
+				(box.minX + box.maxX) / 2,
+				(box.minY + box.maxY) / 2,
+				4,
+			),
+		).toBe(true);
 		expect(strokeHit(textEl, box.maxX + 100, box.maxY + 100, 4)).toBe(false);
 	});
 });

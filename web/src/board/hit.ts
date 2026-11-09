@@ -1,4 +1,5 @@
 import type { Stroke } from "./board";
+import { textBox } from "./text";
 
 function distToSegment(
 	px: number,
@@ -18,15 +19,13 @@ function distToSegment(
 	return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
 }
 
-/** True if (x, y) is within `radius` of the stroke's outline (stroke half-width included). */
-export function strokeHit(
-	stroke: Stroke,
+/** True if the polyline through `pts` passes within `reach` of (x, y). */
+function nearPolyline(
+	pts: number[][],
 	x: number,
 	y: number,
-	radius: number,
+	reach: number,
 ): boolean {
-	const reach = radius + stroke.size / 2;
-	const pts = stroke.points;
 	if (pts.length === 1)
 		return Math.hypot(x - pts[0][0], y - pts[0][1]) <= reach;
 	for (let i = 1; i < pts.length; i++) {
@@ -37,6 +36,46 @@ export function strokeHit(
 			return true;
 	}
 	return false;
+}
+
+/** True if (x, y) is within `radius` of the element's outline (its half-width included). */
+export function strokeHit(
+	stroke: Stroke,
+	x: number,
+	y: number,
+	radius: number,
+): boolean {
+	const reach = radius + stroke.size / 2;
+	const pts = stroke.points;
+	switch (stroke.kind) {
+		case "rect": {
+			const [a, b] = pts;
+			const corners = [
+				[a[0], a[1]],
+				[b[0], a[1]],
+				[b[0], b[1]],
+				[a[0], b[1]],
+				[a[0], a[1]],
+			];
+			return nearPolyline(corners, x, y, reach);
+		}
+		case "circle": {
+			const [c, edge] = pts;
+			const r = Math.hypot(edge[0] - c[0], edge[1] - c[1]);
+			return Math.abs(Math.hypot(x - c[0], y - c[1]) - r) <= reach;
+		}
+		case "text": {
+			const box = textBox(stroke);
+			return (
+				x >= box.minX - radius &&
+				x <= box.maxX + radius &&
+				y >= box.minY - radius &&
+				y <= box.maxY + radius
+			);
+		}
+		default:
+			return nearPolyline(pts, x, y, reach);
+	}
 }
 
 /** Topmost (last drawn) stroke under the eraser, if any. */
