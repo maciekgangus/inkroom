@@ -3,12 +3,12 @@
 package room
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"sort"
 	"sync"
+
+	"github.com/maciekgangus/inkroom/server/internal/store"
 )
 
 const maxIDLen = 64
@@ -65,11 +65,32 @@ type Room struct {
 	strokes map[string]entry
 	seq     int
 	clients map[*Client]map[string]struct{} // client -> ids of its unfinished "live" strokes
+
+	// Persistence (only for rooms created by a Hub): changes wait in pending until flushed.
+	track   bool
+	pending []store.Op
+	flushMu sync.Mutex // serializes flushes so batches reach the store in order
+	closed  bool
 }
 
-// New returns an empty room.
+// New returns an empty room that is not persisted.
 func New() *Room {
 	return &Room{strokes: map[string]entry{}, clients: map[*Client]map[string]struct{}{}}
+}
+
+// newPersisted returns a room holding the saved strokes, recording further changes for the store.
+func newPersisted(saved [][]byte) *Room {
+	r := New()
+	r.track = true
+	for _, raw := range saved {
+		id, err := strokeID(raw)
+		if err != nil {
+			continue
+		}
+		r.seq++
+		r.strokes[id] = entry{seq: r.seq, raw: append(json.RawMessage(nil), raw...)}
+	}
+	return r
 }
 
 type message struct {
@@ -115,6 +136,9 @@ func (r *Room) Handle(c *Client, raw []byte) error {
 		if _, ok := r.strokes[id]; !ok {
 			r.seq++
 			r.strokes[id] = entry{seq: r.seq, raw: m.Stroke}
+			if r.track {
+				r.pending = append(r.pending, store.Op{Add: true, ID: id, Data: m.Stroke})
+			}
 		}
 		delete(r.clients[c], id)
 		r.broadcastLocked(msg, nil)
@@ -122,7 +146,12 @@ func (r *Room) Handle(c *Client, raw []byte) error {
 		if err := checkID(m.ID); err != nil {
 			return err
 		}
-		delete(r.strokes, m.ID)
+		if _, ok := r.strokes[m.ID]; ok {
+			delete(r.strokes, m.ID)
+			if r.track {
+				r.pending = append(r.pending, store.Op{ID: m.ID})
+			}
+		}
 		r.broadcastLocked(msg, nil)
 	case "live":
 		if err := checkID(m.ID); err != nil {
@@ -198,33 +227,4 @@ func strokeID(raw json.RawMessage) (string, error) {
 		return "", err
 	}
 	return s.ID, checkID(s.ID)
-}
-
-// Hub maps board identifiers to rooms.
-type Hub struct {
-	mu    sync.Mutex
-	rooms map[string]*Room
-}
-
-// NewHub returns an empty hub.
-func NewHub() *Hub { return &Hub{rooms: map[string]*Room{}} }
-
-// Create makes a new room and returns its 128-bit random hex identifier.
-func (h *Hub) Create() string {
-	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
-		panic(err)
-	}
-	id := hex.EncodeToString(b)
-	h.mu.Lock()
-	h.rooms[id] = New()
-	h.mu.Unlock()
-	return id
-}
-
-// Get returns the room with the given id, or nil.
-func (h *Hub) Get(id string) *Room {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	return h.rooms[id]
 }
