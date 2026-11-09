@@ -1,0 +1,26 @@
+# secrets
+.env
+.env.*
+
+# dependencies and build output (stack-agnostic)
+node_modules/
+dist/
+build/
+target/
+__pycache__/
+*.pyc
+.venv/
+
+# local data
+*.sqlite
+*.sqlite-journal
+*.db
+data/
+
+# editors and OS
+.idea/
+.vscode/
+.DS_Store
+
+# Claude Code local files
+.claude/settings.local.json
