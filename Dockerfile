@@ -11,10 +11,13 @@ WORKDIR /server
 COPY server/go.mod server/go.sum* ./
 RUN go mod download
 COPY server/ ./
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/server ./cmd/server
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/server ./cmd/server \
+ && mkdir -p /out/data
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=server /out/server /app/server
+# Owned by the non-root user so the named volume mounted here is writable.
+COPY --from=server --chown=nonroot:nonroot /out/data /data
 COPY --from=web /web/dist /app/static
 ENV STATIC_DIR=/app/static DATA_DIR=/data PORT=8080
 EXPOSE 8080

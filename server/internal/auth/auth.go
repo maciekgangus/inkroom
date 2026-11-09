@@ -163,7 +163,7 @@ func (s *Service) Login(w http.ResponseWriter, r *http.Request) {
 
 // Logout ends the current session.
 func (s *Service) Logout(w http.ResponseWriter, r *http.Request) {
-	if !jsonRequest(w, r) {
+	if !RequireJSON(w, r) {
 		return
 	}
 	if c, err := r.Cookie(cookieName); err == nil {
@@ -291,8 +291,8 @@ func clientIP(r *http.Request) string {
 	return host
 }
 
-// jsonRequest enforces Content-Type: application/json, which (with SameSite=Lax) blocks CSRF.
-func jsonRequest(w http.ResponseWriter, r *http.Request) bool {
+// RequireJSON enforces Content-Type: application/json, which (with SameSite=Lax) blocks CSRF.
+func RequireJSON(w http.ResponseWriter, r *http.Request) bool {
 	mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil || mt != "application/json" {
 		fail(w, http.StatusUnsupportedMediaType, "expected application/json")
@@ -303,7 +303,7 @@ func jsonRequest(w http.ResponseWriter, r *http.Request) bool {
 
 func readCredentials(w http.ResponseWriter, r *http.Request) (credentials, bool) {
 	var c credentials
-	if !jsonRequest(w, r) {
+	if !RequireJSON(w, r) {
 		return c, false
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBody)).Decode(&c); err != nil {
