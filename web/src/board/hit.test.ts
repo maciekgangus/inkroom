@@ -8,6 +8,7 @@ function line(id: string, pts: [number, number][], size = 4): Stroke {
 		authorId: "a",
 		color: "#111",
 		size,
+		z: 0,
 		points: pts.map(([x, y]) => [x, y, 0.5]),
 	};
 }
