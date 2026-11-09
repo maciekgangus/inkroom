@@ -136,4 +136,14 @@ describe("Controller", () => {
 		c.redo();
 		expect(board.strokes).toHaveLength(1);
 	});
+
+	test("strokes get a strictly increasing z", () => {
+		for (let i = 0; i < 3; i++) {
+			c.pointerDown(ev("pen", i, 0));
+			c.pointerUp(ev("pen", i, 0));
+		}
+		const z = board.strokes.map((s) => s.z);
+		expect(z[1]).toBeGreaterThan(z[0]);
+		expect(z[2]).toBeGreaterThan(z[1]);
+	});
 });

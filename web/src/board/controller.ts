@@ -30,6 +30,7 @@ const ERASER_RADIUS = 10;
 export class Controller {
 	private activeId: number | null = null;
 	private current: Stroke | null = null;
+	private lastZ = 0;
 
 	constructor(
 		private board: Board,
@@ -51,6 +52,7 @@ export class Controller {
 			authorId: this.authorId,
 			color: this.settings.color,
 			size: this.settings.size,
+			z: this.nextZ(),
 			points: [[e.clientX, e.clientY, e.pressure || 0.5]],
 		};
 		this.renderer.drawLive(this.current);
@@ -92,6 +94,12 @@ export class Controller {
 	redo(): void {
 		if (this.board.redo(this.authorId))
 			this.renderer.redraw(this.board.strokes);
+	}
+
+	/** Client clock in ms, strictly increasing so this client's strokes never tie. */
+	private nextZ(): number {
+		this.lastZ = Math.max(Date.now(), this.lastZ + 1);
+		return this.lastZ;
 	}
 
 	private erase(e: PointerInput): void {

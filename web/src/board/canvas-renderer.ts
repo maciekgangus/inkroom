@@ -24,6 +24,8 @@ function fill(ctx: CanvasRenderingContext2D, stroke: Stroke): void {
 export class CanvasRenderer implements Renderer {
 	private committed: CanvasRenderingContext2D | null;
 	private live: CanvasRenderingContext2D | null;
+	private local: Stroke | null = null;
+	private remote: Stroke[] = [];
 
 	constructor(
 		private committedCanvas: HTMLCanvasElement,
@@ -44,12 +46,26 @@ export class CanvasRenderer implements Renderer {
 			canvas.height = innerHeight * dpr;
 			ctx?.setTransform(dpr, 0, 0, dpr, 0, 0);
 		}
+		this.paintLive();
 	}
 
+	/** Sets our own unfinished stroke (null when finished). */
 	drawLive(stroke: Stroke | null): void {
+		this.local = stroke;
+		this.paintLive();
+	}
+
+	/** Sets other people's unfinished strokes. */
+	setRemoteLive(strokes: Stroke[]): void {
+		this.remote = strokes;
+		this.paintLive();
+	}
+
+	private paintLive(): void {
 		if (!this.live) return;
 		this.live.clearRect(0, 0, innerWidth, innerHeight);
-		if (stroke) fill(this.live, stroke);
+		for (const s of this.remote) fill(this.live, s);
+		if (this.local) fill(this.live, this.local);
 	}
 
 	redraw(strokes: Stroke[]): void {
