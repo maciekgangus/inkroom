@@ -37,6 +37,14 @@ export function Toolbar({ settings, onUndo, onRedo }: Props) {
 			>
 				Gumka
 			</button>
+			<button
+				type="button"
+				aria-label="pan"
+				class={on(settings.tool === "pan")}
+				onClick={() => set({ tool: "pan" })}
+			>
+				Ręka
+			</button>
 			{COLORS.map((c) => (
 				<button
 					type="button"

@@ -9,9 +9,18 @@ describe("ZoomControls", () => {
 	let onReset: () => void;
 
 	const mount = (scale: number) => {
-		render(<ZoomControls scale={scale} onZoomIn={onZoomIn} onZoomOut={onZoomOut} onReset={onReset} />, root);
+		render(
+			<ZoomControls
+				scale={scale}
+				onZoomIn={onZoomIn}
+				onZoomOut={onZoomOut}
+				onReset={onReset}
+			/>,
+			root,
+		);
 	};
-	const click = (label: string) => (root.querySelector(`[aria-label="${label}"]`) as HTMLElement).click();
+	const click = (label: string) =>
+		(root.querySelector(`[aria-label="${label}"]`) as HTMLElement).click();
 
 	beforeEach(() => {
 		root = document.createElement("div");
@@ -22,7 +31,9 @@ describe("ZoomControls", () => {
 
 	test("shows the current zoom as a rounded percentage", () => {
 		mount(1.2549);
-		expect(root.querySelector('[aria-label="zoom reset"]')?.textContent).toBe("125%");
+		expect(root.querySelector('[aria-label="zoom reset"]')?.textContent).toBe(
+			"125%",
+		);
 	});
 
 	test("plus and minus buttons call their handlers", () => {
@@ -41,8 +52,14 @@ describe("ZoomControls", () => {
 
 	test("minus and plus are disabled at the limits", () => {
 		mount(0.1);
-		expect((root.querySelector('[aria-label="zoom out"]') as HTMLButtonElement).disabled).toBe(true);
+		expect(
+			(root.querySelector('[aria-label="zoom out"]') as HTMLButtonElement)
+				.disabled,
+		).toBe(true);
 		mount(5);
-		expect((root.querySelector('[aria-label="zoom in"]') as HTMLButtonElement).disabled).toBe(true);
+		expect(
+			(root.querySelector('[aria-label="zoom in"]') as HTMLButtonElement)
+				.disabled,
+		).toBe(true);
 	});
 });
