@@ -34,6 +34,7 @@ func main() {
 	defer st.Close()
 
 	a := newApp(getenv("STATIC_DIR", "../web/dist"), st)
+	seedDevUser(a)
 	srv := &http.Server{Addr: ":" + getenv("PORT", "8080"), Handler: a.Handler()}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -51,4 +52,18 @@ func main() {
 	}
 	a.Close() // save pending board changes before the store closes
 	log.Print("stopped")
+}
+
+// seedDevUser creates the account named by SEED_USER_EMAIL and SEED_USER_PASSWORD, if both
+// are set. It is meant for local development only: production must not set them.
+func seedDevUser(a *app) {
+	email, password := os.Getenv("SEED_USER_EMAIL"), os.Getenv("SEED_USER_PASSWORD")
+	if email == "" && password == "" {
+		return
+	}
+	if err := a.auth.Seed(email, password); err != nil {
+		log.Printf("seeding the dev user failed: %v", err)
+		return
+	}
+	log.Printf("dev user %s is available (seeded from SEED_USER_EMAIL)", email)
 }

@@ -129,6 +129,29 @@ func (s *Service) Register(w http.ResponseWriter, r *http.Request) {
 	respondUser(w, http.StatusCreated, u)
 }
 
+// Seed makes sure an account exists, for local development. An existing account is left
+// untouched (its password is not reset). Never call it with a real user's password.
+func (s *Service) Seed(email, password string) error {
+	email, err := normalizeEmail(email)
+	if err != nil {
+		return err
+	}
+	if len(password) < minPassword || len(password) > maxPassword {
+		return errors.New("seed password must have at least 8 characters")
+	}
+	if _, err := s.store.UserByEmail(email); err == nil {
+		return nil
+	}
+	hash, err := HashPassword(password)
+	if err != nil {
+		return err
+	}
+	if _, err := s.store.CreateUser(email, hash); err != nil && !errors.Is(err, store.ErrEmailTaken) {
+		return err
+	}
+	return nil
+}
+
 // Login checks credentials and starts a session.
 func (s *Service) Login(w http.ResponseWriter, r *http.Request) {
 	c, ok := readCredentials(w, r)

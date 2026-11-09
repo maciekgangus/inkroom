@@ -260,3 +260,40 @@ func TestErrorMessagesArePolish(t *testing.T) {
 		t.Errorf("rate limit: body %q", w.Body.String())
 	}
 }
+
+func TestSeedCreatesAUserWhoCanLogIn(t *testing.T) {
+	e := setup(t)
+	if err := e.svc.Seed("Dev@Example.test", "seed-password-1"); err != nil {
+		t.Fatal(err)
+	}
+	w := e.do(e.svc.Login, `{"email":"dev@example.test","password":"seed-password-1"}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("login as seeded user = %d %s", w.Code, w.Body)
+	}
+}
+
+func TestSeedIsIdempotentAndKeepsTheExistingPassword(t *testing.T) {
+	e := setup(t)
+	if err := e.svc.Seed("dev@example.test", "first-password-1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.svc.Seed("dev@example.test", "other-password-2"); err != nil {
+		t.Fatalf("seeding twice should be fine: %v", err)
+	}
+	if w := e.do(e.svc.Login, `{"email":"dev@example.test","password":"first-password-1"}`); w.Code != http.StatusOK {
+		t.Fatalf("original password should still work: %d", w.Code)
+	}
+	if w := e.do(e.svc.Login, `{"email":"dev@example.test","password":"other-password-2"}`); w.Code != http.StatusUnauthorized {
+		t.Fatalf("second password must not replace the first: %d", w.Code)
+	}
+}
+
+func TestSeedRejectsBadInput(t *testing.T) {
+	e := setup(t)
+	if err := e.svc.Seed("not-an-email", "long-enough-pw"); err == nil {
+		t.Error("expected an error for a bad e-mail")
+	}
+	if err := e.svc.Seed("dev@example.test", "short"); err == nil {
+		t.Error("expected an error for a short password")
+	}
+}
