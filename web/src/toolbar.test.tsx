@@ -14,7 +14,10 @@ describe("Toolbar", () => {
 		settings = { tool: "pen", color: COLORS[0], size: SIZES[1] };
 		onUndo = vi.fn();
 		onRedo = vi.fn();
-		render(<Toolbar settings={settings} onUndo={onUndo} onRedo={onRedo} />, root);
+		render(
+			<Toolbar settings={settings} onUndo={onUndo} onRedo={onRedo} />,
+			root,
+		);
 	});
 
 	const click = (label: string) =>
