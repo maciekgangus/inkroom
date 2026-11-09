@@ -4,7 +4,7 @@ Własna, tania tablica interaktywna do prowadzenia korepetycji online, zamiennik
 Źródło prawdy o wymaganiach: @SPEC.md. Decyzje architektoniczne: `docs/decisions/`.
 
 ## Stan projektu
-Etap 0: stos wybrany w `docs/decisions/0001-stack.md` (własny canvas + Go + SQLite). Plan w `docs/plan-stage-0.md`. Kod aplikacji dopiero po spike'u na iPadzie i zgodnie z tym planem.
+Etap 0 w toku (szkielet działa, zostały hooki i PR): stos wybrany w `docs/decisions/0001-stack.md` (własny canvas + Go + SQLite). Plan w `docs/plan-stage-0.md`. Kod aplikacji dopiero po spike'u na iPadzie i zgodnie z tym planem.
 
 ## Priorytety (w tej kolejności)
 1. Responsywność: kreska pojawia się natychmiast lokalnie, u drugiej osoby bez zauważalnego opóźnienia. Wygoda użytkownika ponad wszystko.
@@ -21,7 +21,7 @@ Etap 0: stos wybrany w `docs/decisions/0001-stack.md` (własny canvas + Go + SQL
 6. Decyzje architektoniczne zapisuj jako ADR w `docs/decisions/` (szablon: `0000-template.md`).
 
 ## Komendy
-Stos: serwer w Go (`server/`), klient w TypeScript + Vite + Preact (`web/`). Komendy poniżej są planowane i zostaną potwierdzone w krokach 5 do 9 Etapu 0.
+Stos: serwer w Go (`server/`), klient w TypeScript + Vite + Preact (`web/`). Komendy poniżej sprawdzone na szkielecie z Etapu 0 (poza `npm run dev`). Serwer czyta `PORT` (domyślnie 8080) i `STATIC_DIR` (domyślnie `../web/dist`), więc do dev serwera najpierw `cd web && npm run build`.
 - Uruchomienie całości: `docker compose up` (ADR 0002)
 - Build obrazu: `docker compose build`
 - Dev klienta: `cd web && npm run dev`; dev serwera: `cd server && go run ./cmd/server`
