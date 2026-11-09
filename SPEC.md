@@ -32,7 +32,7 @@ Priorytety: P1 do pierwszej lekcji, P2 zaraz po niej, P3 później. Statusy: pro
 | R-009 | Panel twórcy z listą jego tablic (nazwa, data ostatniej zmiany, kopiowanie linku, otwarcie, usunięcie) | P1 | done |
 | R-010 | Nieskończone lub przewijane płótno, przesuwanie i powiększanie | P2 | done |
 | R-011 | Kilka stron (kart) w jednej tablicy | P2 | proposed |
-| R-012 | Narzędzia: linia, prostokąt, okrąg, tekst | P2 | proposed |
+| R-012 | Narzędzia: linia, prostokąt, okrąg, tekst | P2 | accepted |
 | R-013 | Wskaźniki kursorów pozostałych osób na tablicy | P2 | proposed |
 | R-014 | Eksport tablicy do PNG lub PDF | P2 | proposed |
 | R-015 | Wstawianie obrazu (np. zadanie ze zdjęcia) | P3 | proposed |

@@ -1,6 +1,6 @@
 # 0006. Elementy tablicy: kształty i tekst
 
-- Status: proposed
+- Status: accepted
 - Data: 2026-11-09
 
 ## Kontekst
