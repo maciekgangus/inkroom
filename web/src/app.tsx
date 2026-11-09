@@ -1,5 +1,8 @@
-import { useMemo, useState } from "preact/hooks";
+import { useEffect, useMemo, useState } from "preact/hooks";
+import * as api from "./api";
+import { AuthForms } from "./auth-forms";
 import { BoardView, newId } from "./board-view";
+import { Panel } from "./panel";
 import type { SocketLike } from "./sync/sync";
 
 const BOARD_PATH = /^\/b\/([0-9a-f]{32})$/;
@@ -32,7 +35,7 @@ function store(storage: Storage, key: string, value: string): void {
 	}
 }
 
-/** Root component: home page, or a board page at /b/<id>. */
+/** Root component: home page (login or panel), or a board page at /b/<id>. */
 export function App({
 	path = location.pathname,
 	navigate = goTo,
@@ -44,25 +47,15 @@ export function App({
 }
 
 function Home({ navigate }: { navigate: (to: string) => void }) {
-	const [busy, setBusy] = useState(false);
-	const create = async () => {
-		setBusy(true);
-		try {
-			const res = await fetch("/api/boards", { method: "POST" });
-			if (!res.ok) throw new Error(String(res.status));
-			const { id } = await res.json();
-			navigate(`/b/${id}`);
-		} catch {
-			setBusy(false);
-		}
-	};
+	const [email, setEmail] = useState<string | null | undefined>(undefined); // undefined: still asking the server
+	useEffect(() => {
+		api.me().then(setEmail, () => setEmail(null));
+	}, []);
+
+	if (email === undefined) return null;
+	if (email === null) return <AuthForms onAuth={setEmail} />;
 	return (
-		<main class="center">
-			<h1>Inkroom</h1>
-			<button type="button" class="primary" disabled={busy} onClick={create}>
-				Nowa tablica
-			</button>
-		</main>
+		<Panel email={email} navigate={navigate} onLogout={() => setEmail(null)} />
 	);
 }
 
@@ -73,7 +66,16 @@ function BoardPage({
 	id: string;
 	createSocket: (url: string) => SocketLike;
 }) {
-	const [name, setName] = useState(() => stored(localStorage, NAME_KEY));
+	const [exists, setExists] = useState<boolean | undefined>(undefined);
+	const [account, setAccount] = useState<string | null | undefined>(undefined);
+	const [guestName, setGuestName] = useState(() =>
+		stored(localStorage, NAME_KEY),
+	);
+	useEffect(() => {
+		api.boardExists(id).then(setExists);
+		api.me().then(setAccount, () => setAccount(null));
+	}, [id]);
+
 	const authorId = useMemo(() => {
 		const existing = stored(sessionStorage, AUTHOR_KEY);
 		if (existing) return existing;
@@ -81,18 +83,32 @@ function BoardPage({
 		store(sessionStorage, AUTHOR_KEY, fresh);
 		return fresh;
 	}, []);
+
+	// Logged-in users are known by their e-mail's local part; guests give a name.
+	const name = account ? account.split("@")[0] : guestName;
 	const connect = useMemo(() => {
 		const scheme = location.protocol === "https:" ? "wss" : "ws";
 		const url = `${scheme}://${location.host}/ws/${id}?name=${encodeURIComponent(name ?? "")}`;
 		return () => createSocket(url);
 	}, [id, name, createSocket]);
 
+	if (exists === undefined || account === undefined) return null;
+	if (!exists) {
+		return (
+			<main class="center">
+				<h1>Nie ma takiej tablicy</h1>
+				<p class="muted">
+					Link jest nieprawidłowy albo tablica została usunięta.
+				</p>
+			</main>
+		);
+	}
 	if (!name) {
 		return (
 			<NamePrompt
 				onSubmit={(n) => {
 					store(localStorage, NAME_KEY, n);
-					setName(n);
+					setGuestName(n);
 				}}
 			/>
 		);
