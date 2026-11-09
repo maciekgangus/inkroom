@@ -78,6 +78,11 @@ describe("Viewport", () => {
 		v.x = 100;
 		v.y = 50;
 		v.scale = 2;
-		expect(v.worldRect(800, 600)).toEqual({ minX: 100, minY: 50, maxX: 500, maxY: 350 });
+		expect(v.worldRect(800, 600)).toEqual({
+			minX: 100,
+			minY: 50,
+			maxX: 500,
+			maxY: 350,
+		});
 	});
 });
