@@ -2,7 +2,14 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { Board, type Stroke } from "./board";
 
 function stroke(id: string, authorId = "a"): Stroke {
-	return { id, authorId, color: "#111", size: 4, z: Number(id), points: [[0, 0, 0.5]] };
+	return {
+		id,
+		authorId,
+		color: "#111",
+		size: 4,
+		z: Number(id),
+		points: [[0, 0, 0.5]],
+	};
 }
 
 const ids = (b: Board) => b.strokes.map((s) => s.id);
