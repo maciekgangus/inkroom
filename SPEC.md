@@ -24,11 +24,11 @@ Priorytety: P1 do pierwszej lekcji, P2 zaraz po niej, P3 później. Statusy: pro
 | R-001 | Rejestracja i logowanie użytkownika (e-mail i hasło); konto może założyć każdy i każdy zalogowany może tworzyć tablice | P1 | proposed |
 | R-002 | Twórca tworzy tablicę w panelu; tablica ma stały, trudny do odgadnięcia link, który działa na każdej sesji i zawsze otwiera ostatni zapisany stan | P1 | proposed |
 | R-003 | Wejście uczestnika przez link jako gość (podaje imię) albo po zalogowaniu na własne konto | P1 | proposed |
-| R-004 | Rysowanie na płótnie: pióro, gumka, kolor, grubość linii; gumka kasuje elementy dowolnego autora (każdy uczestnik z prawem rysowania, R-016, może skasować każdy element) | P1 | proposed |
-| R-005 | Obsługa myszy, dotyku i rysika (Pointer Events, nacisk rysika) na: iPad + Apple Pencil (Safari), tablet z Androidem + rysik (Chrome), tablet graficzny przy PC (Wacom itp.) | P1 | proposed |
+| R-004 | Rysowanie na płótnie: pióro, gumka, kolor, grubość linii; gumka kasuje elementy dowolnego autora (każdy uczestnik z prawem rysowania, R-016, może skasować każdy element) | P1 | done |
+| R-005 | Obsługa myszy, dotyku i rysika (Pointer Events, nacisk rysika) na: iPad + Apple Pencil (Safari), tablet z Androidem + rysik (Chrome), tablet graficzny przy PC (Wacom itp.) | P1 | accepted |
 | R-006 | Współpraca na żywo: wszyscy w pokoju widzą zmiany w czasie rzeczywistym | P1 | proposed |
 | R-007 | Automatyczny zapis stanu tablicy; powrót przez ten sam link i kontynuacja pracy na kolejnych lekcjach, bez logowania gościa | P1 | proposed |
-| R-008 | Cofnij i ponów działają per użytkownik: każdy cofa tylko własne ruchy (osobny stos w obrębie sesji) | P1 | proposed |
+| R-008 | Cofnij i ponów działają per użytkownik: każdy cofa tylko własne ruchy (osobny stos w obrębie sesji) | P1 | done |
 | R-009 | Panel twórcy z listą jego tablic (nazwa, data ostatniej zmiany, kopiowanie linku, otwarcie, usunięcie) | P1 | proposed |
 | R-010 | Nieskończone lub przewijane płótno, przesuwanie i powiększanie | P2 | proposed |
 | R-011 | Kilka stron (kart) w jednej tablicy | P2 | proposed |
@@ -79,3 +79,4 @@ Miary to propozycje startowe, do potwierdzenia po pierwszych testach na prawdziw
 - 2026-11-09: cofanie per użytkownik (R-008), gumka kasuje cudze elementy (R-004), zasada konfliktów N-011, dodano R-020 (przywracanie wersji, P3).
 - 2026-11-09: wystawienie przez Cloudflare Tunnel: zmieniono sekcję 6, Etap 3.5, N-004.
 - 2026-11-09: wdrożenie przez docker compose (lokalnie, potem domowy VPS): zmieniono N-006, dodano N-009 i Etap 3.5, hosting rozstrzygnięty w ADR 0002.
+- 2026-11-09: Etap 1 zakończony testem na iPadzie z Apple Pencil: R-004 i R-008 `done`; R-005 `accepted` (iPad zdany, Android i tablet graficzny w Etapie 4).
