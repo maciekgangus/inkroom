@@ -26,4 +26,3 @@ Etap 2 (R-006, R-018): kilka osób rysuje na jednej tablicy na żywo. Wymagania:
 - Serwer nie weryfikuje, kto kasuje czyją kreskę (R-004: każdy może skasować każdą). Uprawnienia (R-016) w Etapie 5.
 - Restart serwera kasuje tablice do czasu Etapu 3.
 - Kursory innych osób (R-013) wejdą jako kolejny typ wiadomości, bez zmiany tego modelu.
-- Punkty kresek są we współrzędnych tablicy, nie ekranu. Widok (przesunięcie i powiększenie, R-010 "nieskończone płótno") jest lokalny dla klienta i nie jest synchronizowany, więc protokół nie zmieni się po dodaniu R-010. Do czasu R-010 współrzędne tablicy to piksele ekranu, a urządzenia o różnych rozmiarach ekranu widzą różne fragmenty tej samej płaszczyzny.
