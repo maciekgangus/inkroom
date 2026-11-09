@@ -22,7 +22,8 @@ function outlinePath(stroke: Stroke): Path2D | null {
 }
 
 interface Cached {
-	path: Path2D | null;
+	/** Computed on first use, only for strokes that are actually in view. */
+	path?: Path2D | null;
 	bounds: Rect;
 }
 
@@ -105,10 +106,12 @@ export class CanvasRenderer implements Renderer {
 		for (const s of this.strokes) {
 			let c = this.cache.get(s);
 			if (!c) {
-				c = { path: outlinePath(s), bounds: strokeBounds(s) };
+				c = { bounds: strokeBounds(s) };
 				this.cache.set(s, c);
 			}
-			if (!c.path || !intersects(c.bounds, view)) continue;
+			if (!intersects(c.bounds, view)) continue;
+			if (c.path === undefined) c.path = outlinePath(s);
+			if (!c.path) continue;
 			ctx.fillStyle = s.color;
 			ctx.fill(c.path);
 		}
