@@ -21,10 +21,11 @@ Etap 0: stos technologiczny NIE jest wybrany. Do czasu zaakceptowania `docs/deci
 6. Decyzje architektoniczne zapisuj jako ADR w `docs/decisions/` (szablon: `0000-template.md`).
 
 ## Komendy
-Do uzupełnienia po wyborze stosu (ADR 0001): dev, build, test, lint.
+Uruchomienie całości: `docker compose up` (ADR 0002). Pozostałe do uzupełnienia po wyborze stosu (ADR 0001): dev, build, test, lint.
 
 ## Konwencje
 - Kod, nazwy, komentarze i commit messages po angielsku. Dokumenty (`SPEC.md`, ADR, README) po polsku.
 - Małe commity, jeden po każdej działającej części. Commituj po przejściu testów i moim przeglądzie diffu.
 - Nie czytaj ani nie ruszaj plików `.env`.
+- Wdrożenie: docker compose, najpierw lokalnie, później na domowym VPS (ADR 0002). Sekrety w `.env`, nigdy w obrazach ani w repo.
 - Plugin lub serwer MCP dodawaj dopiero pod konkretny problem, a po dodaniu sprawdź `/context`.

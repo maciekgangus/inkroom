@@ -49,21 +49,24 @@ Miary to propozycje startowe, do potwierdzenia po pierwszych testach na prawdziw
 | N-003 | Przeglądarki | aktualny Chrome, Edge, Safari (w tym iPadOS) i Firefox |
 | N-004 | Bezpieczeństwo kont | hasła haszowane, HTTPS, linki pokoi trudne do odgadnięcia |
 | N-005 | Utrata połączenia | ponowne połączenie bez utraty narysowanych elementów |
-| N-006 | Koszt hostingu | docelowo kilka złotych miesięcznie lub własny serwer |
+| N-006 | Koszt hostingu | docelowo własny serwer domowy (VPS), bez miesięcznych opłat za hosting |
 | N-007 | Dane uczniów | minimum danych (imię), brak śledzenia, możliwość usunięcia tablicy |
 | N-008 | Obciążenie CPU serwera | niskie; stos dobrany pod oszczędność procesora |
+| N-009 | Uruchamianie i wdrożenie | całość startuje jedną komendą `docker compose up`; ta sama konfiguracja lokalnie i na serwerze; sekrety w `.env` poza repo; dane (baza, zapisane tablice) w wolumenach z kopią zapasową (ADR 0002) |
 
 ## 5. Etapy
-1. Etap 0, szkielet: wybór stosu (ADR 0001), repo, pusta aplikacja z testem. Gotowe, gdy działa komenda testowa i `claude` czyta CLAUDE.md.
+1. Etap 0, szkielet: wybór stosu (ADR 0001), repo, pusta aplikacja z testem. Gotowe, gdy działa komenda testowa, `docker compose up` uruchamia pustą aplikację i `claude` czyta CLAUDE.md.
 2. Etap 1, tablica lokalna: płótno, pióro, gumka, mysz/dotyk/rysik, cofnij (R-004, R-005, R-008). Gotowe, gdy rysowanie rysikiem jest płynne na twoim tablecie i na iPadzie.
 3. Etap 2, współpraca na żywo: pokój z linkiem, synchronizacja klientów (R-002, R-003, R-006). Gotowe, gdy dwie przeglądarki widzą wzajemnie swoje kreski.
 4. Etap 3, konta i zapis: logowanie, zapis i odtworzenie stanu, lista tablic (R-001, R-007, R-009, R-017). Gotowe, gdy po zamknięciu karty tablica wraca w tym samym stanie.
-5. Etap 4, pierwsza prawdziwa lekcja: test z jednym uczniem, lista poprawek. Gotowe, gdy lekcja przeszła bez powrotu do IDROO.
-6. Etap 5: pozostałe P2 i P3 według tego, czego zabrakło na lekcji.
+5. Etap 3.5, wdrożenie: ten sam docker compose na domowym VPS, HTTPS, dostęp z internetu dla uczniów (sposób wystawienia do ustalenia), kopie zapasowe bazy (N-004, N-006, N-009). Gotowe, gdy iPad na danych komórkowych otwiera pokój.
+6. Etap 4, pierwsza prawdziwa lekcja: test z jednym uczniem, lista poprawek. Gotowe, gdy lekcja przeszła bez powrotu do IDROO.
+7. Etap 5: pozostałe P2 i P3 według tego, czego zabrakło na lekcji.
 
 ## 6. Otwarte pytania
 - Gotowa biblioteka tablicy czy własny canvas (licencja, obsługa iPada, możliwość własnego serwera synchronizacji). Rozstrzyga ADR 0001.
-- Hosting: tani VPS czy własny serwer.
+- Hosting rozstrzygnięty w ADR 0002: docker compose lokalnie, później domowy VPS. Otwarte: jak wystawić serwer domowy na internet dla uczniów (tunel lub przekierowanie portów, domena, dynamiczny adres IP).
 
 ## 7. Historia zmian
 - 2026-11-09: wersja startowa, uczeń jako gość lub z kontem, zapisane tablice jako rdzeń, dodane R-017 i R-018, N-008.
+- 2026-11-09: wdrożenie przez docker compose (lokalnie, potem domowy VPS): zmieniono N-006, dodano N-009 i Etap 3.5, hosting rozstrzygnięty w ADR 0002.
