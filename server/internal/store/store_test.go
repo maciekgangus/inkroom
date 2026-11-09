@@ -195,3 +195,77 @@ func TestDataSurvivesReopening(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+func TestImages(t *testing.T) {
+	s := open(t)
+	u := user(t, s, "a@example.com")
+	_, _ = s.CreateBoard("b1", u.ID, "x")
+	_, _ = s.CreateBoard("b2", u.ID, "y")
+
+	if err := s.SaveImage("img1", "b1", "image/png", []byte{1, 2, 3}); err != nil {
+		t.Fatal(err)
+	}
+	mime, data, err := s.Image("b1", "img1")
+	if err != nil || mime != "image/png" || string(data) != "\x01\x02\x03" {
+		t.Fatalf("got %q %v %v", mime, data, err)
+	}
+	if _, _, err := s.Image("b2", "img1"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("an image must only be readable through its own board: %v", err)
+	}
+	if _, _, err := s.Image("b1", "nope"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestSaveImageNeedsAnExistingBoard(t *testing.T) {
+	s := open(t)
+	if err := s.SaveImage("img1", "no-such-board", "image/png", []byte{1}); err == nil {
+		t.Fatal("expected an error")
+	}
+}
+
+func TestDeletingABoardDeletesItsImages(t *testing.T) {
+	s := open(t)
+	u := user(t, s, "a@example.com")
+	_, _ = s.CreateBoard("b1", u.ID, "x")
+	_ = s.SaveImage("img1", "b1", "image/png", []byte{1})
+	if err := s.DeleteBoard("b1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.Image("b1", "img1"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("image survived its board: %v", err)
+	}
+}
+
+func TestApplyReplaceChangesAnExistingStrokeOnly(t *testing.T) {
+	s := open(t)
+	u := user(t, s, "a@example.com")
+	_, _ = s.CreateBoard("b1", u.ID, "x")
+	err := s.Apply("b1", []Op{
+		{Add: true, ID: "s1", Data: []byte(`{"id":"s1","v":1}`)},
+		{Add: true, ID: "s2", Data: []byte(`{"id":"s2","v":1}`)},
+		{Replace: true, ID: "s1", Data: []byte(`{"id":"s1","v":2}`)},
+		{Replace: true, ID: "ghost", Data: []byte(`{"id":"ghost"}`)}, // never inserted
+	}, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := s.LoadStrokes("b1")
+	if len(got) != 2 || string(got[0]) != `{"id":"s1","v":2}` || string(got[1]) != `{"id":"s2","v":1}` {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestAddDoesNotOverwriteAnExistingStroke(t *testing.T) {
+	s := open(t)
+	u := user(t, s, "a@example.com")
+	_, _ = s.CreateBoard("b1", u.ID, "x")
+	_ = s.Apply("b1", []Op{
+		{Add: true, ID: "s1", Data: []byte(`{"id":"s1","v":2}`)},
+		{Add: true, ID: "s1", Data: []byte(`{"id":"s1","v":1}`)}, // a stale resend
+	}, time.Now())
+	got, _ := s.LoadStrokes("b1")
+	if len(got) != 1 || string(got[0]) != `{"id":"s1","v":2}` {
+		t.Fatalf("got %q", got)
+	}
+}
