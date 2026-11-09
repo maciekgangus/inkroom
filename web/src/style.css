@@ -210,3 +210,31 @@ button.danger {
 	min-width: 6em;
 	font-family: system-ui, sans-serif;
 }
+.cursors {
+	position: fixed;
+	inset: 0;
+	pointer-events: none;
+	overflow: hidden;
+	z-index: 1;
+}
+.cursor {
+	position: absolute;
+	left: 0;
+	top: 0;
+	will-change: transform;
+}
+.cursor svg {
+	display: block;
+	filter: drop-shadow(0 1px 1px #0004);
+}
+.cursor .label {
+	position: absolute;
+	left: 12px;
+	top: 14px;
+	padding: 1px 6px;
+	border-radius: 8px;
+	color: #fff;
+	font-size: 12px;
+	line-height: 1.4;
+	white-space: nowrap;
+}
