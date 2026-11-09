@@ -37,7 +37,14 @@ describe("Controller", () => {
 		settings = { tool: "pen", color: "#c00", size: 4 };
 		viewport = new Viewport();
 		let n = 0;
-		c = new Controller(board, renderer, settings, viewport, "me", () => `s${++n}`);
+		c = new Controller(
+			board,
+			renderer,
+			settings,
+			viewport,
+			"me",
+			() => `s${++n}`,
+		);
 	});
 
 	test("pen draws a stroke with the current color and size on release", () => {
