@@ -7,7 +7,13 @@ import type { SocketLike } from "./sync/sync";
 const ID = "0123456789abcdef0123456789abcdef";
 
 function fakeSocket(): SocketLike {
-	return { send: vi.fn(), close: vi.fn(), onopen: null, onmessage: null, onclose: null };
+	return {
+		send: vi.fn(),
+		close: vi.fn(),
+		onopen: null,
+		onmessage: null,
+		onclose: null,
+	};
 }
 
 describe("App", () => {
@@ -28,7 +34,9 @@ describe("App", () => {
 	});
 
 	test("the home page creates a board and navigates to its link", async () => {
-		const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ id: ID }) });
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValue({ ok: true, json: async () => ({ id: ID }) });
 		vi.stubGlobal("fetch", fetchMock);
 		const navigate = vi.fn();
 		render(<App path="/" navigate={navigate} />, root);
@@ -50,7 +58,9 @@ describe("App", () => {
 			const input = root.querySelector("input") as HTMLInputElement;
 			input.value = "Ola";
 			input.dispatchEvent(new Event("input", { bubbles: true }));
-			(root.querySelector("form") as HTMLFormElement).dispatchEvent(new Event("submit", { cancelable: true }));
+			(root.querySelector("form") as HTMLFormElement).dispatchEvent(
+				new Event("submit", { cancelable: true }),
+			);
 		});
 
 		expect(localStorage.getItem("inkroom.name")).toBe("Ola");
@@ -58,12 +68,16 @@ describe("App", () => {
 		expect(createSocket).toHaveBeenCalledOnce();
 	});
 
-	test("a board page with a remembered name connects to that board's websocket", () => {
+	test("a board page with a remembered name connects to that board's websocket", async () => {
 		localStorage.setItem("inkroom.name", "Ola");
 		const createSocket = vi.fn(fakeSocket);
-		render(<App path={`/b/${ID}`} createSocket={createSocket} />, root);
+		await act(async () => {
+			render(<App path={`/b/${ID}`} createSocket={createSocket} />, root);
+		});
 
 		expect(root.querySelectorAll("canvas")).toHaveLength(2);
-		expect(createSocket).toHaveBeenCalledWith(expect.stringContaining(`/ws/${ID}`));
+		expect(createSocket).toHaveBeenCalledWith(
+			expect.stringContaining(`/ws/${ID}`),
+		);
 	});
 });
