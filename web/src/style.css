@@ -18,6 +18,13 @@ button {
 	align-items: center;
 	justify-content: center;
 }
+#app {
+	height: 100%;
+}
+button,
+input {
+	font-family: inherit;
+}
 canvas {
 	position: fixed;
 	inset: 0;
