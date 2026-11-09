@@ -64,7 +64,7 @@ type Room struct {
 	mu      sync.Mutex
 	strokes map[string]entry
 	seq     int
-	clients map[*Client]map[string]struct{} // client -> ids of its unfinished "live" strokes
+	clients map[*Client]*presence
 
 	// Persistence (only for rooms created by a Hub): changes wait in pending until flushed.
 	track   bool
@@ -73,9 +73,19 @@ type Room struct {
 	closed  bool
 }
 
+// presence is what a connected client has shown to the others and must be taken back on leaving.
+type presence struct {
+	live    map[string]struct{} // ids of its unfinished "live" strokes
+	cursors map[string]struct{} // ids under which it published a cursor
+}
+
+func newPresence() *presence {
+	return &presence{live: map[string]struct{}{}, cursors: map[string]struct{}{}}
+}
+
 // New returns an empty room that is not persisted.
 func New() *Room {
-	return &Room{strokes: map[string]entry{}, clients: map[*Client]map[string]struct{}{}}
+	return &Room{strokes: map[string]entry{}, clients: map[*Client]*presence{}}
 }
 
 // newPersisted returns a room holding the saved strokes, recording further changes for the store.
@@ -96,6 +106,8 @@ func newPersisted(saved [][]byte) *Room {
 type message struct {
 	T      string          `json:"t"`
 	ID     string          `json:"id"`
+	Name   string          `json:"name"`
+	Hidden bool            `json:"hidden"`
 	Stroke json.RawMessage `json:"stroke"`
 }
 
@@ -103,7 +115,7 @@ type message struct {
 func (r *Room) Join(c *Client) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.clients[c] = map[string]struct{}{}
+	r.clients[c] = newPresence()
 	if !c.trySend(r.snapshotLocked()) {
 		r.leaveLocked(c)
 	}
@@ -140,7 +152,9 @@ func (r *Room) Handle(c *Client, raw []byte) error {
 				r.pending = append(r.pending, store.Op{Add: true, ID: id, Data: m.Stroke})
 			}
 		}
-		delete(r.clients[c], id)
+		if p := r.clients[c]; p != nil {
+			delete(p.live, id)
+		}
 		r.broadcastLocked(msg, nil)
 	case "remove":
 		if err := checkID(m.ID); err != nil {
@@ -157,8 +171,23 @@ func (r *Room) Handle(c *Client, raw []byte) error {
 		if err := checkID(m.ID); err != nil {
 			return err
 		}
-		if live, ok := r.clients[c]; ok {
-			live[m.ID] = struct{}{}
+		if p := r.clients[c]; p != nil {
+			p.live[m.ID] = struct{}{}
+		}
+		r.broadcastLocked(msg, c)
+	case "cursor":
+		if err := checkID(m.ID); err != nil {
+			return err
+		}
+		if len(m.Name) > maxIDLen {
+			return errors.New("name too long")
+		}
+		if p := r.clients[c]; p != nil {
+			if m.Hidden {
+				delete(p.cursors, m.ID)
+			} else {
+				p.cursors[m.ID] = struct{}{}
+			}
 		}
 		r.broadcastLocked(msg, c)
 	default:
@@ -194,22 +223,28 @@ func (r *Room) broadcastLocked(msg []byte, skip *Client) {
 }
 
 func (r *Room) leaveLocked(c *Client) {
-	live, ok := r.clients[c]
+	p, ok := r.clients[c]
 	if !ok {
 		c.drop()
 		return
 	}
 	delete(r.clients, c)
 	c.drop()
-	if len(live) == 0 {
-		return
+	if len(p.live) > 0 {
+		r.broadcastLocked(dropMessage("live_drop", p.live), nil)
 	}
-	ids := make([]string, 0, len(live))
-	for id := range live {
+	if len(p.cursors) > 0 {
+		r.broadcastLocked(dropMessage("cursor_drop", p.cursors), nil)
+	}
+}
+
+func dropMessage(kind string, set map[string]struct{}) []byte {
+	ids := make([]string, 0, len(set))
+	for id := range set {
 		ids = append(ids, id)
 	}
-	b, _ := json.Marshal(map[string]any{"t": "live_drop", "ids": ids})
-	r.broadcastLocked(b, nil)
+	b, _ := json.Marshal(map[string]any{"t": kind, "ids": ids})
+	return b
 }
 
 func checkID(id string) error {
