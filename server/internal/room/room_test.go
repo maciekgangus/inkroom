@@ -2,6 +2,7 @@ package room
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -198,4 +199,90 @@ func TestInvalidMessagesAreRejected(t *testing.T) {
 		}
 	}
 	none(t, a)
+}
+
+const cursorMsg = `{"t":"cursor","id":"a","name":"Ola","x":10.5,"y":20}`
+
+func TestCursorGoesToOthersOnlyAndIsNotStored(t *testing.T) {
+	r := New()
+	a, b := join(r), join(r)
+	recv(t, a)
+	recv(t, b)
+	if err := r.Handle(a, []byte(cursorMsg)); err != nil {
+		t.Fatal(err)
+	}
+	none(t, a)
+	if m := recv(t, b); m["t"] != "cursor" || m["id"] != "a" || m["name"] != "Ola" {
+		t.Fatalf("got %v", m)
+	}
+	late := join(r)
+	if ids := strokeIDs(t, recv(t, late)); len(ids) != 0 {
+		t.Fatalf("cursor was stored: %v", ids)
+	}
+}
+
+func TestHiddenCursorIsRelayed(t *testing.T) {
+	r := New()
+	a, b := join(r), join(r)
+	recv(t, a)
+	recv(t, b)
+	if err := r.Handle(a, []byte(`{"t":"cursor","id":"a","hidden":true}`)); err != nil {
+		t.Fatal(err)
+	}
+	if m := recv(t, b); m["hidden"] != true {
+		t.Fatalf("got %v", m)
+	}
+}
+
+func TestLeaveDropsTheCursor(t *testing.T) {
+	r := New()
+	a, b := join(r), join(r)
+	recv(t, a)
+	recv(t, b)
+	_ = r.Handle(a, []byte(cursorMsg))
+	recv(t, b)
+	r.Leave(a)
+	m := recv(t, b)
+	if m["t"] != "cursor_drop" || m["ids"].([]any)[0] != "a" {
+		t.Fatalf("got %v", m)
+	}
+}
+
+func TestLeavingWithoutACursorSendsNothing(t *testing.T) {
+	r := New()
+	a, b := join(r), join(r)
+	recv(t, a)
+	recv(t, b)
+	r.Leave(a)
+	none(t, b)
+}
+
+func TestHiddenCursorIsNotDroppedAgainOnLeave(t *testing.T) {
+	r := New()
+	a, b := join(r), join(r)
+	recv(t, a)
+	recv(t, b)
+	_ = r.Handle(a, []byte(cursorMsg))
+	_ = r.Handle(a, []byte(`{"t":"cursor","id":"a","hidden":true}`))
+	recv(t, b)
+	recv(t, b)
+	r.Leave(a)
+	none(t, b)
+}
+
+func TestInvalidCursorsAreRejected(t *testing.T) {
+	r := New()
+	a := join(r)
+	recv(t, a)
+	long := strings.Repeat("x", 65)
+	for _, msg := range []string{
+		`{"t":"cursor"}`,
+		`{"t":"cursor","id":"","x":1,"y":1}`,
+		`{"t":"cursor","id":"` + long + `","x":1,"y":1}`,
+		`{"t":"cursor","id":"a","name":"` + long + `","x":1,"y":1}`,
+	} {
+		if err := r.Handle(a, []byte(msg)); err == nil {
+			t.Errorf("expected an error for %.60s", msg)
+		}
+	}
 }
