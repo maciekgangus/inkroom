@@ -35,6 +35,8 @@ describe("SyncClient", () => {
 	let onUpdate: () => void;
 	let client: SyncClient;
 	let flush: () => void;
+	let onCursors: () => void;
+	let clock: number;
 
 	const sock = () => sockets[sockets.length - 1];
 	const connectAndJoin = (strokes: Stroke[] = []) => {
@@ -47,6 +49,8 @@ describe("SyncClient", () => {
 		board = new Board();
 		sockets = [];
 		onUpdate = vi.fn();
+		onCursors = vi.fn();
+		clock = 1_000_000;
 		let scheduled: (() => void) | null = null;
 		flush = () => {
 			const f = scheduled;
@@ -60,6 +64,9 @@ describe("SyncClient", () => {
 				return s;
 			},
 			onUpdate,
+			onCursors,
+			self: { authorId: "me", name: "Ola" },
+			now: () => clock,
 			schedule: (f) => {
 				scheduled = f;
 			},
@@ -231,6 +238,107 @@ describe("SyncClient", () => {
 			});
 			sock().drop();
 			expect(client.liveStrokes()).toEqual([]);
+		});
+	});
+
+	describe("cursors", () => {
+		const cursorsSent = () => sock().sent.filter((m) => m.t === "cursor");
+
+		test("our pointer position goes out with our id and name", () => {
+			connectAndJoin();
+			client.cursorMove(12.5, 40);
+			flush();
+			expect(cursorsSent()).toEqual([{ t: "cursor", id: "me", name: "Ola", x: 12.5, y: 40 }]);
+		});
+
+		test("only the latest position is sent per flush, and an unchanged one is not repeated", () => {
+			connectAndJoin();
+			client.cursorMove(1, 1);
+			client.cursorMove(2, 2);
+			client.cursorMove(3, 3);
+			flush();
+			expect(cursorsSent()).toHaveLength(1);
+			expect(cursorsSent()[0]).toMatchObject({ x: 3, y: 3 });
+			clock += 100;
+			client.cursorMove(3, 3);
+			flush();
+			expect(cursorsSent()).toHaveLength(1);
+		});
+
+		test("sending is rate limited to about 30 per second", () => {
+			connectAndJoin();
+			client.cursorMove(1, 1);
+			flush();
+			clock += 10;
+			client.cursorMove(2, 2);
+			flush(); // too soon: held back, rescheduled
+			expect(cursorsSent()).toHaveLength(1);
+			clock += 40;
+			flush();
+			expect(cursorsSent()).toHaveLength(2);
+			expect(cursorsSent()[1]).toMatchObject({ x: 2, y: 2 });
+		});
+
+		test("cursorHide tells the others to hide us, once", () => {
+			connectAndJoin();
+			client.cursorMove(1, 1);
+			flush();
+			client.cursorHide();
+			client.cursorHide();
+			expect(cursorsSent().filter((m) => m.hidden)).toEqual([{ t: "cursor", id: "me", hidden: true }]);
+		});
+
+		test("nothing is sent while disconnected", () => {
+			client.cursorMove(1, 1);
+			flush();
+			expect(cursorsSent()).toEqual([]);
+		});
+
+		test("other people's cursors are tracked and reported", () => {
+			connectAndJoin();
+			sock().receive({ t: "cursor", id: "b", name: "Kuba", x: 5, y: 6 });
+			expect(client.cursors()).toEqual([{ id: "b", name: "Kuba", x: 5, y: 6 }]);
+			expect(onCursors).toHaveBeenCalled();
+		});
+
+		test("a cursor message does not repaint the board", () => {
+			connectAndJoin();
+			const before = (onUpdate as ReturnType<typeof vi.fn>).mock.calls.length;
+			sock().receive({ t: "cursor", id: "b", name: "Kuba", x: 5, y: 6 });
+			expect((onUpdate as ReturnType<typeof vi.fn>).mock.calls.length).toBe(before);
+		});
+
+		test("a newer position replaces the older one", () => {
+			connectAndJoin();
+			sock().receive({ t: "cursor", id: "b", name: "Kuba", x: 5, y: 6 });
+			sock().receive({ t: "cursor", id: "b", name: "Kuba", x: 50, y: 60 });
+			expect(client.cursors()).toEqual([{ id: "b", name: "Kuba", x: 50, y: 60 }]);
+		});
+
+		test("hidden and cursor_drop remove cursors", () => {
+			connectAndJoin();
+			sock().receive({ t: "cursor", id: "b", name: "Kuba", x: 1, y: 1 });
+			sock().receive({ t: "cursor", id: "c", name: "Ewa", x: 2, y: 2 });
+			sock().receive({ t: "cursor", id: "b", hidden: true });
+			expect(client.cursors().map((c) => c.id)).toEqual(["c"]);
+			sock().receive({ t: "cursor_drop", ids: ["c"] });
+			expect(client.cursors()).toEqual([]);
+		});
+
+		test("a cursor that stopped updating expires after 15 seconds", () => {
+			connectAndJoin();
+			sock().receive({ t: "cursor", id: "b", name: "Kuba", x: 1, y: 1 });
+			clock += 14_000;
+			expect(client.cursors()).toHaveLength(1);
+			clock += 2_000;
+			expect(client.cursors()).toEqual([]);
+		});
+
+		test("cursors are forgotten when the connection drops", () => {
+			connectAndJoin();
+			sock().receive({ t: "cursor", id: "b", name: "Kuba", x: 1, y: 1 });
+			sock().drop();
+			expect(client.cursors()).toEqual([]);
 		});
 	});
 });
