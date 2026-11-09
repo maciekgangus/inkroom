@@ -20,7 +20,7 @@ Zasady: najpierw test i potwierdzenie, że pada; potem implementacja. Małe comm
    - osobna warstwa "żywej" kreski nad warstwą zatwierdzoną.
 
    Kryteria "zdał/nie zdał" ustalamy z użytkownikiem przed testem. Wynik zapisujemy w ADR 0001. Słaby wynik oznacza poprawianie własnego canvasu, nie zmianę biblioteki.
-3. **ADR 0003** (Cloudflare Tunnel, status `proposed`), zgodnie z sekcją 6 SPEC.md.
+3. ~~**ADR 0003** (Cloudflare Tunnel)~~ Odłożony na Etap 3.5. Najpierw aplikacja działa lokalnie w sieci Wi-Fi.
 4. **Szkielet repo:** `server/` (Go), `web/` (TS), `Dockerfile` (wieloetapowy), `docker-compose.yml`, `.env.example`.
 5. **Testy najpierw, potwierdzone jako padające:**
    - serwer: `GET /healthz` zwraca 200,
@@ -37,4 +37,4 @@ Rysowanie na płótnie (Etap 1), synchronizacja (Etap 2), konta i zapis (Etap 3)
 
 ## Otwarte
 - Kryteria spike'u (krok 2) do ustalenia z użytkownikiem przed testem.
-- Domena i Cloudflare (Etap 3.5).
+- Etap 3.5: domena jest wykupiona, a Cloudflare Tunnel skonfigurowany. Zostaje podpięcie portów i spisanie ADR 0003.
