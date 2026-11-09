@@ -143,4 +143,75 @@ describe("Board", () => {
 			expect(ids(board)).toEqual(["2", "3"]);
 		});
 	});
+
+	describe("updating an element", () => {
+		const moved = (id: string, authorId = "a"): Stroke => ({ ...stroke(id, authorId), points: [[9, 9, 0.5]] });
+
+		test("updateElement replaces the element in place and reports an update", () => {
+			const ops: unknown[] = [];
+			board.addStroke(stroke("1"));
+			board.addStroke(stroke("2"));
+			board.onOp = (op) => ops.push(op);
+			expect(board.updateElement("a", moved("1"))).toBe(true);
+			expect(ids(board)).toEqual(["1", "2"]);
+			expect(board.strokes[0].points[0]).toEqual([9, 9, 0.5]);
+			expect(ops).toEqual([{ t: "update", stroke: moved("1") }]);
+		});
+
+		test("updating an element that is gone does nothing", () => {
+			const onOp = vi.fn();
+			board.onOp = onOp;
+			expect(board.updateElement("a", moved("nope"))).toBe(false);
+			expect(onOp).not.toHaveBeenCalled();
+		});
+
+		test("undo restores the previous version and redo the new one", () => {
+			const ops: unknown[] = [];
+			board.addStroke(stroke("1"));
+			board.updateElement("a", moved("1"));
+			board.onOp = (op) => ops.push(op);
+			expect(board.undo("a")).toBe(true);
+			expect(board.strokes[0].points[0]).toEqual([0, 0, 0.5]);
+			expect(board.redo("a")).toBe(true);
+			expect(board.strokes[0].points[0]).toEqual([9, 9, 0.5]);
+			expect(ops).toEqual([
+				{ t: "update", stroke: stroke("1") },
+				{ t: "update", stroke: moved("1") },
+			]);
+		});
+
+		test("undo goes back through add and update in order", () => {
+			board.addStroke(stroke("1"));
+			board.updateElement("a", moved("1"));
+			board.undo("a");
+			expect(ids(board)).toEqual(["1"]);
+			board.undo("a");
+			expect(ids(board)).toEqual([]);
+		});
+
+		test("any author may update, and it lands in that author's history", () => {
+			board.addStroke(stroke("1", "a"));
+			board.updateElement("b", moved("1", "a"));
+			expect(board.undo("a")).toBe(true); // a's own add
+			board.addStroke(stroke("2", "a"));
+			expect(board.undo("b")).toBe(true); // b's update
+			expect(board.strokes.find((s) => s.id === "1")?.points[0]).toEqual([0, 0, 0.5]);
+		});
+
+		test("applyRemote update replaces an existing element without touching history", () => {
+			const onOp = vi.fn();
+			board.addStroke(stroke("1"));
+			board.onOp = onOp;
+			board.applyRemote({ t: "update", stroke: moved("1") });
+			expect(board.strokes[0].points[0]).toEqual([9, 9, 0.5]);
+			expect(onOp).not.toHaveBeenCalled();
+			board.undo("a"); // only the add is in history
+			expect(ids(board)).toEqual([]);
+		});
+
+		test("applyRemote update for a missing element is ignored", () => {
+			board.applyRemote({ t: "update", stroke: moved("ghost") });
+			expect(ids(board)).toEqual([]);
+		});
+	});
 });
