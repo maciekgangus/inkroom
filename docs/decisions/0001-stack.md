@@ -38,7 +38,7 @@ Uzasadnienie: zakres jest wąski (pióro, gumka, kolor, grubość, cofanie per u
 
 Stos:
 - **Klient:** TypeScript + Vite, silnik płótna w czystym TS, panel i logowanie w Preact.
-- **Serwer:** Go, jeden proces (API, WebSocket, pliki statyczne). Pokoje w pamięci, zapis jako dziennik kresek (append-only) z okresowym zagęszczaniem.
+- **Serwer:** Go, jeden proces (API, WebSocket, pliki statyczne). Pokoje w pamięci, zapis jako dziennik kresek (append-only) z okresowym zagęszczaniem (zastąpione tabelą bieżącego stanu, patrz ADR 0005).
 - **Baza:** SQLite (`modernc.org/sqlite`, bez CGO), plik w wolumenie, kopia przez `sqlite3 .backup`.
 - **Konta:** argon2id, ciasteczko sesji. Link tablicy to 128-bitowy losowy identyfikator.
 - **Protokół:** JSON po WebSocket; binarny dopiero po pomiarze.

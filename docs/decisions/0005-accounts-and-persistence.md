@@ -1,6 +1,6 @@
 # 0005. Konta, sesje i zapis tablic
 
-- Status: proposed
+- Status: accepted
 - Data: 2026-11-09
 
 ## Kontekst
