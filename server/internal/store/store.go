@@ -34,11 +34,13 @@ type Board struct {
 	UpdatedAt time.Time
 }
 
-// Op is one change to a board's strokes: add (or keep) a stroke, or remove it.
+// Op is one change to a board's strokes: add a stroke if it is not there yet, replace an
+// existing one, or (with neither flag) remove it.
 type Op struct {
-	Add  bool
-	ID   string
-	Data []byte
+	Add     bool
+	Replace bool
+	ID      string
+	Data    []byte
 }
 
 // Store is a SQLite-backed store. Safe for concurrent use.
@@ -80,8 +82,19 @@ CREATE TABLE strokes (
 );
 `
 
+const imagesSchema = `
+CREATE TABLE images (
+	id TEXT PRIMARY KEY,
+	board_id TEXT NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+	mime TEXT NOT NULL,
+	data BLOB NOT NULL,
+	created_at INTEGER NOT NULL
+);
+CREATE INDEX images_board ON images(board_id);
+`
+
 // migrations run in order; the number applied is kept in PRAGMA user_version.
-var migrations = []string{schema}
+var migrations = []string{schema, imagesSchema}
 
 // Open opens (creating if needed) the database at path and applies migrations.
 func Open(path string) (*Store, error) {
@@ -262,6 +275,8 @@ func (s *Store) Apply(boardID string, ops []Op, at time.Time) error {
 	for _, op := range ops {
 		if op.Add {
 			_, err = tx.Exec("INSERT OR IGNORE INTO strokes (board_id, id, data) VALUES (?, ?, ?)", boardID, op.ID, op.Data)
+		} else if op.Replace {
+			_, err = tx.Exec("UPDATE strokes SET data = ? WHERE board_id = ? AND id = ?", op.Data, boardID, op.ID)
 		} else {
 			_, err = tx.Exec("DELETE FROM strokes WHERE board_id = ? AND id = ?", boardID, op.ID)
 		}
@@ -291,6 +306,19 @@ func (s *Store) LoadStrokes(boardID string) ([][]byte, error) {
 		out = append(out, d)
 	}
 	return out, rows.Err()
+}
+
+// SaveImage stores an image's bytes under a board. The board must exist.
+func (s *Store) SaveImage(id, boardID, mime string, data []byte) error {
+	_, err := s.db.Exec("INSERT INTO images (id, board_id, mime, data, created_at) VALUES (?, ?, ?, ?, ?)",
+		id, boardID, mime, data, unix(time.Now()))
+	return err
+}
+
+// Image returns an image's type and bytes, only through the board it belongs to.
+func (s *Store) Image(boardID, id string) (mime string, data []byte, err error) {
+	err = s.db.QueryRow("SELECT mime, data FROM images WHERE board_id = ? AND id = ?", boardID, id).Scan(&mime, &data)
+	return mime, data, notFound(err)
 }
 
 func (s *Store) mustAffect(res sql.Result, err error) error {
