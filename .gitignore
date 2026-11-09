@@ -24,3 +24,6 @@ data/
 
 # Claude Code local files
 .claude/settings.local.json
+
+# keep the example env file tracked
+!.env.example
