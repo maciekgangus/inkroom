@@ -120,6 +120,7 @@ function NamePrompt({ onSubmit }: { onSubmit: (name: string) => void }) {
 	return (
 		<main class="center">
 			<form
+				class="stack"
 				onSubmit={(e) => {
 					e.preventDefault();
 					const name = String(
@@ -129,7 +130,7 @@ function NamePrompt({ onSubmit }: { onSubmit: (name: string) => void }) {
 				}}
 			>
 				<h1>Jak masz na imię?</h1>
-				<input name="name" placeholder="Imię" maxLength={40} />{" "}
+				<input name="name" placeholder="Imię" maxLength={40} />
 				<button type="submit" class="primary">
 					Wejdź
 				</button>
