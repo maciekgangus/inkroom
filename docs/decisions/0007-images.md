@@ -1,6 +1,6 @@
 # 0007. Obrazy na tablicy i zmiana istniejących elementów
 
-- Status: proposed
+- Status: accepted
 - Data: 2026-11-09
 
 ## Kontekst

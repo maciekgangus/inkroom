@@ -35,7 +35,7 @@ Priorytety: P1 do pierwszej lekcji, P2 zaraz po niej, P3 później. Statusy: pro
 | R-012 | Narzędzia: linia, prostokąt, okrąg, tekst | P2 | done |
 | R-013 | Wskaźniki kursorów pozostałych osób na tablicy | P2 | done |
 | R-014 | Eksport tablicy do PNG lub PDF | P2 | proposed |
-| R-015 | Wstawianie obrazu (np. zadanie ze zdjęcia) | P3 | proposed |
+| R-015 | Wstawianie obrazu (np. zadanie ze zdjęcia) | P3 | accepted |
 | R-016 | Twórca może ustawić tablicę jako "uczestnicy tylko oglądają" albo "uczestnicy rysują" | P3 | proposed |
 | R-017 | Uczestnik z kontem widzi w panelu osobną listę "tablice, do których mam dostęp" | P2 | done |
 | R-018 | Kilku uczestników jednocześnie na jednej tablicy | P2 | done |
