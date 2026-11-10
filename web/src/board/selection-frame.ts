@@ -1,5 +1,5 @@
 import type { Stroke } from "./board";
-import { geomBox, rotatePoint, worldBounds } from "./transform";
+import { elementCorners, geomBox, rotatePoint, worldBounds } from "./transform";
 
 type Vec = [number, number];
 
@@ -35,8 +35,9 @@ export function showsBox(els: Stroke[]): boolean {
  * The frame around the selected elements: a lone element gets its own (possibly rotated) box,
  * several get the upright box around all of them as they appear on the board.
  */
-export function frameOf(els: Stroke[]): Frame | null {
+export function frameOf(els: Stroke[], groupRot = 0): Frame | null {
 	if (els.length === 0) return null;
+	if (els.length > 1 && groupRot !== 0) return turnedFrame(els, groupRot);
 	if (els.length === 1) {
 		const b = geomBox(els[0]);
 		return {
@@ -71,6 +72,34 @@ export function frameOf(els: Stroke[]): Frame | null {
 export function pointInFrame(f: Frame, p: Vec): boolean {
 	const [x, y] = rotatePoint(p, [f.cx, f.cy], -f.rot);
 	return Math.abs(x - f.cx) <= f.w / 2 && Math.abs(y - f.cy) <= f.h / 2;
+}
+
+/**
+ * The box around several elements measured in axes turned by `rot`, so a group that was turned
+ * keeps the size of its frame and the frame turns with it, instead of growing to cover the
+ * corners of the turned elements.
+ */
+function turnedFrame(els: Stroke[], rot: number): Frame {
+	const origin: Vec = [0, 0];
+	let minX = Number.POSITIVE_INFINITY;
+	let minY = Number.POSITIVE_INFINITY;
+	let maxX = Number.NEGATIVE_INFINITY;
+	let maxY = Number.NEGATIVE_INFINITY;
+	for (const el of els) {
+		for (const corner of elementCorners(el)) {
+			const [x, y] = rotatePoint(corner, origin, -rot);
+			minX = Math.min(minX, x);
+			minY = Math.min(minY, y);
+			maxX = Math.max(maxX, x);
+			maxY = Math.max(maxY, y);
+		}
+	}
+	const [cx, cy] = rotatePoint(
+		[(minX + maxX) / 2, (minY + maxY) / 2],
+		origin,
+		rot,
+	);
+	return { cx, cy, w: maxX - minX, h: maxY - minY, rot };
 }
 
 const at = (f: Frame, dx: number, dy: number): Vec =>

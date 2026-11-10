@@ -9,6 +9,7 @@ import {
 	rotationHandlePos,
 	showsBox,
 } from "./selection-frame";
+import { rotateEl } from "./transform";
 
 const base = { id: "e", authorId: "a", color: "#000", size: 4, z: 0 };
 const rect = (
@@ -169,5 +170,29 @@ describe("pointInFrame", () => {
 		const turned = { ...f, rot: Math.PI / 2 }; // now 40 wide and 80 tall on the board
 		expect(pointInFrame(turned, [100, 135])).toBe(true);
 		expect(pointInFrame(turned, [135, 100])).toBe(false);
+	});
+});
+
+describe("frameOf with a group rotation", () => {
+	const a = rect([100, 100], [300, 200]);
+	const b = rect([400, 100], [450, 150]);
+
+	test("a turned group keeps the size of its frame and the frame turns with it", () => {
+		const before = frameOf([a, b]);
+		if (!before) throw new Error("no frame");
+		const pivot: [number, number] = [before.cx, before.cy];
+		const delta = 0.6;
+		const turned = [a, b].map((e) => rotateEl(e, pivot, delta));
+		const after = frameOf(turned, delta);
+		if (!after) throw new Error("no frame");
+		expect(after.w).toBeCloseTo(before.w);
+		expect(after.h).toBeCloseTo(before.h);
+		expect(after.cx).toBeCloseTo(before.cx);
+		expect(after.cy).toBeCloseTo(before.cy);
+		expect(after.rot).toBeCloseTo(delta);
+	});
+
+	test("without a rotation it is the upright box, as before", () => {
+		expect(frameOf([a, b], 0)).toEqual(frameOf([a, b]));
 	});
 });
