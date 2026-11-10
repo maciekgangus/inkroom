@@ -1,5 +1,5 @@
 import type { Stroke } from "./board";
-import { isPolygonKind } from "./shapes";
+import { hasInside, isPolygonKind } from "./shapes";
 import { fontSizeFor, fontSizeOf } from "./text";
 
 export type Dash = "solid" | "dashed" | "dotted" | "natural";
@@ -58,7 +58,7 @@ export function applyStyle(el: Stroke, patch: StylePatch): Stroke {
 		if (patch.dash === "solid") delete out.dash;
 		else out.dash = patch.dash;
 	}
-	if (patch.fill !== undefined && isShape(el)) {
+	if (patch.fill !== undefined && isShape(el) && hasInside(el.kind)) {
 		if (patch.fill === null) delete out.fill;
 		else out.fill = patch.fill;
 	}
@@ -76,7 +76,7 @@ export function capabilities(els: Stroke[]) {
 		color: els.some((e) => e.kind !== "image"),
 		size: els.some((e) => e.kind !== "image"),
 		dash: dashOptions(els).length > 1,
-		fill: els.some(isShape),
+		fill: els.some((e) => isShape(e) && hasInside(e.kind)),
 		text: els.some((e) => e.kind === "text"),
 		/** Only texts are selected: the size slider is then a font size. */
 		textOnly: els.length > 0 && els.every((e) => e.kind === "text"),

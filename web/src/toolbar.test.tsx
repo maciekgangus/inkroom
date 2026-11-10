@@ -227,7 +227,7 @@ describe("Toolbar", () => {
 			expect(list()).toBeNull();
 		});
 
-		test("clicking the button again opens the list of all five shapes", () => {
+		test("clicking the button again opens the list of all shapes, by category", () => {
 			pressTool("shape");
 			pressTool("shape");
 			expect(list()).not.toBeNull();

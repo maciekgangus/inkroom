@@ -2,32 +2,133 @@ import type { ElementKind } from "./board";
 
 type Vec = [number, number];
 
-/** The kinds of the shape category (R-033), in the order of the list in the toolbar. */
+/** Which shapes the shape tool can draw (R-033, R-039). */
 export type ShapeChoice =
 	| "rect"
 	| "ellipse"
 	| "trapezoid"
 	| "rhombus"
-	| "parallelogram";
+	| "parallelogram"
+	| "triangle"
+	| "righttriangle"
+	| "righttrapezoid"
+	| "pentagon"
+	| "hexagon"
+	| "octagon"
+	| "star"
+	| "roundrect"
+	| "semicircle"
+	| "quadrant"
+	| "cube"
+	| "cuboid"
+	| "cylinder"
+	| "parallelepiped"
+	| "pyramid"
+	| "cone"
+	| "sphere"
+	| "tetrahedron"
+	| "hexprism"
+	| "octahedron"
+	| "pyramidfrustum"
+	| "conefrustum"
+	| "sine"
+	| "bell"
+	| "scurve"
+	| "parabola"
+	| "axes";
 
-/** What the toolbar offers: the element kind, its Polish name and the icon to show. */
-export const SHAPES: {
+/** One entry of the list: the element kind, its Polish name and, for the two with a fixed icon, that icon. */
+export interface ShapeEntry {
 	kind: ShapeChoice;
 	label: string;
-	icon: "rect" | "circle" | "trapezoid" | "rhombus" | "parallelogram";
-}[] = [
-	{ kind: "rect", label: "Prostokąt", icon: "rect" },
-	{ kind: "ellipse", label: "Okrąg i owal", icon: "circle" },
-	{ kind: "trapezoid", label: "Trapez", icon: "trapezoid" },
-	{ kind: "rhombus", label: "Romb", icon: "rhombus" },
-	{ kind: "parallelogram", label: "Równoległobok", icon: "parallelogram" },
+	icon?: "rect" | "circle";
+}
+
+/** The categories of the list, in the order of the toolbar (R-039). */
+export const SHAPE_GROUPS: { title: string; shapes: ShapeEntry[] }[] = [
+	{
+		title: "Podstawowe wielokąty",
+		shapes: [
+			{ kind: "rect", label: "Prostokąt", icon: "rect" },
+			{ kind: "triangle", label: "Trójkąt" },
+			{ kind: "righttriangle", label: "Trójkąt prostokątny" },
+			{ kind: "righttrapezoid", label: "Trapez prostokątny" },
+			{ kind: "trapezoid", label: "Trapez" },
+			{ kind: "parallelogram", label: "Równoległobok" },
+			{ kind: "rhombus", label: "Romb" },
+		],
+	},
+	{
+		title: "Regularne wielokąty",
+		shapes: [
+			{ kind: "pentagon", label: "Pięciokąt" },
+			{ kind: "hexagon", label: "Sześciokąt" },
+			{ kind: "octagon", label: "Ośmiokąt" },
+			{ kind: "star", label: "Gwiazda" },
+		],
+	},
+	{
+		title: "Zaokrąglone kształty",
+		shapes: [
+			{ kind: "ellipse", label: "Okrąg i owal", icon: "circle" },
+			{ kind: "roundrect", label: "Prostokąt zaokrąglony" },
+			{ kind: "semicircle", label: "Półokrąg" },
+			{ kind: "quadrant", label: "Ćwiartka koła" },
+		],
+	},
+	{
+		title: "Bryły 3D",
+		shapes: [
+			{ kind: "cube", label: "Sześcian" },
+			{ kind: "cuboid", label: "Prostopadłościan" },
+			{ kind: "cylinder", label: "Walec" },
+			{ kind: "parallelepiped", label: "Równoległościan" },
+			{ kind: "pyramid", label: "Ostrosłup" },
+			{ kind: "cone", label: "Stożek" },
+			{ kind: "sphere", label: "Kula" },
+			{ kind: "tetrahedron", label: "Czworościan" },
+			{ kind: "hexprism", label: "Graniastosłup sześciokątny" },
+			{ kind: "octahedron", label: "Ośmiościan" },
+			{ kind: "pyramidfrustum", label: "Ostrosłup ścięty" },
+			{ kind: "conefrustum", label: "Stożek ścięty" },
+		],
+	},
+	{
+		title: "Krzywe",
+		shapes: [
+			{ kind: "sine", label: "Sinusoida" },
+			{ kind: "bell", label: "Krzywa dzwonowa" },
+			{ kind: "scurve", label: "Krzywa S" },
+			{ kind: "parabola", label: "Parabola" },
+		],
+	},
+	{
+		title: "Wykresy",
+		shapes: [{ kind: "axes", label: "Układ współrzędnych" }],
+	},
 ];
 
-const POLYGONS: ElementKind[] = ["trapezoid", "rhombus", "parallelogram"];
+/** Every shape of the list, in order. */
+export const SHAPES: ShapeEntry[] = SHAPE_GROUPS.flatMap((g) => g.shapes);
 
-/** Whether the element is drawn as a polygon computed from the box of its two corners. */
+/**
+ * The kinds drawn from the box of their two corners by `shapeParts` (everything of the list
+ * except the rectangle and the ellipse, which have their own paths).
+ */
+const PARAMETRIC: ElementKind[] = SHAPES.map((s) => s.kind).filter(
+	(k) => k !== "rect" && k !== "ellipse",
+);
+
+/** The kinds without an inside: curves and the coordinate system. */
+const OPEN: ElementKind[] = ["sine", "bell", "scurve", "parabola", "axes"];
+
+/** Whether a shape has an inside that can be filled and hit (false for curves and axes). */
+export const hasInside = (kind: ElementKind | undefined): boolean =>
+	kind === undefined || !OPEN.includes(kind);
+
+/** Whether the element is drawn from parts computed from the box of its two corners. */
 export const isPolygonKind = (kind: ElementKind | undefined): boolean =>
-	kind !== undefined && POLYGONS.includes(kind);
+	kind !== undefined && PARAMETRIC.includes(kind);
 
 /** How far a trapezoid's or parallelogram's slanted sides lean in, as a share of the width. */
 const SLANT = 0.25;

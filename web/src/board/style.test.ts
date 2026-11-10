@@ -231,3 +231,32 @@ describe("the natural pen style (R-037)", () => {
 		expect(capabilities([image]).dash).toBe(false);
 	});
 });
+
+describe("curves and the coordinate system have no inside to fill (R-039)", () => {
+	const open = (kind: Stroke["kind"]): Stroke => ({
+		...base,
+		kind,
+		points: pts([0, 0], [10, 5]),
+	});
+	test.each(["sine", "bell", "scurve", "parabola", "axes"] as const)(
+		"%s",
+		(kind) => {
+			expect(capabilities([open(kind)]).fill).toBe(false);
+			expect(applyStyle(open(kind), { fill: "#0f0" }).fill).toBeUndefined();
+			expect(capabilities([open(kind)]).dash).toBe(true);
+			expect(applyStyle(open(kind), { dash: "dashed" }).dash).toBe("dashed");
+		},
+	);
+
+	test("the shapes with an inside still take a fill", () => {
+		for (const kind of [
+			"triangle",
+			"star",
+			"roundrect",
+			"cube",
+			"sphere",
+			"cone",
+		] as const)
+			expect(capabilities([open(kind)]).fill).toBe(true);
+	});
+});

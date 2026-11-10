@@ -1,9 +1,12 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
+import { shapeParts } from "./shape-parts";
 import {
+	hasInside,
 	isPolygonKind,
 	loadShape,
 	pointInPolygon,
 	polygonPoints,
+	SHAPE_GROUPS,
 	SHAPES,
 	saveShape,
 } from "./shapes";
@@ -103,17 +106,33 @@ describe("polygon shapes (R-033)", () => {
 	});
 });
 
-describe("the list of shapes", () => {
-	test("offers rectangle, circle and oval, trapezoid, rhombus and parallelogram, rectangle first", () => {
-		expect(SHAPES.map((s) => s.kind)).toEqual([
-			"rect",
-			"ellipse",
-			"trapezoid",
-			"rhombus",
-			"parallelogram",
+describe("the list of shapes (R-039)", () => {
+	test("is in the categories of the catalog, rectangle first", () => {
+		expect(SHAPE_GROUPS.map((g) => g.title)).toEqual([
+			"Podstawowe wielokąty",
+			"Regularne wielokąty",
+			"Zaokrąglone kształty",
+			"Bryły 3D",
+			"Krzywe",
+			"Wykresy",
 		]);
+		expect(SHAPES[0].kind).toBe("rect");
 		expect(SHAPES[0].label).toBe("Prostokąt");
+	});
+
+	test("has every shape of the catalog once, each with a Polish name", () => {
+		const kinds = SHAPES.map((s) => s.kind);
+		expect(new Set(kinds).size).toBe(kinds.length);
+		expect(kinds).toHaveLength(7 + 4 + 4 + 12 + 4 + 1);
 		for (const s of SHAPES) expect(s.label.length).toBeGreaterThan(0);
+	});
+
+	test("everything but the rectangle and the oval is drawn from lines", () => {
+		for (const s of SHAPES) {
+			const lines = s.kind !== "rect" && s.kind !== "ellipse";
+			expect(isPolygonKind(s.kind)).toBe(lines);
+			expect(shapeParts(s.kind, [0, 0], [100, 80]) !== null).toBe(lines);
+		}
 	});
 });
 
@@ -142,7 +161,7 @@ describe("the remembered shape", () => {
 
 	test("ignores a value that is not a shape, and storage that throws", () => {
 		const s = fakeStorage();
-		s.setItem("inkroom.shape", "hexagon");
+		s.setItem("inkroom.shape", "heptagon");
 		vi.stubGlobal("localStorage", s);
 		expect(loadShape()).toBe("rect");
 		vi.stubGlobal("localStorage", {
@@ -155,5 +174,21 @@ describe("the remembered shape", () => {
 		});
 		expect(loadShape()).toBe("rect");
 		expect(() => saveShape("rhombus")).not.toThrow();
+	});
+});
+
+describe("hasInside", () => {
+	test("is false for the curves and the coordinate system, true for the other shapes", () => {
+		for (const kind of ["sine", "bell", "scurve", "parabola", "axes"] as const)
+			expect(hasInside(kind)).toBe(false);
+		for (const kind of [
+			"rect",
+			"ellipse",
+			"circle",
+			"triangle",
+			"cube",
+			"star",
+		] as const)
+			expect(hasInside(kind)).toBe(true);
 	});
 });

@@ -1,8 +1,9 @@
 import { useEffect, useState } from "preact/hooks";
 import type { Settings } from "./board/controller";
-import { SHAPES, saveShape } from "./board/shapes";
+import { SHAPE_GROUPS, SHAPES, saveShape } from "./board/shapes";
 import { Icon } from "./icon";
 import { ImageControls, type ImageControlsProps } from "./image-controls";
+import { ShapeIcon } from "./shape-icon";
 import { selectTool, TOOL_KEYS } from "./shortcuts";
 import { StrokeControls } from "./stroke-controls";
 import { displayColor, useTheme } from "./theme";
@@ -139,7 +140,11 @@ export function Toolbar({
 								onToolChange?.();
 							}}
 						>
-							<Icon name={isShapeTool ? current.icon : tool} />
+							{isShapeTool ? (
+								<ShapeIcon kind={current.kind} />
+							) : (
+								<Icon name={tool} />
+							)}
 						</button>
 					);
 					if (!isShapeTool) return button;
@@ -148,25 +153,32 @@ export function Toolbar({
 							{button}
 							{listOpen && (
 								<div class="shape-list" role="menu">
-									{SHAPES.map((s) => (
-										<button
-											type="button"
-											role="menuitem"
-											key={s.kind}
-											aria-label={`shape ${s.kind}`}
-											class={on(s.kind === current.kind)}
-											onClick={() => {
-												settings.shape = s.kind;
-												saveShape(s.kind);
-												selectTool(settings, "shape");
-												setShapesOpen(false);
-												rerender((n) => n + 1);
-												onToolChange?.();
-											}}
-										>
-											<Icon name={s.icon} />
-											{s.label}
-										</button>
+									{SHAPE_GROUPS.map((group) => (
+										<div class="shape-group" key={group.title}>
+											<div class="shape-group-title">{group.title}</div>
+											<div class="shape-grid">
+												{group.shapes.map((s) => (
+													<button
+														type="button"
+														role="menuitem"
+														key={s.kind}
+														aria-label={`shape ${s.kind}`}
+														title={s.label}
+														class={on(s.kind === current.kind)}
+														onClick={() => {
+															settings.shape = s.kind;
+															saveShape(s.kind);
+															selectTool(settings, "shape");
+															setShapesOpen(false);
+															rerender((n) => n + 1);
+															onToolChange?.();
+														}}
+													>
+														<ShapeIcon kind={s.kind} />
+													</button>
+												))}
+											</div>
+										</div>
 									))}
 								</div>
 							)}

@@ -1,6 +1,6 @@
 import { getStroke } from "perfect-freehand";
 import { type Background, drawBackground } from "./background";
-import type { ElementKind, Stroke } from "./board";
+import type { Stroke } from "./board";
 import { intersects, strokeBounds } from "./bounds";
 import type { Renderer } from "./controller";
 import type { ImageCache } from "./image-cache";
@@ -11,7 +11,8 @@ import {
 	ROT_OFFSET_PX,
 	showsBox,
 } from "./selection-frame";
-import { isPolygonKind, polygonPoints } from "./shapes";
+import { partsOf } from "./shape-parts";
+import { isPolygonKind } from "./shapes";
 import { strokeOptions } from "./stroke-style";
 import { fontSizeOf, LINE_HEIGHT } from "./text";
 import { centerOf } from "./transform";
@@ -31,6 +32,46 @@ function outlinePath(stroke: Stroke): Path2D | null {
 	return path;
 }
 
+/** Adds a polyline to a path; it is closed when its last point is its first. */
+function addPolyline(path: Path2D, pts: [number, number][]): void {
+	if (pts.length < 2) return;
+	path.moveTo(pts[0][0], pts[0][1]);
+	for (let i = 1; i < pts.length; i++) path.lineTo(pts[i][0], pts[i][1]);
+	const [a, b] = [pts[0], pts[pts.length - 1]];
+	if (pts.length > 2 && a[0] === b[0] && a[1] === b[1]) path.closePath();
+}
+
+/**
+ * What a shape made of lines needs besides its path: the contour to fill and the hidden edges
+ * of a solid (drawn dotted), computed once per element.
+ */
+const extras = new WeakMap<
+	Stroke,
+	{ fill: Path2D | null; hidden: Path2D | null }
+>();
+function extraPaths(
+	s: Stroke,
+): { fill: Path2D | null; hidden: Path2D | null } | null {
+	if (!isPolygonKind(s.kind)) return null;
+	let e = extras.get(s);
+	if (!e) {
+		const parts = partsOf(s);
+		let fill: Path2D | null = null;
+		let hidden: Path2D | null = null;
+		if (parts && parts.fill.length >= 3) {
+			fill = new Path2D();
+			addPolyline(fill, [...parts.fill, parts.fill[0]]);
+		}
+		if (parts && parts.hidden.length > 0) {
+			hidden = new Path2D();
+			for (const line of parts.hidden) addPolyline(hidden, line);
+		}
+		e = { fill, hidden };
+		extras.set(s, e);
+	}
+	return e;
+}
+
 /** The path of a line, rectangle or circle; null for anything else. */
 function shapePath(s: Stroke): Path2D | null {
 	const [a, b] = s.points;
@@ -47,14 +88,9 @@ function shapePath(s: Stroke): Path2D | null {
 			Math.abs(b[1] - a[1]),
 		);
 	} else if (isPolygonKind(s.kind)) {
-		const poly = polygonPoints(
-			s.kind as ElementKind,
-			[a[0], a[1]],
-			[b[0], b[1]],
-		);
-		path.moveTo(poly[0][0], poly[0][1]);
-		for (const [x, y] of poly.slice(1)) path.lineTo(x, y);
-		path.closePath();
+		const parts = partsOf(s);
+		if (!parts) return null;
+		for (const line of parts.lines) addPolyline(path, line);
 	} else if (s.kind === "ellipse") {
 		path.ellipse(
 			(a[0] + b[0]) / 2,
@@ -130,9 +166,11 @@ function drawElement(
 			ctx.fillStyle = color;
 			ctx.fill(path);
 		} else if (path) {
+			const extra = extraPaths(s);
 			if (fill) {
 				ctx.fillStyle = fill;
-				ctx.fill(path);
+				// A solid is filled inside its silhouette only, not inside its inner edges.
+				ctx.fill(extra?.fill ?? path);
 			}
 			ctx.strokeStyle = color;
 			ctx.lineWidth = s.size;
@@ -140,6 +178,11 @@ function drawElement(
 			ctx.lineJoin = "round";
 			ctx.setLineDash(dashPattern(s));
 			ctx.stroke(path);
+			if (extra?.hidden) {
+				// The edges behind a solid: dotted, whatever the line style.
+				ctx.setLineDash([0.1, s.size * 2.2]);
+				ctx.stroke(extra.hidden);
+			}
 			ctx.setLineDash([]);
 		}
 	});
