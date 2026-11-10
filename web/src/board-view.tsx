@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import type { Stroke } from "./board/board";
 import { Board } from "./board/board";
 import { CanvasRenderer } from "./board/canvas-renderer";
 import { Controller, type Renderer, type Settings } from "./board/controller";
@@ -6,10 +7,11 @@ import { TouchGestures } from "./board/gestures";
 import { ImageCache } from "./board/image-cache";
 import { defaultSize, placeCentered } from "./board/image-geometry";
 import { prepareImage, uploadImage } from "./board/image-upload";
-import { fontSizeFor } from "./board/text";
+import { fontSizeFor, fontSizeOf } from "./board/text";
 import { Viewport } from "./board/viewport";
 import { Cursors } from "./cursors";
 import { ImageControls } from "./image-controls";
+import { PropertiesPanel } from "./properties-panel";
 import { type SocketLike, SyncClient } from "./sync/sync";
 import { TextEditor } from "./text-editor";
 import { COLORS, SIZES, Toolbar } from "./toolbar";
@@ -44,6 +46,8 @@ export function BoardView({ boardId, authorId, name, connect }: Props) {
 	const viewport = useMemo(() => new Viewport(), []);
 	const [scale, setScale] = useState(1);
 	/** Board position of the text being typed, if any. */
+	/** An existing text being edited (double-click), if any. */
+	const [editingText, setEditingText] = useState<Stroke | null>(null);
 	const [textAt, setTextAt] = useState<{ x: number; y: number } | null>(null);
 	const [, setTick] = useState(0); // bumped when the view changes, so the text field follows it
 	const ctl = useRef<Controller | null>(null);
@@ -79,7 +83,8 @@ export function BoardView({ boardId, authorId, name, connect }: Props) {
 				if (stroke && !stroke.kind) sync.liveUpdate(stroke);
 			},
 			redraw: (strokes) => canvas.redraw(strokes),
-			setSelection: (rect) => canvas.setSelection(rect),
+			setSelection: (frame) => canvas.setSelection(frame),
+			setMarquee: (rect) => canvas.setMarquee(rect),
 		};
 		const controller = new Controller(
 			board,
@@ -91,6 +96,7 @@ export function BoardView({ boardId, authorId, name, connect }: Props) {
 		);
 		ctl.current = controller;
 		controller.onTextRequest = ([x, y]) => setTextAt({ x, y });
+		controller.onTextEdit = (el) => setEditingText(el);
 		controller.onSelectionChange = () => setTick((t) => t + 1);
 
 		const changed = () => {
@@ -178,6 +184,10 @@ export function BoardView({ boardId, authorId, name, connect }: Props) {
 		};
 		const prevent = (e: Event) => e.preventDefault();
 		// A middle-button press would start the browser's autoscroll instead of panning the board.
+		const dblclick = (e: MouseEvent) => {
+			if (settings.tool === "select")
+				controller.editTextAt(e.clientX, e.clientY);
+		};
 		const middle = (e: MouseEvent) => {
 			if (e.button === 1) e.preventDefault();
 		};
@@ -231,6 +241,7 @@ export function BoardView({ boardId, authorId, name, connect }: Props) {
 		live.addEventListener("pointercancel", cancel);
 		live.addEventListener("pointerleave", leave);
 		live.addEventListener("wheel", wheel, { passive: false });
+		live.addEventListener("dblclick", dblclick);
 		live.addEventListener("mousedown", middle);
 		// Block Safari gestures and the context menu over the board.
 		for (const ev of gestureEvents) document.addEventListener(ev, prevent);
@@ -249,6 +260,7 @@ export function BoardView({ boardId, authorId, name, connect }: Props) {
 			live.removeEventListener("pointercancel", cancel);
 			live.removeEventListener("pointerleave", leave);
 			live.removeEventListener("wheel", wheel);
+			live.removeEventListener("dblclick", dblclick);
 			live.removeEventListener("mousedown", middle);
 			for (const ev of gestureEvents) document.removeEventListener(ev, prevent);
 			document.removeEventListener("touchmove", prevent);
@@ -288,6 +300,39 @@ export function BoardView({ boardId, authorId, name, connect }: Props) {
 		<>
 			<canvas id="board" ref={committedRef} />
 			<canvas id="live" ref={liveRef} />
+			{editingText && (
+				<TextEditor
+					key={editingText.id}
+					x={
+						viewport.toScreen(
+							editingText.points[0][0],
+							editingText.points[0][1],
+						)[0]
+					}
+					y={
+						viewport.toScreen(
+							editingText.points[0][0],
+							editingText.points[0][1],
+						)[1]
+					}
+					fontSize={fontSizeOf(editingText) * viewport.scale}
+					color={editingText.color}
+					initialText={editingText.text ?? ""}
+					onCommit={(text) => {
+						ctl.current?.commitText(editingText.id, text);
+						setEditingText(null);
+					}}
+					onCancel={() => setEditingText(null)}
+				/>
+			)}
+			<PropertiesPanel
+				elements={ctl.current?.selection ?? []}
+				colors={COLORS}
+				onChange={(patch) => {
+					ctl.current?.setProps(patch);
+					setTick((t) => t + 1);
+				}}
+			/>
 			{textAt && (
 				<TextEditor
 					key={`${textAt.x},${textAt.y}`}
@@ -304,7 +349,7 @@ export function BoardView({ boardId, authorId, name, connect }: Props) {
 			)}
 			<ImageControls
 				settings={settings}
-				hasSelection={!!ctl.current?.selected}
+				hasSelection={(ctl.current?.selection.length ?? 0) > 0}
 				canPaste={canReadClipboard}
 				error={imageError}
 				onFile={(file) => insertImage.current(file)}

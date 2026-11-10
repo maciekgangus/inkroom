@@ -65,11 +65,11 @@ export function ImageControls({
 			{hasSelection && (
 				<button
 					type="button"
-					aria-label="delete image"
+					aria-label="delete selection"
 					class="danger"
 					onClick={onDelete}
 				>
-					Usuń obraz
+					Usuń
 				</button>
 			)}
 			{error && (

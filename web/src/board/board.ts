@@ -22,6 +22,16 @@ export interface Stroke {
 	text?: string;
 	/** The uploaded image's id, for kind "image" (ADR 0007). */
 	src?: string;
+	/** Rotation in radians around the centre of the (unrotated) geometry (ADR 0008). */
+	rot?: number;
+	/** Line style; missing means solid. */
+	dash?: "solid" | "dashed" | "dotted";
+	/** Fill colour of a rectangle or circle; missing means no fill. */
+	fill?: string;
+	/** 0 to 1; missing means 1. */
+	opacity?: number;
+	/** Font size of a text in board units; missing means the size table value. */
+	fontSize?: number;
 	id: string;
 	authorId: string;
 	color: string;
@@ -38,10 +48,12 @@ export type BoardOp =
 
 interface Action {
 	type: "add" | "erase" | "update";
-	/** The element as it was added or erased, or its new version for an update. */
+	/** The element as it was added or erased, or the first new version for an update. */
 	stroke: Stroke;
-	/** For an update: the version it replaced. */
-	before?: Stroke;
+	/** For an update: every element changed by one gesture, as it was and as it became. */
+	changes?: { before: Stroke; after: Stroke }[];
+	/** For an add or erase of several elements at once: all of them (`stroke` is the first). */
+	group?: Stroke[];
 }
 
 interface History {
@@ -85,16 +97,44 @@ export class Board {
 		return true;
 	}
 
+	/** Erases several elements as one undo step. Returns false if none of them exists. */
+	eraseMany(authorId: string, strokeIds: string[]): boolean {
+		const group = strokeIds
+			.map((id) => this.strokes.find((s) => s.id === id))
+			.filter((s): s is Stroke => !!s);
+		if (group.length === 0) return false;
+		for (const s of group) this.remove(s.id);
+		this.record(authorId, { type: "erase", stroke: group[0], group });
+		for (const s of group) this.onOp?.({ t: "remove", id: s.id });
+		return true;
+	}
+
 	/**
-	 * Replaces an existing element with a new version (move, resize); the action goes to
-	 * `authorId`'s history. Returns false if the element is gone.
+	 * Replaces an existing element with a new version (move, resize, restyle); the action goes
+	 * to `authorId`'s history. Returns false if the element is gone.
 	 */
 	updateElement(authorId: string, next: Stroke): boolean {
-		const before = this.strokes.find((s) => s.id === next.id);
-		if (!before) return false;
-		this.replace(next);
-		this.record(authorId, { type: "update", stroke: next, before });
-		this.onOp?.({ t: "update", stroke: next });
+		return this.updateMany(authorId, [next]);
+	}
+
+	/**
+	 * Replaces several elements in one go: one undo step, one `update` operation each. Elements
+	 * that are gone are skipped; returns false if none was left to change.
+	 */
+	updateMany(authorId: string, next: Stroke[]): boolean {
+		const changes: { before: Stroke; after: Stroke }[] = [];
+		for (const after of next) {
+			const before = this.strokes.find((s) => s.id === after.id);
+			if (before) changes.push({ before, after });
+		}
+		if (changes.length === 0) return false;
+		for (const c of changes) this.replace(c.after);
+		this.record(authorId, {
+			type: "update",
+			stroke: changes[0].after,
+			changes,
+		});
+		for (const c of changes) this.onOp?.({ t: "update", stroke: c.after });
 		return true;
 	}
 
@@ -155,16 +195,21 @@ export class Board {
 		what: "add" | "remove" | "revert" | "reapply",
 	): void {
 		if (what === "revert" || what === "reapply") {
-			const version =
-				what === "revert" ? (action.before as Stroke) : action.stroke;
-			this.replace(version);
-			this.onOp?.({ t: "update", stroke: version });
+			for (const c of action.changes ?? []) {
+				const version = what === "revert" ? c.before : c.after;
+				this.replace(version);
+				this.onOp?.({ t: "update", stroke: version });
+			}
 		} else if (what === "add") {
-			this.insert(action.stroke);
-			this.onOp?.({ t: "add", stroke: action.stroke });
+			for (const s of action.group ?? [action.stroke]) {
+				this.insert(s);
+				this.onOp?.({ t: "add", stroke: s });
+			}
 		} else {
-			this.remove(action.stroke.id);
-			this.onOp?.({ t: "remove", id: action.stroke.id });
+			for (const s of action.group ?? [action.stroke]) {
+				this.remove(s.id);
+				this.onOp?.({ t: "remove", id: s.id });
+			}
 		}
 	}
 

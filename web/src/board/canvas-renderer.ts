@@ -4,7 +4,9 @@ import { intersects, strokeBounds } from "./bounds";
 import type { Renderer } from "./controller";
 import type { ImageCache } from "./image-cache";
 import { imageRect } from "./image-geometry";
-import { fontSizeFor, LINE_HEIGHT } from "./text";
+import { type Frame, HANDLE_PX, ROT_OFFSET_PX } from "./selection-frame";
+import { fontSizeOf, LINE_HEIGHT } from "./text";
+import { centerOf } from "./transform";
 import type { Rect, Viewport } from "./viewport";
 
 /** Freehand strokes are filled outlines; shapes are stroked paths; text is drawn directly. */
@@ -54,33 +56,70 @@ function elementPath(s: Stroke): Path2D | null {
 	return isFilled(s) ? outlinePath(s) : shapePath(s);
 }
 
+/** Runs `draw` with the element's rotation and opacity applied (ADR 0008). */
+function withLook(
+	ctx: CanvasRenderingContext2D,
+	s: Stroke,
+	draw: () => void,
+): void {
+	if (!s.rot && s.opacity === undefined) {
+		draw();
+		return;
+	}
+	ctx.save();
+	if (s.rot) {
+		const [cx, cy] = centerOf(s);
+		ctx.translate(cx, cy);
+		ctx.rotate(s.rot);
+		ctx.translate(-cx, -cy);
+	}
+	if (s.opacity !== undefined) ctx.globalAlpha = s.opacity;
+	draw();
+	ctx.restore();
+}
+
+/** Dash pattern for a line style; dots are tiny dashes with round caps. */
+function dashPattern(s: Stroke): number[] {
+	if (s.dash === "dashed") return [s.size * 3, s.size * 2];
+	if (s.dash === "dotted") return [0.1, s.size * 2];
+	return [];
+}
+
 /** Draws one element; `path` is its (cached) path, unused for text. */
 function drawElement(
 	ctx: CanvasRenderingContext2D,
 	s: Stroke,
 	path: Path2D | null,
 ): void {
-	if (s.kind === "text") {
-		const fs = fontSizeFor(s.size);
-		ctx.fillStyle = s.color;
-		ctx.font = `${fs}px system-ui, sans-serif`;
-		ctx.textBaseline = "top";
-		const [x, y] = s.points[0];
-		const lineHeight = fs * LINE_HEIGHT;
-		const halfLeading = (lineHeight - fs) / 2; // where a text field puts the first line
-		(s.text ?? "").split("\n").forEach((line, i) => {
-			ctx.fillText(line, x, y + i * lineHeight + halfLeading);
-		});
-	} else if (path && isFilled(s)) {
-		ctx.fillStyle = s.color;
-		ctx.fill(path);
-	} else if (path) {
-		ctx.strokeStyle = s.color;
-		ctx.lineWidth = s.size;
-		ctx.lineCap = "round";
-		ctx.lineJoin = "round";
-		ctx.stroke(path);
-	}
+	withLook(ctx, s, () => {
+		if (s.kind === "text") {
+			const fs = fontSizeOf(s);
+			ctx.fillStyle = s.color;
+			ctx.font = `${fs}px system-ui, sans-serif`;
+			ctx.textBaseline = "top";
+			const [x, y] = s.points[0];
+			const lineHeight = fs * LINE_HEIGHT;
+			const halfLeading = (lineHeight - fs) / 2; // where a text field puts the first line
+			(s.text ?? "").split("\n").forEach((line, i) => {
+				ctx.fillText(line, x, y + i * lineHeight + halfLeading);
+			});
+		} else if (path && isFilled(s)) {
+			ctx.fillStyle = s.color;
+			ctx.fill(path);
+		} else if (path) {
+			if (s.fill) {
+				ctx.fillStyle = s.fill;
+				ctx.fill(path);
+			}
+			ctx.strokeStyle = s.color;
+			ctx.lineWidth = s.size;
+			ctx.lineCap = "round";
+			ctx.lineJoin = "round";
+			ctx.setLineDash(dashPattern(s));
+			ctx.stroke(path);
+			ctx.setLineDash([]);
+		}
+	});
 }
 
 interface Cached {
@@ -101,7 +140,8 @@ export class CanvasRenderer implements Renderer {
 	private remote: Stroke[] = [];
 	private strokes: Stroke[] = [];
 	private cache = new WeakMap<Stroke, Cached>();
-	private selection: Rect | null = null;
+	private selection: Frame | null = null;
+	private marquee: Rect | null = null;
 
 	constructor(
 		private committedCanvas: HTMLCanvasElement,
@@ -130,9 +170,15 @@ export class CanvasRenderer implements Renderer {
 		this.paintLive();
 	}
 
-	/** Shows the selection frame and corner handles of the selected image (null hides them). */
-	setSelection(rect: Rect | null): void {
-		this.selection = rect;
+	/** Shows the selection frame, corner handles and rotation handle (null hides them). */
+	setSelection(frame: Frame | null): void {
+		this.selection = frame;
+		this.paintLive();
+	}
+
+	/** Shows the rubber band of a selection being dragged (null hides it). */
+	setMarquee(rect: Rect | null): void {
+		this.marquee = rect;
 		this.paintLive();
 	}
 
@@ -194,40 +240,63 @@ export class CanvasRenderer implements Renderer {
 	private drawImage(ctx: CanvasRenderingContext2D, s: Stroke): void {
 		const r = imageRect(s);
 		const img = s.src ? this.images?.get(s.src) : null;
-		if (img) {
-			ctx.drawImage(
-				img as unknown as CanvasImageSource,
-				r.minX,
-				r.minY,
-				r.maxX - r.minX,
-				r.maxY - r.minY,
-			);
-			return;
-		}
-		ctx.fillStyle = "#eceff1";
-		ctx.fillRect(r.minX, r.minY, r.maxX - r.minX, r.maxY - r.minY);
-		ctx.strokeStyle = "#b0bec5";
-		ctx.lineWidth = 1 / this.viewport.scale;
-		ctx.strokeRect(r.minX, r.minY, r.maxX - r.minX, r.maxY - r.minY);
+		withLook(ctx, s, () => {
+			if (img) {
+				ctx.drawImage(
+					img as unknown as CanvasImageSource,
+					r.minX,
+					r.minY,
+					r.maxX - r.minX,
+					r.maxY - r.minY,
+				);
+				return;
+			}
+			ctx.fillStyle = "#eceff1";
+			ctx.fillRect(r.minX, r.minY, r.maxX - r.minX, r.maxY - r.minY);
+			ctx.strokeStyle = "#b0bec5";
+			ctx.lineWidth = 1 / this.viewport.scale;
+			ctx.strokeRect(r.minX, r.minY, r.maxX - r.minX, r.maxY - r.minY);
+		});
 	}
 
-	/** Frame and handles of the selected image, a constant size on screen whatever the zoom. */
-	private drawSelection(ctx: CanvasRenderingContext2D, r: Rect): void {
+	/** Frame, corner handles and rotation handle, a constant size on screen whatever the zoom. */
+	private drawFrame(ctx: CanvasRenderingContext2D, f: Frame): void {
 		const px = 1 / this.viewport.scale;
+		ctx.save();
+		ctx.translate(f.cx, f.cy);
+		ctx.rotate(f.rot);
 		ctx.strokeStyle = "#1976d2";
 		ctx.lineWidth = 2 * px;
-		ctx.strokeRect(r.minX, r.minY, r.maxX - r.minX, r.maxY - r.minY);
-		const h = 10 * px;
+		ctx.strokeRect(-f.w / 2, -f.h / 2, f.w, f.h);
+		const stem = ROT_OFFSET_PX * px;
+		ctx.beginPath();
+		ctx.moveTo(0, -f.h / 2);
+		ctx.lineTo(0, -f.h / 2 - stem);
+		ctx.stroke();
 		ctx.fillStyle = "#fff";
+		ctx.beginPath();
+		ctx.arc(0, -f.h / 2 - stem, (HANDLE_PX / 2) * px, 0, Math.PI * 2);
+		ctx.fill();
+		ctx.stroke();
+		const h = (HANDLE_PX - 2) * px;
 		for (const [x, y] of [
-			[r.minX, r.minY],
-			[r.maxX, r.minY],
-			[r.minX, r.maxY],
-			[r.maxX, r.maxY],
+			[-f.w / 2, -f.h / 2],
+			[f.w / 2, -f.h / 2],
+			[f.w / 2, f.h / 2],
+			[-f.w / 2, f.h / 2],
 		]) {
 			ctx.fillRect(x - h / 2, y - h / 2, h, h);
 			ctx.strokeRect(x - h / 2, y - h / 2, h, h);
 		}
+		ctx.restore();
+	}
+
+	private drawMarquee(ctx: CanvasRenderingContext2D, r: Rect): void {
+		ctx.fillStyle = "rgba(25, 118, 210, 0.12)";
+		ctx.fillRect(r.minX, r.minY, r.maxX - r.minX, r.maxY - r.minY);
+		ctx.strokeStyle = "#1976d2";
+		ctx.lineWidth = 1 / this.viewport.scale;
+		ctx.strokeRect(r.minX, r.minY, r.maxX - r.minX, r.maxY - r.minY);
 	}
 
 	private paintLive(): void {
@@ -238,6 +307,7 @@ export class CanvasRenderer implements Renderer {
 		for (const s of [...this.remote, ...(this.local ? [this.local] : [])]) {
 			drawElement(ctx, s, elementPath(s));
 		}
-		if (this.selection) this.drawSelection(ctx, this.selection);
+		if (this.selection) this.drawFrame(ctx, this.selection);
+		if (this.marquee) this.drawMarquee(ctx, this.marquee);
 	}
 }

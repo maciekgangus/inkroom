@@ -12,13 +12,18 @@ export function fontSizeFor(size: number): number {
 	return FONT_SIZES[size] ?? Math.round(size * 4);
 }
 
+/** The font size of a text element: its own `fontSize`, else the table value for its pen size. */
+export function fontSizeOf(s: Stroke): number {
+	return s.fontSize ?? fontSizeFor(s.size);
+}
+
 /**
  * Estimated box of a text element, from its anchor (top-left). The width is an estimate,
  * not a measurement, so it is only used to skip off-screen text and to hit it with the eraser.
  */
 export function textBox(s: Stroke): Rect {
 	const [x, y] = s.points[0];
-	const fs = fontSizeFor(s.size);
+	const fs = fontSizeOf(s);
 	const lines = (s.text ?? "").split("\n");
 	const longest = Math.max(1, ...lines.map((l) => l.length));
 	return {

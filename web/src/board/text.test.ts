@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import type { Stroke } from "./board";
-import { fontSizeFor, LINE_HEIGHT, textBox } from "./text";
+import { fontSizeFor, fontSizeOf, LINE_HEIGHT, textBox } from "./text";
 
 function text(
 	content: string,
@@ -52,5 +52,18 @@ describe("textBox", () => {
 		const box = textBox(text("a\nabcdef\nabc"));
 		const single = textBox(text("abcdef"));
 		expect(box.maxX - box.minX).toBeCloseTo(single.maxX - single.minX);
+	});
+});
+
+describe("fontSizeOf", () => {
+	test("uses the element's own font size when it has one, else the size table", () => {
+		expect(fontSizeOf({ ...text("a", 5), fontSize: 61 })).toBe(61);
+		expect(fontSizeOf(text("a", 5))).toBe(24);
+	});
+
+	test("the text box follows the font size", () => {
+		const big = textBox({ ...text("abcd", 5), fontSize: 100 });
+		const normal = textBox(text("abcd", 5));
+		expect(big.maxX - big.minX).toBeGreaterThan(normal.maxX - normal.minX);
 	});
 });

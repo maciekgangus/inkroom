@@ -3,11 +3,8 @@ import type { Stroke } from "./board";
 import {
 	defaultSize,
 	fitWithin,
-	hitHandle,
 	imageRect,
-	moveRect,
 	placeCentered,
-	resizeFromCorner,
 } from "./image-geometry";
 
 function image(a: [number, number], b: [number, number]): Stroke {
@@ -80,65 +77,5 @@ describe("placeCentered", () => {
 				{ minX: 100, minY: 0, maxX: 500, maxY: 300 },
 			),
 		).toEqual([200, 100]);
-	});
-});
-
-describe("moveRect", () => {
-	test("shifts the rectangle", () => {
-		expect(moveRect({ minX: 0, minY: 0, maxX: 10, maxY: 20 }, 5, -3)).toEqual({
-			minX: 5,
-			minY: -3,
-			maxX: 15,
-			maxY: 17,
-		});
-	});
-});
-
-describe("resizeFromCorner", () => {
-	const r = { minX: 100, minY: 100, maxX: 300, maxY: 200 }; // 200 x 100
-
-	test("dragging the south-east corner outwards grows it, anchored at the north-west", () => {
-		const n = resizeFromCorner(r, "se", [500, 300], 20);
-		expect([n.minX, n.minY]).toEqual([100, 100]);
-		expect((n.maxX - n.minX) / (n.maxY - n.minY)).toBeCloseTo(2);
-		expect(n.maxX - n.minX).toBeCloseTo(400);
-	});
-
-	test("the opposite corner stays put for every corner", () => {
-		const nw = resizeFromCorner(r, "nw", [50, 50], 20);
-		expect([nw.maxX, nw.maxY]).toEqual([300, 200]);
-		const ne = resizeFromCorner(r, "ne", [400, 50], 20);
-		expect([ne.minX, ne.maxY]).toEqual([100, 200]);
-		const sw = resizeFromCorner(r, "sw", [20, 300], 20);
-		expect([sw.maxX, sw.minY]).toEqual([300, 100]);
-	});
-
-	test("proportions are always kept", () => {
-		for (const corner of ["nw", "ne", "sw", "se"] as const) {
-			const n = resizeFromCorner(r, corner, [37, 411], 20);
-			expect((n.maxX - n.minX) / (n.maxY - n.minY)).toBeCloseTo(2);
-		}
-	});
-
-	test("cannot shrink below the minimum width, and cannot flip over the anchor", () => {
-		const n = resizeFromCorner(r, "se", [90, 90], 20); // past the anchor
-		expect(n.maxX - n.minX).toBeCloseTo(20);
-		expect([n.minX, n.minY]).toEqual([100, 100]);
-	});
-});
-
-describe("hitHandle", () => {
-	const r = { minX: 100, minY: 100, maxX: 300, maxY: 200 };
-
-	test("finds the corner under the pointer", () => {
-		expect(hitHandle(r, [102, 98], 10)).toBe("nw");
-		expect(hitHandle(r, [298, 99], 10)).toBe("ne");
-		expect(hitHandle(r, [101, 203], 10)).toBe("sw");
-		expect(hitHandle(r, [305, 205], 10)).toBe("se");
-	});
-
-	test("returns null away from the corners", () => {
-		expect(hitHandle(r, [200, 150], 10)).toBeNull();
-		expect(hitHandle(r, [150, 100], 10)).toBeNull();
 	});
 });

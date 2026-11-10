@@ -1,5 +1,6 @@
 import type { Stroke } from "./board";
 import { textBox } from "./text";
+import { geomBox, toLocal } from "./transform";
 
 function distToSegment(
 	px: number,
@@ -40,6 +41,48 @@ function nearPolyline(
 
 /** True if (x, y) is within `radius` of the element's outline (its half-width included). */
 export function strokeHit(
+	stroke: Stroke,
+	x: number,
+	y: number,
+	radius: number,
+): boolean {
+	const [lx, ly] = toLocal(stroke, [x, y]);
+	return hitLocal(stroke, lx, ly, radius);
+}
+
+/**
+ * True if clicking (x, y) should select the element: like `strokeHit`, but a filled shape is
+ * hit anywhere inside and an image anywhere inside too (the eraser never takes an image).
+ */
+export function objectHit(
+	stroke: Stroke,
+	x: number,
+	y: number,
+	radius: number,
+): boolean {
+	const [lx, ly] = toLocal(stroke, [x, y]);
+	const reach = radius + stroke.size / 2;
+	if (stroke.kind === "image" || (stroke.kind === "rect" && stroke.fill)) {
+		const b = geomBox(stroke);
+		const slack = stroke.kind === "image" ? radius : reach;
+		if (
+			lx >= b.minX - slack &&
+			lx <= b.maxX + slack &&
+			ly >= b.minY - slack &&
+			ly <= b.maxY + slack
+		)
+			return true;
+	}
+	if (stroke.kind === "circle" && stroke.fill) {
+		const [c, edge] = stroke.points;
+		const r = Math.hypot(edge[0] - c[0], edge[1] - c[1]);
+		if (Math.hypot(lx - c[0], ly - c[1]) <= r + reach) return true;
+	}
+	return hitLocal(stroke, lx, ly, radius);
+}
+
+/** The hit test in the element's own, unrotated frame. */
+function hitLocal(
 	stroke: Stroke,
 	x: number,
 	y: number,

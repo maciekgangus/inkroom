@@ -68,9 +68,9 @@ describe("ImageControls", () => {
 
 	test("the delete button is there only while an image is selected", () => {
 		mount();
-		expect(btn("delete image")).toBeNull();
+		expect(btn("delete selection")).toBeNull();
 		mount({ hasSelection: true });
-		btn("delete image")?.click();
+		btn("delete selection")?.click();
 		expect(onDelete).toHaveBeenCalledOnce();
 	});
 

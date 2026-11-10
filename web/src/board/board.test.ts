@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { Board, type Stroke } from "./board";
+import { Board, type BoardOp, type Stroke } from "./board";
 
 function stroke(id: string, authorId = "a"): Stroke {
 	return {
@@ -215,6 +215,93 @@ describe("Board", () => {
 		test("applyRemote update for a missing element is ignored", () => {
 			board.applyRemote({ t: "update", stroke: moved("ghost") });
 			expect(ids(board)).toEqual([]);
+		});
+	});
+
+	describe("updating many elements at once", () => {
+		const shifted = (id: string, x: number): Stroke => ({
+			...stroke(id),
+			points: [[x, x, 0.5]],
+		});
+
+		test("updateMany replaces all of them and reports one update each", () => {
+			board.addStroke(stroke("1"));
+			board.addStroke(stroke("2"));
+			const ops: BoardOp[] = [];
+			board.onOp = (op) => ops.push(op);
+			expect(board.updateMany("a", [shifted("1", 5), shifted("2", 6)])).toBe(
+				true,
+			);
+			expect(board.strokes.map((s) => s.points[0][0])).toEqual([5, 6]);
+			expect(ops).toEqual([
+				{ t: "update", stroke: shifted("1", 5) },
+				{ t: "update", stroke: shifted("2", 6) },
+			]);
+		});
+
+		test("the whole change is one undo step and one redo step", () => {
+			board.addStroke(stroke("1"));
+			board.addStroke(stroke("2"));
+			board.updateMany("a", [shifted("1", 5), shifted("2", 6)]);
+			expect(board.undo("a")).toBe(true);
+			expect(board.strokes.map((s) => s.points[0][0])).toEqual([0, 0]);
+			expect(board.redo("a")).toBe(true);
+			expect(board.strokes.map((s) => s.points[0][0])).toEqual([5, 6]);
+		});
+
+		test("elements that are gone are skipped, and nothing is recorded if none are left", () => {
+			board.addStroke(stroke("1"));
+			expect(
+				board.updateMany("a", [shifted("1", 5), shifted("ghost", 6)]),
+			).toBe(true);
+			expect(ids(board)).toEqual(["1"]);
+			expect(board.updateMany("a", [shifted("ghost", 6)])).toBe(false);
+		});
+
+		test("style fields travel with the element", () => {
+			board.addStroke(stroke("1"));
+			board.updateMany("a", [
+				{
+					...stroke("1"),
+					rot: 1.5,
+					dash: "dashed",
+					fill: "#f00",
+					opacity: 0.5,
+					fontSize: 30,
+				},
+			]);
+			expect(board.strokes[0]).toMatchObject({
+				rot: 1.5,
+				dash: "dashed",
+				fill: "#f00",
+				opacity: 0.5,
+				fontSize: 30,
+			});
+		});
+	});
+
+	describe("erasing many elements at once", () => {
+		test("eraseMany removes them all, reports a remove each, and is one undo step", () => {
+			board.addStroke(stroke("1"));
+			board.addStroke(stroke("2"));
+			board.addStroke(stroke("3"));
+			const ops: BoardOp[] = [];
+			board.onOp = (op) => ops.push(op);
+			expect(board.eraseMany("a", ["1", "3", "ghost"])).toBe(true);
+			expect(ids(board)).toEqual(["2"]);
+			expect(ops).toEqual([
+				{ t: "remove", id: "1" },
+				{ t: "remove", id: "3" },
+			]);
+			expect(board.undo("a")).toBe(true);
+			expect(ids(board)).toEqual(["1", "2", "3"]);
+			expect(board.redo("a")).toBe(true);
+			expect(ids(board)).toEqual(["2"]);
+		});
+
+		test("returns false when none of them exist", () => {
+			expect(board.eraseMany("a", ["ghost"])).toBe(false);
+			expect(board.undo("a")).toBe(false);
 		});
 	});
 });

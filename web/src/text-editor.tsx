@@ -8,6 +8,8 @@ interface Props {
 	/** Font size in screen pixels (already multiplied by the zoom). */
 	fontSize: number;
 	color: string;
+	/** The existing text when editing one; the field then covers the drawn text. */
+	initialText?: string;
 	onCommit: (text: string) => void;
 	onCancel: () => void;
 }
@@ -18,6 +20,7 @@ export function TextEditor({
 	y,
 	fontSize,
 	color,
+	initialText,
 	onCommit,
 	onCancel,
 }: Props) {
@@ -39,9 +42,10 @@ export function TextEditor({
 	return (
 		<textarea
 			ref={ref}
-			class="text-editor"
+			class={initialText === undefined ? "text-editor" : "text-editor solid"}
+			defaultValue={initialText}
 			aria-label="text editor"
-			rows={1}
+			rows={initialText === undefined ? 1 : initialText.split("\n").length}
 			style={{
 				left: `${x}px`,
 				top: `${y}px`,
