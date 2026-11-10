@@ -41,9 +41,9 @@ Priorytety: P1 do pierwszej lekcji, P2 zaraz po niej, P3 później. Statusy: pro
 | R-018 | Kilku uczestników jednocześnie na jednej tablicy | P2 | done |
 | R-019 | Usunięcie tablicy tylko przez twórcę, z potwierdzeniem; usunięcie jest trwałe, a link przestaje działać | P1 | done |
 | R-020 | Przywracanie wcześniejszej wersji tablicy (historia/snapshoty), np. po przypadkowym skasowaniu cudzej pracy | P3 | proposed |
-| R-021 | Rozszerzona paleta kolorów: 5 szybkich kolorów zostaje w pasku narzędzi, a obok wysuwany panel z ok. 12 dodatkowymi kolorami i dowolnym kolorem z próbnika; wybrany kolor działa dla pióra, kształtów i tekstu | P2 | accepted |
-| R-022 | Tryb ciemny całej aplikacji, łącznie z tablicą: domyślnie według ustawienia systemu, ręczny przełącznik zapamiętywany na urządzeniu; to ustawienie osobiste, niewspółdzielone. Domyślny czarny tusz jest w trybie ciemnym wyświetlany jako biały (a biały jako czarny), pozostałe kolory bez zmian, więc ta sama tablica jest czytelna w obu trybach | P2 | accepted |
-| R-023 | Tło tablicy do wyboru: gładkie, kropki, kratka, linie; wspólne dla wszystkich na tablicy, ustawia je twórca, zapisuje się razem z tablicą i zmienia u wszystkich na żywo; tło przesuwa się i skaluje razem z płótnem | P2 | accepted |
+| R-021 | Rozszerzona paleta kolorów: 5 szybkich kolorów zostaje w pasku narzędzi, a obok wysuwany panel z ok. 12 dodatkowymi kolorami i dowolnym kolorem z próbnika; wybrany kolor działa dla pióra, kształtów i tekstu | P2 | done |
+| R-022 | Tryb ciemny całej aplikacji, łącznie z tablicą: domyślnie według ustawienia systemu, ręczny przełącznik zapamiętywany na urządzeniu; to ustawienie osobiste, niewspółdzielone. Domyślny czarny tusz jest w trybie ciemnym wyświetlany jako biały (a biały jako czarny), pozostałe kolory bez zmian, więc ta sama tablica jest czytelna w obu trybach | P2 | done |
+| R-023 | Tło tablicy do wyboru: gładkie, kropki, kratka, linie; wspólne dla wszystkich na tablicy, ustawia je twórca, zapisuje się razem z tablicą i zmienia u wszystkich na żywo; tło przesuwa się i skaluje razem z płótnem | P2 | done |
 
 ## 4. Wymagania niefunkcjonalne
 Miary to propozycje startowe, do potwierdzenia po pierwszych testach na prawdziwej lekcji.
