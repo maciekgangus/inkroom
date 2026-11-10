@@ -118,7 +118,15 @@ describe("strokeBounds with rotation", () => {
 	const base = { id: "r", authorId: "a", color: "#000", size: 4, z: 0 };
 
 	test("a quarter turn swaps width and height around the same centre", () => {
-		const el = { ...base, kind: "rect" as const, rot: Math.PI / 2, points: [[0, 0, 0.5], [100, 50, 0.5]] as [number, number, number][] };
+		const el = {
+			...base,
+			kind: "rect" as const,
+			rot: Math.PI / 2,
+			points: [
+				[0, 0, 0.5],
+				[100, 50, 0.5],
+			] as [number, number, number][],
+		};
 		const b = strokeBounds(el);
 		expect(b.maxX - b.minX).toBeCloseTo(50 + 2 * 4);
 		expect(b.maxY - b.minY).toBeCloseTo(100 + 2 * 4);
@@ -127,14 +135,34 @@ describe("strokeBounds with rotation", () => {
 	});
 
 	test("an eighth turn of a square grows the bounds to its diagonal", () => {
-		const el = { ...base, kind: "rect" as const, rot: Math.PI / 4, points: [[0, 0, 0.5], [100, 100, 0.5]] as [number, number, number][] };
+		const el = {
+			...base,
+			kind: "rect" as const,
+			rot: Math.PI / 4,
+			points: [
+				[0, 0, 0.5],
+				[100, 100, 0.5],
+			] as [number, number, number][],
+		};
 		const b = strokeBounds(el);
 		expect(b.maxX - b.minX).toBeGreaterThan(141);
 	});
 
 	test("without rotation nothing changes", () => {
-		const el = { ...base, kind: "rect" as const, points: [[0, 0, 0.5], [100, 50, 0.5]] as [number, number, number][] };
-		expect(strokeBounds(el)).toEqual({ minX: -4, minY: -4, maxX: 104, maxY: 54 });
+		const el = {
+			...base,
+			kind: "rect" as const,
+			points: [
+				[0, 0, 0.5],
+				[100, 50, 0.5],
+			] as [number, number, number][],
+		};
+		expect(strokeBounds(el)).toEqual({
+			minX: -4,
+			minY: -4,
+			maxX: 104,
+			maxY: 54,
+		});
 	});
 });
 

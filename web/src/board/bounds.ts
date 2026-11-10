@@ -1,9 +1,31 @@
 import type { Stroke } from "./board";
 import { fontSizeOf, textBox } from "./text";
+import { centerOf, rotatePoint } from "./transform";
 import type { Rect } from "./viewport";
 
-/** Box around a stroke including its width, used to skip strokes outside the view. */
+/** Box around an element as it appears on the board: its padded box, turned by its rotation. */
 export function strokeBounds(stroke: Stroke): Rect {
+	const r = plainBounds(stroke);
+	if (!stroke.rot) return r;
+	const c = centerOf(stroke);
+	const corners = [
+		[r.minX, r.minY],
+		[r.maxX, r.minY],
+		[r.maxX, r.maxY],
+		[r.minX, r.maxY],
+	].map((p) => rotatePoint(p as [number, number], c, stroke.rot as number));
+	const xs = corners.map((p) => p[0]);
+	const ys = corners.map((p) => p[1]);
+	return {
+		minX: Math.min(...xs),
+		minY: Math.min(...ys),
+		maxX: Math.max(...xs),
+		maxY: Math.max(...ys),
+	};
+}
+
+/** Box around an element before rotation, including its line width. */
+function plainBounds(stroke: Stroke): Rect {
 	if (stroke.kind === "text") {
 		// The width is estimated, so leave generous slack.
 		const box = textBox(stroke);
