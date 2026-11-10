@@ -1,8 +1,6 @@
 import type { Stroke } from "./board";
 import type { Rect } from "./viewport";
 
-export type Corner = "nw" | "ne" | "sw" | "se";
-
 /** Largest part of the view a freshly placed image may take. */
 const VIEW_SHARE = 0.6;
 
@@ -52,62 +50,4 @@ export function placeCentered(
 		(view.minX + view.maxX) / 2 - size.w / 2,
 		(view.minY + view.maxY) / 2 - size.h / 2,
 	];
-}
-
-export function moveRect(r: Rect, dx: number, dy: number): Rect {
-	return {
-		minX: r.minX + dx,
-		minY: r.minY + dy,
-		maxX: r.maxX + dx,
-		maxY: r.maxY + dy,
-	};
-}
-
-/**
- * Resizes a rectangle by dragging one corner while the opposite corner stays fixed. The
- * proportions are kept; the result never gets narrower than `minWidth` and never flips
- * over the fixed corner.
- */
-export function resizeFromCorner(
-	r: Rect,
-	corner: Corner,
-	pointer: [number, number],
-	minWidth: number,
-): Rect {
-	const w = r.maxX - r.minX;
-	const h = r.maxY - r.minY;
-	const east = corner === "ne" || corner === "se";
-	const south = corner === "sw" || corner === "se";
-	const fx = east ? r.minX : r.maxX;
-	const fy = south ? r.minY : r.maxY;
-	// How far the pointer is from the fixed corner, in the direction the corner points.
-	const dx = Math.max(0, east ? pointer[0] - fx : fx - pointer[0]);
-	const dy = Math.max(0, south ? pointer[1] - fy : fy - pointer[1]);
-	const scale = Math.max(minWidth / w, dx / w, dy / h);
-	const nw = w * scale;
-	const nh = h * scale;
-	return {
-		minX: east ? fx : fx - nw,
-		maxX: east ? fx + nw : fx,
-		minY: south ? fy : fy - nh,
-		maxY: south ? fy + nh : fy,
-	};
-}
-
-/** Which corner handle (if any) is within `radius` of the point. */
-export function hitHandle(
-	r: Rect,
-	p: [number, number],
-	radius: number,
-): Corner | null {
-	const corners: [Corner, number, number][] = [
-		["nw", r.minX, r.minY],
-		["ne", r.maxX, r.minY],
-		["sw", r.minX, r.maxY],
-		["se", r.maxX, r.maxY],
-	];
-	for (const [name, x, y] of corners) {
-		if (Math.hypot(p[0] - x, p[1] - y) <= radius) return name;
-	}
-	return null;
 }
