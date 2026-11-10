@@ -153,4 +153,24 @@ describe("Toolbar", () => {
 		expect(onUndo).toHaveBeenCalledOnce();
 		expect(onRedo).toHaveBeenCalledOnce();
 	});
+
+	test("hides colour and size while something is selected, the properties panel owns them", () => {
+		expect(root.querySelector('[aria-label="size 5"]')).not.toBeNull();
+		act(() =>
+			render(
+				<Toolbar
+					settings={settings}
+					hasSelection
+					onUndo={onUndo}
+					onRedo={onRedo}
+				/>,
+				root,
+			),
+		);
+		expect(root.querySelector('[aria-label^="color "]')).toBeNull();
+		expect(root.querySelector('[aria-label="more colors"]')).toBeNull();
+		expect(root.querySelector('[aria-label="size 5"]')).toBeNull();
+		expect(root.querySelector('[aria-label="select"]')).not.toBeNull();
+		expect(root.querySelector('[aria-label="undo"]')).not.toBeNull();
+	});
 });

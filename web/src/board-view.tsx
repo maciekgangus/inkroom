@@ -397,6 +397,7 @@ export function BoardView({
 			<Cursors cursors={syncRef.current?.cursors() ?? []} viewport={viewport} />
 			<Toolbar
 				settings={settings}
+				hasSelection={(ctl.current?.selection.length ?? 0) > 0}
 				onUndo={() => ctl.current?.undo()}
 				onRedo={() => ctl.current?.redo()}
 			/>

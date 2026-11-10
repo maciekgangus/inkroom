@@ -1,16 +1,20 @@
+/* Stacked above the bottom-left corner controls (theme and backgrounds), which
+   own the bottom-left spot. Same glass pill as the other floating controls. */
 .image-controls {
 	position: fixed;
 	left: 12px;
-	bottom: 12px;
+	bottom: 64px;
 	display: flex;
 	flex-wrap: wrap;
-	gap: 6px;
+	gap: 2px;
 	align-items: center;
 	max-width: calc(100vw - 180px);
 	padding: 6px;
-	background: var(--surface);
 	border: 1px solid var(--border);
 	border-radius: var(--radius-lg);
+	background: color-mix(in srgb, var(--surface) 85%, transparent);
+	-webkit-backdrop-filter: blur(12px);
+	backdrop-filter: blur(12px);
 	box-shadow: var(--shadow);
 	z-index: 1;
 	-webkit-user-select: none;
@@ -19,10 +23,10 @@
 .image-controls button {
 	min-height: 40px;
 	padding: 0 12px;
-	border: 1px solid var(--border);
+	border: 1px solid transparent;
 	border-radius: var(--radius);
-	background: var(--surface);
-	color: var(--text);
+	background: transparent;
+	color: var(--icon);
 	font: inherit;
 	font-size: 14px;
 }
@@ -31,7 +35,6 @@
 }
 .image-controls button.danger {
 	background: var(--danger);
-	border-color: var(--danger);
 	color: #fff;
 }
 .image-controls .error {

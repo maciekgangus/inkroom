@@ -23,6 +23,8 @@ export const SIZES = [2, 5, 10];
 
 interface Props {
 	settings: Settings;
+	/** True while something is selected: the properties panel then owns colour and size. */
+	hasSelection?: boolean;
 	onUndo: () => void;
 	onRedo: () => void;
 }
@@ -48,7 +50,12 @@ const colourTools: Settings["tool"][] = [
 ];
 
 /** Tool palette: tools, color, size, undo/redo. Mutates `settings` in place. */
-export function Toolbar({ settings, onUndo, onRedo }: Props) {
+export function Toolbar({
+	settings,
+	hasSelection = false,
+	onUndo,
+	onRedo,
+}: Props) {
 	const [, rerender] = useState(0);
 	const set = (patch: Partial<Settings>) => {
 		Object.assign(settings, patch);
@@ -97,58 +104,62 @@ export function Toolbar({ settings, onUndo, onRedo }: Props) {
 					</button>
 				))}
 			</div>
-			<div class="group">
-				{COLORS.map((c) => swatch(c))}
-				<button
-					type="button"
-					aria-label="more colors"
-					aria-pressed={drawing && custom}
-					aria-expanded={paletteOpen}
-					title="Więcej kolorów"
-					class={`swatch more ${on(drawing && custom)}`}
-					style={
-						custom
-							? { background: displayColor(settings.color, theme) }
-							: undefined
-					}
-					onClick={() => setPaletteOpen(!paletteOpen)}
-				>
-					{!custom && <Icon name="plus" />}
-				</button>
-				{paletteOpen && (
-					<div class="palette">
-						{MORE_COLORS.map((c) => swatch(c, () => setPaletteOpen(false)))}
-						<label class="custom">
-							Własny kolor
-							<input
-								type="color"
-								aria-label="custom color"
-								value={custom ? settings.color : "#5b5bf0"}
-								onInput={(e) =>
-									pick((e.currentTarget as HTMLInputElement).value)
-								}
-							/>
-						</label>
-					</div>
-				)}
-			</div>
-			<div class="group">
-				{SIZES.map((s) => (
+			{!hasSelection && (
+				<div class="group">
+					{COLORS.map((c) => swatch(c))}
 					<button
 						type="button"
-						key={s}
-						aria-label={`size ${s}`}
-						aria-pressed={settings.size === s}
-						class={on(settings.size === s)}
-						onClick={() => set({ size: s })}
+						aria-label="more colors"
+						aria-pressed={drawing && custom}
+						aria-expanded={paletteOpen}
+						title="Więcej kolorów"
+						class={`swatch more ${on(drawing && custom)}`}
+						style={
+							custom
+								? { background: displayColor(settings.color, theme) }
+								: undefined
+						}
+						onClick={() => setPaletteOpen(!paletteOpen)}
 					>
-						<span
-							class="dot"
-							style={{ width: `${s + 2}px`, height: `${s + 2}px` }}
-						/>
+						{!custom && <Icon name="plus" />}
 					</button>
-				))}
-			</div>
+					{paletteOpen && (
+						<div class="palette">
+							{MORE_COLORS.map((c) => swatch(c, () => setPaletteOpen(false)))}
+							<label class="custom">
+								Własny kolor
+								<input
+									type="color"
+									aria-label="custom color"
+									value={custom ? settings.color : "#5b5bf0"}
+									onInput={(e) =>
+										pick((e.currentTarget as HTMLInputElement).value)
+									}
+								/>
+							</label>
+						</div>
+					)}
+				</div>
+			)}
+			{!hasSelection && (
+				<div class="group">
+					{SIZES.map((s) => (
+						<button
+							type="button"
+							key={s}
+							aria-label={`size ${s}`}
+							aria-pressed={settings.size === s}
+							class={on(settings.size === s)}
+							onClick={() => set({ size: s })}
+						>
+							<span
+								class="dot"
+								style={{ width: `${s + 2}px`, height: `${s + 2}px` }}
+							/>
+						</button>
+					))}
+				</div>
+			)}
 			<div class="group">
 				<button type="button" aria-label="undo" title="Cofnij" onClick={onUndo}>
 					<Icon name="undo" />

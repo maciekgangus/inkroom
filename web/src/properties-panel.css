@@ -1,15 +1,18 @@
+/* Same look as the main toolbar: glass surface, round swatches with a ring,
+   borderless icon-like buttons and an accent tint for the active one. */
 .properties {
 	position: fixed;
 	right: 12px;
 	top: 64px;
 	display: flex;
 	flex-direction: column;
-	gap: 6px;
-	padding: 8px;
 	max-width: 260px;
-	background: var(--surface);
+	padding: 6px;
 	border: 1px solid var(--border);
 	border-radius: var(--radius-lg);
+	background: color-mix(in srgb, var(--surface) 85%, transparent);
+	-webkit-backdrop-filter: blur(12px);
+	backdrop-filter: blur(12px);
 	box-shadow: var(--shadow);
 	z-index: 1;
 	-webkit-user-select: none;
@@ -18,36 +21,48 @@
 .properties .row {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 6px;
+	gap: 2px;
 	align-items: center;
+	padding: 4px 0;
+}
+.properties .row + .row {
+	border-top: 1px solid var(--border);
 }
 .properties button {
-	min-width: 36px;
-	min-height: 36px;
+	min-width: 40px;
+	min-height: 40px;
 	padding: 0 8px;
-	border: 1px solid var(--border);
+	border: 1px solid transparent;
 	border-radius: var(--radius);
-	background: var(--surface);
-	color: var(--text);
+	background: transparent;
+	color: var(--icon);
 	font: inherit;
 	font-size: 14px;
 }
 .properties button:hover {
 	background: var(--surface-hover);
 }
+.properties button.active {
+	background: var(--accent-soft);
+	color: var(--accent);
+}
 .properties button.swatch {
-	min-width: 30px;
-	width: 30px;
-	height: 30px;
+	min-width: 24px;
+	width: 24px;
+	height: 24px;
+	min-height: 24px;
+	margin: 8px;
 	padding: 0;
 	border-radius: 50%;
 }
-.properties button.active {
-	border-color: var(--accent);
-	box-shadow: 0 0 0 2px var(--accent);
+.properties button.swatch.active {
+	box-shadow:
+		0 0 0 3px var(--surface),
+		0 0 0 5px var(--accent);
 }
 .properties .dot {
-	display: inline-block;
-	background: var(--text);
+	background: currentColor;
 	border-radius: 50%;
+	display: block;
+	margin: 0 auto;
 }
