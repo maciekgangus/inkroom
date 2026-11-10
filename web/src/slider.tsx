@@ -37,7 +37,7 @@ export function Slider({
 				onChange={(e) => onChange(Number(e.currentTarget.value))}
 			/>
 			<span class="value">
-				{value}
+				{Math.round(value)}
 				{unit}
 			</span>
 		</label>

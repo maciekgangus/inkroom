@@ -154,7 +154,7 @@ describe("Toolbar", () => {
 		expect(onRedo).toHaveBeenCalledOnce();
 	});
 
-	test("hides colour and size while something is selected, the properties panel owns them", () => {
+	test("keeps colour and size in place, dimmed, while something is selected (the panel owns them then)", () => {
 		expect(root.querySelector('[aria-label="size 5"]')).not.toBeNull();
 		act(() =>
 			render(
@@ -167,9 +167,9 @@ describe("Toolbar", () => {
 				root,
 			),
 		);
-		expect(root.querySelector('[aria-label^="color "]')).toBeNull();
-		expect(root.querySelector('[aria-label="more colors"]')).toBeNull();
-		expect(root.querySelector('[aria-label="size 5"]')).toBeNull();
+		expect(root.querySelector('[aria-label^="color "]')).not.toBeNull();
+		expect(root.querySelector('[aria-label="size 5"]')).not.toBeNull();
+		expect(root.querySelectorAll(".group.dimmed").length).toBe(2);
 		expect(root.querySelector('[aria-label="select"]')).not.toBeNull();
 		expect(root.querySelector('[aria-label="undo"]')).not.toBeNull();
 	});
@@ -294,7 +294,7 @@ describe("Toolbar", () => {
 		expect(root.querySelector('[aria-label="natural pen"]')).toBeNull();
 	});
 
-	test("they are hidden while something is selected, the properties panel has them then", () => {
+	test("they stay, dimmed, while something is selected", () => {
 		act(() =>
 			render(
 				<Toolbar
@@ -306,8 +306,8 @@ describe("Toolbar", () => {
 				root,
 			),
 		);
-		for (const label of ["size 5", "stroke settings", "line style"])
-			expect(root.querySelector(`[aria-label="${label}"]`)).toBeNull();
+		expect(root.querySelector('[aria-label="size 5"]')).not.toBeNull();
+		expect(root.querySelector(".group.dimmed")).not.toBeNull();
 	});
 
 	test("tells its parent when the tool changes, so the board can update the cursor", () => {

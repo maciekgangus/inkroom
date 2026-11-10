@@ -786,3 +786,10 @@ canvas {
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
+
+/* What the floating panel edits for the selection is not offered twice: the tools of the pen stay
+   in place, only dimmed, so the bar does not jump about. */
+.toolbar .group.dimmed {
+	opacity: 0.35;
+	pointer-events: none;
+}

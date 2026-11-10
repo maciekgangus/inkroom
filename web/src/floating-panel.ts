@@ -3,6 +3,8 @@ import type { Rect } from "./board/viewport";
 
 /** Space between an object and its panel, the margin kept to the screen edge, and the height of the top bar. */
 const GAP = 12;
+/** Above the object the panel clears the rotation handle that stands over its frame. */
+const GAP_ABOVE = 48;
 const MARGIN = 8;
 const TOP_BAR = 64;
 
@@ -40,7 +42,7 @@ export function panelPosition(
 	);
 	if (seen.maxY + GAP + size.h <= view.h - MARGIN)
 		return { left, top: seen.maxY + GAP, placement: "below" };
-	const above = seen.minY - GAP - size.h;
+	const above = seen.minY - GAP_ABOVE - size.h;
 	if (above >= TOP_BAR) return { left, top: above, placement: "above" };
 	return {
 		left: (view.w - size.w) / 2,

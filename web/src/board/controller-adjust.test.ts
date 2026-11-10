@@ -153,3 +153,40 @@ describe("dragging the handle of an adjustable shape (R-041, phase 2)", () => {
 		expect(get().adj).toBeCloseTo(0.375); // mirrored: measured from the right
 	});
 });
+
+describe("a shape being drawn is a new object at every step", () => {
+	test("what is cached for an element cannot go stale while it is dragged out", () => {
+		const board = new Board();
+		const seen: Stroke[] = [];
+		const renderer: Renderer = {
+			drawLive: (s) => void (s && seen.push(s)),
+			redraw: vi.fn(),
+		};
+		const c = new Controller(
+			board,
+			renderer,
+			{ tool: "shape", shape: "trapezoid", color: "#111", size: 4 },
+			new Viewport(),
+			"me",
+			() => "n",
+		);
+		const at = (x: number, y: number): PointerInput => ({
+			pointerId: 1,
+			pointerType: "mouse",
+			clientX: x,
+			clientY: y,
+			pressure: 0.5,
+			button: 0,
+		});
+		c.pointerDown(at(100, 100));
+		c.pointerMove(at(200, 150));
+		c.pointerMove(at(300, 250));
+		c.pointerUp(at(300, 250));
+		expect(new Set(seen).size).toBe(seen.length); // no object is drawn twice
+		const done = board.strokes[0];
+		expect(seen.includes(done)).toBe(false);
+		expect(partsOf(done)?.fill.some((p) => p[0] === 300 || p[0] === 100)).toBe(
+			true,
+		);
+	});
+});

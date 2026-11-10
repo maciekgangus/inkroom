@@ -309,7 +309,13 @@ export class Controller {
 		if (!this.current) return;
 		if (this.current.kind) {
 			// A shape only needs where it ends.
-			this.current.points[1] = this.shapeEnd(e, this.current);
+			// A new object each time: what is computed from an element (its parts, its paths) is kept
+			// per object, so an object that changes under it would keep an old, smaller shape.
+			const [a] = this.current.points;
+			this.current = {
+				...this.current,
+				points: [a, this.shapeEnd(e, this.current)],
+			};
 			this.renderer.drawLive(this.current);
 			return;
 		}
@@ -322,6 +328,12 @@ export class Controller {
 
 	pointerUp(e: PointerInput): void {
 		if (e.pointerId !== this.activeId) return;
+		this.finishPointer(e);
+		// Whatever the gesture was, the UI is told it is over (the panel of tools comes back).
+		this.onSelectionChange?.();
+	}
+
+	private finishPointer(e: PointerInput): void {
 		this.activeId = null;
 		this.panFrom = null;
 		const press = this.rightPress;
@@ -350,8 +362,13 @@ export class Controller {
 			return;
 		}
 		if (!this.current) return;
-		if (this.current.kind)
-			this.current.points[1] = this.shapeEnd(e, this.current); // Shift as it is on release
+		if (this.current.kind) {
+			const [a] = this.current.points; // Shift as it is on release
+			this.current = {
+				...this.current,
+				points: [a, this.shapeEnd(e, this.current)],
+			};
+		}
 		if (this.current.kind && this.tooSmall(this.current)) {
 			this.current = null;
 			this.renderer.drawLive(null);

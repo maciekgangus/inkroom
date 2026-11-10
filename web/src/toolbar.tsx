@@ -186,8 +186,8 @@ export function Toolbar({
 					);
 				})}
 			</div>
-			{!hasSelection && (
-				<div class="group">
+			{
+				<div class={`group${hasSelection ? " dimmed" : ""}`}>
 					{COLORS.map((c) => swatch(c))}
 					<button
 						type="button"
@@ -222,12 +222,10 @@ export function Toolbar({
 						</div>
 					)}
 				</div>
-			)}
-			{!hasSelection && (
-				<div class="group">
-					<StrokeControls settings={settings} onChange={set} />
-				</div>
-			)}
+			}
+			<div class={`group${hasSelection ? " dimmed" : ""}`}>
+				<StrokeControls settings={settings} onChange={set} />
+			</div>
 			{images && <ImageControls {...images} />}
 			<div class="group">
 				<button type="button" aria-label="undo" title="Cofnij" onClick={onUndo}>

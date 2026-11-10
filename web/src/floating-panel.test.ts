@@ -19,7 +19,7 @@ describe("panelPosition (R-042)", () => {
 
 	test("goes above when there is no room below", () => {
 		const p = panelPosition(rect(400, 560, 600, 700), size, view);
-		expect(p).toMatchObject({ top: 560 - 12 - 200, placement: "above" });
+		expect(p).toMatchObject({ top: 560 - 48 - 200, placement: "above" });
 	});
 
 	test("never leaves the screen sideways", () => {

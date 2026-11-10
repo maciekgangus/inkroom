@@ -193,7 +193,15 @@ describe("what the panel needs to know about the selection (R-042)", () => {
 		expect(changes).toBe(1);
 		c.pointerMove(ev(170, 125));
 		c.pointerUp(ev(170, 125));
-		expect(changes).toBe(2);
+		expect(changes).toBeGreaterThan(1);
+	});
+
+	test("a plain click on the selection also tells the UI when it is over", () => {
+		c.select("a");
+		c.pointerDown(ev(150, 125));
+		changes = 0;
+		c.pointerUp(ev(150, 125));
+		expect(changes).toBeGreaterThan(0);
 	});
 
 	test("the controller says whether a pointer is down", () => {
