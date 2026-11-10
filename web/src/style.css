@@ -10,6 +10,7 @@
 	--danger: #e5484d;
 	--icon: #3d4150;
 	--board: #fff;
+	--grid: #dcdee8;
 	--radius: 12px;
 	--radius-lg: 18px;
 	--shadow: 0 1px 2px #10122008, 0 8px 24px #10122014;
@@ -28,6 +29,7 @@
 	--accent-soft: #272850;
 	--icon: #c3c5d1;
 	--board: #131418;
+	--grid: #2c2e39;
 	--shadow: 0 1px 2px #0006, 0 8px 24px #0009;
 }
 html,
@@ -258,8 +260,13 @@ canvas {
 	-webkit-user-select: none;
 	user-select: none;
 }
+.board-bg {
+	position: fixed;
+	inset: 0;
+}
 .toolbar,
 .zoom,
+.backgrounds,
 .corner {
 	position: fixed;
 	z-index: 1;
@@ -277,6 +284,7 @@ canvas {
 }
 .toolbar button,
 .zoom button,
+.backgrounds button,
 .corner button {
 	width: 40px;
 	padding: 0;
@@ -303,6 +311,7 @@ canvas {
 .toolbar .group + .group {
 	border-left: 1px solid var(--border);
 }
+.backgrounds button.active,
 .toolbar button.active {
 	background: var(--accent-soft);
 	color: var(--accent);
@@ -372,6 +381,11 @@ canvas {
 .corner {
 	left: 12px;
 	bottom: 12px;
+}
+.backgrounds {
+	left: 76px;
+	bottom: 12px;
+	gap: 2px;
 }
 .zoom {
 	right: 12px;

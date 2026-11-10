@@ -1,4 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import {
+	BACKGROUNDS,
+	type Background,
+	backgroundStyle,
+} from "./board/background";
 import { Board } from "./board/board";
 import { CanvasRenderer } from "./board/canvas-renderer";
 import { Controller, type Renderer, type Settings } from "./board/controller";
@@ -6,6 +11,7 @@ import { TouchGestures } from "./board/gestures";
 import { fontSizeFor } from "./board/text";
 import { Viewport } from "./board/viewport";
 import { Cursors } from "./cursors";
+import { Icon } from "./icon";
 import { type SocketLike, SyncClient } from "./sync/sync";
 import { TextEditor } from "./text-editor";
 import { currentTheme, displayColor, useTheme } from "./theme";
@@ -26,10 +32,20 @@ interface Props {
 	name: string;
 	/** Opens the board's websocket. */
 	connect: () => SocketLike;
+	/** Saves a new shared background; given only to the board's owner (R-023). */
+	onSetBackground?: (background: Background) => Promise<void>;
 }
 
+const BACKGROUND_NAMES: Record<Background, string> = {
+	plain: "Gładkie tło",
+	dots: "Kropki",
+	grid: "Kratka",
+	lines: "Linie",
+};
+
 /** A shared infinite board: two canvas layers, a tool palette, zoom buttons and live sync. */
-export function BoardView({ authorId, name, connect }: Props) {
+export function BoardView({ authorId, name, connect, onSetBackground }: Props) {
+	const [background, setBackground] = useState<Background>("plain");
 	const committedRef = useRef<HTMLCanvasElement>(null);
 	const liveRef = useRef<HTMLCanvasElement>(null);
 	const settings = useMemo<Settings>(
@@ -61,6 +77,7 @@ export function BoardView({ authorId, name, connect }: Props) {
 			createSocket: connect,
 			self: { authorId, name },
 			onCursors: () => setTick((t) => t + 1),
+			onBackground: setBackground,
 			onUpdate: () => {
 				canvas.redraw(board.strokes);
 				canvas.setRemoteLive(sync.liveStrokes());
@@ -202,6 +219,11 @@ export function BoardView({ authorId, name, connect }: Props) {
 
 	return (
 		<>
+			<div
+				class="board-bg"
+				data-background={background}
+				style={backgroundStyle(background, viewport)}
+			/>
 			<canvas id="board" ref={committedRef} />
 			<canvas id="live" ref={liveRef} />
 			{textAt && (
@@ -224,6 +246,26 @@ export function BoardView({ authorId, name, connect }: Props) {
 				onUndo={() => ctl.current?.undo()}
 				onRedo={() => ctl.current?.redo()}
 			/>
+			{onSetBackground && (
+				<div class="backgrounds">
+					{BACKGROUNDS.map((b) => (
+						<button
+							type="button"
+							key={b}
+							aria-label={`background ${b}`}
+							aria-pressed={background === b}
+							title={BACKGROUND_NAMES[b]}
+							class={background === b ? "active" : ""}
+							onClick={() => {
+								setBackground(b); // shown at once; the server tells everyone else
+								onSetBackground(b).catch(() => {});
+							}}
+						>
+							<Icon name={b} />
+						</button>
+					))}
+				</div>
+			)}
 			<ZoomControls
 				scale={scale}
 				onZoomIn={() => zoomTo((s) => s * ZOOM_STEP)}
