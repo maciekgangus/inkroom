@@ -283,7 +283,9 @@ describe("App", () => {
 			const createSocket = vi.fn(fakeSocket);
 			await mount({ path: `/b/${ID}`, createSocket });
 			await vi.waitFor(() =>
-				expect(root.querySelectorAll("canvas")).toHaveLength(2),
+				expect(
+					root.querySelectorAll('canvas:not([aria-label="board map"])'),
+				).toHaveLength(2),
 			);
 			expect(createSocket).toHaveBeenCalledWith(
 				expect.stringContaining(`/ws/${ID}`),
@@ -298,7 +300,9 @@ describe("App", () => {
 			const createSocket = vi.fn(fakeSocket);
 			await mount({ path: `/b/${ID}`, createSocket });
 			await vi.waitFor(() =>
-				expect(root.querySelectorAll("canvas")).toHaveLength(2),
+				expect(
+					root.querySelectorAll('canvas:not([aria-label="board map"])'),
+				).toHaveLength(2),
 			);
 			expect(root.querySelector('input[name="name"]')).toBeNull();
 			expect(createSocket).toHaveBeenCalledOnce();
@@ -314,7 +318,9 @@ describe("App", () => {
 				const socket = fakeSocket();
 				await mount({ path: `/b/${ID}`, createSocket: () => socket });
 				await vi.waitFor(() =>
-					expect(root.querySelectorAll("canvas")).toHaveLength(2),
+					expect(
+						root.querySelectorAll('canvas:not([aria-label="board map"])'),
+					).toHaveLength(2),
 				);
 				return { api, socket };
 			};
