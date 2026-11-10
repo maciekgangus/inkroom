@@ -349,4 +349,75 @@ describe("SyncClient", () => {
 			expect(client.cursors()).toEqual([]);
 		});
 	});
+
+	describe("updates", () => {
+		const moved = (id: string): Stroke => ({
+			...stroke(id),
+			points: [[7, 7, 0.5]],
+		});
+
+		test("a local update is sent after the add", () => {
+			connectAndJoin();
+			board.addStroke(stroke("1"));
+			board.updateElement("me", moved("1"));
+			expect(sock().sent).toEqual([
+				{ t: "add", stroke: stroke("1") },
+				{ t: "update", stroke: moved("1") },
+			]);
+		});
+
+		test("a remote update replaces the element and repaints", () => {
+			connectAndJoin([stroke("1")]);
+			sock().receive({ t: "update", stroke: moved("1") });
+			expect(board.strokes[0].points[0]).toEqual([7, 7, 0.5]);
+			expect(onUpdate).toHaveBeenCalled();
+		});
+
+		test("the echo of our own update clears it, so it is not re-sent", () => {
+			connectAndJoin();
+			board.addStroke(stroke("1"));
+			board.updateElement("me", moved("1"));
+			sock().receive({ t: "add", stroke: stroke("1") });
+			sock().receive({ t: "update", stroke: moved("1") });
+			sock().drop();
+			vi.advanceTimersByTime(10_000);
+			sock().open();
+			sock().receive({ t: "snapshot", strokes: [moved("1")] });
+			expect(sock().sent).toEqual([]);
+		});
+
+		test("an update the server never confirmed is re-sent after reconnecting", () => {
+			connectAndJoin([stroke("1")]);
+			board.updateElement("me", moved("1"));
+			sock().drop();
+			vi.advanceTimersByTime(10_000);
+			sock().open();
+			sock().receive({ t: "snapshot", strokes: [stroke("1")] });
+			expect(sock().sent).toEqual([{ t: "update", stroke: moved("1") }]);
+			expect(board.strokes[0].points[0]).toEqual([7, 7, 0.5]);
+		});
+
+		test("an element added and edited while offline is re-sent as one add with the latest content", () => {
+			connectAndJoin();
+			sock().drop();
+			board.addStroke(stroke("1"));
+			board.updateElement("me", moved("1"));
+			vi.advanceTimersByTime(10_000);
+			sock().open();
+			sock().receive({ t: "snapshot", strokes: [] });
+			expect(sock().sent).toEqual([{ t: "add", stroke: moved("1") }]);
+		});
+
+		test("the add being confirmed does not forget an update still in flight", () => {
+			connectAndJoin();
+			board.addStroke(stroke("1"));
+			board.updateElement("me", moved("1"));
+			sock().receive({ t: "add", stroke: stroke("1") }); // only the add came back so far
+			sock().drop();
+			vi.advanceTimersByTime(10_000);
+			sock().open();
+			sock().receive({ t: "snapshot", strokes: [stroke("1")] });
+			expect(sock().sent).toEqual([{ t: "update", stroke: moved("1") }]);
+		});
+	});
 });

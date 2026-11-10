@@ -286,3 +286,97 @@ func TestInvalidCursorsAreRejected(t *testing.T) {
 		}
 	}
 }
+
+const add1v2 = `{"t":"update","stroke":{"id":"s1","authorId":"a","color":"#111","size":4,"z":1,"points":[[5,5,0.5]]}}`
+
+func TestUpdateReplacesAnElementAndIsBroadcastToEveryone(t *testing.T) {
+	r := New()
+	a, b := join(r), join(r)
+	recv(t, a)
+	recv(t, b)
+	_ = r.Handle(a, []byte(add1))
+	recv(t, a)
+	recv(t, b)
+	if err := r.Handle(b, []byte(add1v2)); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []*Client{a, b} {
+		if m := recv(t, c); m["t"] != "update" || m["stroke"].(map[string]any)["id"] != "s1" {
+			t.Fatalf("got %v", m)
+		}
+	}
+	late := join(r)
+	snap := recv(t, late)
+	pts := snap["strokes"].([]any)[0].(map[string]any)["points"].([]any)[0].([]any)
+	if pts[0].(float64) != 5 {
+		t.Fatalf("snapshot still has the old version: %v", snap)
+	}
+}
+
+func TestUpdateKeepsTheElementsPlaceInTheSnapshot(t *testing.T) {
+	r := New()
+	a := join(r)
+	recv(t, a)
+	_ = r.Handle(a, []byte(add1))
+	_ = r.Handle(a, []byte(`{"t":"add","stroke":{"id":"s2","z":2,"points":[]}}`))
+	_ = r.Handle(a, []byte(add1v2))
+	late := join(r)
+	if ids := strokeIDs(t, recv(t, late)); len(ids) != 2 || ids[0] != "s1" || ids[1] != "s2" {
+		t.Fatalf("got %v", ids)
+	}
+}
+
+func TestUpdateOfAMissingElementIsIgnored(t *testing.T) {
+	r := New()
+	a, b := join(r), join(r)
+	recv(t, a)
+	recv(t, b)
+	if err := r.Handle(a, []byte(add1v2)); err != nil {
+		t.Fatal(err)
+	}
+	none(t, a)
+	none(t, b)
+	late := join(r)
+	if ids := strokeIDs(t, recv(t, late)); len(ids) != 0 {
+		t.Fatalf("an update must not create an element: %v", ids)
+	}
+}
+
+func TestUpdateAfterRemoveDoesNotBringItBack(t *testing.T) {
+	r := New()
+	a := join(r)
+	recv(t, a)
+	_ = r.Handle(a, []byte(add1))
+	_ = r.Handle(a, []byte(`{"t":"remove","id":"s1"}`))
+	_ = r.Handle(a, []byte(add1v2))
+	late := join(r)
+	if ids := strokeIDs(t, recv(t, late)); len(ids) != 0 {
+		t.Fatalf("got %v", ids)
+	}
+}
+
+func TestAddDoesNotOverwriteAnUpdatedElement(t *testing.T) {
+	r := New()
+	a := join(r)
+	recv(t, a)
+	_ = r.Handle(a, []byte(add1))
+	_ = r.Handle(a, []byte(add1v2))
+	_ = r.Handle(a, []byte(add1)) // a stale resend after a reconnect
+	late := join(r)
+	snap := recv(t, late)
+	pts := snap["strokes"].([]any)[0].(map[string]any)["points"].([]any)[0].([]any)
+	if pts[0].(float64) != 5 {
+		t.Fatalf("the stale add overwrote the update: %v", snap)
+	}
+}
+
+func TestInvalidUpdatesAreRejected(t *testing.T) {
+	r := New()
+	a := join(r)
+	recv(t, a)
+	for _, msg := range []string{`{"t":"update"}`, `{"t":"update","stroke":{"authorId":"a"}}`} {
+		if err := r.Handle(a, []byte(msg)); err == nil {
+			t.Errorf("expected an error for %s", msg)
+		}
+	}
+}

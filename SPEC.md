@@ -35,7 +35,7 @@ Priorytety: P1 do pierwszej lekcji, P2 zaraz po niej, P3 później. Statusy: pro
 | R-012 | Narzędzia: linia, prostokąt, okrąg, tekst | P2 | done |
 | R-013 | Wskaźniki kursorów pozostałych osób na tablicy | P2 | done |
 | R-014 | Eksport tablicy do PNG lub PDF | P2 | proposed |
-| R-015 | Wstawianie obrazu (np. zadanie ze zdjęcia) | P3 | proposed |
+| R-015 | Wstawianie obrazu (np. zadanie ze zdjęcia) | P3 | done |
 | R-016 | Twórca może ustawić tablicę jako "uczestnicy tylko oglądają" albo "uczestnicy rysują" | P3 | proposed |
 | R-017 | Uczestnik z kontem widzi w panelu osobną listę "tablice, do których mam dostęp" | P2 | done |
 | R-018 | Kilku uczestników jednocześnie na jednej tablicy | P2 | done |
@@ -85,3 +85,4 @@ Miary to propozycje startowe, do potwierdzenia po pierwszych testach na prawdziw
 - 2026-11-09: R-010 (nieskończone płótno) `done` po teście na iPadzie: widok lokalny (przesuwanie, zoom 10–500%), przyciski zoomu w rogu, dwa palce, Ctrl + kółko, narzędzie Ręka; plan w `docs/plan-infinite-canvas.md`.
 - 2026-11-09: R-012 (linia, prostokąt, okrąg, tekst) `done` po teście ręcznym; elementy z polem `kind` w ADR 0006, plan w `docs/plan-shapes-and-text.md`.
 - 2026-11-09: R-013 (kursory pozostałych osób) `done` po teście ręcznym; wiadomości `cursor` i `cursor_drop` bez zapisu, plan w `docs/plan-cursors.md`.
+- 2026-11-10: R-015 (obrazy) `done` po teście ręcznym: wklejanie, wybór pliku, upuszczanie, zmiana rozmiaru i przesuwanie (operacja `update`), zdjęcia w SQLite; ADR 0007, plan w `docs/plan-images.md`.

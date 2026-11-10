@@ -1,6 +1,13 @@
 import type { Board, Point, Stroke } from "./board";
 import { findHit } from "./hit";
-import type { Viewport } from "./viewport";
+import {
+	type Corner,
+	hitHandle,
+	imageRect,
+	moveRect,
+	resizeFromCorner,
+} from "./image-geometry";
+import type { Rect, Viewport } from "./viewport";
 
 /** The subset of PointerEvent the controller reads. */
 export interface PointerInput {
@@ -18,11 +25,21 @@ export interface PointerInput {
 export interface Renderer {
 	drawLive(stroke: Stroke | null): void;
 	redraw(strokes: Stroke[]): void;
+	/** Shows the selection frame and handles of the selected image (null hides them). */
+	setSelection?(rect: Rect | null): void;
 }
 
 /** Current tool settings, mutated by the toolbar. */
 export interface Settings {
-	tool: "pen" | "eraser" | "pan" | "line" | "rect" | "circle" | "text";
+	tool:
+		| "pen"
+		| "eraser"
+		| "pan"
+		| "line"
+		| "rect"
+		| "circle"
+		| "text"
+		| "select";
 	color: string;
 	size: number;
 }
@@ -30,6 +47,26 @@ export interface Settings {
 const ERASER_RADIUS = 10;
 /** A shape dragged less than this many screen pixels is treated as a stray click and dropped. */
 const MIN_SHAPE_PX = 2;
+/** Grab radius of a selection handle and the smallest width an image can be resized to, in screen pixels. */
+const HANDLE_PX = 12;
+const MIN_IMAGE_PX = 24;
+
+/** An image being moved or resized; `draft` is the preview currently applied to the board. */
+interface Edit {
+	mode: "move" | "resize";
+	corner?: Corner;
+	start: [number, number];
+	original: Stroke;
+	draft: Stroke;
+}
+
+const withRect = (el: Stroke, r: Rect): Stroke => ({
+	...el,
+	points: [
+		[r.minX, r.minY, 0.5],
+		[r.maxX, r.maxY, 0.5],
+	],
+});
 
 type ShapeTool = "line" | "rect" | "circle";
 const isShapeTool = (t: Settings["tool"]): t is ShapeTool =>
@@ -42,6 +79,10 @@ export class Controller {
 	private lastZ = 0;
 	private panFrom: { x: number; y: number } | null = null;
 	private textTap = false;
+	private selectedId: string | null = null;
+	private edit: Edit | null = null;
+	/** Called when the selected image changes, so the UI can show or hide its controls. */
+	onSelectionChange: (() => void) | null = null;
 	/** Called with the board position when the text tool is tapped; the UI then asks for the text. */
 	onTextRequest: ((at: [number, number]) => void) | null = null;
 
@@ -54,6 +95,11 @@ export class Controller {
 		private newId: () => string,
 	) {}
 
+	/** The selected image, if any. */
+	get selected(): Stroke | null {
+		return this.board.strokes.find((s) => s.id === this.selectedId) ?? null;
+	}
+
 	/** True while a pen or mouse pointer is down (touch gestures must then be ignored). */
 	get busy(): boolean {
 		return this.activeId !== null;
@@ -64,6 +110,10 @@ export class Controller {
 		this.activeId = e.pointerId;
 		if (e.button === 1 || this.settings.tool === "pan") {
 			this.panFrom = { x: e.clientX, y: e.clientY };
+			return;
+		}
+		if (this.settings.tool === "select") {
+			this.startSelect(e);
 			return;
 		}
 		if (this.settings.tool === "eraser") {
@@ -99,6 +149,10 @@ export class Controller {
 			this.renderer.redraw(this.board.strokes);
 			return;
 		}
+		if (this.edit) {
+			this.dragEdit(e);
+			return;
+		}
 		if (this.settings.tool === "eraser") {
 			this.erase(e);
 			return;
@@ -124,6 +178,10 @@ export class Controller {
 		if (this.textTap) {
 			this.textTap = false;
 			this.onTextRequest?.(this.viewport.toWorld(e.clientX, e.clientY));
+			return;
+		}
+		if (this.edit) {
+			this.finishEdit();
 			return;
 		}
 		if (!this.current) return;
@@ -158,6 +216,115 @@ export class Controller {
 		this.renderer.redraw(this.board.strokes);
 	}
 
+	/** Adds an image element covering `rect` and selects it. Returns its id. */
+	addImage(src: string, rect: Rect): string {
+		const el = withRect(
+			{
+				id: this.newId(),
+				authorId: this.authorId,
+				color: "#000000",
+				size: 1,
+				z: this.nextZ(),
+				kind: "image",
+				src,
+				points: [],
+			},
+			rect,
+		);
+		this.board.addStroke(el);
+		this.renderer.redraw(this.board.strokes);
+		this.select(el.id);
+		return el.id;
+	}
+
+	/** Selects an image (or clears the selection with null) and shows its frame. */
+	select(id: string | null): void {
+		this.selectedId = id;
+		const el = this.selected;
+		this.renderer.setSelection?.(el ? imageRect(el) : null);
+		this.onSelectionChange?.();
+	}
+
+	/** Removes the selected image (undoable). Returns false if nothing is selected. */
+	deleteSelected(): boolean {
+		const el = this.selected;
+		if (!el || !this.board.eraseStroke(this.authorId, el.id)) return false;
+		this.select(null);
+		this.renderer.redraw(this.board.strokes);
+		return true;
+	}
+
+	private startSelect(e: PointerInput): void {
+		const p = this.viewport.toWorld(e.clientX, e.clientY);
+		const sel = this.selected;
+		const corner = sel
+			? hitHandle(imageRect(sel), p, HANDLE_PX / this.viewport.scale)
+			: null;
+		if (sel && corner) {
+			this.edit = {
+				mode: "resize",
+				corner,
+				start: p,
+				original: sel,
+				draft: sel,
+			};
+			return;
+		}
+		const hit = [...this.board.strokes].reverse().find((s) => {
+			if (s.kind !== "image") return false;
+			const r = imageRect(s);
+			return (
+				p[0] >= r.minX && p[0] <= r.maxX && p[1] >= r.minY && p[1] <= r.maxY
+			);
+		});
+		if (hit) {
+			this.select(hit.id);
+			this.edit = { mode: "move", start: p, original: hit, draft: hit };
+		} else {
+			this.select(null);
+		}
+	}
+
+	private dragEdit(e: PointerInput): void {
+		const edit = this.edit;
+		if (!edit) return;
+		const p = this.viewport.toWorld(e.clientX, e.clientY);
+		const base = imageRect(edit.original);
+		const rect =
+			edit.mode === "resize" && edit.corner
+				? resizeFromCorner(
+						base,
+						edit.corner,
+						p,
+						MIN_IMAGE_PX / this.viewport.scale,
+					)
+				: moveRect(base, p[0] - edit.start[0], p[1] - edit.start[1]);
+		edit.draft = withRect(edit.original, rect);
+		// A local preview only: nothing is sent and no history is written until release.
+		this.board.applyRemote({ t: "update", stroke: edit.draft });
+		this.renderer.setSelection?.(rect);
+		this.renderer.redraw(this.board.strokes);
+	}
+
+	private finishEdit(): void {
+		const edit = this.edit;
+		this.edit = null;
+		if (!edit || edit.draft === edit.original) return;
+		// Put the original back, then record the change once so it is one undo step and one message.
+		this.board.applyRemote({ t: "update", stroke: edit.original });
+		this.board.updateElement(this.authorId, edit.draft);
+		this.renderer.setSelection?.(imageRect(edit.draft));
+		this.renderer.redraw(this.board.strokes);
+	}
+
+	/** Keeps the selection frame in step after undo or redo changed the board. */
+	private syncSelection(): void {
+		const el = this.selected;
+		if (!el) this.selectedId = null;
+		this.renderer.setSelection?.(el ? imageRect(el) : null);
+		this.onSelectionChange?.();
+	}
+
 	private tooSmall(shape: Stroke): boolean {
 		const [a, b] = shape.points;
 		return (
@@ -166,13 +333,17 @@ export class Controller {
 	}
 
 	undo(): void {
-		if (this.board.undo(this.authorId))
+		if (this.board.undo(this.authorId)) {
 			this.renderer.redraw(this.board.strokes);
+			this.syncSelection();
+		}
 	}
 
 	redo(): void {
-		if (this.board.redo(this.authorId))
+		if (this.board.redo(this.authorId)) {
 			this.renderer.redraw(this.board.strokes);
+			this.syncSelection();
+		}
 	}
 
 	/** A pointer position as a stroke point in board coordinates. */

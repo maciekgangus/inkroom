@@ -1,0 +1,38 @@
+.image-controls {
+	position: fixed;
+	left: 12px;
+	bottom: 12px;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	align-items: center;
+	max-width: calc(100vw - 180px);
+	padding: 6px;
+	background: #fffe;
+	border: 1px solid #ccc;
+	border-radius: 10px;
+	z-index: 1;
+	-webkit-user-select: none;
+	user-select: none;
+}
+.image-controls button {
+	min-height: 40px;
+	padding: 0 12px;
+	border: 1px solid #bbb;
+	border-radius: 8px;
+	background: #fff;
+	font-size: 15px;
+}
+.image-controls button.active {
+	border-color: #1976d2;
+	box-shadow: 0 0 0 2px #1976d2;
+}
+.image-controls button.danger {
+	background: #d32f2f;
+	border-color: #d32f2f;
+	color: #fff;
+}
+.image-controls .error {
+	color: #d32f2f;
+	font-size: 14px;
+}

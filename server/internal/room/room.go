@@ -156,6 +156,21 @@ func (r *Room) Handle(c *Client, raw []byte) error {
 			delete(p.live, id)
 		}
 		r.broadcastLocked(msg, nil)
+	case "update":
+		id, err := strokeID(m.Stroke)
+		if err != nil {
+			return err
+		}
+		e, ok := r.strokes[id]
+		if !ok {
+			return nil // deleted meanwhile: an update never brings an element back
+		}
+		e.raw = m.Stroke // same place in the snapshot, new content
+		r.strokes[id] = e
+		if r.track {
+			r.pending = append(r.pending, store.Op{Replace: true, ID: id, Data: m.Stroke})
+		}
+		r.broadcastLocked(msg, nil)
 	case "remove":
 		if err := checkID(m.ID); err != nil {
 			return err

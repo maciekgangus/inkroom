@@ -2,6 +2,8 @@ import { getStroke } from "perfect-freehand";
 import type { Stroke } from "./board";
 import { intersects, strokeBounds } from "./bounds";
 import type { Renderer } from "./controller";
+import type { ImageCache } from "./image-cache";
+import { imageRect } from "./image-geometry";
 import { fontSizeFor, LINE_HEIGHT } from "./text";
 import type { Rect, Viewport } from "./viewport";
 
@@ -99,11 +101,14 @@ export class CanvasRenderer implements Renderer {
 	private remote: Stroke[] = [];
 	private strokes: Stroke[] = [];
 	private cache = new WeakMap<Stroke, Cached>();
+	private selection: Rect | null = null;
 
 	constructor(
 		private committedCanvas: HTMLCanvasElement,
 		private liveCanvas: HTMLCanvasElement,
 		private viewport: Viewport,
+		/** Source of the pictures for image elements; without it they show as placeholders. */
+		private images: ImageCache | null = null,
 	) {
 		this.committed = committedCanvas.getContext("2d");
 		this.live = liveCanvas.getContext("2d");
@@ -122,6 +127,12 @@ export class CanvasRenderer implements Renderer {
 	/** Sets our own unfinished stroke (null when finished). */
 	drawLive(stroke: Stroke | null): void {
 		this.local = stroke;
+		this.paintLive();
+	}
+
+	/** Shows the selection frame and corner handles of the selected image (null hides them). */
+	setSelection(rect: Rect | null): void {
+		this.selection = rect;
 		this.paintLive();
 	}
 
@@ -170,8 +181,52 @@ export class CanvasRenderer implements Renderer {
 				this.cache.set(s, c);
 			}
 			if (!intersects(c.bounds, view)) continue;
+			if (s.kind === "image") {
+				this.drawImage(ctx, s);
+				continue;
+			}
 			if (c.path === undefined) c.path = elementPath(s);
 			drawElement(ctx, s, c.path);
+		}
+	}
+
+	/** Draws a photo, or a grey placeholder while it loads (or if it failed). */
+	private drawImage(ctx: CanvasRenderingContext2D, s: Stroke): void {
+		const r = imageRect(s);
+		const img = s.src ? this.images?.get(s.src) : null;
+		if (img) {
+			ctx.drawImage(
+				img as unknown as CanvasImageSource,
+				r.minX,
+				r.minY,
+				r.maxX - r.minX,
+				r.maxY - r.minY,
+			);
+			return;
+		}
+		ctx.fillStyle = "#eceff1";
+		ctx.fillRect(r.minX, r.minY, r.maxX - r.minX, r.maxY - r.minY);
+		ctx.strokeStyle = "#b0bec5";
+		ctx.lineWidth = 1 / this.viewport.scale;
+		ctx.strokeRect(r.minX, r.minY, r.maxX - r.minX, r.maxY - r.minY);
+	}
+
+	/** Frame and handles of the selected image, a constant size on screen whatever the zoom. */
+	private drawSelection(ctx: CanvasRenderingContext2D, r: Rect): void {
+		const px = 1 / this.viewport.scale;
+		ctx.strokeStyle = "#1976d2";
+		ctx.lineWidth = 2 * px;
+		ctx.strokeRect(r.minX, r.minY, r.maxX - r.minX, r.maxY - r.minY);
+		const h = 10 * px;
+		ctx.fillStyle = "#fff";
+		for (const [x, y] of [
+			[r.minX, r.minY],
+			[r.maxX, r.minY],
+			[r.minX, r.maxY],
+			[r.maxX, r.maxY],
+		]) {
+			ctx.fillRect(x - h / 2, y - h / 2, h, h);
+			ctx.strokeRect(x - h / 2, y - h / 2, h, h);
 		}
 	}
 
@@ -183,5 +238,6 @@ export class CanvasRenderer implements Renderer {
 		for (const s of [...this.remote, ...(this.local ? [this.local] : [])]) {
 			drawElement(ctx, s, elementPath(s));
 		}
+		if (this.selection) this.drawSelection(ctx, this.selection);
 	}
 }
