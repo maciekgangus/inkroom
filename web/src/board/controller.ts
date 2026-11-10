@@ -243,6 +243,7 @@ export class Controller {
 		}
 		if (this.settings.tool === "select") {
 			this.startSelect(e);
+			this.onSelectionChange?.(); // the panel of tools steps aside while the pointer is down
 			return;
 		}
 		// Anything that draws starts clean: what was selected before is let go of.

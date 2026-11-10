@@ -190,7 +190,7 @@ describe("what the panel needs to know about the selection (R-042)", () => {
 		c.select("a");
 		changes = 0;
 		c.pointerDown(ev(150, 125));
-		expect(changes).toBe(1);
+		expect(changes).toBeGreaterThan(0);
 		c.pointerMove(ev(170, 125));
 		c.pointerUp(ev(170, 125));
 		expect(changes).toBeGreaterThan(1);

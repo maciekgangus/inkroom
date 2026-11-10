@@ -244,3 +244,25 @@ describe("PropertiesPanel", () => {
 		});
 	});
 });
+
+describe("the cross in the panel's title", () => {
+	test("is offered when the board can put the panel away, and calls it", () => {
+		const root = document.createElement("div");
+		const onClose = vi.fn();
+		const show = (close?: () => void) =>
+			render(
+				<PropertiesPanel
+					elements={[rect]}
+					colors={COLORS}
+					onChange={() => {}}
+					onClose={close}
+				/>,
+				root,
+			);
+		show();
+		expect(root.querySelector('[aria-label="close panel"]')).toBeNull();
+		show(onClose);
+		(root.querySelector('[aria-label="close panel"]') as HTMLElement).click();
+		expect(onClose).toHaveBeenCalledTimes(1);
+	});
+});

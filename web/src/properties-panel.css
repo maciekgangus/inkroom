@@ -133,10 +133,30 @@
 	right: auto;
 }
 .panel-title {
-	padding: 2px 6px 6px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 2px 2px 6px 6px;
 	font-size: 11px;
 	font-weight: 600;
 	letter-spacing: 0.06em;
 	text-transform: uppercase;
 	color: var(--muted);
+}
+
+.panel-close {
+	width: 22px;
+	height: 22px;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	background: transparent;
+	color: var(--muted);
+	font-size: 16px;
+	line-height: 1;
+	cursor: pointer;
+}
+.panel-close:hover {
+	background: var(--hover, rgba(0, 0, 0, 0.07));
+	color: inherit;
 }

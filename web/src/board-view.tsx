@@ -131,6 +131,8 @@ export function BoardView({
 			);
 		if (moved) setEditorRect(next);
 	});
+	/** The selection whose panel was put away with the cross; another selection brings it back. */
+	const [closedFor, setClosedFor] = useState<string | null>(null);
 	const [, setTick] = useState(0); // bumped when the view changes, so the text field follows it
 	const ctl = useRef<Controller | null>(null);
 	const syncRef = useRef<SyncClient | null>(null);
@@ -683,9 +685,12 @@ export function BoardView({
 	const liveText = editingText
 		? ctl.current?.selection.find((s) => s.id === editingText.id)
 		: undefined;
+	const selectionKey = (ctl.current?.selection ?? [])
+		.map((s) => s.id)
+		.join(",");
 	const panelElements = typing
 		? [draft as Stroke]
-		: ctl.current?.busy
+		: ctl.current?.busy || (closedFor !== null && closedFor === selectionKey)
 			? []
 			: (ctl.current?.selection ?? []);
 	const panelAnchor =
@@ -751,6 +756,7 @@ export function BoardView({
 				elements={panelElements}
 				colors={COLORS}
 				anchor={panelAnchor}
+				onClose={typing ? undefined : () => setClosedFor(selectionKey)}
 				display={(c) => displayColor(c, currentTheme())}
 				onPreview={(patch) => changeStyle(patch, true)}
 				onChange={(patch) => changeStyle(patch, false)}

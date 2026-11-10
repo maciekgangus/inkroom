@@ -472,23 +472,34 @@ export class CanvasRenderer implements Renderer {
 		ctx.strokeStyle = "#fff";
 		ctx.fillStyle = "#e91e63";
 		const stem = ROT_OFFSET_PX * px;
+		const half = (HANDLE_PX / 2) * px;
+		// The handles that scale: green rounded squares, at the corners and the middles of the sides.
+		ctx.fillStyle = "#7cc243";
+		ctx.strokeStyle = "#3d6b1c";
+		ctx.lineWidth = 1.5 * px;
 		for (const [x, y] of [
-			[0, -f.h / 2 - stem],
 			[-f.w / 2, -f.h / 2],
 			[f.w / 2, -f.h / 2],
 			[f.w / 2, f.h / 2],
 			[-f.w / 2, f.h / 2],
-			// the middles of the sides stretch one dimension (R-041)
 			[0, -f.h / 2],
 			[f.w / 2, 0],
 			[0, f.h / 2],
 			[-f.w / 2, 0],
 		]) {
 			ctx.beginPath();
-			ctx.arc(x, y, (HANDLE_PX / 2) * px, 0, Math.PI * 2);
+			ctx.roundRect(x - half, y - half, 2 * half, 2 * half, 3 * px);
 			ctx.fill();
 			ctx.stroke();
 		}
+		// The handle that turns is a blue dot, apart from the others.
+		ctx.fillStyle = "#1976d2";
+		ctx.strokeStyle = "#fff";
+		ctx.lineWidth = 2 * px;
+		ctx.beginPath();
+		ctx.arc(0, -f.h / 2 - stem, half, 0, Math.PI * 2);
+		ctx.fill();
+		ctx.stroke();
 		ctx.restore();
 	}
 

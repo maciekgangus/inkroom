@@ -34,6 +34,8 @@ interface Props {
 	anchor?: Rect | null;
 	/** A change that is still being made (a slider moving): shown, but not yet final. */
 	onPreview?: (patch: StylePatch) => void;
+	/** Puts the panel away until something else is selected (the cross in its title). */
+	onClose?: () => void;
 	/** A final change: a click, or a slider released. */
 	onChange: (patch: StylePatch) => void;
 }
@@ -45,6 +47,7 @@ export function PropertiesPanel({
 	display = (c) => c,
 	anchor = null,
 	onPreview = () => {},
+	onClose,
 	onChange,
 }: Props) {
 	const ref = useRef<HTMLDivElement>(null);
@@ -82,7 +85,20 @@ export function PropertiesPanel({
 				if ((e.target as HTMLElement).tagName !== "INPUT") e.preventDefault();
 			}}
 		>
-			<div class="panel-title">{panelTitle(elements)}</div>
+			<div class="panel-title">
+				<span>{panelTitle(elements)}</span>
+				{onClose && (
+					<button
+						type="button"
+						class="panel-close"
+						aria-label="close panel"
+						title="Zamknij"
+						onClick={onClose}
+					>
+						×
+					</button>
+				)}
+			</div>
 			{can.color && (
 				<div class="row">
 					{colors.map((c) => (
