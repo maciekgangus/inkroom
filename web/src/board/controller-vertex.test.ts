@@ -209,3 +209,45 @@ describe("the pen takes the line style (R-037)", () => {
 		expect(board.strokes[0].dash).toBe("dotted");
 	});
 });
+
+describe("the corners of a solid (R-050)", () => {
+	test("a cube has seven dots, and dragging one moves that corner of the solid", () => {
+		const board = new Board();
+		const dots: (Vec[] | null)[] = [];
+		const renderer: Renderer = {
+			drawLive: vi.fn(),
+			redraw: vi.fn(),
+			setSelection: vi.fn(),
+			setHighlight: vi.fn(),
+			setDrag: vi.fn(),
+			setVertices: (v) => void dots.push(v),
+		};
+		const c = new Controller(
+			board,
+			renderer,
+			{ tool: "select", color: "#111", size: 4 },
+			new Viewport(),
+			"me",
+			() => "n",
+		);
+		board.addStroke(shape("cube"));
+		c.select("s");
+		const first = dots[dots.length - 1] as Vec[];
+		expect(first).toHaveLength(7);
+		const from = first[0];
+		c.pointerDown(ev(from));
+		c.pointerMove(ev([from[0] - 50, from[1] - 40]));
+		c.pointerUp(ev([from[0] - 50, from[1] - 40]));
+		const now = dots[dots.length - 1] as Vec[];
+		expect(now).toHaveLength(7);
+		expect(now[0][0]).toBeCloseTo(from[0] - 50);
+		expect(now[0][1]).toBeCloseTo(from[1] - 40);
+		for (let i = 1; i < 7; i++) {
+			expect(now[i][0]).toBeCloseTo(first[i][0]);
+			expect(now[i][1]).toBeCloseTo(first[i][1]);
+		}
+		expect(board.strokes[0].kind).toBe("cube"); // still a cube, with a corner pulled
+		board.undo("me");
+		expect(board.strokes[0].verts).toBeUndefined();
+	});
+});

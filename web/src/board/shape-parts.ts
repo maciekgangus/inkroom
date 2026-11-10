@@ -518,8 +518,12 @@ export function shapeParts(
 	b: Vec,
 	adj?: number,
 	verts?: Vec[],
+	/** The kind's own shape, whatever `verts` say (what a solid's skeleton is made from). */
+	plain = false,
 ): ShapeParts | null {
 	if (!kind || !isPolygonKind(kind)) return null;
+	if (POLYHEDRA.includes(kind) && !plain)
+		return solidParts(kind, a, b, adj, verts);
 	if (verts && verts.length >= 3) {
 		const { x0, y0, w, h } = boxOf(a, b);
 		const poly = verts.map((v): Vec => [x0 + v[0] * w, y0 + v[1] * h]);
@@ -676,6 +680,14 @@ export function outlineOf(
 	adj?: number,
 	verts?: Vec[],
 ): Vec[] | null {
+	if (POLYHEDRA.includes(kind)) {
+		const { x0, y0, w, h } = boxOf(a, b);
+		const f =
+			verts && verts.length === skeletonOf(kind).corners.length
+				? verts
+				: skeletonOf(kind).corners;
+		return f.map((v): Vec => [x0 + v[0] * w, y0 + v[1] * h]);
+	}
 	if (kind === "rect") {
 		const { x0, y0, x1, y1 } = boxOf(a, b);
 		return [
@@ -690,4 +702,74 @@ export function outlineOf(
 		return null;
 	const n = parts.fill.length;
 	return n >= 3 && n <= MAX_VERTICES ? parts.fill : null;
+}
+
+/** The solids made of straight edges only; each corner of one can be moved (R-050). */
+const POLYHEDRA: ElementKind[] = [
+	"cube",
+	"cuboid",
+	"parallelepiped",
+	"pyramid",
+	"tetrahedron",
+	"hexprism",
+	"octahedron",
+	"pyramidfrustum",
+];
+
+/**
+ * A solid as corners and the edges between them: the corners in the unit box, and for every
+ * visible and hidden edge the corners it runs through. Worked out once per kind from its shape.
+ */
+interface Skeleton {
+	corners: Vec[];
+	lines: number[][];
+	hidden: number[][];
+}
+const skeletons = new Map<ElementKind, Skeleton>();
+
+function skeletonOf(kind: ElementKind): Skeleton {
+	let sk = skeletons.get(kind);
+	if (sk) return sk;
+	const unit = shapeParts(
+		kind,
+		[0, 0],
+		[1, 1],
+		undefined,
+		undefined,
+		true,
+	) as ShapeParts;
+	const corners: Vec[] = [];
+	const index = (p: Vec): number => {
+		let i = corners.findIndex(
+			(c) => Math.hypot(c[0] - p[0], c[1] - p[1]) < 1e-6,
+		);
+		if (i < 0) i = corners.push([p[0], p[1]]) - 1;
+		return i;
+	};
+	const lines = unit.lines.map((l) => l.map(index));
+	const hidden = unit.hidden.map((l) => l.map(index));
+	sk = { corners, lines, hidden };
+	skeletons.set(kind, sk);
+	return sk;
+}
+
+/** A solid with its corners where `verts` (fractions of the box) put them; the usual ones if none. */
+function solidParts(
+	kind: ElementKind,
+	a: Vec,
+	b: Vec,
+	adj: number | undefined,
+	verts: Vec[] | undefined,
+): ShapeParts | null {
+	const sk = skeletonOf(kind);
+	if (!verts || verts.length !== sk.corners.length) {
+		return shapeParts(kind, a, b, adj, undefined, true);
+	}
+	const { x0, y0, w, h } = boxOf(a, b);
+	const at = verts.map((v): Vec => [x0 + v[0] * w, y0 + v[1] * h]);
+	return {
+		lines: sk.lines.map((l) => l.map((i) => at[i])),
+		hidden: sk.hidden.map((l) => l.map((i) => at[i])),
+		fill: hull(at),
+	};
 }

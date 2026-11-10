@@ -547,12 +547,81 @@ describe("free vertices (R-047)", () => {
 		for (const kind of [
 			"ellipse",
 			"circle",
-			"cube",
 			"sphere",
 			"sine",
 			"axes",
 			"roundrect",
 		] as const)
 			expect(outlineOf(kind, A, B)).toBeNull();
+	});
+});
+
+describe("the corners of solids (R-050)", () => {
+	const counts: [ElementKind, number][] = [
+		["cube", 7], // drawn as a solid seen from the front: its back corner is hidden by it
+		["cuboid", 8],
+		["parallelepiped", 8],
+		["pyramid", 5],
+		["tetrahedron", 4],
+		["hexprism", 12],
+		["octahedron", 6],
+		["pyramidfrustum", 8],
+	];
+	test.each(counts)("%s has %i corners to move", (kind, n) => {
+		expect(outlineOf(kind, A, B)).toHaveLength(n);
+	});
+
+	test("what is round has none", () => {
+		for (const kind of ["cylinder", "cone", "sphere", "conefrustum"] as const)
+			expect(outlineOf(kind, A, B)).toBeNull();
+	});
+
+	test("every edge of the solid ends on one of the corners", () => {
+		for (const [kind] of counts) {
+			const corners = outlineOf(kind, A, B) as Vec[];
+			const parts = shapeParts(kind, A, B);
+			for (const p of [
+				...(parts?.lines ?? []),
+				...(parts?.hidden ?? []),
+			].flat())
+				expect(
+					corners.some((c) => Math.hypot(c[0] - p[0], c[1] - p[1]) < 1e-6),
+				).toBe(true);
+		}
+	});
+
+	test("moving a corner moves it on every edge that meets there, and nothing else", () => {
+		const corners = outlineOf("cube", A, B) as Vec[];
+		const before = shapeParts("cube", A, B);
+		// the fractions of the box, the corner 0 pulled out to (-0.2, -0.3)
+		const verts = corners.map(
+			(c, i): Vec =>
+				i === 0 ? [-0.2, -0.3] : [(c[0] - 100) / 240, (c[1] - 100) / 180],
+		);
+		const after = shapeParts("cube", A, B, undefined, verts);
+		const moved = (parts: typeof before) =>
+			[...(parts?.lines ?? []), ...(parts?.hidden ?? [])].flat();
+		const was = moved(before);
+		const now = moved(after);
+		expect(now).toHaveLength(was.length);
+		expect(after?.lines).toHaveLength(before?.lines.length ?? 0);
+		expect(after?.hidden).toHaveLength(before?.hidden.length ?? 0);
+		const target: Vec = [100 + -0.2 * 240, 100 + -0.3 * 180];
+		now.forEach((p, i) => {
+			const atCorner =
+				Math.hypot(was[i][0] - corners[0][0], was[i][1] - corners[0][1]) < 1e-6;
+			if (atCorner) expect(p).toEqual(target);
+			else expect(p).toEqual(was[i]);
+		});
+	});
+
+	test("the silhouette to fill follows the corners", () => {
+		const corners = outlineOf("pyramid", A, B) as Vec[];
+		const verts = corners.map(
+			(c, i): Vec =>
+				i === 4 ? [0.5, -1] : [(c[0] - 100) / 240, (c[1] - 100) / 180],
+		);
+		const fill = shapeParts("pyramid", A, B, undefined, verts)?.fill ?? [];
+		expect(fill.some((p) => p[1] < 100 - 100)).toBe(true); // the apex is far above the box
 	});
 });
