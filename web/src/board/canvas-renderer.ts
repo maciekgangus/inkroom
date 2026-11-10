@@ -5,7 +5,12 @@ import { intersects, strokeBounds } from "./bounds";
 import type { Renderer } from "./controller";
 import type { ImageCache } from "./image-cache";
 import { imageRect } from "./image-geometry";
-import { type Frame, HANDLE_PX, ROT_OFFSET_PX } from "./selection-frame";
+import {
+	type Frame,
+	HANDLE_PX,
+	ROT_OFFSET_PX,
+	showsBox,
+} from "./selection-frame";
 import { fontSizeOf, LINE_HEIGHT } from "./text";
 import { centerOf } from "./transform";
 import type { Rect, Viewport } from "./viewport";
@@ -302,7 +307,8 @@ export class CanvasRenderer implements Renderer {
 		ctx.rotate(f.rot);
 		ctx.strokeStyle = "#1976d2";
 		ctx.lineWidth = 2 * px;
-		ctx.strokeRect(-f.w / 2, -f.h / 2, f.w, f.h);
+		// A lone stroke, line or text only glows: its handles show, the box does not (R-034).
+		if (showsBox(this.highlight)) ctx.strokeRect(-f.w / 2, -f.h / 2, f.w, f.h);
 		const stem = ROT_OFFSET_PX * px;
 		ctx.beginPath();
 		ctx.moveTo(0, -f.h / 2);

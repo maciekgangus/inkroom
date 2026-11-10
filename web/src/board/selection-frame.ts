@@ -20,10 +20,11 @@ export type Corner = "nw" | "ne" | "se" | "sw";
 export type Handle = Corner | "rot";
 
 /**
- * Whether a selection gets the frame with handles (R-034): images, shapes and several elements
- * do; a lone stroke, line or text only glows, so no big box covers what was selected.
+ * Whether the selection frame is drawn as an outline box (R-034): images, shapes and several
+ * elements get one; a lone stroke, line or text shows only its handles and glows, so no big
+ * box covers what was selected. The handles work the same either way.
  */
-export function needsFrame(els: Stroke[]): boolean {
+export function showsBox(els: Stroke[]): boolean {
 	if (els.length === 0) return false;
 	if (els.length > 1) return true;
 	const kind = els[0].kind;

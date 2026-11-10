@@ -4,9 +4,9 @@ import {
 	frameCorners,
 	frameOf,
 	hitFrameHandle,
-	needsFrame,
 	oppositeCorner,
 	rotationHandlePos,
+	showsBox,
 } from "./selection-frame";
 
 const base = { id: "e", authorId: "a", color: "#000", size: 4, z: 0 };
@@ -128,7 +128,7 @@ describe("oppositeCorner", () => {
 	});
 });
 
-describe("needsFrame (R-034)", () => {
+describe("showsBox (R-034)", () => {
 	const pt = (x: number, y: number) => [x, y, 0.5] as [number, number, number];
 	const el = (kind?: Stroke["kind"]): Stroke => ({
 		...base,
@@ -136,20 +136,20 @@ describe("needsFrame (R-034)", () => {
 		points: [pt(0, 0), pt(10, 10)],
 	});
 
-	test("a lone stroke, line or text glows instead of getting a box", () => {
-		expect(needsFrame([el()])).toBe(false);
-		expect(needsFrame([el("line")])).toBe(false);
-		expect(needsFrame([el("text")])).toBe(false);
+	test("a lone stroke, line or text has handles but no outline box, it glows", () => {
+		expect(showsBox([el()])).toBe(false);
+		expect(showsBox([el("line")])).toBe(false);
+		expect(showsBox([el("text")])).toBe(false);
 	});
 
-	test("images and shapes keep their frame with handles", () => {
-		expect(needsFrame([el("image")])).toBe(true);
-		expect(needsFrame([el("rect")])).toBe(true);
-		expect(needsFrame([el("circle")])).toBe(true);
+	test("images and shapes keep the outline box", () => {
+		expect(showsBox([el("image")])).toBe(true);
+		expect(showsBox([el("rect")])).toBe(true);
+		expect(showsBox([el("circle")])).toBe(true);
 	});
 
-	test("several elements always get a frame, and nothing selected needs none", () => {
-		expect(needsFrame([el(), el("line")])).toBe(true);
-		expect(needsFrame([])).toBe(false);
+	test("several elements get the outline box, and nothing selected shows none", () => {
+		expect(showsBox([el(), el("line")])).toBe(true);
+		expect(showsBox([])).toBe(false);
 	});
 });

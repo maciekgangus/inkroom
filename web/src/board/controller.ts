@@ -7,7 +7,6 @@ import {
 	frameOf,
 	HANDLE_PX,
 	hitFrameHandle,
-	needsFrame,
 	oppositeCorner,
 	ROT_OFFSET_PX,
 } from "./selection-frame";
@@ -468,17 +467,17 @@ export class Controller {
 		this.showSelection(this.selection);
 	}
 
-	/** The glow on every selected element, and the frame with handles where it is needed. */
+	/** The glow on every selected element, and the frame with the handles that edit them. */
 	private showSelection(els: Stroke[]): void {
 		this.renderer.setHighlight?.(els);
-		this.renderer.setSelection?.(needsFrame(els) ? frameOf(els) : null);
+		this.renderer.setSelection?.(frameOf(els));
 	}
 
 	private startSelect(e: PointerInput): void {
 		const p = this.viewport.toWorld(e.clientX, e.clientY);
 		const px = 1 / this.viewport.scale;
 		const sel = this.selection;
-		const frame = needsFrame(sel) ? frameOf(sel) : null;
+		const frame = frameOf(sel);
 		if (frame) {
 			const handle = hitFrameHandle(
 				frame,

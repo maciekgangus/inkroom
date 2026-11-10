@@ -68,14 +68,14 @@ describe("Controller selection look (R-034)", () => {
 		for (const s of [line("l"), pen("p"), rect("r")]) board.addStroke(s);
 	});
 
-	test("a lone line or stroke glows and has no frame", () => {
+	test("a lone line or stroke glows and keeps its handles, so it is controlled as before", () => {
 		c.select("l");
-		expect(renderer.setSelection).toHaveBeenLastCalledWith(null);
+		expect(renderer.setSelection.mock.lastCall?.[0]).not.toBeNull();
 		expect(
 			renderer.setHighlight.mock.lastCall?.[0].map((s: Stroke) => s.id),
 		).toEqual(["l"]);
 		c.select("p");
-		expect(renderer.setSelection).toHaveBeenLastCalledWith(null);
+		expect(renderer.setSelection.mock.lastCall?.[0]).not.toBeNull();
 		expect(
 			renderer.setHighlight.mock.lastCall?.[0].map((s: Stroke) => s.id),
 		).toEqual(["p"]);
@@ -93,6 +93,18 @@ describe("Controller selection look (R-034)", () => {
 		c.select(["l", "r"]);
 		expect(renderer.setSelection.mock.lastCall?.[0]).not.toBeNull();
 		expect(renderer.setHighlight.mock.lastCall?.[0]).toHaveLength(2);
+	});
+
+	test("a lone stroke can be scaled with its corner handle like any other element", () => {
+		c.select("p");
+		const f = renderer.setSelection.mock.lastCall?.[0];
+		const se = [f.cx + f.w / 2, f.cy + f.h / 2] as const;
+		const before = board.strokes.find((s) => s.id === "p")?.points[2];
+		c.pointerDown(ev(se[0], se[1]));
+		c.pointerMove(ev(se[0] + 100, se[1] + 40));
+		c.pointerUp(ev(se[0] + 100, se[1] + 40));
+		const after = board.strokes.find((s) => s.id === "p")?.points[2];
+		expect(after).not.toEqual(before);
 	});
 
 	test("clearing the selection clears both", () => {

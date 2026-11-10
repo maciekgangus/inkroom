@@ -291,7 +291,7 @@ describe("Controller selection", () => {
 			expect(b[0] - a[0]).toBeGreaterThan(5);
 		});
 
-		test("a text's font size grows with the frame of a selection (a lone text has none, R-034)", () => {
+		test("a text's font size grows with it", () => {
 			board.addStroke({
 				...base,
 				id: "t1",
@@ -301,8 +301,8 @@ describe("Controller selection", () => {
 				fontSize: 20,
 				points: [pt(600, 600)],
 			});
-			c.select(["t1", "r1"]);
-			const f = frameOf([get("t1"), get("r1")]);
+			c.select("t1");
+			const f = frameOf([get("t1")]);
 			if (!f) throw new Error("no frame");
 			const se = cornerPos(f, "se");
 			const nw = cornerPos(f, "nw");
