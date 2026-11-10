@@ -187,3 +187,76 @@ func (a *app) deleteBoard(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// Limits of a saved view: the zoom the board allows and a generous reach for the position.
+const (
+	minViewScale = 0.1
+	maxViewScale = 5
+	maxViewReach = 1e7
+)
+
+func validView(v store.View) bool {
+	in := func(n, limit float64) bool { return n >= -limit && n <= limit } // false for NaN too
+	return in(v.X, maxViewReach) && in(v.Y, maxViewReach) &&
+		v.Scale >= minViewScale && v.Scale <= maxViewScale
+}
+
+// getView returns where the logged-in user last looked on the board; 204 if never saved.
+func (a *app) getView(w http.ResponseWriter, r *http.Request) {
+	u, ok := a.auth.User(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Zaloguj się")
+		return
+	}
+	v, err := a.st.View(u.ID, r.PathValue("id"))
+	if errors.Is(err, store.ErrNotFound) {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Błąd serwera")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]float64{"x": v.X, "y": v.Y, "scale": v.Scale})
+}
+
+// setView remembers where the logged-in user is looking on the board.
+func (a *app) setView(w http.ResponseWriter, r *http.Request) {
+	u, ok := a.auth.User(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Zaloguj się")
+		return
+	}
+	if !auth.RequireJSON(w, r) {
+		return
+	}
+	id := r.PathValue("id")
+	if _, err := a.st.Board(id); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "Nie ma takiej tablicy")
+		} else {
+			writeError(w, http.StatusInternalServerError, "Błąd serwera")
+		}
+		return
+	}
+	var v store.View
+	var body struct {
+		X     float64 `json:"x"`
+		Y     float64 `json:"y"`
+		Scale float64 `json:"scale"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodyBytes)).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "Nieprawidłowe żądanie")
+		return
+	}
+	v = store.View{X: body.X, Y: body.Y, Scale: body.Scale}
+	if !validView(v) {
+		writeError(w, http.StatusBadRequest, "Nieprawidłowy widok")
+		return
+	}
+	if err := a.st.SetView(u.ID, id, v); err != nil {
+		writeError(w, http.StatusInternalServerError, "Błąd serwera")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

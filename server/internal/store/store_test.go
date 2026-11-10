@@ -292,3 +292,34 @@ func TestAddDoesNotOverwriteAnExistingStroke(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+func TestViewIsRememberedPerUserAndBoard(t *testing.T) {
+	s := open(t)
+	a := user(t, s, "a@example.com")
+	b := user(t, s, "b@example.com")
+	if _, err := s.CreateBoard("b1", a.ID, "Matma"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.View(a.ID, "b1"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("nothing saved yet: got %v", err)
+	}
+	if err := s.SetView(a.ID, "b1", View{X: 10.5, Y: -20, Scale: 2}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetView(a.ID, "b1", View{X: 11, Y: -21, Scale: 1.5}); err != nil { // replaces
+		t.Fatal(err)
+	}
+	got, err := s.View(a.ID, "b1")
+	if err != nil || got != (View{X: 11, Y: -21, Scale: 1.5}) {
+		t.Fatalf("got %+v %v", got, err)
+	}
+	if _, err := s.View(b.ID, "b1"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("another user has their own view: got %v", err)
+	}
+	if err := s.DeleteBoard("b1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.View(a.ID, "b1"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("a deleted board takes its views: got %v", err)
+	}
+}

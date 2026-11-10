@@ -124,9 +124,9 @@ describe("Toolbar", () => {
 
 	test("picking a colour keeps a shape or text tool, but leaves the eraser and the hand", () => {
 		click("shape");
-		click(`color ${COLORS[3]}`);
+		click(`color ${COLORS[2]}`);
 		expect(settings.tool).toBe("shape");
-		expect(settings.color).toBe(COLORS[3]);
+		expect(settings.color).toBe(COLORS[2]);
 		click("text");
 		click(`color ${COLORS[1]}`);
 		expect(settings.tool).toBe("text");
@@ -326,5 +326,37 @@ describe("Toolbar", () => {
 		click("eraser");
 		expect(onToolChange).toHaveBeenCalledOnce();
 		expect(settings.tool).toBe("eraser");
+	});
+});
+
+describe("the colours in the bar", () => {
+	test("three are at hand, the rest are behind the plus", () => {
+		const root = document.createElement("div");
+		const settings: Settings = { tool: "pen", color: "#111111", size: 5 };
+		act(() =>
+			render(
+				<Toolbar settings={settings} onUndo={() => {}} onRedo={() => {}} />,
+				root,
+			),
+		);
+		expect(
+			root.querySelectorAll(
+				".toolbar > .group:nth-child(2) .swatch:not(.more)",
+			),
+		).toHaveLength(3);
+		expect(root.querySelector('[aria-label="color #388e3c"]')).toBeNull();
+		act(() =>
+			(root.querySelector('[aria-label="more colors"]') as HTMLElement).click(),
+		);
+		expect(root.querySelector('[aria-label="color #388e3c"]')).not.toBeNull();
+		expect(root.querySelector('[aria-label="color #f57c00"]')).not.toBeNull();
+		act(() =>
+			(
+				root.querySelector('[aria-label="color #388e3c"]') as HTMLElement
+			).click(),
+		);
+		expect(settings.color).toBe("#388e3c");
+		// the plus now shows the colour that was picked from the palette
+		expect(root.querySelector(".swatch.more.active")).not.toBeNull();
 	});
 });

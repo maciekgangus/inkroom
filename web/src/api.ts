@@ -96,3 +96,34 @@ export async function boardInfo(
 		return { owner: false, name: "" };
 	}
 }
+
+/** Where the user last looked on a board (null when never saved, or when logged out). */
+export async function loadView(
+	id: string,
+): Promise<{ x: number; y: number; scale: number } | null> {
+	try {
+		const v = await request<
+			{ x: number; y: number; scale: number } | undefined
+		>("GET", `/api/boards/${id}/view`);
+		return v ?? null;
+	} catch {
+		return null;
+	}
+}
+
+/** Remembers where the user is looking; it survives the page being closed (`keepalive`). */
+export async function saveView(
+	id: string,
+	view: { x: number; y: number; scale: number },
+): Promise<void> {
+	try {
+		await fetch(`/api/boards/${id}/view`, {
+			method: "PUT",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(view),
+			keepalive: true,
+		});
+	} catch {
+		// Not being able to save a position is not worth an error.
+	}
+}

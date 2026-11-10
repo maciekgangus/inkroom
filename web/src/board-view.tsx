@@ -5,6 +5,7 @@ import {
 	useRef,
 	useState,
 } from "preact/hooks";
+import { loadView, saveView } from "./api";
 import { BACKGROUNDS, type Background } from "./board/background";
 import type { Stroke } from "./board/board";
 import { Board } from "./board/board";
@@ -24,6 +25,7 @@ import { loadShape } from "./board/shapes";
 import { applyStyle, type StylePatch } from "./board/style";
 import { fontSizeFor, fontSizeOf, fontsChanged } from "./board/text";
 import { textFont } from "./board/text-wrap";
+import { createViewSaver } from "./board/view-saver";
 import { MAX_SCALE, MIN_SCALE, type Rect, Viewport } from "./board/viewport";
 import { stepZoom, wheelZoomFactor } from "./board/zoom";
 import { BoardTitle } from "./board-title";
@@ -261,11 +263,36 @@ export function BoardView({
 			setMenu({ x: e.clientX, y: e.clientY, onObject, at });
 		};
 
+		// Where the user looks is kept on the server, so a reload puts them back there (R-048).
+		let cancelled = false;
+		const viewSaver = createViewSaver((view) => void saveView(boardId, view));
+		let viewReady = false;
 		const changed = () => {
 			canvas.redraw(board.strokes);
 			setScale(viewport.scale);
 			setTick((t) => t + 1);
+			if (viewReady)
+				viewSaver.schedule({
+					x: viewport.x,
+					y: viewport.y,
+					scale: viewport.scale,
+				});
 		};
+		void loadView(boardId).then((saved) => {
+			if (cancelled) return;
+			if (saved) {
+				viewport.x = saved.x;
+				viewport.y = saved.y;
+				viewport.scale = saved.scale;
+				viewSaver.known(saved);
+			}
+			viewReady = true;
+			canvas.redraw(board.strokes);
+			setScale(viewport.scale);
+			setTick((t) => t + 1);
+		});
+		const leaving = () => viewSaver.flush();
+		addEventListener("pagehide", leaving);
 		viewChanged.current = changed;
 		// Zoom eases towards its target one frame at a time, so the percent runs on smoothly.
 		const anim = { target: viewport.scale, sx: 0, sy: 0, raf: 0, last: 0 };
@@ -386,16 +413,17 @@ export function BoardView({
 		const wheel = (e: WheelEvent) => {
 			e.preventDefault(); // otherwise Ctrl + wheel (and trackpad pinch) zooms the whole page
 			const k = e.deltaMode === 1 ? LINE_HEIGHT_PX : 1;
-			if (e.ctrlKey || e.metaKey) {
-				zoomAnim.current.to(
-					zoomAnim.current.target() * wheelZoomFactor(e.deltaY, e.deltaMode),
-					e.clientX,
-					e.clientY,
-				);
+			if (e.shiftKey && !e.ctrlKey && !e.metaKey) {
+				// Shift moves the board, like the hand tool; the plain wheel zooms.
+				viewport.panBy(-e.deltaX * k, -e.deltaY * k);
+				changed();
 				return;
 			}
-			viewport.panBy(-e.deltaX * k, -e.deltaY * k);
-			changed();
+			zoomAnim.current.to(
+				zoomAnim.current.target() * wheelZoomFactor(e.deltaY, e.deltaMode),
+				e.clientX,
+				e.clientY,
+			);
 		};
 		const prevent = (e: Event) => e.preventDefault();
 		// A middle-button press would start the browser's autoscroll instead of panning the board.
@@ -517,6 +545,9 @@ export function BoardView({
 			cancelAnimationFrame(anim.raf);
 			sync.close();
 			removeEventListener("resize", resize);
+			cancelled = true;
+			viewSaver.flush();
+			removeEventListener("pagehide", leaving);
 			removeEventListener("keydown", key);
 			removeEventListener("paste", paste);
 			removeEventListener("copy", copy);

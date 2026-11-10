@@ -9,6 +9,8 @@ import { StrokeControls } from "./stroke-controls";
 import { displayColor, useTheme } from "./theme";
 
 export const COLORS = ["#111111", "#d32f2f", "#1976d2", "#388e3c", "#f57c00"];
+/** The colours at hand in the bar; the rest of COLORS and MORE_COLORS are behind the plus. */
+export const QUICK_COLORS = COLORS.slice(0, 3);
 /** Extra colours behind the palette button (R-025). */
 export const MORE_COLORS = [
 	"#6b7280",
@@ -87,7 +89,7 @@ export function Toolbar({
 	const theme = useTheme();
 	const on = (active: boolean) => (active ? "active" : "");
 	const drawing = colourTools.includes(settings.tool);
-	const custom = !COLORS.includes(settings.color);
+	const custom = !QUICK_COLORS.includes(settings.color);
 	// Picking a colour while erasing or panning goes back to the pen; shapes and text stay.
 	const pick = (color: string) =>
 		set({
@@ -188,7 +190,7 @@ export function Toolbar({
 			</div>
 			{
 				<div class={`group${hasSelection ? " dimmed" : ""}`}>
-					{COLORS.map((c) => swatch(c))}
+					{QUICK_COLORS.map((c) => swatch(c))}
 					<button
 						type="button"
 						aria-label="more colors"
@@ -207,7 +209,9 @@ export function Toolbar({
 					</button>
 					{paletteOpen && (
 						<div class="palette">
-							{MORE_COLORS.map((c) => swatch(c, () => setPaletteOpen(false)))}
+							{[...COLORS.slice(3), ...MORE_COLORS].map((c) =>
+								swatch(c, () => setPaletteOpen(false)),
+							)}
 							<label class="custom">
 								Własny kolor
 								<input

@@ -100,6 +100,15 @@ var migrations = []string{
 	schema,
 	imagesSchema,
 	"ALTER TABLE boards ADD COLUMN background TEXT NOT NULL DEFAULT 'plain'",
+	// Where each user last looked on each board, so a reload puts them back there.
+	`CREATE TABLE views (
+	user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	board_id TEXT NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+	x REAL NOT NULL,
+	y REAL NOT NULL,
+	scale REAL NOT NULL,
+	PRIMARY KEY (user_id, board_id)
+)`,
 }
 
 // DefaultBackground is the background of a new board.
@@ -365,4 +374,29 @@ func notFound(err error) error {
 		return ErrNotFound
 	}
 	return err
+}
+
+// View is the part of a board a user last looked at: the board point at the top left of their
+// screen and the zoom.
+type View struct {
+	X, Y, Scale float64
+}
+
+// SetView remembers where userID last looked on boardID, replacing the previous view.
+func (s *Store) SetView(userID int64, boardID string, v View) error {
+	_, err := s.db.Exec(`INSERT INTO views (user_id, board_id, x, y, scale) VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT (user_id, board_id) DO UPDATE SET x = excluded.x, y = excluded.y, scale = excluded.scale`,
+		userID, boardID, v.X, v.Y, v.Scale)
+	return err
+}
+
+// View returns where userID last looked on boardID, or ErrNotFound if never saved.
+func (s *Store) View(userID int64, boardID string) (View, error) {
+	var v View
+	err := s.db.QueryRow(`SELECT x, y, scale FROM views WHERE user_id = ? AND board_id = ?`,
+		userID, boardID).Scan(&v.X, &v.Y, &v.Scale)
+	if errors.Is(err, sql.ErrNoRows) {
+		return View{}, ErrNotFound
+	}
+	return v, err
 }
