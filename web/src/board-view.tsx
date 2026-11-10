@@ -19,6 +19,7 @@ import { Cursors } from "./cursors";
 import { Icon } from "./icon";
 import { hasFinePointer } from "./pointer";
 import { PropertiesPanel } from "./properties-panel";
+import { applyToolShortcut } from "./shortcuts";
 import { type SocketLike, SyncClient } from "./sync/sync";
 import { TextEditor } from "./text-editor";
 import { currentTheme, displayColor, useTheme } from "./theme";
@@ -134,6 +135,13 @@ export function BoardView({
 		controller.onTextRequest = ([x, y]) => setTextAt({ x, y });
 		controller.onTextEdit = (el) => setEditingText(el);
 		controller.onSelectionChange = () => setTick((t) => t + 1);
+		// A right click (R-029): the menu, but only with a mouse; tablets have none (R-028).
+		controller.onRightClick = (e) => {
+			if (!hasFinePointer()) return;
+			const onObject = controller.contextTarget(e.clientX, e.clientY);
+			const at = viewport.toWorld(e.clientX, e.clientY);
+			setMenu({ x: e.clientX, y: e.clientY, onObject, at });
+		};
 
 		const changed = () => {
 			canvas.redraw(board.strokes);
@@ -248,12 +256,6 @@ export function BoardView({
 			e.preventDefault();
 			insertImage.current(file);
 		};
-		const contextmenu = (e: MouseEvent) => {
-			if (!hasFinePointer()) return; // tablets have no right click (R-028)
-			const onObject = controller.contextTarget(e.clientX, e.clientY);
-			const at = viewport.toWorld(e.clientX, e.clientY);
-			setMenu({ x: e.clientX, y: e.clientY, onObject, at });
-		};
 		const dragover = (e: DragEvent) => e.preventDefault(); // allow dropping files here
 		const drop = (e: DragEvent) => {
 			const files = Array.from(e.dataTransfer?.files ?? []).filter((f) =>
@@ -265,6 +267,11 @@ export function BoardView({
 		};
 		const key = (e: KeyboardEvent) => {
 			if (typing(e)) return; // typing, not undoing the board
+			if (!e.repeat && applyToolShortcut(e, settings)) {
+				e.preventDefault();
+				setTick((t) => t + 1);
+				return;
+			}
 			if (
 				(e.key === "Delete" || e.key === "Backspace") &&
 				controller.deleteSelected()
@@ -304,7 +311,6 @@ export function BoardView({
 		live.addEventListener("pointerleave", leave);
 		live.addEventListener("wheel", wheel, { passive: false });
 		live.addEventListener("dblclick", dblclick);
-		live.addEventListener("contextmenu", contextmenu);
 		live.addEventListener("mousedown", middle);
 		// Block Safari gestures and the context menu over the board.
 		for (const ev of gestureEvents) document.addEventListener(ev, prevent);
@@ -324,7 +330,6 @@ export function BoardView({
 			live.removeEventListener("pointerleave", leave);
 			live.removeEventListener("wheel", wheel);
 			live.removeEventListener("dblclick", dblclick);
-			live.removeEventListener("contextmenu", contextmenu);
 			live.removeEventListener("mousedown", middle);
 			for (const ev of gestureEvents) document.removeEventListener(ev, prevent);
 			document.removeEventListener("touchmove", prevent);

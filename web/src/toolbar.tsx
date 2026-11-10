@@ -2,6 +2,7 @@ import { useState } from "preact/hooks";
 import type { Settings } from "./board/controller";
 import { Icon } from "./icon";
 import { ImageControls, type ImageControlsProps } from "./image-controls";
+import { selectTool, TOOL_KEYS } from "./shortcuts";
 import { displayColor, useTheme } from "./theme";
 
 export const COLORS = ["#111111", "#d32f2f", "#1976d2", "#388e3c", "#f57c00"];
@@ -100,9 +101,14 @@ export function Toolbar({
 						key={tool}
 						aria-label={tool}
 						aria-pressed={settings.tool === tool}
-						title={label}
+						title={
+							TOOL_KEYS[tool] ? `${label} (${TOOL_KEYS[tool]?.label})` : label
+						}
 						class={on(settings.tool === tool)}
-						onClick={() => set({ tool })}
+						onClick={() => {
+							selectTool(settings, tool);
+							rerender((n) => n + 1);
+						}}
 					>
 						<Icon name={tool} />
 					</button>
