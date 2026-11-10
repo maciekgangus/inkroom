@@ -4,6 +4,7 @@ import {
 	estimateWidth,
 	LINE_HEIGHT,
 	type Measure,
+	textFont,
 	wrapLines,
 } from "./text-wrap";
 import type { Rect } from "./viewport";
@@ -32,11 +33,18 @@ const measureText: Measure = (text, fontSize) => {
 				: null;
 	}
 	if (!measuring) return estimateWidth(text, fontSize);
-	measuring.font = `${fontSize}px system-ui, sans-serif`;
+	measuring.font = textFont(fontSize);
 	return measuring.measureText(text).width;
 };
 
-const layouts = new WeakMap<Stroke, string[]>();
+/** Counts font loads; a layout made before the font was there is made again (R-044). */
+let fontEpoch = 0;
+const layouts = new WeakMap<Stroke, { epoch: number; lines: string[] }>();
+
+/** Tells the layout that the board's font has loaded, so the widths it measured are out of date. */
+export function fontsChanged(): void {
+	fontEpoch++;
+}
 
 /**
  * The lines of a text element as they are drawn (R-044): an area (an element with a `width`)
@@ -44,15 +52,14 @@ const layouts = new WeakMap<Stroke, string[]>();
  * result is kept per element, as elements do not change.
  */
 export function textLines(s: Stroke): string[] {
-	let lines = layouts.get(s);
-	if (!lines) {
-		const text = s.text ?? "";
-		lines =
-			s.width === undefined
-				? text.split("\n")
-				: wrapLines(text, s.width, fontSizeOf(s), measureText);
-		layouts.set(s, lines);
-	}
+	const kept = layouts.get(s);
+	if (kept && kept.epoch === fontEpoch) return kept.lines;
+	const text = s.text ?? "";
+	const lines =
+		s.width === undefined
+			? text.split("\n")
+			: wrapLines(text, s.width, fontSizeOf(s), measureText);
+	layouts.set(s, { epoch: fontEpoch, lines });
 	return lines;
 }
 

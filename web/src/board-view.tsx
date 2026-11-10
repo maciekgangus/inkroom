@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import {
+	useEffect,
+	useLayoutEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "preact/hooks";
 import { BACKGROUNDS, type Background } from "./board/background";
 import type { Stroke } from "./board/board";
 import { Board } from "./board/board";
@@ -15,8 +21,10 @@ import { ImageCache } from "./board/image-cache";
 import { defaultSize, placeCentered } from "./board/image-geometry";
 import { prepareImage, uploadImage } from "./board/image-upload";
 import { loadShape } from "./board/shapes";
-import { fontSizeFor, fontSizeOf } from "./board/text";
-import { MAX_SCALE, MIN_SCALE, Viewport } from "./board/viewport";
+import { applyStyle, type StylePatch } from "./board/style";
+import { fontSizeFor, fontSizeOf, fontsChanged } from "./board/text";
+import { textFont } from "./board/text-wrap";
+import { MAX_SCALE, MIN_SCALE, type Rect, Viewport } from "./board/viewport";
 import { stepZoom, wheelZoomFactor } from "./board/zoom";
 import { BoardTitle } from "./board-title";
 import { ContextMenu, type MenuItem } from "./context-menu";
@@ -96,6 +104,33 @@ export function BoardView({
 		/** The area that was dragged, in board units (R-044); none for a click. */
 		area?: { w: number; h: number };
 	} | null>(null);
+	/**
+	 * The look of a text being typed that is not on the board yet: the panel edits this stand-in,
+	 * and the text takes it when it is committed (R-042).
+	 */
+	const [draft, setDraft] = useState<Stroke | null>(null);
+	/**
+	 * Where the field of the text being edited really is on screen: it grows with the text, so
+	 * the panel of tools is attached to what is measured, not to what was estimated (R-042).
+	 */
+	const [editorRect, setEditorRect] = useState<Rect | null>(null);
+	useLayoutEffect(() => {
+		const el = document.querySelector<HTMLTextAreaElement>(
+			"textarea.text-editor",
+		);
+		if (!el) {
+			if (editorRect) setEditorRect(null);
+			return;
+		}
+		const r = el.getBoundingClientRect();
+		const next = { minX: r.left, minY: r.top, maxX: r.right, maxY: r.bottom };
+		const moved =
+			!editorRect ||
+			(Object.keys(next) as (keyof Rect)[]).some(
+				(k) => Math.abs(next[k] - editorRect[k]) > 0.5,
+			);
+		if (moved) setEditorRect(next);
+	});
 	const [, setTick] = useState(0); // bumped when the view changes, so the text field follows it
 	const ctl = useRef<Controller | null>(null);
 	const syncRef = useRef<SyncClient | null>(null);
@@ -139,6 +174,13 @@ export function BoardView({
 		const canvas = new CanvasRenderer(committed, live, viewport, images);
 		canvas.ink = (c) => displayColor(c, currentTheme());
 		rendererRef.current = canvas;
+		// The text font is bundled; once it has loaded the texts are measured and drawn again.
+		void Promise.all(
+			["a", "ł"].map((sample) => document.fonts?.load(textFont(16), sample)),
+		).then(() => {
+			fontsChanged();
+			canvas.fontsChanged();
+		});
 		const sync = new SyncClient(board, {
 			createSocket: connect,
 			self: { authorId, name },
@@ -182,8 +224,26 @@ export function BoardView({
 			live.style.cursor = want;
 		};
 		applyCursor.current();
-		controller.onTextRequest = ([x, y], area) => setTextAt({ x, y, area });
-		controller.onTextEdit = (el) => setEditingText(el);
+		controller.onTextRequest = ([x, y], area) => {
+			setTextAt({ x, y, area });
+			setDraft({
+				id: "draft",
+				authorId,
+				color: settings.color,
+				size: settings.size,
+				z: 0,
+				kind: "text",
+				text: "Tekst",
+				...(settings.opacity !== undefined && settings.opacity < 1
+					? { opacity: settings.opacity }
+					: {}),
+				points: [[x, y, 0.5]],
+			});
+		};
+		controller.onTextEdit = (el) => {
+			controller.select(el.id); // its panel of tools is then next to it
+			setEditingText(el);
+		};
 		controller.onSelectionChange = () => setTick((t) => t + 1);
 		// A right click (R-029): the menu, but only with a mouse; tablets have none (R-028).
 		controller.onRightClick = (e) => {
@@ -595,6 +655,60 @@ export function BoardView({
 		];
 	};
 
+	/** A rectangle of board units as one of screen pixels. */
+	const onScreen = (b: Rect): Rect => {
+		const [minX, minY] = viewport.toScreen(b.minX, b.minY);
+		const [maxX, maxY] = viewport.toScreen(b.maxX, b.maxY);
+		return { minX, minY, maxX, maxY };
+	};
+	// The panel of tools is attached to what is being edited: the text being typed (its look is
+	// the draft), or else the selection; it steps aside while the pointer is down (R-042).
+	const typing = textAt !== null && draft !== null;
+	const draftBox: Rect | null =
+		textAt && draft
+			? (() => {
+					const [x, y] = viewport.toScreen(textAt.x, textAt.y);
+					const w = textAt.area ? textAt.area.w * viewport.scale : 240;
+					const h = Math.max(
+						textAt.area ? textAt.area.h * viewport.scale : 0,
+						fontSizeOf(draft) * viewport.scale * 1.6,
+					);
+					return { minX: x, minY: y, maxX: x + w, maxY: y + h };
+				})()
+			: null;
+	const selectionBox = ctl.current?.selectionBounds();
+	/** The text being edited as it is on the board now, so the panel's changes show in the field. */
+	const liveText = editingText
+		? ctl.current?.selection.find((s) => s.id === editingText.id)
+		: undefined;
+	const panelElements = typing
+		? [draft as Stroke]
+		: ctl.current?.busy
+			? []
+			: (ctl.current?.selection ?? []);
+	const panelAnchor =
+		typing || editingText
+			? (editorRect ?? draftBox)
+			: selectionBox
+				? onScreen(selectionBox)
+				: null;
+	/** A change in the panel: to the text being typed, or to the selection. */
+	const changeStyle = (patch: StylePatch, preview: boolean) => {
+		if (typing) {
+			setDraft(applyStyle(draft as Stroke, patch));
+		} else if (preview) {
+			ctl.current?.previewStyle(patch);
+		} else {
+			ctl.current?.setProps(patch);
+		}
+		setTick((t) => t + 1);
+		// The text keeps being edited while the panel is used.
+		if (typing || editingText)
+			document
+				.querySelector<HTMLTextAreaElement>("textarea.text-editor")
+				?.focus();
+	};
+
 	return (
 		<>
 			<div class="board-bg" data-background={background} />
@@ -615,12 +729,13 @@ export function BoardView({
 							editingText.points[0][1],
 						)[1]
 					}
-					fontSize={fontSizeOf(editingText) * viewport.scale}
-					color={displayColor(editingText.color, currentTheme())}
+					fontSize={fontSizeOf(liveText ?? editingText) * viewport.scale}
+					color={displayColor((liveText ?? editingText).color, currentTheme())}
+					onResize={() => setTick((t) => t + 1)}
 					width={
-						editingText.width === undefined
+						(liveText ?? editingText).width === undefined
 							? undefined
-							: editingText.width * viewport.scale
+							: ((liveText ?? editingText).width as number) * viewport.scale
 					}
 					initialText={editingText.text ?? ""}
 					onCommit={(text) => {
@@ -631,63 +746,73 @@ export function BoardView({
 				/>
 			)}
 			<PropertiesPanel
-				elements={ctl.current?.selection ?? []}
+				elements={panelElements}
 				colors={COLORS}
+				anchor={panelAnchor}
 				display={(c) => displayColor(c, currentTheme())}
-				onPreview={(patch) => {
-					ctl.current?.previewStyle(patch);
-					setTick((t) => t + 1);
-				}}
-				onChange={(patch) => {
-					ctl.current?.setProps(patch);
-					setTick((t) => t + 1);
-				}}
+				onPreview={(patch) => changeStyle(patch, true)}
+				onChange={(patch) => changeStyle(patch, false)}
 			/>
 			{textAt && (
 				<TextEditor
 					key={`${textAt.x},${textAt.y}`}
 					x={viewport.toScreen(textAt.x, textAt.y)[0]}
 					y={viewport.toScreen(textAt.x, textAt.y)[1]}
-					fontSize={fontSizeFor(settings.size) * viewport.scale}
-					color={displayColor(settings.color, theme)}
+					fontSize={
+						(draft ? fontSizeOf(draft) : fontSizeFor(settings.size)) *
+						viewport.scale
+					}
+					color={displayColor(draft?.color ?? settings.color, theme)}
+					onResize={() => setTick((t) => t + 1)}
 					width={textAt.area ? textAt.area.w * viewport.scale : undefined}
 					minHeight={textAt.area ? textAt.area.h * viewport.scale : undefined}
 					onCommit={(text) => {
-						ctl.current?.addText(text, textAt.x, textAt.y, textAt.area?.w);
+						ctl.current?.addText(text, textAt.x, textAt.y, textAt.area?.w, {
+							color: draft?.color,
+							size: draft?.size,
+							fontSize: draft?.fontSize,
+							opacity: draft?.opacity,
+						});
 						setTextAt(null);
+						setDraft(null);
 					}}
-					onCancel={() => setTextAt(null)}
+					onCancel={() => {
+						setTextAt(null);
+						setDraft(null);
+					}}
 				/>
 			)}
-			<BoardTitle
-				name={title}
-				editable={!!onRename}
-				onRename={async (n) => {
-					await onRename?.(n);
-					setTitle(n);
-				}}
-			/>
-			<Participants peers={peers} selfId={authorId} />
 			<Cursors cursors={syncRef.current?.cursors() ?? []} viewport={viewport} />
-			<Toolbar
-				settings={settings}
-				onToolChange={() => {
-					// Choosing a drawing tool lets go of the selection, so colour and width are back.
-					if (dropsSelection(settings.tool)) ctl.current?.select(null);
-					applyCursor.current();
-				}}
-				hasSelection={(ctl.current?.selection.length ?? 0) > 0}
-				images={{
-					fine: hasFinePointer(),
-					hasSelection: (ctl.current?.selection.length ?? 0) > 0,
-					canPaste: canReadClipboard,
-					onFile: (file) => insertImage.current(file),
-					onPaste: () => pasteFromClipboard(),
-					onDelete: () => ctl.current?.deleteSelected(),
-				}}
-				onUndo={() => ctl.current?.undo()}
-				onRedo={() => ctl.current?.redo()}
-			/>
+			<div class="topbar">
+				<BoardTitle
+					name={title}
+					editable={!!onRename}
+					onRename={async (n) => {
+						await onRename?.(n);
+						setTitle(n);
+					}}
+				/>
+				<Toolbar
+					settings={settings}
+					onToolChange={() => {
+						// Choosing a drawing tool lets go of the selection, so colour and width are back.
+						if (dropsSelection(settings.tool)) ctl.current?.select(null);
+						applyCursor.current();
+					}}
+					hasSelection={(ctl.current?.selection.length ?? 0) > 0}
+					images={{
+						fine: hasFinePointer(),
+						hasSelection: (ctl.current?.selection.length ?? 0) > 0,
+						canPaste: canReadClipboard,
+						onFile: (file) => insertImage.current(file),
+						onPaste: () => pasteFromClipboard(),
+						onDelete: () => ctl.current?.deleteSelected(),
+					}}
+					onUndo={() => ctl.current?.undo()}
+					onRedo={() => ctl.current?.redo()}
+				/>
+				<Participants peers={peers} selfId={authorId} />
+			</div>
 			{menu && (
 				<ContextMenu
 					x={menu.x}

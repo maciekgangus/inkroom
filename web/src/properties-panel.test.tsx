@@ -180,4 +180,67 @@ describe("PropertiesPanel", () => {
 		mount([rect]);
 		expect(btn("prop fill none")?.classList.contains("active")).toBe(true);
 	});
+
+	describe("attached to an object (R-042)", () => {
+		const mountAt = (
+			elements: Stroke[],
+			anchor: { minX: number; minY: number; maxX: number; maxY: number } | null,
+		) => {
+			render(
+				<PropertiesPanel
+					elements={elements}
+					colors={COLORS}
+					anchor={anchor}
+					onChange={onChange}
+					onPreview={onPreview}
+				/>,
+				root,
+			);
+			return root.querySelector(".properties") as HTMLElement;
+		};
+		const box = { minX: 400, minY: 200, maxX: 600, maxY: 300 };
+
+		test("is placed near the object it edits", () => {
+			const panel = mountAt([rect], box);
+			expect(panel.classList.contains("floating")).toBe(true);
+			expect(panel.style.top).toBe("312px");
+		});
+
+		test("without an anchor it keeps the corner it always had", () => {
+			const panel = mountAt([rect], null);
+			expect(panel.classList.contains("floating")).toBe(false);
+			expect(panel.style.top).toBe("");
+		});
+
+		test("names the class of the object in a title", () => {
+			mountAt([text], box);
+			expect(root.querySelector(".panel-title")?.textContent).toBe("Tekst");
+			mountAt([rect, text], box);
+			expect(root.querySelector(".panel-title")?.textContent).toBe(
+				"Zaznaczenie (2)",
+			);
+		});
+
+		test("clicking a button does not take the focus from a text field being edited", () => {
+			mountAt([rect], box);
+			const button = btn("prop dash dashed") as HTMLElement;
+			const e = new MouseEvent("mousedown", {
+				bubbles: true,
+				cancelable: true,
+			});
+			button.dispatchEvent(e);
+			expect(e.defaultPrevented).toBe(true);
+		});
+
+		test("a slider can still be grabbed", () => {
+			mountAt([rect], box);
+			const s = slider("prop size") as HTMLInputElement;
+			const e = new MouseEvent("mousedown", {
+				bubbles: true,
+				cancelable: true,
+			});
+			s.dispatchEvent(e);
+			expect(e.defaultPrevented).toBe(false);
+		});
+	});
 });

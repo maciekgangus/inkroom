@@ -16,6 +16,11 @@ interface Props {
 	 */
 	width?: number;
 	minHeight?: number;
+	/**
+	 * Called when the field of an area changes size (typing, a new font size), so the panel of
+	 * tools next to it can follow (R-042).
+	 */
+	onResize?: () => void;
 	/** The existing text when editing one; the field then covers the drawn text. */
 	initialText?: string;
 	onCommit: (text: string) => void;
@@ -30,6 +35,7 @@ export function TextEditor({
 	color,
 	width,
 	minHeight,
+	onResize,
 	initialText,
 	onCommit,
 	onCancel,
@@ -43,12 +49,17 @@ export function TextEditor({
 		if (!area) return;
 		el.style.height = "auto";
 		el.style.height = `${Math.max(el.scrollHeight, minHeight ?? 0)}px`;
+		onResize?.();
 	};
 
 	useEffect(() => {
 		ref.current?.focus();
-		if (ref.current) fit(ref.current);
 	}, []);
+	// A new font size or width changes how tall the text is.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: fit reads the props listed here
+	useEffect(() => {
+		if (ref.current) fit(ref.current);
+	}, [fontSize, width, minHeight]);
 
 	// Enter, Escape and a blur can all arrive for one editing session; only the first counts.
 	const finish = (commit: boolean) => {
@@ -101,7 +112,12 @@ export function TextEditor({
 					finish(false);
 				}
 			}}
-			onBlur={() => finish(true)}
+			onBlur={(e) => {
+				// Moving to the panel of tools next to the field does not end the text.
+				const next = e.relatedTarget as HTMLElement | null;
+				if (next?.closest?.(".properties")) return;
+				finish(true);
+			}}
 		/>
 	);
 }

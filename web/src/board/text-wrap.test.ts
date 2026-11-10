@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import type { Stroke } from "./board";
-import { textBox, textLines } from "./text";
-import { wrapLines } from "./text-wrap";
+import { fontsChanged, textBox, textLines } from "./text";
+import { TEXT_FONT_FAMILY, textFont, wrapLines } from "./text-wrap";
 
 /** Every character is 10 wide, so a width of 50 holds five characters. */
 const ten = (text: string) => text.length * 10;
@@ -89,5 +89,32 @@ describe("text with a width (R-044)", () => {
 	test("the layout of one element is computed once", () => {
 		const t = area();
 		expect(textLines(t)).toBe(textLines(t));
+	});
+});
+
+describe("the font of the board (R-044)", () => {
+	test("is one bundled family for everyone, with a fallback", () => {
+		expect(TEXT_FONT_FAMILY).toBe('"Inter", system-ui, sans-serif');
+		expect(textFont(24)).toBe('24px "Inter", system-ui, sans-serif');
+	});
+
+	test("the layout of a text is computed again once the font has loaded", () => {
+		const t: Stroke = {
+			id: "f",
+			authorId: "a",
+			color: "#000",
+			size: 5,
+			z: 1,
+			kind: "text",
+			text: "ala ma kota",
+			width: 60,
+			points: [[0, 0, 0.5]],
+		};
+		const before = textLines(t);
+		expect(textLines(t)).toBe(before);
+		fontsChanged();
+		const after = textLines(t);
+		expect(after).not.toBe(before);
+		expect(after).toEqual(before);
 	});
 });

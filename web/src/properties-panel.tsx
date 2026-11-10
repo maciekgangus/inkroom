@@ -6,9 +6,12 @@ import {
 	type StylePatch,
 	styleOf,
 } from "./board/style";
+import type { Rect } from "./board/viewport";
+import { panelPosition, panelTitle } from "./floating-panel";
 import { Icon } from "./icon";
 import { Slider } from "./slider";
 import "./properties-panel.css";
+import { useLayoutEffect, useRef, useState } from "preact/hooks";
 
 /** How each line style is shown on its button; the natural pen gets a wave icon. */
 const DASH_LABELS: Record<Dash, string> = {
@@ -24,6 +27,11 @@ interface Props {
 	colors: string[];
 	/** How a stored colour is shown (dark mode swaps black and white); defaults to as is. */
 	display?: (color: string) => string;
+	/**
+	 * Where the object being edited is on screen. With it the panel is attached to the object
+	 * (R-042); without it, it sits in the corner.
+	 */
+	anchor?: Rect | null;
 	/** A change that is still being made (a slider moving): shown, but not yet final. */
 	onPreview?: (patch: StylePatch) => void;
 	/** A final change: a click, or a slider released. */
@@ -35,16 +43,46 @@ export function PropertiesPanel({
 	elements,
 	colors,
 	display = (c) => c,
+	anchor = null,
 	onPreview = () => {},
 	onChange,
 }: Props) {
+	const ref = useRef<HTMLDivElement>(null);
+	const [size, setSize] = useState({ w: 0, h: 0 });
+	// Measured after every render, as the panel grows and shrinks with what it offers.
+	useLayoutEffect(() => {
+		const el = ref.current;
+		if (!el) return;
+		const [w, h] = [el.offsetWidth, el.offsetHeight];
+		if (w !== size.w || h !== size.h) setSize({ w, h });
+	});
 	if (elements.length === 0) return null;
+	const at = anchor
+		? panelPosition(anchor, size, { w: innerWidth, h: innerHeight })
+		: null;
 	const can = capabilities(elements);
 	const now = styleOf(elements);
 	const on = (active: boolean) => (active ? "active" : "");
 
 	return (
-		<div class="properties">
+		<div
+			ref={ref}
+			class={`properties${at ? " floating" : ""}`}
+			style={
+				at
+					? {
+							left: `${at.left}px`,
+							top: `${at.top}px`,
+							visibility: size.w === 0 ? "hidden" : undefined,
+						}
+					: undefined
+			}
+			// A click on a button must not take the focus from a text field being edited.
+			onMouseDown={(e) => {
+				if ((e.target as HTMLElement).tagName !== "INPUT") e.preventDefault();
+			}}
+		>
+			<div class="panel-title">{panelTitle(elements)}</div>
 			{can.color && (
 				<div class="row">
 					{colors.map((c) => (

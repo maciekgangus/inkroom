@@ -2,6 +2,16 @@
 export const LINE_HEIGHT = 1.25;
 export const CHAR_WIDTH = 0.6;
 
+/**
+ * The font every text on the board is drawn and measured in, the same on every device: Inter,
+ * bundled with the app, with the system font only as a fallback while it loads (R-044).
+ */
+export const TEXT_FONT_FAMILY = '"Inter", system-ui, sans-serif';
+
+/** The canvas font string for a font size in px. */
+export const textFont = (fontSize: number): string =>
+	`${fontSize}px ${TEXT_FONT_FAMILY}`;
+
 /** How wide a text is when drawn at a font size (px). */
 export type Measure = (text: string, fontSize: number) => number;
 

@@ -36,6 +36,7 @@ export function Participants({ peers, selfId }: Props) {
 						title={label}
 						aria-label={label}
 						data-color={color}
+						data-name={label}
 						style={{ background: color }}
 					>
 						{initial(p.name)}
@@ -46,6 +47,7 @@ export function Participants({ peers, selfId }: Props) {
 				<div
 					class="participants-more"
 					title={rest.map((p) => p.name).join(", ")}
+					data-name={rest.map((p) => p.name).join(", ")}
 				>
 					+{rest.length}
 				</div>

@@ -79,22 +79,29 @@
 	min-height: 40px;
 	padding: 0 6px;
 }
+/* The page styles text fields with padding and a border; a slider must have neither, or its
+   thumb travels over a narrower stretch than the fill that is drawn for it. */
 .slider input {
+	box-sizing: border-box;
 	flex: 1;
 	min-width: 120px;
 	height: 4px;
 	margin: 0;
+	padding: 0;
+	border: 0;
 	border-radius: 2px;
+	/* The fill ends in the middle of the thumb: it travels from 8px to 8px short of the end. */
 	background: linear-gradient(
 		to right,
-		var(--accent) var(--fill, 0%),
-		var(--border) var(--fill, 0%)
+		var(--accent) calc(8px + (100% - 16px) * var(--p, 0)),
+		var(--border) calc(8px + (100% - 16px) * var(--p, 0))
 	);
 	-webkit-appearance: none;
 	appearance: none;
 	cursor: pointer;
 }
 .slider input::-webkit-slider-thumb {
+	box-sizing: border-box;
 	width: 16px;
 	height: 16px;
 	border: 2px solid var(--surface);
@@ -105,8 +112,9 @@
 	appearance: none;
 }
 .slider input::-moz-range-thumb {
-	width: 12px;
-	height: 12px;
+	box-sizing: border-box;
+	width: 16px;
+	height: 16px;
 	border: 2px solid var(--surface);
 	border-radius: 50%;
 	background: var(--accent);
@@ -117,5 +125,18 @@
 	text-align: right;
 	font-family: var(--mono);
 	font-size: 13px;
+	color: var(--muted);
+}
+
+/* Attached to the object it edits (R-042): placed from the script, hidden until measured. */
+.properties.floating {
+	right: auto;
+}
+.panel-title {
+	padding: 2px 6px 6px;
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
 	color: var(--muted);
 }

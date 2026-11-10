@@ -69,4 +69,24 @@ describe("Participants (R-046)", () => {
 		const root2 = mount([{ id: "y", name: "" }]);
 		expect(chips(root2)[0].textContent).toBe("?");
 	});
+
+	test("the full name is on the chip for a tooltip that shows at once", () => {
+		const root = mount([
+			{ id: "a1", name: "Anna Kowalska-Nowak" },
+			{ id: "me", name: "Maciek" },
+		]);
+		const names = chips(root).map((c) => (c as HTMLElement).dataset.name);
+		expect(names).toEqual(["Maciek (Ty)", "Anna Kowalska-Nowak"]);
+	});
+
+	test("the counter lists the people it hides", () => {
+		const peers = Array.from({ length: 7 }, (_, i) => ({
+			id: `p${i}`,
+			name: `Osoba ${i}`,
+		}));
+		const more = mount(peers, "p0").querySelector(
+			".participants-more",
+		) as HTMLElement;
+		expect(more.dataset.name).toBe("Osoba 5, Osoba 6");
+	});
 });

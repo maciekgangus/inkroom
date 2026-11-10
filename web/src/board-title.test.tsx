@@ -126,4 +126,14 @@ describe("BoardTitle (R-045)", () => {
 		mount({ name: "Lekcja 7" });
 		expect(root.textContent).toContain("Lekcja 7");
 	});
+
+	test("a long name is cut to a fixed width, the whole name is in the tooltip", () => {
+		const long = "Bardzo długa nazwa tablicy z lekcji matematyki w klasie 3b";
+		mount({ name: long, editable: false });
+		const name = root.querySelector(".board-title .name") as HTMLElement;
+		expect(name.title).toBe(long);
+		mount({ name: long, editable: true });
+		const button = root.querySelector(".board-title button") as HTMLElement;
+		expect(button.title).toContain(long);
+	});
 });

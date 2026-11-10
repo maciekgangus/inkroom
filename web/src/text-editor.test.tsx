@@ -187,4 +187,97 @@ describe("TextEditor", () => {
 			expect(onCommit).toHaveBeenCalledTimes(1);
 		});
 	});
+
+	describe("with a panel of tools next to it (R-042)", () => {
+		test("moving to the panel does not end the text, moving anywhere else does", async () => {
+			root = document.createElement("div");
+			document.body.append(root);
+			const panel = document.createElement("div");
+			panel.className = "properties";
+			const slider = document.createElement("input");
+			panel.append(slider);
+			document.body.append(panel);
+			onCommit = vi.fn();
+			await act(async () => {
+				render(
+					<TextEditor
+						x={0}
+						y={0}
+						fontSize={20}
+						color="#000"
+						width={200}
+						onCommit={onCommit}
+						onCancel={vi.fn()}
+					/>,
+					root,
+				);
+			});
+			const f = root.querySelector("textarea") as HTMLTextAreaElement;
+			f.value = "ala";
+			act(() => {
+				f.dispatchEvent(new FocusEvent("blur", { relatedTarget: slider }));
+			});
+			expect(onCommit).not.toHaveBeenCalled();
+			act(() => {
+				f.dispatchEvent(new FocusEvent("blur", { relatedTarget: null }));
+			});
+			expect(onCommit).toHaveBeenCalledWith("ala");
+		});
+	});
+
+	describe("telling the board how big it is (R-042)", () => {
+		test("reports every change of its size, from typing and from a new font size", async () => {
+			const onResize = vi.fn();
+			const el = document.createElement("div");
+			document.body.append(el);
+			const show = async (fontSize: number) =>
+				act(async () => {
+					render(
+						<TextEditor
+							x={0}
+							y={0}
+							fontSize={fontSize}
+							color="#000"
+							width={200}
+							onCommit={vi.fn()}
+							onCancel={vi.fn()}
+							onResize={onResize}
+						/>,
+						el,
+					);
+				});
+			await show(20);
+			const first = onResize.mock.calls.length;
+			expect(first).toBeGreaterThan(0); // once it is on screen
+			const f = el.querySelector("textarea") as HTMLTextAreaElement;
+			act(() => {
+				f.dispatchEvent(new Event("input", { bubbles: true }));
+			});
+			expect(onResize.mock.calls.length).toBeGreaterThan(first);
+			const afterTyping = onResize.mock.calls.length;
+			await show(40);
+			expect(onResize.mock.calls.length).toBeGreaterThan(afterTyping);
+		});
+
+		test("a text at a point does not report, it has no panel to move", async () => {
+			const onResize = vi.fn();
+			const el = document.createElement("div");
+			document.body.append(el);
+			await act(async () => {
+				render(
+					<TextEditor
+						x={0}
+						y={0}
+						fontSize={20}
+						color="#000"
+						onCommit={vi.fn()}
+						onCancel={vi.fn()}
+						onResize={onResize}
+					/>,
+					el,
+				);
+			});
+			expect(onResize).not.toHaveBeenCalled();
+		});
+	});
 });

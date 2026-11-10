@@ -15,6 +15,8 @@
 	--radius-lg: 18px;
 	--shadow: 0 1px 2px #10122008, 0 8px 24px #10122014;
 	--sans: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+	/* The font of every text on the board: bundled, so it looks the same everywhere. */
+	--text-font: "Inter", system-ui, sans-serif;
 	--mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
 }
 :root[data-theme="dark"] {
@@ -412,7 +414,7 @@ canvas {
 	resize: none;
 	overflow: hidden;
 	min-width: 6em;
-	font-family: system-ui, sans-serif;
+	font-family: var(--text-font);
 }
 /* A text area wraps its text inside the width it was made with (R-044). */
 .text-editor.area {
@@ -703,4 +705,84 @@ canvas {
 	border-radius: 14px;
 	background: var(--surface-hover);
 	color: var(--muted);
+}
+
+/*
+ * The top bar: the board's name on the left of the tools and the people on the board on the
+ * right, one menu (R-045, R-046). The name has a fixed size, whatever it says.
+ */
+.topbar {
+	position: fixed;
+	top: 12px;
+	left: 50%;
+	z-index: 1;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	max-width: calc(100vw - 16px);
+	transform: translateX(-50%);
+}
+.topbar .toolbar {
+	position: relative;
+	top: auto;
+	left: auto;
+	flex: 0 1 auto;
+	max-width: none;
+	transform: none;
+}
+.topbar .board-title,
+.topbar .participants {
+	position: static;
+	flex: none;
+}
+.topbar .board-title {
+	width: 200px;
+	max-width: none;
+	box-sizing: border-box;
+}
+.topbar .board-title .name,
+.topbar .board-title input {
+	flex: 1;
+	width: 100%;
+	text-align: left;
+}
+/* The full name of a person, at once when the pointer is over their chip. */
+.participant,
+.participants-more {
+	position: relative;
+}
+.participant::after,
+.participants-more::after {
+	content: attr(data-name);
+	position: absolute;
+	top: calc(100% + 10px);
+	right: 0;
+	z-index: 4;
+	padding: 6px 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--surface);
+	box-shadow: var(--shadow);
+	color: var(--text);
+	font-size: 13px;
+	font-weight: 500;
+	white-space: nowrap;
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 80ms;
+}
+.participant:hover::after,
+.participants-more:hover::after {
+	opacity: 1;
+}
+
+/* The name is one line of a fixed width, cut with an ellipsis on the right, whatever it says. */
+.board-title button.name,
+.board-title span.name {
+	display: block;
+	text-align: left;
+	justify-content: flex-start;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }

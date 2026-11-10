@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { Board } from "./board";
+import { Board, type Stroke } from "./board";
 import {
 	Controller,
 	type PointerInput,
@@ -105,5 +105,103 @@ describe("the text tool makes an area (R-044)", () => {
 	test("an area that is left empty is not created", () => {
 		c.addText("   ", 100, 120, 200);
 		expect(board.strokes).toEqual([]);
+	});
+
+	test("a new text can take the style chosen in the panel while it was typed", () => {
+		c.addText("ala", 100, 120, 200, {
+			color: "#d32f2f",
+			size: 10,
+			fontSize: 33,
+			opacity: 0.5,
+		});
+		expect(board.strokes[0]).toMatchObject({
+			color: "#d32f2f",
+			size: 10,
+			fontSize: 33,
+			opacity: 0.5,
+			width: 200,
+		});
+	});
+
+	test("without a style it takes the current settings, as before", () => {
+		c.addText("ala", 100, 120);
+		expect(board.strokes[0]).toMatchObject({ color: "#111", size: 5 });
+		expect(board.strokes[0].fontSize).toBeUndefined();
+	});
+});
+
+describe("what the panel needs to know about the selection (R-042)", () => {
+	let board: Board;
+	let c: Controller;
+	let changes: number;
+	const text = (id: string, x: number, y: number): Stroke => ({
+		id,
+		authorId: "a",
+		color: "#000",
+		size: 5,
+		z: 1,
+		kind: "rect",
+		points: [
+			[x, y, 0.5],
+			[x + 100, y + 50, 0.5],
+		],
+	});
+
+	beforeEach(() => {
+		board = new Board();
+		const renderer: Renderer = {
+			drawLive: vi.fn(),
+			redraw: vi.fn(),
+			setSelection: vi.fn(),
+		};
+		c = new Controller(
+			board,
+			renderer,
+			{ tool: "select", color: "#111", size: 5 },
+			new Viewport(),
+			"me",
+			() => "n",
+		);
+		board.addStroke(text("a", 100, 100));
+		board.addStroke(text("b", 400, 300));
+		changes = 0;
+		c.onSelectionChange = () => void changes++;
+	});
+
+	test("the bounds of the selection, in board units", () => {
+		expect(c.selectionBounds()).toBeNull();
+		c.select("a");
+		expect(c.selectionBounds()).toEqual({
+			minX: 100,
+			minY: 100,
+			maxX: 200,
+			maxY: 150,
+		});
+		c.select(["a", "b"]);
+		expect(c.selectionBounds()).toEqual({
+			minX: 100,
+			minY: 100,
+			maxX: 500,
+			maxY: 350,
+		});
+	});
+
+	test("the UI is told when an edit begins and when it ends, so the panel can hide and come back", () => {
+		c.select("a");
+		changes = 0;
+		c.pointerDown(ev(150, 125));
+		expect(changes).toBe(1);
+		c.pointerMove(ev(170, 125));
+		c.pointerUp(ev(170, 125));
+		expect(changes).toBe(2);
+	});
+
+	test("the controller says whether a pointer is down", () => {
+		c.select("a");
+		expect(c.busy).toBe(false);
+		c.pointerDown(ev(150, 125));
+		expect(c.busy).toBe(true);
+		c.pointerUp(ev(150, 125));
+		expect(c.busy).toBe(false);
 	});
 });

@@ -15,6 +15,7 @@ import { partsOf } from "./shape-parts";
 import { isPolygonKind } from "./shapes";
 import { strokeOptions } from "./stroke-style";
 import { fontSizeOf, LINE_HEIGHT, textLines } from "./text";
+import { textFont } from "./text-wrap";
 import { centerOf } from "./transform";
 import type { Rect, Viewport } from "./viewport";
 
@@ -157,7 +158,7 @@ function drawElement(
 		if (s.kind === "text") {
 			const fs = fontSizeOf(s);
 			ctx.fillStyle = color;
-			ctx.font = `${fs}px system-ui, sans-serif`;
+			ctx.font = textFont(fs);
 			ctx.textBaseline = "top";
 			const [x, y] = s.points[0];
 			const lineHeight = fs * LINE_HEIGHT;
@@ -285,6 +286,12 @@ export class CanvasRenderer implements Renderer {
 	setRemoteLive(strokes: Stroke[]): void {
 		this.remote = strokes;
 		this.schedule(false, true);
+	}
+
+	/** The board's font has loaded: text sizes were measured without it, so measure them again. */
+	fontsChanged(): void {
+		this.cache = new WeakMap();
+		this.schedule(true, true);
 	}
 
 	/** Repaints with what is already known (after the background or its colour changed). */

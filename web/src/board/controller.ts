@@ -401,21 +401,49 @@ export class Controller {
 	}
 
 	/** Adds a text element at a board position, an area with a `width` (R-044); blank text is ignored. */
-	addText(text: string, x: number, y: number, width?: number): void {
+	addText(
+		text: string,
+		x: number,
+		y: number,
+		width?: number,
+		look?: {
+			color?: string;
+			size?: number;
+			fontSize?: number;
+			opacity?: number;
+		},
+	): void {
 		if (!text.trim()) return;
+		const settings = this.newLook("text");
+		const opacity =
+			look?.opacity !== undefined ? look.opacity : settings.opacity;
 		this.board.addStroke({
 			id: this.newId(),
 			authorId: this.authorId,
-			color: this.settings.color,
-			size: this.settings.size,
+			color: look?.color ?? this.settings.color,
+			size: look?.size ?? this.settings.size,
 			z: this.nextZ(),
 			kind: "text",
 			text,
 			...(width ? { width } : {}),
-			...this.newLook("text"),
+			...(look?.fontSize ? { fontSize: look.fontSize } : {}),
+			...(opacity !== undefined && opacity < 1 ? { opacity } : {}),
 			points: [[x, y, 0.5]],
 		});
 		this.renderer.redraw(this.board.strokes);
+	}
+
+	/** The box around the selection, in board units; null when nothing is selected. */
+	selectionBounds(): Rect | null {
+		const sel = this.selection;
+		if (sel.length === 0) return null;
+		const boxes = sel.map(worldBounds);
+		return {
+			minX: Math.min(...boxes.map((b) => b.minX)),
+			minY: Math.min(...boxes.map((b) => b.minY)),
+			maxX: Math.max(...boxes.map((b) => b.maxX)),
+			maxY: Math.max(...boxes.map((b) => b.maxY)),
+		};
 	}
 
 	/** Adds an image element covering `rect` and selects it. Returns its id. */

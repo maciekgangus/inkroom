@@ -53,7 +53,9 @@ export function BoardTitle({ name, editable, onRename }: Props) {
 	if (!editable) {
 		return (
 			<div class="board-title">
-				<span class="name">{name}</span>
+				<span class="name" title={name}>
+					{name}
+				</span>
 			</div>
 		);
 	}
@@ -76,7 +78,7 @@ export function BoardTitle({ name, editable, onRename }: Props) {
 				<button
 					type="button"
 					class="name"
-					title="Zmień nazwę tablicy"
+					title={`${name} (kliknij, aby zmienić nazwę)`}
 					onClick={() => {
 						settled.current = false;
 						setError("");
