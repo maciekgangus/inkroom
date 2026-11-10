@@ -113,7 +113,9 @@ function BoardPage({
 			/>
 		);
 	}
-	return <BoardView authorId={authorId} name={name} connect={connect} />;
+	return (
+		<BoardView boardId={id} authorId={authorId} name={name} connect={connect} />
+	);
 }
 
 function NamePrompt({ onSubmit }: { onSubmit: (name: string) => void }) {

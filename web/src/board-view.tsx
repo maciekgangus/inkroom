@@ -3,9 +3,13 @@ import { Board } from "./board/board";
 import { CanvasRenderer } from "./board/canvas-renderer";
 import { Controller, type Renderer, type Settings } from "./board/controller";
 import { TouchGestures } from "./board/gestures";
+import { ImageCache } from "./board/image-cache";
+import { defaultSize, placeCentered } from "./board/image-geometry";
+import { prepareImage, uploadImage } from "./board/image-upload";
 import { fontSizeFor } from "./board/text";
 import { Viewport } from "./board/viewport";
 import { Cursors } from "./cursors";
+import { ImageControls } from "./image-controls";
 import { type SocketLike, SyncClient } from "./sync/sync";
 import { TextEditor } from "./text-editor";
 import { COLORS, SIZES, Toolbar } from "./toolbar";
@@ -20,6 +24,8 @@ const WHEEL_ZOOM_SPEED = 0.01;
 const LINE_HEIGHT_PX = 16;
 
 interface Props {
+	/** The board's id, needed to upload and load its images. */
+	boardId: string;
 	authorId: string;
 	/** Shown next to our cursor on other people's screens. */
 	name: string;
@@ -28,7 +34,7 @@ interface Props {
 }
 
 /** A shared infinite board: two canvas layers, a tool palette, zoom buttons and live sync. */
-export function BoardView({ authorId, name, connect }: Props) {
+export function BoardView({ boardId, authorId, name, connect }: Props) {
 	const committedRef = useRef<HTMLCanvasElement>(null);
 	const liveRef = useRef<HTMLCanvasElement>(null);
 	const settings = useMemo<Settings>(
@@ -44,14 +50,18 @@ export function BoardView({ authorId, name, connect }: Props) {
 	const syncRef = useRef<SyncClient | null>(null);
 	/** Repaints after the view changed (set up by the effect below). */
 	const viewChanged = useRef<() => void>(() => {});
+	/** Adds a picked, pasted or dropped image to the board (set up by the effect below). */
+	const insertImage = useRef<(file: Blob) => void>(() => {});
+	const [imageError, setImageError] = useState("");
 
 	useEffect(() => {
 		const committed = committedRef.current;
 		const live = liveRef.current;
 		if (!committed || !live) return;
 
-		const canvas = new CanvasRenderer(committed, live, viewport);
 		const board = new Board();
+		const images = new ImageCache(boardId, () => canvas.redraw(board.strokes));
+		const canvas = new CanvasRenderer(committed, live, viewport, images);
 		const sync = new SyncClient(board, {
 			createSocket: connect,
 			self: { authorId, name },
@@ -69,6 +79,7 @@ export function BoardView({ authorId, name, connect }: Props) {
 				if (stroke && !stroke.kind) sync.liveUpdate(stroke);
 			},
 			redraw: (strokes) => canvas.redraw(strokes),
+			setSelection: (rect) => canvas.setSelection(rect),
 		};
 		const controller = new Controller(
 			board,
@@ -80,6 +91,7 @@ export function BoardView({ authorId, name, connect }: Props) {
 		);
 		ctl.current = controller;
 		controller.onTextRequest = ([x, y]) => setTextAt({ x, y });
+		controller.onSelectionChange = () => setTick((t) => t + 1);
 
 		const changed = () => {
 			canvas.redraw(board.strokes);
@@ -92,6 +104,35 @@ export function BoardView({ authorId, name, connect }: Props) {
 			() => controller.busy,
 			changed,
 		);
+
+		insertImage.current = async (file) => {
+			setImageError("");
+			try {
+				const { blob, w, h } = await prepareImage(file);
+				const src = await uploadImage(boardId, blob);
+				const size = defaultSize(
+					w,
+					h,
+					viewport.worldRect(innerWidth, innerHeight),
+				);
+				const [x, y] = placeCentered(
+					size,
+					viewport.worldRect(innerWidth, innerHeight),
+				);
+				controller.addImage(src, {
+					minX: x,
+					minY: y,
+					maxX: x + size.w,
+					maxY: y + size.h,
+				});
+				settings.tool = "select"; // so it can be resized right away
+				setTick((t) => t + 1);
+			} catch (e) {
+				setImageError(
+					e instanceof Error ? e.message : "Nie udało się dodać obrazu",
+				);
+			}
+		};
 
 		const resize = () => {
 			canvas.resize();
@@ -140,8 +181,38 @@ export function BoardView({ authorId, name, connect }: Props) {
 		const middle = (e: MouseEvent) => {
 			if (e.button === 1) e.preventDefault();
 		};
+		const typing = (e: Event) =>
+			["TEXTAREA", "INPUT"].includes(
+				(e.target as HTMLElement | null)?.tagName ?? "",
+			);
+		const paste = (e: ClipboardEvent) => {
+			if (typing(e)) return;
+			const item = Array.from(e.clipboardData?.items ?? []).find((i) =>
+				i.type.startsWith("image/"),
+			);
+			const file = item?.getAsFile();
+			if (!file) return;
+			e.preventDefault();
+			insertImage.current(file);
+		};
+		const dragover = (e: DragEvent) => e.preventDefault(); // allow dropping files here
+		const drop = (e: DragEvent) => {
+			const files = Array.from(e.dataTransfer?.files ?? []).filter((f) =>
+				f.type.startsWith("image/"),
+			);
+			if (files.length === 0) return;
+			e.preventDefault();
+			for (const f of files) insertImage.current(f);
+		};
 		const key = (e: KeyboardEvent) => {
-			if ((e.target as HTMLElement | null)?.tagName === "TEXTAREA") return; // typing, not undoing the board
+			if (typing(e)) return; // typing, not undoing the board
+			if (
+				(e.key === "Delete" || e.key === "Backspace") &&
+				controller.deleteSelected()
+			) {
+				e.preventDefault();
+				return;
+			}
 			if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "z") return;
 			e.preventDefault();
 			if (e.shiftKey) controller.redo();
@@ -151,6 +222,9 @@ export function BoardView({ authorId, name, connect }: Props) {
 
 		addEventListener("resize", resize);
 		addEventListener("keydown", key);
+		addEventListener("paste", paste);
+		live.addEventListener("dragover", dragover);
+		live.addEventListener("drop", drop);
 		live.addEventListener("pointerdown", down);
 		live.addEventListener("pointermove", move);
 		live.addEventListener("pointerup", up);
@@ -166,6 +240,9 @@ export function BoardView({ authorId, name, connect }: Props) {
 			sync.close();
 			removeEventListener("resize", resize);
 			removeEventListener("keydown", key);
+			removeEventListener("paste", paste);
+			live.removeEventListener("dragover", dragover);
+			live.removeEventListener("drop", drop);
 			live.removeEventListener("pointerdown", down);
 			live.removeEventListener("pointermove", move);
 			live.removeEventListener("pointerup", up);
@@ -176,7 +253,7 @@ export function BoardView({ authorId, name, connect }: Props) {
 			for (const ev of gestureEvents) document.removeEventListener(ev, prevent);
 			document.removeEventListener("touchmove", prevent);
 		};
-	}, [settings, viewport, authorId, name, connect]);
+	}, [settings, viewport, boardId, authorId, name, connect]);
 
 	// Expired cursors vanish even if nothing else happens on the board.
 	useEffect(() => {
@@ -188,6 +265,23 @@ export function BoardView({ authorId, name, connect }: Props) {
 	const zoomTo = (next: (current: number) => number) => {
 		viewport.setScaleAt(innerWidth / 2, innerHeight / 2, next(viewport.scale));
 		viewChanged.current();
+	};
+
+	const canReadClipboard =
+		typeof navigator !== "undefined" &&
+		window.isSecureContext === true &&
+		!!navigator.clipboard?.read;
+	const pasteFromClipboard = async () => {
+		setImageError("");
+		try {
+			for (const item of await navigator.clipboard.read()) {
+				const type = item.types.find((t) => t.startsWith("image/"));
+				if (type) return insertImage.current(await item.getType(type));
+			}
+			setImageError("W schowku nie ma obrazu");
+		} catch {
+			setImageError("Nie można odczytać schowka (brak zgody)");
+		}
 	};
 
 	return (
@@ -208,6 +302,15 @@ export function BoardView({ authorId, name, connect }: Props) {
 					onCancel={() => setTextAt(null)}
 				/>
 			)}
+			<ImageControls
+				settings={settings}
+				hasSelection={!!ctl.current?.selected}
+				canPaste={canReadClipboard}
+				error={imageError}
+				onFile={(file) => insertImage.current(file)}
+				onPaste={pasteFromClipboard}
+				onDelete={() => ctl.current?.deleteSelected()}
+			/>
 			<Cursors cursors={syncRef.current?.cursors() ?? []} viewport={viewport} />
 			<Toolbar
 				settings={settings}
