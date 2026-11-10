@@ -153,4 +153,51 @@ describe("Toolbar", () => {
 		expect(onUndo).toHaveBeenCalledOnce();
 		expect(onRedo).toHaveBeenCalledOnce();
 	});
+
+	test("hides colour and size while something is selected, the properties panel owns them", () => {
+		expect(root.querySelector('[aria-label="size 5"]')).not.toBeNull();
+		act(() =>
+			render(
+				<Toolbar
+					settings={settings}
+					hasSelection
+					onUndo={onUndo}
+					onRedo={onRedo}
+				/>,
+				root,
+			),
+		);
+		expect(root.querySelector('[aria-label^="color "]')).toBeNull();
+		expect(root.querySelector('[aria-label="more colors"]')).toBeNull();
+		expect(root.querySelector('[aria-label="size 5"]')).toBeNull();
+		expect(root.querySelector('[aria-label="select"]')).not.toBeNull();
+		expect(root.querySelector('[aria-label="undo"]')).not.toBeNull();
+	});
+
+	test("shows the image group before undo and redo when given one", () => {
+		expect(root.querySelector('[aria-label="add image"]')).toBeNull();
+		act(() =>
+			render(
+				<Toolbar
+					settings={settings}
+					images={{
+						fine: true,
+						hasSelection: false,
+						canPaste: false,
+						onFile: vi.fn(),
+						onPaste: vi.fn(),
+						onDelete: vi.fn(),
+					}}
+					onUndo={onUndo}
+					onRedo={onRedo}
+				/>,
+				root,
+			),
+		);
+		const labels = Array.from(root.querySelectorAll("button")).map((b) =>
+			b.getAttribute("aria-label"),
+		);
+		expect(labels.indexOf("add image")).toBeGreaterThan(-1);
+		expect(labels.indexOf("add image")).toBeLessThan(labels.indexOf("undo"));
+	});
 });

@@ -87,6 +87,14 @@ export class Board {
 		this.onOp?.({ t: "add", stroke });
 	}
 
+	/** Adds several elements as one undo step, one `add` operation each. */
+	addMany(authorId: string, strokes: Stroke[]): void {
+		if (strokes.length === 0) return;
+		for (const s of strokes) this.insert(s);
+		this.record(authorId, { type: "add", stroke: strokes[0], group: strokes });
+		for (const s of strokes) this.onOp?.({ t: "add", stroke: s });
+	}
+
 	/** Erases any author's stroke; the action goes to `authorId`'s history. */
 	eraseStroke(authorId: string, strokeId: string): boolean {
 		const stroke = this.strokes.find((s) => s.id === strokeId);
@@ -223,7 +231,14 @@ export class Board {
 	/** Swaps in a new version of an element that is on the board; ignores unknown ids. */
 	private replace(stroke: Stroke): void {
 		const i = this.strokes.findIndex((s) => s.id === stroke.id);
-		if (i >= 0) this.strokes[i] = stroke;
+		if (i < 0) return;
+		if (this.strokes[i].z === stroke.z) {
+			this.strokes[i] = stroke;
+			return;
+		}
+		// A new z moves the element in the drawing order.
+		this.strokes.splice(i, 1);
+		this.insert(stroke);
 	}
 
 	private remove(id: string): void {

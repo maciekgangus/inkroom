@@ -19,6 +19,16 @@ const ICONS = {
 	undo: "M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11",
 	redo: "m15 14 5-5-5-5M20 9H9.5a5.5 5.5 0 0 0 0 11H13",
 	plus: "M12 5v14M5 12h14",
+	image:
+		"M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1ZM8.5 10a1.5 1.5 0 1 0 0-3a1.5 1.5 0 0 0 0 3ZM20 15l-5-5L5 20",
+	paste:
+		"M9 4h6v3H9ZM15 5.5h2a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V6.5a1 1 0 0 1 1-1h2",
+	trash:
+		"M4 7h16M10 11v6M14 11v6M6 7l1 12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-12M9 7V4h6v3",
+	copy: "M9 9h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V10a1 1 0 0 1 1-1ZM5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1",
+	duplicate: "M8 8h12v12H8ZM4 16V4h12",
+	front: "M9 3h11v11H9ZM4 9v11h11",
+	back: "M4 3h11v11H4ZM9 9h11v11H9Z",
 };
 
 /** A line icon that takes the colour of the surrounding text. */

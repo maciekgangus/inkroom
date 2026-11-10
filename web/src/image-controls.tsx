@@ -1,29 +1,33 @@
 import { useRef } from "preact/hooks";
-import "./image-controls.css";
+import { Icon } from "./icon";
 
-interface Props {
+export interface ImageControlsProps {
+	/** A mouse-like main pointer (a PC): the context menu offers paste and delete instead. */
+	fine: boolean;
 	hasSelection: boolean;
 	/** True where the browser lets us read the clipboard (HTTPS or localhost). */
 	canPaste: boolean;
-	error: string;
 	onFile: (file: File) => void;
 	onPaste: () => void;
 	onDelete: () => void;
 }
 
-/** Adding an image (picker, paste), the select tool and deleting the selected image. */
+/**
+ * A group of the main toolbar: add an image from a file; on a tablet, which has no right
+ * click, also paste an image and delete the selection.
+ */
 export function ImageControls({
+	fine,
 	hasSelection,
 	canPaste,
-	error,
 	onFile,
 	onPaste,
 	onDelete,
-}: Props) {
+}: ImageControlsProps) {
 	const input = useRef<HTMLInputElement>(null);
 
 	return (
-		<div class="image-controls">
+		<div class="group">
 			<input
 				ref={input}
 				type="file"
@@ -38,29 +42,30 @@ export function ImageControls({
 			<button
 				type="button"
 				aria-label="add image"
+				title="Obraz z pliku"
 				onClick={() => input.current?.click()}
 			>
-				Obraz
+				<Icon name="image" />
 			</button>
-			{canPaste && (
-				<button type="button" aria-label="paste image" onClick={onPaste}>
-					Wklej obraz
+			{!fine && canPaste && (
+				<button
+					type="button"
+					aria-label="paste image"
+					title="Wklej obraz"
+					onClick={onPaste}
+				>
+					<Icon name="paste" />
 				</button>
 			)}
-			{hasSelection && (
+			{!fine && hasSelection && (
 				<button
 					type="button"
 					aria-label="delete selection"
-					class="danger"
+					title="Usuń"
 					onClick={onDelete}
 				>
-					Usuń
+					<Icon name="trash" />
 				</button>
-			)}
-			{error && (
-				<span class="error" role="alert">
-					{error}
-				</span>
 			)}
 		</div>
 	);

@@ -446,3 +446,58 @@ canvas {
 .center form .row > button {
 	flex: 1;
 }
+
+.context-menu {
+	position: fixed;
+	z-index: 3;
+	display: flex;
+	flex-direction: column;
+	width: 220px;
+	padding: 6px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: color-mix(in srgb, var(--surface) 92%, transparent);
+	-webkit-backdrop-filter: blur(12px);
+	backdrop-filter: blur(12px);
+	box-shadow: var(--shadow);
+	-webkit-user-select: none;
+	user-select: none;
+}
+.context-menu button {
+	display: flex;
+	align-items: center;
+	justify-content: flex-start;
+	width: 100%;
+	gap: 12px;
+	min-height: 40px;
+	padding: 0 12px;
+	border: 1px solid transparent;
+	border-radius: var(--radius);
+	background: transparent;
+	color: var(--text);
+	font: inherit;
+	font-size: 14px;
+	text-align: left;
+}
+.context-menu button svg {
+	color: var(--icon);
+}
+.context-menu button:hover:not(:disabled) {
+	background: var(--surface-hover);
+}
+.context-menu button:disabled {
+	opacity: 0.4;
+}
+.toast {
+	position: fixed;
+	left: 50%;
+	bottom: 72px;
+	transform: translateX(-50%);
+	z-index: 2;
+	padding: 10px 16px;
+	border-radius: var(--radius-lg);
+	background: var(--danger);
+	color: #fff;
+	font-size: 14px;
+	box-shadow: var(--shadow);
+}
