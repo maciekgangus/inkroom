@@ -4,7 +4,7 @@ import { intersects, strokeBounds } from "./bounds";
 import type { Renderer } from "./controller";
 import type { ImageCache } from "./image-cache";
 import { imageRect } from "./image-geometry";
-import { fontSizeFor, LINE_HEIGHT } from "./text";
+import { fontSizeOf, LINE_HEIGHT } from "./text";
 import type { Rect, Viewport } from "./viewport";
 
 /** Freehand strokes are filled outlines; shapes are stroked paths; text is drawn directly. */
@@ -61,7 +61,7 @@ function drawElement(
 	path: Path2D | null,
 ): void {
 	if (s.kind === "text") {
-		const fs = fontSizeFor(s.size);
+		const fs = fontSizeOf(s);
 		ctx.fillStyle = s.color;
 		ctx.font = `${fs}px system-ui, sans-serif`;
 		ctx.textBaseline = "top";

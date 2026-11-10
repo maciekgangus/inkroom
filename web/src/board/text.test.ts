@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import type { Stroke } from "./board";
-import { fontSizeFor, LINE_HEIGHT, textBox } from "./text";
+import { fontSizeFor, fontSizeOf, LINE_HEIGHT, textBox } from "./text";
 
 function text(
 	content: string,

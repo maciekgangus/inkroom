@@ -1,5 +1,5 @@
 import type { Stroke } from "./board";
-import { fontSizeFor, textBox } from "./text";
+import { fontSizeOf, textBox } from "./text";
 import type { Rect } from "./viewport";
 
 /** Box around a stroke including its width, used to skip strokes outside the view. */
@@ -7,7 +7,7 @@ export function strokeBounds(stroke: Stroke): Rect {
 	if (stroke.kind === "text") {
 		// The width is estimated, so leave generous slack.
 		const box = textBox(stroke);
-		const pad = fontSizeFor(stroke.size);
+		const pad = fontSizeOf(stroke);
 		return {
 			minX: box.minX - pad,
 			minY: box.minY - pad,

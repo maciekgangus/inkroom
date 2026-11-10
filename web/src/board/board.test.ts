@@ -219,14 +219,19 @@ describe("Board", () => {
 	});
 
 	describe("updating many elements at once", () => {
-		const shifted = (id: string, x: number): Stroke => ({ ...stroke(id), points: [[x, x, 0.5]] });
+		const shifted = (id: string, x: number): Stroke => ({
+			...stroke(id),
+			points: [[x, x, 0.5]],
+		});
 
 		test("updateMany replaces all of them and reports one update each", () => {
 			board.addStroke(stroke("1"));
 			board.addStroke(stroke("2"));
 			const ops: BoardOp[] = [];
 			board.onOp = (op) => ops.push(op);
-			expect(board.updateMany("a", [shifted("1", 5), shifted("2", 6)])).toBe(true);
+			expect(board.updateMany("a", [shifted("1", 5), shifted("2", 6)])).toBe(
+				true,
+			);
 			expect(board.strokes.map((s) => s.points[0][0])).toEqual([5, 6]);
 			expect(ops).toEqual([
 				{ t: "update", stroke: shifted("1", 5) },
@@ -246,15 +251,32 @@ describe("Board", () => {
 
 		test("elements that are gone are skipped, and nothing is recorded if none are left", () => {
 			board.addStroke(stroke("1"));
-			expect(board.updateMany("a", [shifted("1", 5), shifted("ghost", 6)])).toBe(true);
+			expect(
+				board.updateMany("a", [shifted("1", 5), shifted("ghost", 6)]),
+			).toBe(true);
 			expect(ids(board)).toEqual(["1"]);
 			expect(board.updateMany("a", [shifted("ghost", 6)])).toBe(false);
 		});
 
 		test("style fields travel with the element", () => {
 			board.addStroke(stroke("1"));
-			board.updateMany("a", [{ ...stroke("1"), rot: 1.5, dash: "dashed", fill: "#f00", opacity: 0.5, fontSize: 30 }]);
-			expect(board.strokes[0]).toMatchObject({ rot: 1.5, dash: "dashed", fill: "#f00", opacity: 0.5, fontSize: 30 });
+			board.updateMany("a", [
+				{
+					...stroke("1"),
+					rot: 1.5,
+					dash: "dashed",
+					fill: "#f00",
+					opacity: 0.5,
+					fontSize: 30,
+				},
+			]);
+			expect(board.strokes[0]).toMatchObject({
+				rot: 1.5,
+				dash: "dashed",
+				fill: "#f00",
+				opacity: 0.5,
+				fontSize: 30,
+			});
 		});
 	});
 });
