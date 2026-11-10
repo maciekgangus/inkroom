@@ -1,13 +1,26 @@
 import { describe, expect, test } from "vitest";
 import type { Stroke } from "./board";
-import { frameCorners, frameOf, hitFrameHandle, oppositeCorner, rotationHandlePos } from "./selection-frame";
+import {
+	frameCorners,
+	frameOf,
+	hitFrameHandle,
+	oppositeCorner,
+	rotationHandlePos,
+} from "./selection-frame";
 
 const base = { id: "e", authorId: "a", color: "#000", size: 4, z: 0 };
-const rect = (a: [number, number], b: [number, number], rot?: number): Stroke => ({
+const rect = (
+	a: [number, number],
+	b: [number, number],
+	rot?: number,
+): Stroke => ({
 	...base,
 	kind: "rect",
 	...(rot ? { rot } : {}),
-	points: [[...a, 0.5], [...b, 0.5]],
+	points: [
+		[...a, 0.5],
+		[...b, 0.5],
+	],
 });
 
 const close = (a: number[], b: number[]) => {
@@ -20,7 +33,13 @@ describe("frameOf", () => {
 	});
 
 	test("one element: its own box and rotation", () => {
-		expect(frameOf([rect([0, 0], [100, 50], 0.5)])).toEqual({ cx: 50, cy: 25, w: 100, h: 50, rot: 0.5 });
+		expect(frameOf([rect([0, 0], [100, 50], 0.5)])).toEqual({
+			cx: 50,
+			cy: 25,
+			w: 100,
+			h: 50,
+			rot: 0.5,
+		});
 	});
 
 	test("several elements: the upright box around all of them as they appear", () => {
@@ -29,7 +48,10 @@ describe("frameOf", () => {
 	});
 
 	test("several elements account for their rotation", () => {
-		const f = frameOf([rect([0, 0], [100, 50], Math.PI / 2), rect([200, 0], [210, 10])]);
+		const f = frameOf([
+			rect([0, 0], [100, 50], Math.PI / 2),
+			rect([200, 0], [210, 10]),
+		]);
 		expect(f?.rot).toBe(0);
 		expect(f?.w).toBeCloseTo(210 - 25);
 	});
@@ -37,7 +59,12 @@ describe("frameOf", () => {
 
 describe("frameCorners", () => {
 	test("an upright frame has its corners in nw, ne, se, sw order", () => {
-		expect(frameCorners({ cx: 50, cy: 25, w: 100, h: 50, rot: 0 })).toEqual([[0, 0], [100, 0], [100, 50], [0, 50]]);
+		expect(frameCorners({ cx: 50, cy: 25, w: 100, h: 50, rot: 0 })).toEqual([
+			[0, 0],
+			[100, 0],
+			[100, 50],
+			[0, 50],
+		]);
 	});
 
 	test("a rotated frame has rotated corners", () => {
@@ -48,12 +75,18 @@ describe("frameCorners", () => {
 
 describe("rotationHandlePos", () => {
 	test("sits above the top edge of an upright frame", () => {
-		close(rotationHandlePos({ cx: 50, cy: 25, w: 100, h: 50, rot: 0 }, 30), [50, -30]);
+		close(
+			rotationHandlePos({ cx: 50, cy: 25, w: 100, h: 50, rot: 0 }, 30),
+			[50, -30],
+		);
 	});
 
 	test("follows the frame's rotation", () => {
 		// a quarter turn clockwise: "up" now points to the right
-		close(rotationHandlePos({ cx: 0, cy: 0, w: 20, h: 10, rot: Math.PI / 2 }, 30), [5 + 30, 0]);
+		close(
+			rotationHandlePos({ cx: 0, cy: 0, w: 20, h: 10, rot: Math.PI / 2 }, 30),
+			[5 + 30, 0],
+		);
 	});
 });
 
@@ -85,6 +118,11 @@ describe("hitFrameHandle", () => {
 
 describe("oppositeCorner", () => {
 	test("is the corner across the frame", () => {
-		expect([oppositeCorner("nw"), oppositeCorner("ne"), oppositeCorner("se"), oppositeCorner("sw")]).toEqual(["se", "sw", "nw", "ne"]);
+		expect([
+			oppositeCorner("nw"),
+			oppositeCorner("ne"),
+			oppositeCorner("se"),
+			oppositeCorner("sw"),
+		]).toEqual(["se", "sw", "nw", "ne"]);
 	});
 });

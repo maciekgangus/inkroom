@@ -1,0 +1,94 @@
+import type { Stroke } from "./board";
+import { geomBox, rotatePoint, worldBounds } from "./transform";
+
+type Vec = [number, number];
+
+/** The frame drawn around the selection: centre, size and rotation. */
+export interface Frame {
+	cx: number;
+	cy: number;
+	w: number;
+	h: number;
+	rot: number;
+}
+
+export type Corner = "nw" | "ne" | "se" | "sw";
+export type Handle = Corner | "rot";
+
+/**
+ * The frame around the selected elements: a lone element gets its own (possibly rotated) box,
+ * several get the upright box around all of them as they appear on the board.
+ */
+export function frameOf(els: Stroke[]): Frame | null {
+	if (els.length === 0) return null;
+	if (els.length === 1) {
+		const b = geomBox(els[0]);
+		return {
+			cx: (b.minX + b.maxX) / 2,
+			cy: (b.minY + b.maxY) / 2,
+			w: b.maxX - b.minX,
+			h: b.maxY - b.minY,
+			rot: els[0].rot ?? 0,
+		};
+	}
+	let minX = Number.POSITIVE_INFINITY;
+	let minY = Number.POSITIVE_INFINITY;
+	let maxX = Number.NEGATIVE_INFINITY;
+	let maxY = Number.NEGATIVE_INFINITY;
+	for (const el of els) {
+		const b = worldBounds(el);
+		minX = Math.min(minX, b.minX);
+		minY = Math.min(minY, b.minY);
+		maxX = Math.max(maxX, b.maxX);
+		maxY = Math.max(maxY, b.maxY);
+	}
+	return {
+		cx: (minX + maxX) / 2,
+		cy: (minY + maxY) / 2,
+		w: maxX - minX,
+		h: maxY - minY,
+		rot: 0,
+	};
+}
+
+const at = (f: Frame, dx: number, dy: number): Vec =>
+	rotatePoint([f.cx + dx, f.cy + dy], [f.cx, f.cy], f.rot);
+
+/** The four corners on the board: nw, ne, se, sw. */
+export function frameCorners(f: Frame): [Vec, Vec, Vec, Vec] {
+	const hw = f.w / 2;
+	const hh = f.h / 2;
+	return [at(f, -hw, -hh), at(f, hw, -hh), at(f, hw, hh), at(f, -hw, hh)];
+}
+
+/** Where one corner of the frame is on the board. */
+export function cornerPos(f: Frame, corner: Corner): Vec {
+	return frameCorners(f)[{ nw: 0, ne: 1, se: 2, sw: 3 }[corner]];
+}
+
+export function oppositeCorner(c: Corner): Corner {
+	return { nw: "se", ne: "sw", se: "nw", sw: "ne" }[c] as Corner;
+}
+
+/** The rotation handle: above the middle of the frame's top edge, `offset` board units away. */
+export function rotationHandlePos(f: Frame, offset: number): Vec {
+	return at(f, 0, -f.h / 2 - offset);
+}
+
+/** Which handle (the rotation one first, then the corners) is within `radius` of the point. */
+export function hitFrameHandle(
+	f: Frame,
+	p: Vec,
+	radius: number,
+	rotOffset: number,
+): Handle | null {
+	const r = rotationHandlePos(f, rotOffset);
+	if (Math.hypot(p[0] - r[0], p[1] - r[1]) <= radius) return "rot";
+	const names: Corner[] = ["nw", "ne", "se", "sw"];
+	const corners = frameCorners(f);
+	for (const [i, name] of names.entries()) {
+		if (Math.hypot(p[0] - corners[i][0], p[1] - corners[i][1]) <= radius)
+			return name;
+	}
+	return null;
+}
