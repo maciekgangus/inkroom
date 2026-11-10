@@ -8,9 +8,10 @@
 	align-items: center;
 	max-width: calc(100vw - 180px);
 	padding: 6px;
-	background: #fffe;
-	border: 1px solid #ccc;
-	border-radius: 10px;
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	box-shadow: var(--shadow);
 	z-index: 1;
 	-webkit-user-select: none;
 	user-select: none;
@@ -18,24 +19,25 @@
 .image-controls button {
 	min-height: 40px;
 	padding: 0 12px;
-	border: 1px solid #bbb;
-	border-radius: 8px;
-	background: #fff;
-	font-size: 15px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--surface);
+	color: var(--text);
+	font: inherit;
+	font-size: 14px;
 }
-.image-controls button.active {
-	border-color: #1976d2;
-	box-shadow: 0 0 0 2px #1976d2;
+.image-controls button:hover {
+	background: var(--surface-hover);
 }
 .image-controls button.danger {
-	background: #d32f2f;
-	border-color: #d32f2f;
+	background: var(--danger);
+	border-color: var(--danger);
 	color: #fff;
 }
 .image-controls .error {
-	color: #d32f2f;
+	color: var(--danger);
 	font-size: 14px;
 }
 .text-editor.solid {
-	background: #fff;
+	background: var(--surface);
 }

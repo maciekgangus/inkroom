@@ -7,9 +7,10 @@
 	gap: 6px;
 	padding: 8px;
 	max-width: 260px;
-	background: #fffe;
-	border: 1px solid #ccc;
-	border-radius: 10px;
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	box-shadow: var(--shadow);
 	z-index: 1;
 	-webkit-user-select: none;
 	user-select: none;
@@ -24,10 +25,15 @@
 	min-width: 36px;
 	min-height: 36px;
 	padding: 0 8px;
-	border: 1px solid #bbb;
-	border-radius: 8px;
-	background: #fff;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--surface);
+	color: var(--text);
+	font: inherit;
 	font-size: 14px;
+}
+.properties button:hover {
+	background: var(--surface-hover);
 }
 .properties button.swatch {
 	min-width: 30px;
@@ -37,11 +43,11 @@
 	border-radius: 50%;
 }
 .properties button.active {
-	border-color: #1976d2;
-	box-shadow: 0 0 0 2px #1976d2;
+	border-color: var(--accent);
+	box-shadow: 0 0 0 2px var(--accent);
 }
 .properties .dot {
 	display: inline-block;
-	background: #111;
+	background: var(--text);
 	border-radius: 50%;
 }

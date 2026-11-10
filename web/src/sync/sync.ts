@@ -1,3 +1,4 @@
+import { type Background, isBackground } from "../board/background";
 import type { Board, BoardOp, Point, Stroke } from "../board/board";
 
 /** The subset of WebSocket the client uses (lets tests supply a fake). */
@@ -23,6 +24,8 @@ interface Options {
 	self?: { authorId: string; name: string };
 	/** Called when other people's cursors changed (no need to repaint the board). */
 	onCursors?: () => void;
+	/** Called with the board's shared background, on joining and whenever the owner changes it. */
+	onBackground?: (background: Background) => void;
 	/** Clock in ms; tests replace it. */
 	now?: () => number;
 	/** Called whenever the board or the remote live strokes changed (time to redraw). */
@@ -221,6 +224,8 @@ export class SyncClient {
 			y?: number;
 			hidden?: boolean;
 			t: string;
+			background?: unknown;
+			value?: unknown;
 			strokes?: Stroke[];
 			stroke?: Stroke;
 			id?: string;
@@ -233,7 +238,11 @@ export class SyncClient {
 			return;
 		}
 		switch (m.t) {
+			case "background":
+				if (isBackground(m.value)) this.opts.onBackground?.(m.value);
+				return; // the pattern is not on the canvas
 			case "snapshot":
+				if (isBackground(m.background)) this.opts.onBackground?.(m.background);
 				this.board.setStrokes(m.strokes ?? []);
 				for (const { op, merged } of this.pending.values()) {
 					this.board.applyRemote(op);

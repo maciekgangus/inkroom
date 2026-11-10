@@ -43,9 +43,9 @@ export function Panel({ email, navigate, onLogout }: Props) {
 	return (
 		<main class="panel">
 			<header class="row between">
-				<h1>Inkroom</h1>
-				<span>
-					{email}{" "}
+				<h1 class="brand">Inkroom</h1>
+				<span class="row">
+					<span class="chip">{email}</span>
 					<button type="button" onClick={logout}>
 						Wyloguj
 					</button>
