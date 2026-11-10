@@ -351,7 +351,10 @@ describe("SyncClient", () => {
 	});
 
 	describe("updates", () => {
-		const moved = (id: string): Stroke => ({ ...stroke(id), points: [[7, 7, 0.5]] });
+		const moved = (id: string): Stroke => ({
+			...stroke(id),
+			points: [[7, 7, 0.5]],
+		});
 
 		test("a local update is sent after the add", () => {
 			connectAndJoin();

@@ -52,7 +52,11 @@ export class SyncClient {
 	private closed = false;
 	private attempts = 0;
 	private timer: ReturnType<typeof setTimeout> | null = null;
-	private pending = new Map<string, BoardOp>();
+	/**
+	 * Operations the server has not confirmed yet, by element id. `merged` marks an add that
+	 * already carries a later edit (so a re-send creates the element with its latest content).
+	 */
+	private pending = new Map<string, { op: BoardOp; merged: boolean }>();
 	private liveOut = new Map<string, LiveOut>();
 	private liveIn = new Map<string, Stroke>();
 	private flushScheduled = false;
@@ -191,9 +195,17 @@ export class SyncClient {
 	}
 
 	private local(op: BoardOp): void {
-		const id = op.t === "add" ? op.stroke.id : op.id;
+		const id = op.t === "remove" ? op.id : op.stroke.id;
+		const prev = this.pending.get(id);
+		// An edit of an element the server may not know yet must not turn into a lone update.
+		const merged = op.t === "update" && prev?.op.t === "add";
 		this.pending.delete(id);
-		this.pending.set(id, op);
+		this.pending.set(
+			id,
+			merged
+				? { op: { t: "add", stroke: op.stroke }, merged: true }
+				: { op, merged: false },
+		);
 		if (op.t === "add") this.liveOut.delete(id);
 		this.send(op);
 	}
@@ -223,8 +235,10 @@ export class SyncClient {
 		switch (m.t) {
 			case "snapshot":
 				this.board.setStrokes(m.strokes ?? []);
-				for (const op of this.pending.values()) {
+				for (const { op, merged } of this.pending.values()) {
 					this.board.applyRemote(op);
+					if (merged && op.t === "add")
+						this.board.applyRemote({ t: "update", stroke: op.stroke });
 					this.send(op);
 				}
 				break;
@@ -233,6 +247,11 @@ export class SyncClient {
 				this.board.applyRemote({ t: "add", stroke: m.stroke });
 				this.liveIn.delete(m.stroke.id);
 				this.acknowledge("add", m.stroke.id);
+				break;
+			case "update":
+				if (!m.stroke) return;
+				this.board.applyRemote({ t: "update", stroke: m.stroke });
+				this.acknowledge("update", m.stroke.id, m.stroke);
 				break;
 			case "remove":
 				if (!m.id) return;
@@ -288,8 +307,23 @@ export class SyncClient {
 	}
 
 	/** The server echoed an operation of ours: it no longer needs re-sending. */
-	private acknowledge(type: BoardOp["t"], id: string): void {
-		if (this.pending.get(id)?.t === type) this.pending.delete(id);
+	private acknowledge(type: BoardOp["t"], id: string, stroke?: Stroke): void {
+		const entry = this.pending.get(id);
+		if (!entry || entry.op.t !== type) return;
+		if (type === "add" && entry.merged && entry.op.t === "add") {
+			// Only the add came back; the edit made after it is still in flight.
+			entry.op = { t: "update", stroke: entry.op.stroke };
+			entry.merged = false;
+		} else if (
+			type === "update" &&
+			stroke &&
+			entry.op.t === "update" &&
+			JSON.stringify(entry.op.stroke) !== JSON.stringify(stroke)
+		) {
+			// A newer edit of ours is still waiting for its own echo.
+		} else {
+			this.pending.delete(id);
+		}
 	}
 
 	private dropped(): void {
