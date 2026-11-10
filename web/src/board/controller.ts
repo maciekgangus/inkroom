@@ -12,6 +12,7 @@ import {
 	pointInFrame,
 	ROT_OFFSET_PX,
 } from "./selection-frame";
+import type { ShapeChoice } from "./shapes";
 import { applyStyle, type StylePatch } from "./style";
 import {
 	rotateEl,
@@ -52,17 +53,9 @@ export interface Renderer {
 
 /** Current tool settings, mutated by the toolbar. */
 export interface Settings {
-	tool:
-		| "pen"
-		| "eraser"
-		| "pan"
-		| "line"
-		| "rect"
-		| "circle"
-		| "text"
-		| "select";
-	/** The shape tool K goes back to: the last one chosen (R-030); a rectangle if none. */
-	lastShape?: "rect" | "circle";
+	tool: "pen" | "eraser" | "pan" | "line" | "shape" | "text" | "select";
+	/** Which shape the shape tool draws (R-033); a rectangle if none was chosen. */
+	shape?: ShapeChoice;
 	color: string;
 	size: number;
 }
@@ -116,14 +109,12 @@ const withRect = (el: Stroke, r: Rect): Stroke => ({
 	],
 });
 
-type ShapeTool = "line" | "rect" | "circle";
-/** What each shape tool creates: the oval tool draws an ellipse (a circle with Shift, R-024). */
-const SHAPE_KIND = { line: "line", rect: "rect", circle: "ellipse" } as const;
 /** How far (px) the right button may move and still count as a click, not a pan. */
 const RIGHT_CLICK_SLOP = 4;
 
-const isShapeTool = (t: Settings["tool"]): t is ShapeTool =>
-	t === "line" || t === "rect" || t === "circle";
+/** The tools that drag out an element from two corners: the line and the shape tool (R-033). */
+const isShapeTool = (t: Settings["tool"]): boolean =>
+	t === "line" || t === "shape";
 
 /** Turns pointer input into board changes: draws with pen/mouse, ignores touch (palm rejection). */
 export class Controller {
@@ -215,7 +206,9 @@ export class Controller {
 			color: this.settings.color,
 			size: this.settings.size,
 			z: this.nextZ(),
-			...(isShapeTool(tool) ? { kind: SHAPE_KIND[tool] } : {}),
+			...(isShapeTool(tool)
+				? { kind: tool === "shape" ? (this.settings.shape ?? "rect") : "line" }
+				: {}),
 			points: isShapeTool(tool) ? [start, [...start]] : [start],
 		};
 		this.renderer.drawLive(this.current);
@@ -696,9 +689,8 @@ export class Controller {
 	/** Where the shape being dragged ends at this pointer position, with Shift's drawing aids applied. */
 	private shapeEnd(e: PointerInput, shape: Stroke): Point {
 		const p = this.point(e);
-		const kind = shape.kind as "line" | "rect" | "ellipse";
 		const [x, y] = constrainEnd(
-			kind,
+			shape.kind === "line" ? "line" : "rect", // every other shape gets a square box
 			[shape.points[0][0], shape.points[0][1]],
 			[p[0], p[1]],
 			!!e.shiftKey,

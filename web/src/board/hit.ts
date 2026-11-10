@@ -1,4 +1,5 @@
-import type { Stroke } from "./board";
+import type { ElementKind, Stroke } from "./board";
+import { isPolygonKind, pointInPolygon, polygonPoints } from "./shapes";
 import { textBox } from "./text";
 import { geomBox, toLocal } from "./transform";
 
@@ -73,6 +74,17 @@ export function objectHit(
 		)
 			return true;
 	}
+	if (isPolygonKind(stroke.kind) && stroke.fill) {
+		const [a, b] = stroke.points;
+		if (
+			pointInPolygon(
+				polygonPoints(stroke.kind as ElementKind, [a[0], a[1]], [b[0], b[1]]),
+				lx,
+				ly,
+			)
+		)
+			return true;
+	}
 	if (stroke.kind === "ellipse" && stroke.fill) {
 		const { cx, cy, rx, ry } = ellipseOf(stroke);
 		if (
@@ -128,6 +140,13 @@ function hitLocal(
 				[a[0], a[1]],
 			];
 			return nearPolyline(corners, x, y, reach);
+		}
+		case "trapezoid":
+		case "rhombus":
+		case "parallelogram": {
+			const [a, b] = pts;
+			const poly = polygonPoints(stroke.kind, [a[0], a[1]], [b[0], b[1]]);
+			return nearPolyline([...poly, poly[0]], x, y, reach);
 		}
 		case "ellipse": {
 			// Distance from the outline, approximated by how far the normalised radius is from 1.

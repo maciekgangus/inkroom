@@ -49,7 +49,7 @@ describe("Controller mouse buttons (R-029)", () => {
 	};
 
 	test("the right button never draws, whatever the tool", () => {
-		for (const tool of ["pen", "line", "rect", "circle"] as const) {
+		for (const tool of ["pen", "line", "shape"] as const) {
 			settings.tool = tool;
 			drag(2, [300, 200]);
 		}

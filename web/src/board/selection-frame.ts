@@ -1,4 +1,5 @@
 import type { Stroke } from "./board";
+import { isPolygonKind } from "./shapes";
 import { elementCorners, geomBox, rotatePoint, worldBounds } from "./transform";
 
 type Vec = [number, number];
@@ -32,7 +33,8 @@ export function showsBox(els: Stroke[]): boolean {
 		kind === "image" ||
 		kind === "rect" ||
 		kind === "circle" ||
-		kind === "ellipse"
+		kind === "ellipse" ||
+		isPolygonKind(kind)
 	);
 }
 

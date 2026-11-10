@@ -250,7 +250,7 @@ describe("Controller", () => {
 		});
 
 		test("the rect tool stores two corners", () => {
-			settings.tool = "rect";
+			settings.tool = "shape";
 			c.pointerDown(ev("mouse", 5, 5));
 			c.pointerMove(ev("mouse", 65, 45));
 			c.pointerUp(ev("mouse", 65, 45));
@@ -262,7 +262,8 @@ describe("Controller", () => {
 		});
 
 		test("the oval tool stores an ellipse as two opposite corners of its box", () => {
-			settings.tool = "circle";
+			settings.tool = "shape";
+			settings.shape = "ellipse";
 			c.pointerDown(ev("pen", 100, 100));
 			c.pointerMove(ev("pen", 300, 160));
 			c.pointerUp(ev("pen", 300, 160));
@@ -274,7 +275,7 @@ describe("Controller", () => {
 		});
 
 		test("a preview is shown while dragging and cleared on release", () => {
-			settings.tool = "rect";
+			settings.tool = "shape";
 			c.pointerDown(ev("pen", 0, 0));
 			c.pointerMove(ev("pen", 40, 40));
 			expect(renderer.drawLive).toHaveBeenLastCalledWith(
@@ -285,7 +286,8 @@ describe("Controller", () => {
 		});
 
 		test("a click without dragging does not create a shape", () => {
-			settings.tool = "circle";
+			settings.tool = "shape";
+			settings.shape = "ellipse";
 			c.pointerDown(ev("pen", 10, 10));
 			c.pointerUp(ev("pen", 10, 10));
 			expect(board.strokes).toHaveLength(0);
@@ -306,7 +308,7 @@ describe("Controller", () => {
 		});
 
 		test("a shape can be undone and erased like a stroke", () => {
-			settings.tool = "rect";
+			settings.tool = "shape";
 			c.pointerDown(ev("pen", 0, 0));
 			c.pointerMove(ev("pen", 100, 60));
 			c.pointerUp(ev("pen", 100, 60));
@@ -369,7 +371,7 @@ describe("Controller", () => {
 			]);
 
 		test("a rectangle dragged with Shift is a square", () => {
-			settings.tool = "rect";
+			settings.tool = "shape";
 			c.pointerDown(ev("pen", 100, 100));
 			c.pointerMove(ev("pen", 300, 160, shifted));
 			c.pointerUp(ev("pen", 300, 160, shifted));
@@ -380,7 +382,8 @@ describe("Controller", () => {
 		});
 
 		test("an ellipse dragged with Shift is a circle", () => {
-			settings.tool = "circle";
+			settings.tool = "shape";
+			settings.shape = "ellipse";
 			c.pointerDown(ev("pen", 100, 100));
 			c.pointerMove(ev("pen", 300, 160, shifted));
 			c.pointerUp(ev("pen", 300, 160, shifted));
@@ -413,7 +416,7 @@ describe("Controller", () => {
 		});
 
 		test("the preview follows Shift as it is pressed and released during the drag", () => {
-			settings.tool = "rect";
+			settings.tool = "shape";
 			c.pointerDown(ev("pen", 0, 0));
 			c.pointerMove(ev("pen", 100, 40, shifted));
 			expect(renderer.drawLive).toHaveBeenLastCalledWith(
@@ -436,7 +439,7 @@ describe("Controller", () => {
 		});
 
 		test("the state of Shift at release decides the final shape", () => {
-			settings.tool = "rect";
+			settings.tool = "shape";
 			c.pointerDown(ev("pen", 0, 0));
 			c.pointerMove(ev("pen", 100, 40));
 			c.pointerUp(ev("pen", 100, 40, shifted));
@@ -447,7 +450,7 @@ describe("Controller", () => {
 		});
 
 		test("without Shift shapes stay free", () => {
-			settings.tool = "rect";
+			settings.tool = "shape";
 			c.pointerDown(ev("pen", 0, 0));
 			c.pointerMove(ev("pen", 100, 40));
 			c.pointerUp(ev("pen", 100, 40));

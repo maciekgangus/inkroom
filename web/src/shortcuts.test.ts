@@ -24,32 +24,27 @@ describe("tool shortcuts (R-030)", () => {
 		["Escape", "select"],
 		["KeyE", "eraser"],
 		["KeyL", "line"],
-		["KeyK", "rect"],
+		["KeyK", "shape"],
 	] as const)("%s switches to %s", (code, tool) => {
 		const s = fresh("eraser");
 		expect(applyToolShortcut(key(code), s)).toBe(true);
 		expect(s.tool).toBe(tool);
 	});
 
-	test("K uses the last chosen shape, the rectangle by default", () => {
-		const s = fresh("circle");
-		applyToolShortcut(key("KeyF"), s); // leave the circle for the pen
+	test("K picks the shape tool and keeps the shape chosen before", () => {
+		const s = fresh("pen");
+		s.shape = "rhombus";
 		applyToolShortcut(key("KeyK"), s);
-		expect(s.tool).toBe("circle");
+		expect(s.tool).toBe("shape");
+		expect(s.shape).toBe("rhombus");
 	});
 
-	test("K while a shape tool is active changes nothing", () => {
-		const s = fresh("circle");
-		s.lastShape = "rect";
+	test("K while the shape tool is active changes nothing", () => {
+		const s = fresh("shape");
+		s.shape = "trapezoid";
 		expect(applyToolShortcut(key("KeyK"), s)).toBe(true);
-		expect(s.tool).toBe("circle");
-	});
-
-	test("picking a shape remembers it for K", () => {
-		const s = fresh();
-		s.tool = "circle";
-		applyToolShortcut(key("KeyF"), s);
-		expect(s.lastShape).toBe("circle");
+		expect(s.tool).toBe("shape");
+		expect(s.shape).toBe("trapezoid");
 	});
 
 	test("other keys, and keys held with Ctrl, Cmd or Alt, are left alone", () => {
@@ -61,9 +56,9 @@ describe("tool shortcuts (R-030)", () => {
 		expect(s.tool).toBe("pen");
 	});
 
-	test("every toolbar tool but the circle has a labelled key", () => {
+	test("the tools have labelled keys", () => {
 		expect(TOOL_KEYS.pen?.label).toBe("F");
 		expect(TOOL_KEYS.select?.label).toBe("Esc");
-		expect(TOOL_KEYS.rect?.label).toBe("K");
+		expect(TOOL_KEYS.shape?.label).toBe("K");
 	});
 });

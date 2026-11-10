@@ -8,6 +8,9 @@ export type ElementKind =
 	| "rect"
 	| "circle"
 	| "ellipse"
+	| "trapezoid"
+	| "rhombus"
+	| "parallelogram"
 	| "text"
 	| "image";
 

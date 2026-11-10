@@ -8,6 +8,7 @@ import { TouchGestures } from "./board/gestures";
 import { ImageCache } from "./board/image-cache";
 import { defaultSize, placeCentered } from "./board/image-geometry";
 import { prepareImage, uploadImage } from "./board/image-upload";
+import { loadShape } from "./board/shapes";
 import { fontSizeFor, fontSizeOf } from "./board/text";
 import { Viewport } from "./board/viewport";
 import { ContextMenu, type MenuItem } from "./context-menu";
@@ -62,7 +63,12 @@ export function BoardView({
 	const committedRef = useRef<HTMLCanvasElement>(null);
 	const liveRef = useRef<HTMLCanvasElement>(null);
 	const settings = useMemo<Settings>(
-		() => ({ tool: "pen", color: COLORS[0], size: SIZES[1] }),
+		() => ({
+			tool: "pen",
+			color: COLORS[0],
+			size: SIZES[1],
+			shape: loadShape(),
+		}),
 		[],
 	);
 	const viewport = useMemo(() => new Viewport(), []);

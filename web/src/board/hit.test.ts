@@ -345,3 +345,34 @@ describe("ellipse hit testing", () => {
 		expect(strokeHit(turned, 200, 50, 4)).toBe(false);
 	});
 });
+
+describe("polygon shapes (R-033)", () => {
+	const base = { id: "p", authorId: "a", color: "#000", size: 4, z: 0 };
+	const rhombus = (fill?: string): Stroke => ({
+		...base,
+		kind: "rhombus",
+		...(fill ? { fill } : {}),
+		points: [
+			[0, 0, 0.5],
+			[100, 50, 0.5],
+		],
+	});
+
+	test("the outline is hit along its sides, not along the box", () => {
+		expect(strokeHit(rhombus(), 25, 12.5, 3)).toBe(true); // on the upper left side
+		expect(strokeHit(rhombus(), 0, 0, 3)).toBe(false); // the box corner is empty
+		expect(strokeHit(rhombus(), 50, 25, 3)).toBe(false); // an empty inside
+	});
+
+	test("a filled one is hit anywhere inside, but not in the corners of its box", () => {
+		expect(objectHit(rhombus("#fcc"), 50, 25, 3)).toBe(true);
+		expect(objectHit(rhombus("#fcc"), 3, 2, 3)).toBe(false);
+		expect(objectHit(rhombus(), 50, 25, 3)).toBe(false); // empty: only its outline
+	});
+
+	test("a turned polygon is hit where it now is", () => {
+		const turned = { ...rhombus("#fcc"), rot: Math.PI / 2 };
+		expect(objectHit(turned, 50, 25, 3)).toBe(true); // the centre stays
+		expect(objectHit(turned, 50, -5, 3)).toBe(true); // now reaches higher than before
+	});
+});

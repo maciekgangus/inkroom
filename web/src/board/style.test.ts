@@ -175,3 +175,20 @@ describe("sliders (R-031)", () => {
 		expect(capabilities([rect]).textOnly).toBe(false);
 	});
 });
+
+describe("polygon shapes take fill and line style like other shapes (R-033)", () => {
+	const poly = (kind: Stroke["kind"]): Stroke => ({
+		...base,
+		kind,
+		points: pts([0, 0], [10, 5]),
+	});
+	test.each(["trapezoid", "rhombus", "parallelogram"] as const)(
+		"%s",
+		(kind) => {
+			expect(capabilities([poly(kind)]).fill).toBe(true);
+			expect(capabilities([poly(kind)]).dash).toBe(true);
+			expect(applyStyle(poly(kind), { fill: "#0f0" }).fill).toBe("#0f0");
+			expect(applyStyle(poly(kind), { dash: "dotted" }).dash).toBe("dotted");
+		},
+	);
+});

@@ -1,4 +1,5 @@
 import type { Stroke } from "./board";
+import { isPolygonKind } from "./shapes";
 import { fontSizeFor, fontSizeOf } from "./text";
 
 export type Dash = "solid" | "dashed" | "dotted";
@@ -20,7 +21,10 @@ const clamp = (n: number, min: number, max: number) =>
 	Math.max(min, Math.min(max, n));
 
 const isShape = (el: Stroke) =>
-	el.kind === "rect" || el.kind === "circle" || el.kind === "ellipse";
+	el.kind === "rect" ||
+	el.kind === "circle" ||
+	el.kind === "ellipse" ||
+	isPolygonKind(el.kind);
 const isDashable = (el: Stroke) => el.kind === "line" || isShape(el);
 
 /** The element with the patch applied where it applies (see ADR 0008). */
