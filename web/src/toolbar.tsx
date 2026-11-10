@@ -1,5 +1,6 @@
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import type { Settings } from "./board/controller";
+import { SHAPES, saveShape } from "./board/shapes";
 import { Icon } from "./icon";
 import { ImageControls, type ImageControlsProps } from "./image-controls";
 import { selectTool, TOOL_KEYS } from "./shortcuts";
@@ -39,21 +40,14 @@ const TOOLS: { tool: Settings["tool"]; label: string }[] = [
 	{ tool: "select", label: "Zaznacz" },
 	{ tool: "pen", label: "Pióro" },
 	{ tool: "line", label: "Linia" },
-	{ tool: "rect", label: "Prostokąt" },
-	{ tool: "circle", label: "Owal" },
+	{ tool: "shape", label: "Kształty" },
 	{ tool: "text", label: "Tekst" },
 	{ tool: "eraser", label: "Gumka" },
 	{ tool: "pan", label: "Ręka" },
 ];
 
 /** Tools that draw something in the chosen colour. */
-const colourTools: Settings["tool"][] = [
-	"pen",
-	"line",
-	"rect",
-	"circle",
-	"text",
-];
+const colourTools: Settings["tool"][] = ["pen", "line", "shape", "text"];
 
 /** Tool palette: tools, color, size, undo/redo. Mutates `settings` in place. */
 export function Toolbar({
@@ -71,6 +65,23 @@ export function Toolbar({
 		if (patch.tool) onToolChange?.();
 	};
 	const [paletteOpen, setPaletteOpen] = useState(false);
+	const [shapesOpen, setShapesOpen] = useState(false);
+	// The list belongs to the shape tool: leaving it closes the list.
+	const listOpen = shapesOpen && settings.tool === "shape";
+	useEffect(() => {
+		if (!listOpen) return;
+		const close = () => setShapesOpen(false);
+		const key = (e: KeyboardEvent) => e.key === "Escape" && close();
+		const outside = (e: Event) => {
+			if (!(e.target as HTMLElement).closest?.(".shape-wrap")) close();
+		};
+		addEventListener("keydown", key);
+		addEventListener("pointerdown", outside, true);
+		return () => {
+			removeEventListener("keydown", key);
+			removeEventListener("pointerdown", outside, true);
+		};
+	}, [listOpen]);
 	const theme = useTheme();
 	const on = (active: boolean) => (active ? "active" : "");
 	const drawing = colourTools.includes(settings.tool);
@@ -99,25 +110,68 @@ export function Toolbar({
 	return (
 		<div class="toolbar">
 			<div class="group">
-				{TOOLS.map(({ tool, label }) => (
-					<button
-						type="button"
-						key={tool}
-						aria-label={tool}
-						aria-pressed={settings.tool === tool}
-						title={
-							TOOL_KEYS[tool] ? `${label} (${TOOL_KEYS[tool]?.label})` : label
-						}
-						class={on(settings.tool === tool)}
-						onClick={() => {
-							selectTool(settings, tool);
-							rerender((n) => n + 1);
-							onToolChange?.();
-						}}
-					>
-						<Icon name={tool} />
-					</button>
-				))}
+				{TOOLS.map(({ tool, label }) => {
+					const isShapeTool = tool === "shape";
+					const current =
+						SHAPES.find((s) => s.kind === (settings.shape ?? "rect")) ??
+						SHAPES[0];
+					const button = (
+						<button
+							type="button"
+							key={tool}
+							aria-label={tool}
+							aria-pressed={settings.tool === tool}
+							aria-expanded={isShapeTool ? listOpen : undefined}
+							title={
+								TOOL_KEYS[tool] ? `${label} (${TOOL_KEYS[tool]?.label})` : label
+							}
+							class={`${on(settings.tool === tool)}${isShapeTool ? " has-list" : ""}`}
+							onClick={() => {
+								// The shape button opens its list when the tool is already on.
+								if (isShapeTool && settings.tool === "shape") {
+									setShapesOpen(!shapesOpen);
+									return;
+								}
+								selectTool(settings, tool);
+								setShapesOpen(false);
+								rerender((n) => n + 1);
+								onToolChange?.();
+							}}
+						>
+							<Icon name={isShapeTool ? current.icon : tool} />
+						</button>
+					);
+					if (!isShapeTool) return button;
+					return (
+						<div class="shape-wrap" key={tool}>
+							{button}
+							{listOpen && (
+								<div class="shape-list" role="menu">
+									{SHAPES.map((s) => (
+										<button
+											type="button"
+											role="menuitem"
+											key={s.kind}
+											aria-label={`shape ${s.kind}`}
+											class={on(s.kind === current.kind)}
+											onClick={() => {
+												settings.shape = s.kind;
+												saveShape(s.kind);
+												selectTool(settings, "shape");
+												setShapesOpen(false);
+												rerender((n) => n + 1);
+												onToolChange?.();
+											}}
+										>
+											<Icon name={s.icon} />
+											{s.label}
+										</button>
+									))}
+								</div>
+							)}
+						</div>
+					);
+				})}
 			</div>
 			{!hasSelection && (
 				<div class="group">
@@ -173,6 +227,16 @@ export function Toolbar({
 							/>
 						</button>
 					))}
+					<button
+						type="button"
+						aria-label="natural pen"
+						aria-pressed={!!settings.natural}
+						title="Naturalne pióro"
+						class={on(!!settings.natural)}
+						onClick={() => set({ natural: !settings.natural })}
+					>
+						<Icon name="wave" />
+					</button>
 				</div>
 			)}
 			{images && <ImageControls {...images} />}

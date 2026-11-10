@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import type { Stroke } from "./board";
-import { applyStyle, capabilities, styleOf } from "./style";
+import { applyStyle, capabilities, dashOptions, styleOf } from "./style";
 
 const base = { id: "e", authorId: "a", color: "#111", size: 4, z: 0 };
 const pts = (...p: [number, number][]) =>
@@ -85,9 +85,10 @@ describe("capabilities", () => {
 		expect(capabilities([freehand])).toEqual({
 			color: true,
 			size: true,
-			dash: false,
+			dash: true,
 			fill: false,
 			text: false,
+			textOnly: false,
 		});
 		expect(capabilities([rect, freehand])).toEqual({
 			color: true,
@@ -95,6 +96,7 @@ describe("capabilities", () => {
 			dash: true,
 			fill: true,
 			text: false,
+			textOnly: false,
 		});
 		expect(capabilities([text])).toEqual({
 			color: true,
@@ -102,6 +104,7 @@ describe("capabilities", () => {
 			dash: false,
 			fill: false,
 			text: true,
+			textOnly: true,
 		});
 		expect(capabilities([image])).toEqual({
 			color: false,
@@ -109,6 +112,7 @@ describe("capabilities", () => {
 			dash: false,
 			fill: false,
 			text: false,
+			textOnly: false,
 		});
 	});
 });
@@ -126,6 +130,7 @@ describe("styleOf", () => {
 		expect(styleOf([r, line])).toEqual({
 			color: "#abc",
 			size: 10,
+			fontSize: 0,
 			dash: "dashed",
 			fill: "#0f0",
 			opacity: 0.5,
@@ -136,9 +141,93 @@ describe("styleOf", () => {
 		expect(styleOf([freehand])).toEqual({
 			color: "#111",
 			size: 4,
+			fontSize: 0,
 			dash: "solid",
 			fill: null,
 			opacity: 1,
 		});
+	});
+});
+
+describe("sliders (R-031)", () => {
+	test("any width in pixels applies, kept between 1 and 50", () => {
+		expect(applyStyle(rect, { size: 17 }).size).toBe(17);
+		expect(applyStyle(rect, { size: 0 }).size).toBe(1);
+		expect(applyStyle(rect, { size: 400 }).size).toBe(50);
+	});
+
+	test("a font size in pixels applies to a text only, kept between 4 and 400", () => {
+		expect(applyStyle(text, { fontSize: 33 }).fontSize).toBe(33);
+		expect(applyStyle(text, { fontSize: 1 }).fontSize).toBe(4);
+		expect(applyStyle(text, { fontSize: 9999 }).fontSize).toBe(400);
+		expect(applyStyle(rect, { fontSize: 33 }).fontSize).toBeUndefined();
+	});
+
+	test("styleOf reports the font size of a text", () => {
+		expect(styleOf([{ ...text, fontSize: 33 }]).fontSize).toBe(33);
+		expect(styleOf([text]).fontSize).toBe(24); // from the pen size 5
+	});
+
+	test("only texts are 'text only', so the panel knows to offer a font size", () => {
+		expect(capabilities([text]).textOnly).toBe(true);
+		expect(capabilities([text, text]).textOnly).toBe(true);
+		expect(capabilities([text, rect]).textOnly).toBe(false);
+		expect(capabilities([rect]).textOnly).toBe(false);
+	});
+});
+
+describe("polygon shapes take fill and line style like other shapes (R-033)", () => {
+	const poly = (kind: Stroke["kind"]): Stroke => ({
+		...base,
+		kind,
+		points: pts([0, 0], [10, 5]),
+	});
+	test.each(["trapezoid", "rhombus", "parallelogram"] as const)(
+		"%s",
+		(kind) => {
+			expect(capabilities([poly(kind)]).fill).toBe(true);
+			expect(capabilities([poly(kind)]).dash).toBe(true);
+			expect(applyStyle(poly(kind), { fill: "#0f0" }).fill).toBe("#0f0");
+			expect(applyStyle(poly(kind), { dash: "dotted" }).dash).toBe("dotted");
+		},
+	);
+});
+
+describe("the natural pen style (R-037)", () => {
+	test("it applies to freehand strokes only", () => {
+		expect(applyStyle(freehand, { dash: "natural" }).dash).toBe("natural");
+		for (const el of [line, rect, circle, text, image])
+			expect(applyStyle(el, { dash: "natural" }).dash).toBeUndefined();
+	});
+
+	test("dashed and dotted still apply to lines and shapes only", () => {
+		expect(applyStyle(freehand, { dash: "dashed" }).dash).toBeUndefined();
+		expect(applyStyle(rect, { dash: "dotted" }).dash).toBe("dotted");
+	});
+
+	test("solid takes the natural style off again", () => {
+		const natural = applyStyle(freehand, { dash: "natural" });
+		expect(applyStyle(natural, { dash: "solid" }).dash).toBeUndefined();
+	});
+
+	test("the style row offers what the selection can take", () => {
+		expect(dashOptions([freehand])).toEqual(["solid", "natural"]);
+		expect(dashOptions([rect])).toEqual(["solid", "dashed", "dotted"]);
+		expect(dashOptions([line, ellipse])).toEqual(["solid", "dashed", "dotted"]);
+		expect(dashOptions([freehand, rect])).toEqual([
+			"solid",
+			"dashed",
+			"dotted",
+			"natural",
+		]);
+		expect(dashOptions([text])).toEqual(["solid"]);
+		expect(dashOptions([image])).toEqual(["solid"]);
+	});
+
+	test("a freehand stroke now has a style row, a text or image still does not", () => {
+		expect(capabilities([freehand]).dash).toBe(true);
+		expect(capabilities([rect]).dash).toBe(true);
+		expect(capabilities([text]).dash).toBe(false);
+		expect(capabilities([image]).dash).toBe(false);
 	});
 });

@@ -163,4 +163,87 @@ describe("Controller clipboard, duplicate and layer order", () => {
 		expect(c.contextTarget(900, 900)).toBe(false);
 		expect(c.selection).toEqual([]);
 	});
+
+	describe("live style preview (R-031)", () => {
+		test("previewStyle changes the look at once but writes no history and sends nothing", () => {
+			c.select("r1");
+			c.previewStyle({ opacity: 0.5 });
+			c.previewStyle({ opacity: 0.3 });
+			expect(get("r1").opacity).toBe(0.3);
+			expect(ops).toEqual([]);
+			expect(board.undo("me")).toBe(false);
+		});
+
+		test("setProps afterwards makes it one undo step, one update, from the original", () => {
+			c.select(["r1", "r2"]);
+			c.previewStyle({ size: 8 });
+			c.previewStyle({ size: 20 });
+			expect(c.setProps({ size: 20 })).toBe(true);
+			expect(ops.map((o) => o.t)).toEqual(["update", "update"]);
+			expect(get("r1").size).toBe(20);
+			board.undo("me");
+			expect(get("r1").size).toBe(4);
+			expect(get("r2").size).toBe(4);
+			expect(board.undo("me")).toBe(false);
+		});
+
+		test("a preview that ended where it began changes nothing", () => {
+			c.select("r1");
+			c.previewStyle({ opacity: 0.5 });
+			c.previewStyle({ opacity: 1 });
+			expect(c.setProps({ opacity: 1 })).toBe(false);
+			expect(ops).toEqual([]);
+			expect(board.undo("me")).toBe(false);
+		});
+
+		test("changing the selection drops a preview that was never committed", () => {
+			c.select("r1");
+			c.previewStyle({ opacity: 0.5 });
+			c.select("r2");
+			expect(get("r1").opacity).toBeUndefined();
+		});
+	});
+
+	describe("pasting elements from outside the board (R-035)", () => {
+		const outside = [
+			{
+				color: "#d32f2f",
+				size: 6,
+				kind: "rect" as const,
+				points: [pt(10, 20), pt(110, 70)],
+			},
+			{ color: "#1976d2", size: 4, points: [pt(300, 20), pt(320, 60)] },
+		];
+
+		test("adds them as new elements of this author, on top, selected, one undo step", () => {
+			const ids = c.pasteSource(outside, [1000, 500]);
+			expect(ids).toHaveLength(2);
+			const [a, b] = ids.map(get);
+			expect(a.authorId).toBe("me");
+			expect(a.id).not.toBe(b.id);
+			expect(a.z).toBeGreaterThan(30);
+			expect(b.z).toBeGreaterThan(a.z); // the order is kept
+			expect(a.points[0].slice(0, 2)).toEqual([1000, 500]);
+			expect(b.points[0].slice(0, 2)).toEqual([1290, 500]);
+			expect(c.selection.map((s) => s.id)).toEqual(ids);
+			expect(ops.map((o) => o.t)).toEqual(["add", "add"]);
+			board.undo("me");
+			expect(board.strokes.map((s) => s.id)).toEqual(["r1", "r2", "r3"]);
+		});
+
+		test("without a point they land a little below and right of where they were", () => {
+			const [id] = c.pasteSource(outside);
+			expect(get(id).points[0].slice(0, 2)).toEqual([30, 40]);
+		});
+
+		test("an empty list adds nothing", () => {
+			expect(c.pasteSource([])).toEqual([]);
+			expect(ops).toEqual([]);
+		});
+
+		test("it does not touch the internal clipboard", () => {
+			c.pasteSource(outside);
+			expect(c.hasClipboard).toBe(false);
+		});
+	});
 });

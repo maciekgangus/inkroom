@@ -149,6 +149,8 @@ describe("showsBox (R-034)", () => {
 		expect(showsBox([el("rect")])).toBe(true);
 		expect(showsBox([el("circle")])).toBe(true);
 		expect(showsBox([el("ellipse")])).toBe(true);
+		for (const k of ["trapezoid", "rhombus", "parallelogram"] as const)
+			expect(showsBox([el(k)])).toBe(true);
 	});
 
 	test("several elements get the outline box, and nothing selected shows none", () => {

@@ -1,5 +1,6 @@
 import type { Board, Point, Stroke } from "./board";
 import { intersects } from "./bounds";
+import type { ClipElement } from "./clipboard";
 import { constrainEnd } from "./draw-aids";
 import { findHit, objectHit } from "./hit";
 import {
@@ -12,6 +13,7 @@ import {
 	pointInFrame,
 	ROT_OFFSET_PX,
 } from "./selection-frame";
+import type { ShapeChoice } from "./shapes";
 import { applyStyle, type StylePatch } from "./style";
 import {
 	rotateEl,
@@ -52,17 +54,11 @@ export interface Renderer {
 
 /** Current tool settings, mutated by the toolbar. */
 export interface Settings {
-	tool:
-		| "pen"
-		| "eraser"
-		| "pan"
-		| "line"
-		| "rect"
-		| "circle"
-		| "text"
-		| "select";
-	/** The shape tool K goes back to: the last one chosen (R-030); a rectangle if none. */
-	lastShape?: "rect" | "circle";
+	tool: "pen" | "eraser" | "pan" | "line" | "shape" | "text" | "select";
+	/** Which shape the shape tool draws (R-033); a rectangle if none was chosen. */
+	shape?: ShapeChoice;
+	/** The pen draws the natural style (R-037) instead of the ordinary one. */
+	natural?: boolean;
 	color: string;
 	size: number;
 }
@@ -116,14 +112,12 @@ const withRect = (el: Stroke, r: Rect): Stroke => ({
 	],
 });
 
-type ShapeTool = "line" | "rect" | "circle";
-/** What each shape tool creates: the oval tool draws an ellipse (a circle with Shift, R-024). */
-const SHAPE_KIND = { line: "line", rect: "rect", circle: "ellipse" } as const;
 /** How far (px) the right button may move and still count as a click, not a pan. */
 const RIGHT_CLICK_SLOP = 4;
 
-const isShapeTool = (t: Settings["tool"]): t is ShapeTool =>
-	t === "line" || t === "rect" || t === "circle";
+/** The tools that drag out an element from two corners: the line and the shape tool (R-033). */
+const isShapeTool = (t: Settings["tool"]): boolean =>
+	t === "line" || t === "shape";
 
 /** Turns pointer input into board changes: draws with pen/mouse, ignores touch (palm rejection). */
 export class Controller {
@@ -137,6 +131,8 @@ export class Controller {
 	private selectedIds: string[] = [];
 	/** The angle of a group's frame, so a turned group keeps the size of its frame. */
 	private groupRot = 0;
+	/** The selection as it was before a live style preview (R-031), until it is committed. */
+	private styleBase: Stroke[] | null = null;
 	/** Elements copied with copySelected, pasted by paste (not shared between clients). */
 	private clipboard: Stroke[] = [];
 	private edit: Edit | null = null;
@@ -197,6 +193,9 @@ export class Controller {
 			this.startSelect(e);
 			return;
 		}
+		// Anything that draws starts clean: what was selected before is let go of.
+		if (["pen", "line", "shape", "text"].includes(this.settings.tool))
+			this.select(null);
 		if (this.settings.tool === "eraser") {
 			this.erase(e);
 			return;
@@ -213,7 +212,12 @@ export class Controller {
 			color: this.settings.color,
 			size: this.settings.size,
 			z: this.nextZ(),
-			...(isShapeTool(tool) ? { kind: SHAPE_KIND[tool] } : {}),
+			...(isShapeTool(tool)
+				? { kind: tool === "shape" ? (this.settings.shape ?? "rect") : "line" }
+				: {}),
+			...(tool === "pen" && this.settings.natural
+				? { dash: "natural" as const }
+				: {}),
 			points: isShapeTool(tool) ? [start, [...start]] : [start],
 		};
 		this.renderer.drawLive(this.current);
@@ -286,10 +290,16 @@ export class Controller {
 			this.renderer.drawLive(null);
 			return;
 		}
-		this.board.addStroke(this.current);
+		const done = this.current;
+		this.board.addStroke(done);
 		this.current = null;
 		this.renderer.drawLive(null);
 		this.renderer.redraw(this.board.strokes);
+		// A shape or line is selected at once, ready to move or resize: the tool becomes Select.
+		if (done.kind) {
+			this.settings.tool = "select";
+			this.select(done.id);
+		}
 	}
 
 	pointerCancel(e: PointerInput): void {
@@ -335,6 +345,7 @@ export class Controller {
 
 	/** Selects elements by id (null or an empty list clears the selection) and shows their frame. */
 	select(ids: string | string[] | null): void {
+		this.dropStylePreview();
 		this.groupRot = 0; // a new selection starts with an upright frame
 		this.selectedIds =
 			ids === null ? [] : Array.isArray(ids) ? [...ids] : [ids];
@@ -370,6 +381,17 @@ export class Controller {
 	 */
 	paste(at?: [number, number]): string[] {
 		return this.addCopies(this.clipboard, at);
+	}
+
+	/**
+	 * Adds elements that came from outside, from the system clipboard (R-035), as new elements
+	 * of this author on top, selected, as one undo step. Same placement as `paste`.
+	 */
+	pasteSource(els: ClipElement[], at?: [number, number]): string[] {
+		return this.addCopies(
+			els.map((el) => ({ ...el, id: "", authorId: this.authorId, z: 0 })),
+			at,
+		);
 	}
 
 	/** Copies the selection a little below and right of it and selects the copies. */
@@ -442,8 +464,32 @@ export class Controller {
 		return true;
 	}
 
+	/**
+	 * Shows a style change on the selection at once, without history and without sending it
+	 * (a slider being dragged). `setProps` with the final value then records it as one step.
+	 */
+	previewStyle(patch: StylePatch): void {
+		const base = this.styleBase ?? this.selection;
+		if (base.length === 0) return;
+		this.styleBase = base;
+		const drafts = base.map((el) => applyStyle(el, patch));
+		for (const d of drafts) this.board.applyRemote({ t: "update", stroke: d });
+		this.showSelection(drafts);
+		this.renderer.redraw(this.board.strokes);
+	}
+
+	/** Puts the selection back as it was before an uncommitted preview. */
+	private dropStylePreview(): void {
+		const base = this.styleBase;
+		if (!base) return;
+		this.styleBase = null;
+		for (const o of base) this.board.applyRemote({ t: "update", stroke: o });
+		this.renderer.redraw(this.board.strokes);
+	}
+
 	/** Applies a style change to the selection as one undo step; false if nothing changed. */
 	setProps(patch: StylePatch): boolean {
+		this.dropStylePreview(); // record from the original, not from the preview
 		const before = this.selection;
 		const changed = before
 			.map((el) => applyStyle(el, patch))
@@ -669,9 +715,8 @@ export class Controller {
 	/** Where the shape being dragged ends at this pointer position, with Shift's drawing aids applied. */
 	private shapeEnd(e: PointerInput, shape: Stroke): Point {
 		const p = this.point(e);
-		const kind = shape.kind as "line" | "rect" | "ellipse";
 		const [x, y] = constrainEnd(
-			kind,
+			shape.kind === "line" ? "line" : "rect", // every other shape gets a square box
 			[shape.points[0][0], shape.points[0][1]],
 			[p[0], p[1]],
 			!!e.shiftKey,

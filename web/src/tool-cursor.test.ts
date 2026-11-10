@@ -6,8 +6,7 @@ describe("toolCursor", () => {
 		expect(toolCursor("select")).toBe("default");
 		expect(toolCursor("text")).toBe("text");
 		expect(toolCursor("line")).toBe("crosshair");
-		expect(toolCursor("rect")).toBe("crosshair");
-		expect(toolCursor("circle")).toBe("crosshair");
+		expect(toolCursor("shape")).toBe("crosshair");
 		expect(toolCursor("pan")).toBe("grab");
 	});
 

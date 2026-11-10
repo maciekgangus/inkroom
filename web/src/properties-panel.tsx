@@ -2,18 +2,20 @@ import type { Stroke } from "./board/board";
 import {
 	capabilities,
 	type Dash,
+	dashOptions,
 	type StylePatch,
 	styleOf,
 } from "./board/style";
+import { Icon } from "./icon";
 import "./properties-panel.css";
 
-const SIZES = [2, 5, 10];
-const DASHES: { dash: Dash; label: string }[] = [
-	{ dash: "solid", label: "━" },
-	{ dash: "dashed", label: "╌" },
-	{ dash: "dotted", label: "┈" },
-];
-const OPACITIES = [1, 0.6, 0.3];
+/** How each line style is shown on its button; the natural pen gets a wave icon. */
+const DASH_LABELS: Record<Dash, string> = {
+	solid: "━",
+	dashed: "╌",
+	dotted: "┈",
+	natural: "",
+};
 
 interface Props {
 	/** The selected elements; the panel shows the values of the first. */
@@ -21,7 +23,48 @@ interface Props {
 	colors: string[];
 	/** How a stored colour is shown (dark mode swaps black and white); defaults to as is. */
 	display?: (color: string) => string;
+	/** A change that is still being made (a slider moving): shown, but not yet final. */
+	onPreview?: (patch: StylePatch) => void;
+	/** A final change: a click, or a slider released. */
 	onChange: (patch: StylePatch) => void;
+}
+
+/** A slider with its value next to it: `input` while moving, `change` on release. */
+function Slider({
+	label,
+	min,
+	max,
+	value,
+	unit,
+	onInput,
+	onChange,
+}: {
+	label: string;
+	min: number;
+	max: number;
+	value: number;
+	unit: string;
+	onInput: (v: number) => void;
+	onChange: (v: number) => void;
+}) {
+	return (
+		<label class="slider">
+			<input
+				type="range"
+				aria-label={label}
+				min={min}
+				max={max}
+				step={1}
+				value={value}
+				onInput={(e) => onInput(Number(e.currentTarget.value))}
+				onChange={(e) => onChange(Number(e.currentTarget.value))}
+			/>
+			<span class="value">
+				{value}
+				{unit}
+			</span>
+		</label>
+	);
 }
 
 /** Edits the style of the selection: colour, width, line style, fill and opacity. */
@@ -29,6 +72,7 @@ export function PropertiesPanel({
 	elements,
 	colors,
 	display = (c) => c,
+	onPreview = () => {},
 	onChange,
 }: Props) {
 	if (elements.length === 0) return null;
@@ -54,25 +98,32 @@ export function PropertiesPanel({
 			)}
 			{can.size && (
 				<div class="row">
-					{SIZES.map((s) => (
-						<button
-							type="button"
-							key={s}
-							aria-label={`prop size ${s}`}
-							class={on(now.size === s)}
-							onClick={() => onChange({ size: s })}
-						>
-							<span
-								class="dot"
-								style={{ width: `${s + 2}px`, height: `${s + 2}px` }}
-							/>
-						</button>
-					))}
+					{can.textOnly ? (
+						<Slider
+							label="prop font size"
+							min={8}
+							max={200}
+							value={now.fontSize}
+							unit=" px"
+							onInput={(v) => onPreview({ fontSize: v })}
+							onChange={(v) => onChange({ fontSize: v })}
+						/>
+					) : (
+						<Slider
+							label="prop size"
+							min={1}
+							max={50}
+							value={now.size}
+							unit=" px"
+							onInput={(v) => onPreview({ size: v })}
+							onChange={(v) => onChange({ size: v })}
+						/>
+					)}
 				</div>
 			)}
 			{can.dash && (
 				<div class="row">
-					{DASHES.map(({ dash, label }) => (
+					{dashOptions(elements).map((dash) => (
 						<button
 							type="button"
 							key={dash}
@@ -80,7 +131,7 @@ export function PropertiesPanel({
 							class={on(now.dash === dash)}
 							onClick={() => onChange({ dash })}
 						>
-							{label}
+							{dash === "natural" ? <Icon name="wave" /> : DASH_LABELS[dash]}
 						</button>
 					))}
 				</div>
@@ -108,17 +159,15 @@ export function PropertiesPanel({
 				</div>
 			)}
 			<div class="row">
-				{OPACITIES.map((o) => (
-					<button
-						type="button"
-						key={o}
-						aria-label={`prop opacity ${o}`}
-						class={on(Math.abs(now.opacity - o) < 0.05)}
-						onClick={() => onChange({ opacity: o })}
-					>
-						{Math.round(o * 100)}%
-					</button>
-				))}
+				<Slider
+					label="prop opacity"
+					min={1}
+					max={100}
+					value={Math.round(now.opacity * 100)}
+					unit="%"
+					onInput={(v) => onPreview({ opacity: v / 100 })}
+					onChange={(v) => onChange({ opacity: v / 100 })}
+				/>
 			</div>
 		</div>
 	);

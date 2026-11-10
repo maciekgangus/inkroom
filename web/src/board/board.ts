@@ -8,6 +8,9 @@ export type ElementKind =
 	| "rect"
 	| "circle"
 	| "ellipse"
+	| "trapezoid"
+	| "rhombus"
+	| "parallelogram"
 	| "text"
 	| "image";
 
@@ -26,7 +29,7 @@ export interface Stroke {
 	/** Rotation in radians around the centre of the (unrotated) geometry (ADR 0008). */
 	rot?: number;
 	/** Line style; missing means solid. */
-	dash?: "solid" | "dashed" | "dotted";
+	dash?: "solid" | "dashed" | "dotted" | "natural";
 	/** Fill colour of a rectangle or circle; missing means no fill. */
 	fill?: string;
 	/** 0 to 1; missing means 1. */

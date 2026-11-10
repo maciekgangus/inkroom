@@ -1,6 +1,6 @@
 import { getStroke } from "perfect-freehand";
 import { type Background, drawBackground } from "./background";
-import type { Stroke } from "./board";
+import type { ElementKind, Stroke } from "./board";
 import { intersects, strokeBounds } from "./bounds";
 import type { Renderer } from "./controller";
 import type { ImageCache } from "./image-cache";
@@ -11,6 +11,8 @@ import {
 	ROT_OFFSET_PX,
 	showsBox,
 } from "./selection-frame";
+import { isPolygonKind, polygonPoints } from "./shapes";
+import { strokeOptions } from "./stroke-style";
 import { fontSizeOf, LINE_HEIGHT } from "./text";
 import { centerOf } from "./transform";
 import type { Rect, Viewport } from "./viewport";
@@ -19,13 +21,7 @@ import type { Rect, Viewport } from "./viewport";
 const isFilled = (s: Stroke) => !s.kind || s.kind === "stroke";
 
 function outlinePath(stroke: Stroke): Path2D | null {
-	const outline = getStroke(stroke.points, {
-		size: stroke.size,
-		thinning: 0.6,
-		smoothing: 0.5,
-		streamline: 0.4,
-		simulatePressure: false,
-	});
+	const outline = getStroke(stroke.points, strokeOptions(stroke));
 	if (outline.length < 2) return null;
 	const path = new Path2D();
 	path.moveTo(outline[0][0], outline[0][1]);
@@ -50,6 +46,15 @@ function shapePath(s: Stroke): Path2D | null {
 			Math.abs(b[0] - a[0]),
 			Math.abs(b[1] - a[1]),
 		);
+	} else if (isPolygonKind(s.kind)) {
+		const poly = polygonPoints(
+			s.kind as ElementKind,
+			[a[0], a[1]],
+			[b[0], b[1]],
+		);
+		path.moveTo(poly[0][0], poly[0][1]);
+		for (const [x, y] of poly.slice(1)) path.lineTo(x, y);
+		path.closePath();
 	} else if (s.kind === "ellipse") {
 		path.ellipse(
 			(a[0] + b[0]) / 2,

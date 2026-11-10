@@ -116,16 +116,16 @@ describe("Toolbar", () => {
 	});
 
 	test("shape and text buttons select their tools", () => {
-		for (const tool of ["line", "rect", "circle", "text"] as const) {
+		for (const tool of ["line", "shape", "text"] as const) {
 			click(tool);
 			expect(settings.tool).toBe(tool);
 		}
 	});
 
 	test("picking a colour keeps a shape or text tool, but leaves the eraser and the hand", () => {
-		click("rect");
+		click("shape");
 		click(`color ${COLORS[3]}`);
-		expect(settings.tool).toBe("rect");
+		expect(settings.tool).toBe("shape");
 		expect(settings.color).toBe(COLORS[3]);
 		click("text");
 		click(`color ${COLORS[1]}`);
@@ -208,15 +208,78 @@ describe("Toolbar", () => {
 		expect(title("pan")).toBe("Ręka (M)");
 		expect(title("eraser")).toBe("Gumka (E)");
 		expect(title("line")).toBe("Linia (L)");
-		expect(title("rect")).toBe("Prostokąt (K)");
+		expect(title("shape")).toBe("Kształty (K)");
 		expect(title("text")).toBe("Tekst (T)");
-		expect(title("circle")).toBe("Owal");
 	});
 
-	test("clicking a shape tool and leaving it remembers it for K", () => {
-		click("circle");
-		click("pen");
-		expect(settings.lastShape).toBe("circle");
+	describe("the shape list (R-033)", () => {
+		const list = () => root.querySelector(".shape-list");
+		const item = (kind: string) =>
+			root.querySelector(`[aria-label="shape ${kind}"]`) as HTMLElement | null;
+		// Clicks go through act, so the list is in the DOM when we look.
+		const press = (el: HTMLElement | null) => act(() => el?.click());
+		const pressTool = (label: string) =>
+			press(root.querySelector(`[aria-label="${label}"]`) as HTMLElement);
+
+		test("the shape button shows the icon of the current shape and opens no list at first", () => {
+			pressTool("shape");
+			expect(settings.tool).toBe("shape");
+			expect(list()).toBeNull();
+		});
+
+		test("clicking the button again opens the list of all five shapes", () => {
+			pressTool("shape");
+			pressTool("shape");
+			expect(list()).not.toBeNull();
+			for (const k of [
+				"rect",
+				"ellipse",
+				"trapezoid",
+				"rhombus",
+				"parallelogram",
+			])
+				expect(item(k)).not.toBeNull();
+		});
+
+		test("choosing a shape sets it, keeps the shape tool and closes the list", () => {
+			pressTool("shape");
+			pressTool("shape");
+			press(item("rhombus"));
+			expect(settings.shape).toBe("rhombus");
+			expect(settings.tool).toBe("shape");
+			expect(list()).toBeNull();
+		});
+
+		test("choosing a shape while another tool is active switches to the shape tool", () => {
+			pressTool("shape");
+			pressTool("shape");
+			pressTool("eraser"); // leaves the shape tool, the list closes
+			expect(list()).toBeNull();
+			pressTool("shape");
+			pressTool("shape");
+			press(item("trapezoid"));
+			pressTool("pen");
+			pressTool("shape"); // back: the last chosen shape is still the trapezoid
+			expect(settings.shape).toBe("trapezoid");
+			expect(settings.tool).toBe("shape");
+		});
+
+		test("the current shape is marked in the list and its icon is on the button", () => {
+			settings.shape = "parallelogram";
+			pressTool("shape");
+			pressTool("shape");
+			expect(item("parallelogram")?.classList.contains("active")).toBe(true);
+			expect(item("rect")?.classList.contains("active")).toBe(false);
+		});
+
+		test("Escape closes the list", () => {
+			pressTool("shape");
+			pressTool("shape");
+			act(() => {
+				dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+			});
+			expect(list()).toBeNull();
+		});
 	});
 
 	test("tells its parent when the tool changes, so the board can update the cursor", () => {
@@ -235,5 +298,36 @@ describe("Toolbar", () => {
 		click("eraser");
 		expect(onToolChange).toHaveBeenCalledOnce();
 		expect(settings.tool).toBe("eraser");
+	});
+
+	describe("the natural pen toggle (R-037)", () => {
+		test("is next to the widths, shows its state and switches the style of new strokes", () => {
+			const toggle = root.querySelector(
+				'[aria-label="natural pen"]',
+			) as HTMLElement;
+			expect(toggle).not.toBeNull();
+			expect(toggle.querySelector("svg")).not.toBeNull();
+			expect(toggle.title).toBe("Naturalne pióro");
+			expect(toggle.getAttribute("aria-pressed")).toBe("false");
+			click("natural pen");
+			expect(settings.natural).toBe(true);
+			click("natural pen");
+			expect(settings.natural).toBe(false);
+		});
+
+		test("is hidden while something is selected, like the widths", () => {
+			act(() =>
+				render(
+					<Toolbar
+						settings={settings}
+						hasSelection
+						onUndo={onUndo}
+						onRedo={onRedo}
+					/>,
+					root,
+				),
+			);
+			expect(root.querySelector('[aria-label="natural pen"]')).toBeNull();
+		});
 	});
 });

@@ -1,6 +1,6 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import type { Settings } from "./board/controller";
-import { applyToolShortcut, TOOL_KEYS } from "./shortcuts";
+import { applyToolShortcut, dropsSelection, TOOL_KEYS } from "./shortcuts";
 
 const fresh = (tool: Settings["tool"] = "pen"): Settings => ({
 	tool,
@@ -24,32 +24,27 @@ describe("tool shortcuts (R-030)", () => {
 		["Escape", "select"],
 		["KeyE", "eraser"],
 		["KeyL", "line"],
-		["KeyK", "rect"],
+		["KeyK", "shape"],
 	] as const)("%s switches to %s", (code, tool) => {
 		const s = fresh("eraser");
 		expect(applyToolShortcut(key(code), s)).toBe(true);
 		expect(s.tool).toBe(tool);
 	});
 
-	test("K uses the last chosen shape, the rectangle by default", () => {
-		const s = fresh("circle");
-		applyToolShortcut(key("KeyF"), s); // leave the circle for the pen
+	test("K picks the shape tool and keeps the shape chosen before", () => {
+		const s = fresh("pen");
+		s.shape = "rhombus";
 		applyToolShortcut(key("KeyK"), s);
-		expect(s.tool).toBe("circle");
+		expect(s.tool).toBe("shape");
+		expect(s.shape).toBe("rhombus");
 	});
 
-	test("K while a shape tool is active changes nothing", () => {
-		const s = fresh("circle");
-		s.lastShape = "rect";
+	test("K while the shape tool is active changes nothing", () => {
+		const s = fresh("shape");
+		s.shape = "trapezoid";
 		expect(applyToolShortcut(key("KeyK"), s)).toBe(true);
-		expect(s.tool).toBe("circle");
-	});
-
-	test("picking a shape remembers it for K", () => {
-		const s = fresh();
-		s.tool = "circle";
-		applyToolShortcut(key("KeyF"), s);
-		expect(s.lastShape).toBe("circle");
+		expect(s.tool).toBe("shape");
+		expect(s.shape).toBe("trapezoid");
 	});
 
 	test("other keys, and keys held with Ctrl, Cmd or Alt, are left alone", () => {
@@ -61,9 +56,48 @@ describe("tool shortcuts (R-030)", () => {
 		expect(s.tool).toBe("pen");
 	});
 
-	test("every toolbar tool but the circle has a labelled key", () => {
+	test("the tools have labelled keys", () => {
 		expect(TOOL_KEYS.pen?.label).toBe("F");
 		expect(TOOL_KEYS.select?.label).toBe("Esc");
-		expect(TOOL_KEYS.rect?.label).toBe("K");
+		expect(TOOL_KEYS.shape?.label).toBe("K");
+	});
+
+	describe("what happens to the selection", () => {
+		test("Escape cancels the selection and picks Select", () => {
+			const s = fresh("shape");
+			const drop = vi.fn();
+			applyToolShortcut(key("Escape"), s, drop);
+			expect(drop).toHaveBeenCalledOnce();
+			expect(s.tool).toBe("select");
+		});
+
+		test("picking a drawing tool drops the selection, so a new drawing starts clean", () => {
+			for (const code of ["KeyF", "KeyT", "KeyL", "KeyK"]) {
+				const drop = vi.fn();
+				applyToolShortcut(key(code), fresh("select"), drop);
+				expect(drop).toHaveBeenCalledOnce();
+			}
+		});
+
+		test("the eraser and the hand keep the selection", () => {
+			for (const code of ["KeyE", "KeyM"]) {
+				const drop = vi.fn();
+				applyToolShortcut(key(code), fresh("select"), drop);
+				expect(drop).not.toHaveBeenCalled();
+			}
+		});
+
+		test("dropsSelection tells which tools start a new drawing", () => {
+			for (const t of ["pen", "line", "shape", "text"] as const)
+				expect(dropsSelection(t)).toBe(true);
+			for (const t of ["select", "eraser", "pan"] as const)
+				expect(dropsSelection(t)).toBe(false);
+		});
+
+		test("without a callback nothing breaks", () => {
+			expect(() =>
+				applyToolShortcut(key("Escape"), fresh("pen")),
+			).not.toThrow();
+		});
 	});
 });
