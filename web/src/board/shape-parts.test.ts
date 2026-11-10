@@ -5,6 +5,7 @@ import {
 	AXES_STEP,
 	adjustFromPoint,
 	adjustHandle,
+	outlineOf,
 	partsOf,
 	shapeParts,
 } from "./shape-parts";
@@ -489,5 +490,69 @@ describe("the handle of an adjustable shape", () => {
 		expect(adjustFromPoint("trapezoid", A, B, [-900, 100])).toBe(0);
 		expect(adjustFromPoint("triangle", A, B, [900, 100])).toBe(1);
 		expect(adjustFromPoint("roundrect", A, B, [900, 100])).toBe(0.5);
+	});
+});
+
+describe("free vertices (R-047)", () => {
+	test("verts, fractions of the box, replace the outline of a polygon shape", () => {
+		const verts: Vec[] = [
+			[0, 0],
+			[1, 0],
+			[0.5, 1],
+		];
+		const parts = shapeParts("trapezoid", A, B, undefined, verts);
+		expect(parts?.fill).toEqual([
+			[100, 100],
+			[340, 100],
+			[220, 280],
+		]);
+		expect(parts?.lines[0]).toEqual([...(parts?.fill ?? []), [100, 100]]);
+		expect(parts?.hidden).toEqual([]);
+	});
+
+	test("partsOf follows the verts of the element", () => {
+		const s = {
+			id: "x",
+			authorId: "a",
+			color: "#000",
+			size: 4,
+			z: 1,
+			kind: "trapezoid" as const,
+			points: [
+				[100, 100, 0.5],
+				[340, 280, 0.5],
+			] as [number, number, number][],
+			verts: [
+				[0, 0],
+				[1, 0],
+				[1, 1],
+			] as Vec[],
+		};
+		expect(partsOf(s)?.fill).toHaveLength(3);
+	});
+
+	test("outlineOf gives the vertices of a plain polygon, whatever the shape", () => {
+		expect(outlineOf("trapezoid", A, B)).toHaveLength(4);
+		expect(outlineOf("triangle", A, B)).toHaveLength(3);
+		expect(outlineOf("rect", A, B)).toEqual([
+			[100, 100],
+			[340, 100],
+			[340, 280],
+			[100, 280],
+		]);
+		expect(outlineOf("hexagon", A, B)).toHaveLength(6);
+	});
+
+	test("what has no corners to move gives none", () => {
+		for (const kind of [
+			"ellipse",
+			"circle",
+			"cube",
+			"sphere",
+			"sine",
+			"axes",
+			"roundrect",
+		] as const)
+			expect(outlineOf(kind, A, B)).toBeNull();
 	});
 });

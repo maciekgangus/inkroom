@@ -13,7 +13,7 @@ import {
 	pointInFrame,
 	ROT_OFFSET_PX,
 } from "./selection-frame";
-import { adjustFromPoint, adjustHandle } from "./shape-parts";
+import { adjustFromPoint, adjustHandle, outlineOf } from "./shape-parts";
 import type { ShapeChoice } from "./shapes";
 import { applyStyle, type Dash, type StylePatch } from "./style";
 import {
@@ -65,6 +65,8 @@ export interface Renderer {
 	): void;
 	/** Shows the handle of a selected adjustable shape, a board point (null hides it, R-041). */
 	setAdjust?(at: [number, number] | null): void;
+	/** Shows a dot on every corner of a selected figure, board points (null hides them, R-047). */
+	setVertices?(at: [number, number][] | null): void;
 	/** Shows dots at the ends of a selected line, to drag them (null hides them, R-041). */
 	setEndpoints?(ends: [number, number][] | null): void;
 	/** Makes the selected elements glow (an empty list clears it). */
@@ -111,6 +113,12 @@ type Edit =
 			handle: Vec;
 			/** How far the grabbed handle stands outside the object, in board units, with sign. */
 			pad: Vec;
+	  }
+	| {
+			mode: "vertex";
+			originals: Stroke[];
+			drafts: Stroke[];
+			index: number;
 	  }
 	| {
 			mode: "adjust";
@@ -692,6 +700,8 @@ export class Controller {
 		const [el] = els;
 		const [a, b] = el.points;
 		if (!a || !b) return null;
+		// A figure with corners has them to drag instead (R-047): the handle is for what has none.
+		if (this.outline(el)) return null;
 		const h = adjustHandle(
 			el.kind ?? "stroke",
 			[a[0], a[1]],
@@ -699,6 +709,22 @@ export class Controller {
 			el.adj,
 		);
 		return h ? rotatePoint(h, centerOf(el), el.rot ?? 0) : null;
+	}
+
+	/** The corners of a figure before its turn, or null if it has none to move (R-047). */
+	private outline(el: Stroke): Vec[] | null {
+		const [a, b] = el.points;
+		if (!a || !b || !el.kind) return null;
+		return outlineOf(el.kind, [a[0], a[1]], [b[0], b[1]], el.adj, el.verts);
+	}
+
+	/** Where the corner dots of the lone selected figure are on the board, its turn applied. */
+	private vertexDots(els: Stroke[]): [number, number][] | null {
+		if (els.length !== 1) return null;
+		const outline = this.outline(els[0]);
+		if (!outline) return null;
+		const c = centerOf(els[0]);
+		return outline.map((v) => rotatePoint(v, c, els[0].rot ?? 0));
 	}
 
 	/** The frame of a selection, always a little wider than what it holds, so handles never sit on it. */
@@ -716,6 +742,7 @@ export class Controller {
 		const lone = els.length === 1 && els[0].kind === "line";
 		this.renderer.setEndpoints?.(lone ? lineEnds(els[0]) : null);
 		this.renderer.setAdjust?.(this.adjustAt(els));
+		this.renderer.setVertices?.(this.vertexDots(els));
 		this.renderer.setSelection?.(this.frameFor(els, rot));
 	}
 
@@ -723,6 +750,19 @@ export class Controller {
 		const p = this.viewport.toWorld(e.clientX, e.clientY);
 		const px = 1 / this.viewport.scale;
 		const sel = this.selection;
+		const dots = this.vertexDots(sel);
+		const grabbed = dots?.findIndex(
+			(d) => Math.hypot(p[0] - d[0], p[1] - d[1]) <= HANDLE_PX * px,
+		);
+		if (grabbed !== undefined && grabbed >= 0) {
+			this.edit = {
+				mode: "vertex",
+				originals: sel,
+				drafts: sel,
+				index: grabbed,
+			};
+			return;
+		}
 		const adjustPoint = this.adjustAt(sel);
 		if (
 			adjustPoint &&
@@ -835,6 +875,47 @@ export class Controller {
 			const dy = p[1] - edit.start[1];
 			offset = [dx, dy];
 			edit.drafts = edit.originals.map((el) => translateEl(el, dx, dy));
+		} else if (edit.mode === "vertex") {
+			const [orig] = edit.originals;
+			const outline = this.outline(orig) as Vec[];
+			const here = toLocal(orig, [p[0], p[1]]);
+			const was = outline[edit.index];
+			if (
+				Math.abs(here[0] - was[0]) < 1e-9 &&
+				Math.abs(here[1] - was[1]) < 1e-9
+			) {
+				edit.drafts = [orig];
+			} else {
+				const moved = outline.map((v, i): Vec => (i === edit.index ? here : v));
+				const x0 = Math.min(...moved.map((v) => v[0]));
+				const x1 = Math.max(...moved.map((v) => v[0]));
+				const y0 = Math.min(...moved.map((v) => v[1]));
+				const y1 = Math.max(...moved.map((v) => v[1]));
+				const w = Math.max(x1 - x0, 1e-3);
+				const h = Math.max(y1 - y0, 1e-3);
+				// The box is re-fitted round the corners; its centre moves, so it is taken to where it
+				// really is on the board and the turn about it still gives the same picture.
+				const c = rotatePoint(
+					[(x0 + x1) / 2, (y0 + y1) / 2],
+					centerOf(orig),
+					orig.rot ?? 0,
+				);
+				const [a, b] = orig.points;
+				edit.drafts = [
+					{
+						...orig,
+						kind: orig.kind === "rect" ? "parallelogram" : orig.kind,
+						points: [
+							[c[0] - w / 2, c[1] - h / 2, a[2]],
+							[c[0] + w / 2, c[1] + h / 2, b[2]],
+						],
+						verts: moved.map((v): [number, number] => [
+							(v[0] - x0) / w,
+							(v[1] - y0) / h,
+						]),
+					},
+				];
+			}
 		} else if (edit.mode === "adjust") {
 			const [orig] = edit.originals;
 			const kind = orig.kind ?? "stroke";

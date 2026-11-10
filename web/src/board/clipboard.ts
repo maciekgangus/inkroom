@@ -116,6 +116,19 @@ function cleanElement(raw: unknown): ClipElement | null {
 		if (!isNum(raw.adj)) return null;
 		out.adj = raw.adj;
 	}
+	if (raw.verts !== undefined) {
+		const v = raw.verts;
+		if (
+			!Array.isArray(v) ||
+			v.length < 3 ||
+			v.length > 64 ||
+			!v.every(
+				(p) => Array.isArray(p) && p.length === 2 && isNum(p[0]) && isNum(p[1]),
+			)
+		)
+			return null;
+		out.verts = v.map((p) => [p[0], p[1]] as [number, number]);
+	}
 	if (raw.width !== undefined) {
 		if (!isNum(raw.width) || raw.width <= 0) return null;
 		out.width = raw.width;

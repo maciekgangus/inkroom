@@ -31,7 +31,7 @@ const ev = (p: Vec): PointerInput => ({
 	button: 0,
 });
 
-describe("dragging the handle of an adjustable shape (R-041, phase 2)", () => {
+describe("dragging the handle of a rounded rectangle (R-041)", () => {
 	let board: Board;
 	let c: Controller;
 	let handles: (Vec | null)[];
@@ -73,84 +73,55 @@ describe("dragging the handle of an adjustable shape (R-041, phase 2)", () => {
 		);
 	});
 
-	test("a lone adjustable shape shows its handle, other things do not", () => {
-		add(shape("trapezoid"));
-		expect(lastHandle()).toEqual([160, 100]);
+	test("the handle is only for a figure that has no corners to drag", () => {
+		add(shape("roundrect"));
+		expect(lastHandle()).toEqual([145, 100]); // radius 0.25 of the shorter side, 180
+		board.eraseStroke("me", "s");
+		add(shape("trapezoid")); // it has corner dots instead
+		expect(lastHandle()).toBeNull();
 		c.select(null);
 		expect(lastHandle()).toBeNull();
-		board.eraseStroke("me", "s");
-		add(shape("rect"));
-		expect(lastHandle()).toBeNull();
 	});
 
-	test("several shapes selected show none", () => {
-		add(shape("trapezoid"));
-		board.addStroke({ ...shape("triangle"), id: "t" });
-		c.select(["s", "t"]);
-		expect(lastHandle()).toBeNull();
-	});
-
-	test("dragging it changes the parameter, as one undo step", () => {
-		add(shape("trapezoid"));
-		drag([160, 100], [190, 100]);
-		expect(get().adj).toBeCloseTo(0.375);
+	test("dragging it changes the radius, as one undo step", () => {
+		add(shape("roundrect"));
+		drag([145, 100], [118, 100]);
+		expect(get().adj).toBeCloseTo(0.1);
 		expect(ops.map((o) => o.t)).toEqual(["update"]);
-		const tops = (partsOf(get())?.fill ?? [])
-			.filter((p) => p[1] === 100)
-			.map((p) => p[0]);
-		expect(Math.min(...tops)).toBeCloseTo(190);
 		board.undo("me");
 		expect(get().adj).toBeUndefined();
 	});
 
+	test("the radius stays within what looks right", () => {
+		add(shape("roundrect"));
+		drag([145, 100], [900, 100]);
+		expect(get().adj).toBe(0.5);
+		drag(lastHandle() as Vec, [-900, 100]);
+		expect(get().adj).toBe(0);
+	});
+
 	test("the handle follows the new shape", () => {
-		add(shape("trapezoid"));
-		drag([160, 100], [190, 100]);
+		add(shape("roundrect"));
+		drag([145, 100], [190, 100]);
 		expect(lastHandle()?.[0]).toBeCloseTo(190);
 	});
 
-	test("the triangle's apex moves along the top and stays inside", () => {
-		add(shape("triangle"));
-		drag([220, 100], [100, 100]);
-		expect(get().adj).toBe(0);
-		drag([100, 100], [900, 100]);
-		expect(get().adj).toBe(1);
-	});
-
-	test("the handle wins over the corner handle where they meet", () => {
-		add(shape("trapezoid", { adj: 0 })); // its top vertex is on the corner
-		drag([100, 100], [160, 100]);
-		expect(get().adj).toBeCloseTo(0.25);
-		expect(get().points.map((p) => p.slice(0, 2))).toEqual([
-			[100, 100],
-			[340, 280],
-		]); // the shape was not scaled
-	});
-
 	test("a turned shape is adjusted along its own axes", () => {
-		add(shape("trapezoid", { rot: Math.PI / 2 }));
+		add(shape("roundrect", { rot: Math.PI / 2 }));
 		const centre: Vec = [220, 190];
 		const handle = lastHandle() as Vec;
 		expect(handle[0]).toBeCloseTo(
-			rotatePoint([160, 100], centre, Math.PI / 2)[0],
+			rotatePoint([145, 100], centre, Math.PI / 2)[0],
 		);
-		const target = rotatePoint([190, 100], centre, Math.PI / 2);
-		drag(handle, target);
-		expect(get().adj).toBeCloseTo(0.375);
+		drag(handle, rotatePoint([118, 100], centre, Math.PI / 2));
+		expect(get().adj).toBeCloseTo(0.1);
 	});
 
 	test("pressing it without moving changes nothing", () => {
-		add(shape("trapezoid"));
-		drag([160, 100], [160, 100]);
+		add(shape("roundrect"));
+		drag([145, 100], [145, 100]);
 		expect(ops).toEqual([]);
 		expect(get().adj).toBeUndefined();
-	});
-
-	test("a shape drawn upside down has its handle at the bottom", () => {
-		add(shape("trapezoid", { points: [pt(340, 280), pt(100, 100)] }));
-		expect(lastHandle()?.[1]).toBe(280);
-		drag(lastHandle() as Vec, [250, 280]);
-		expect(get().adj).toBeCloseTo(0.375); // mirrored: measured from the right
 	});
 });
 

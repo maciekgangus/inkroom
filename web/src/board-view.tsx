@@ -208,6 +208,7 @@ export function BoardView({
 			setHighlight: (els) => canvas.setHighlight(els),
 			setEndpoints: (ends) => canvas.setEndpoints(ends),
 			setAdjust: (at) => canvas.setAdjust(at),
+			setVertices: (at) => canvas.setVertices(at),
 			setDrag: (drag) => canvas.setDrag(drag),
 			setMarquee: (rect) => canvas.setMarquee(rect),
 		};
@@ -248,7 +249,10 @@ export function BoardView({
 			controller.select(el.id); // its panel of tools is then next to it
 			setEditingText(el);
 		};
-		controller.onSelectionChange = () => setTick((t) => t + 1);
+		controller.onSelectionChange = () => {
+			setClosedFor(null); // a click on the object brings the panel back after its cross
+			setTick((t) => t + 1);
+		};
 		// A right click (R-029): the menu, but only with a mouse; tablets have none (R-028).
 		controller.onRightClick = (e) => {
 			if (!hasFinePointer()) return;

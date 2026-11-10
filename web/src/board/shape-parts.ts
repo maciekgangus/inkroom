@@ -517,8 +517,14 @@ export function shapeParts(
 	a: Vec,
 	b: Vec,
 	adj?: number,
+	verts?: Vec[],
 ): ShapeParts | null {
 	if (!kind || !isPolygonKind(kind)) return null;
+	if (verts && verts.length >= 3) {
+		const { x0, y0, w, h } = boxOf(a, b);
+		const poly = verts.map((v): Vec => [x0 + v[0] * w, y0 + v[1] * h]);
+		return { lines: [closed(poly)], hidden: [], fill: poly };
+	}
 	if (kind === "trapezoid" || kind === "rhombus" || kind === "parallelogram") {
 		const poly = polygonPoints(kind, a, b, parameter(kind, adj));
 		return { lines: [closed(poly)], hidden: [], fill: poly };
@@ -561,7 +567,9 @@ export function partsOf(s: Stroke): ShapeParts | null {
 	if (cache.has(s)) return cache.get(s) ?? null;
 	const [a, b] = s.points;
 	const parts =
-		a && b ? shapeParts(s.kind, [a[0], a[1]], [b[0], b[1]], s.adj) : null;
+		a && b
+			? shapeParts(s.kind, [a[0], a[1]], [b[0], b[1]], s.adj, s.verts)
+			: null;
 	cache.set(s, parts);
 	return parts;
 }
@@ -651,4 +659,35 @@ export function adjustFromPoint(
 	if (size <= 0) return r.def;
 	const k = kind === "righttrapezoid" ? (x1 - x) / size : (x - x0) / size;
 	return Math.min(r.max, Math.max(r.min, k));
+}
+
+/** The most corners that are offered as handles; a shape with arcs has too many to be useful. */
+const MAX_VERTICES = 12;
+
+/**
+ * The corners of a shape that is a single plain polygon (before the element's turn), or null for
+ * anything else: ellipses, solids, curves and shapes with arcs have no corners to move (R-047).
+ * A rectangle has four.
+ */
+export function outlineOf(
+	kind: ElementKind,
+	a: Vec,
+	b: Vec,
+	adj?: number,
+	verts?: Vec[],
+): Vec[] | null {
+	if (kind === "rect") {
+		const { x0, y0, x1, y1 } = boxOf(a, b);
+		return [
+			[x0, y0],
+			[x1, y0],
+			[x1, y1],
+			[x0, y1],
+		];
+	}
+	const parts = shapeParts(kind, a, b, adj, verts);
+	if (!parts || parts.hidden.length > 0 || parts.lines.length !== 1)
+		return null;
+	const n = parts.fill.length;
+	return n >= 3 && n <= MAX_VERTICES ? parts.fill : null;
 }
