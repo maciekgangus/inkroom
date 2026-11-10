@@ -109,4 +109,15 @@ describe("Controller mouse buttons (R-029)", () => {
 		expect(board.strokes).toHaveLength(2);
 		expect(clicks).toEqual([]);
 	});
+
+	test("panning reports true only while a pan is in progress", () => {
+		expect(c.panning).toBe(false);
+		c.pointerDown(ev("mouse", 10, 10, 2));
+		expect(c.panning).toBe(true);
+		c.pointerUp(ev("mouse", 10, 10, 2));
+		expect(c.panning).toBe(false);
+		settings.tool = "pen";
+		c.pointerDown(ev("mouse", 10, 10, 0));
+		expect(c.panning).toBe(false);
+	});
 });

@@ -62,7 +62,7 @@ export interface Settings {
 	size: number;
 }
 
-const ERASER_RADIUS = 10;
+export const ERASER_RADIUS = 10;
 /** A shape dragged less than this many screen pixels is treated as a stray click and dropped. */
 const MIN_SHAPE_PX = 2;
 /** How far from an object (screen pixels) a click still selects it. */
@@ -154,6 +154,11 @@ export class Controller {
 	/** The selected elements that are still on the board. */
 	get selection(): Stroke[] {
 		return this.board.strokes.filter((s) => this.selectedIds.includes(s.id));
+	}
+
+	/** True while the board is being dragged (hand tool, middle or right button). */
+	get panning(): boolean {
+		return this.panFrom !== null;
 	}
 
 	/** True while a pen or mouse pointer is down (touch gestures must then be ignored). */

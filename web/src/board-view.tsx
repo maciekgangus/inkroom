@@ -23,6 +23,7 @@ import { applyToolShortcut } from "./shortcuts";
 import { type SocketLike, SyncClient } from "./sync/sync";
 import { TextEditor } from "./text-editor";
 import { currentTheme, displayColor, useTheme } from "./theme";
+import { toolCursor } from "./tool-cursor";
 import { COLORS, SIZES, Toolbar } from "./toolbar";
 import { ZoomControls } from "./zoom-controls";
 
@@ -195,6 +196,7 @@ export function BoardView({
 			if (e.pointerType === "touch") return gestures.down(e);
 			live.setPointerCapture(e.pointerId);
 			controller.pointerDown(e);
+			live.style.cursor = toolCursor(settings.tool, controller.panning);
 		};
 		const move = (e: PointerEvent) => {
 			if (e.pointerType === "touch") return gestures.move(e);
@@ -206,12 +208,16 @@ export function BoardView({
 		const leave = (e: PointerEvent) => {
 			if (e.pointerType !== "touch") sync.cursorHide();
 		};
-		const up = (e: PointerEvent) =>
-			e.pointerType === "touch" ? gestures.up(e) : controller.pointerUp(e);
-		const cancel = (e: PointerEvent) =>
-			e.pointerType === "touch"
-				? gestures.cancel(e)
-				: controller.pointerCancel(e);
+		const up = (e: PointerEvent) => {
+			if (e.pointerType === "touch") return gestures.up(e);
+			controller.pointerUp(e);
+			live.style.cursor = toolCursor(settings.tool);
+		};
+		const cancel = (e: PointerEvent) => {
+			if (e.pointerType === "touch") return gestures.cancel(e);
+			controller.pointerCancel(e);
+			live.style.cursor = toolCursor(settings.tool);
+		};
 		const wheel = (e: WheelEvent) => {
 			e.preventDefault(); // otherwise Ctrl + wheel (and trackpad pinch) zooms the whole page
 			const k = e.deltaMode === 1 ? LINE_HEIGHT_PX : 1;
@@ -428,7 +434,11 @@ export function BoardView({
 				style={backgroundStyle(background, viewport)}
 			/>
 			<canvas id="board" ref={committedRef} />
-			<canvas id="live" ref={liveRef} />
+			<canvas
+				id="live"
+				ref={liveRef}
+				style={{ cursor: toolCursor(settings.tool) }}
+			/>
 			{editingText && (
 				<TextEditor
 					key={editingText.id}
