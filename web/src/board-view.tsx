@@ -3,6 +3,12 @@ import { BACKGROUNDS, type Background } from "./board/background";
 import type { Stroke } from "./board/board";
 import { Board } from "./board/board";
 import { CanvasRenderer } from "./board/canvas-renderer";
+import {
+	type ParsedClip,
+	parseClipboard,
+	rehomeImages,
+	serializeSelection,
+} from "./board/clipboard";
 import { Controller, type Renderer, type Settings } from "./board/controller";
 import { TouchGestures } from "./board/gestures";
 import { ImageCache } from "./board/image-cache";
@@ -87,6 +93,10 @@ export function BoardView({
 	/** Adds a picked, pasted or dropped image to the board (set up by the effect below). */
 	const insertImage = useRef<(file: Blob) => void>(() => {});
 	const [imageError, setImageError] = useState("");
+	/** Pastes elements read from the system clipboard (set up by the effect below). */
+	const pasteClip = useRef<(clip: ParsedClip, at?: [number, number]) => void>(
+		() => {},
+	);
 	/** Shows the cursor of the active tool on the board (set up by the effect below). */
 	const applyCursor = useRef<() => void>(() => {});
 	/** The open right-click menu: where, what is under it and the board position clicked. */
@@ -198,6 +208,29 @@ export function BoardView({
 			}
 		};
 
+		/** Copies a picture from another board onto this one and returns its new id. */
+		const transferImage = async (
+			from: string,
+			src: string,
+		): Promise<string> => {
+			const res = await fetch(`/api/boards/${from}/images/${src}`);
+			if (!res.ok) throw new Error(`HTTP ${res.status}`);
+			return uploadImage(boardId, await res.blob());
+		};
+		pasteClip.current = async (clip, at) => {
+			setImageError("");
+			try {
+				const elements = await rehomeImages(clip, boardId, transferImage);
+				controller.pasteSource(elements, at);
+				settings.tool = "select"; // the pasted elements are selected, ready to move
+				setTick((t) => t + 1);
+			} catch (e) {
+				setImageError(e instanceof Error ? e.message : "Nie udało się wkleić");
+			}
+		};
+		/** Where the pointer last was on the board: pasted elements land there. */
+		let lastPointer: [number, number] | undefined;
+
 		const resize = () => {
 			canvas.resize();
 			canvas.redraw(board.strokes);
@@ -215,6 +248,7 @@ export function BoardView({
 			if (e.pointerType === "touch") return gestures.move(e);
 			// Mouse and pen are shared as a cursor, also while hovering without pressing.
 			const [x, y] = viewport.toWorld(e.clientX, e.clientY);
+			lastPointer = [x, y];
 			sync.cursorMove(x, y);
 			controller.pointerMove(e);
 			applyCursor.current(); // a safety net: whichever way the tool changed, it shows
@@ -265,16 +299,37 @@ export function BoardView({
 				i.type.startsWith("image/"),
 			);
 			const file = item?.getAsFile();
-			if (!file) {
-				// Nothing to paste from the system: paste what was copied on the board.
-				if (controller.hasClipboard) {
-					e.preventDefault();
-					controller.paste();
-				}
+			if (file) {
+				e.preventDefault();
+				insertImage.current(file);
 				return;
 			}
+			// Elements copied on a board, on this one or another, travel as JSON text (R-035).
+			const clip = parseClipboard(e.clipboardData?.getData("text/plain") ?? "");
+			if (clip) {
+				e.preventDefault();
+				pasteClip.current(clip, lastPointer);
+				return;
+			}
+			// Nothing of ours in the system clipboard: paste what was copied on this board.
+			if (controller.hasClipboard) {
+				e.preventDefault();
+				controller.paste(lastPointer);
+			}
+		};
+		/** Puts the selection on the system clipboard as JSON; false if nothing is selected. */
+		const copyToEvent = (e: ClipboardEvent): boolean => {
+			if (typing(e) || !controller.copySelected()) return false;
+			e.clipboardData?.setData(
+				"text/plain",
+				serializeSelection(controller.selection, boardId),
+			);
 			e.preventDefault();
-			insertImage.current(file);
+			return true;
+		};
+		const copy = (e: ClipboardEvent) => void copyToEvent(e);
+		const cut = (e: ClipboardEvent) => {
+			if (copyToEvent(e)) controller.deleteSelected();
 		};
 		const dragover = (e: DragEvent) => e.preventDefault(); // allow dropping files here
 		const drop = (e: DragEvent) => {
@@ -322,6 +377,8 @@ export function BoardView({
 		addEventListener("resize", resize);
 		addEventListener("keydown", key);
 		addEventListener("paste", paste);
+		addEventListener("copy", copy);
+		addEventListener("cut", cut);
 		live.addEventListener("dragover", dragover);
 		live.addEventListener("drop", drop);
 		live.addEventListener("pointerdown", down);
@@ -341,6 +398,8 @@ export function BoardView({
 			removeEventListener("resize", resize);
 			removeEventListener("keydown", key);
 			removeEventListener("paste", paste);
+			removeEventListener("copy", copy);
+			removeEventListener("cut", cut);
 			live.removeEventListener("dragover", dragover);
 			live.removeEventListener("drop", drop);
 			live.removeEventListener("pointerdown", down);
@@ -392,16 +451,32 @@ export function BoardView({
 		typeof navigator !== "undefined" &&
 		window.isSecureContext === true &&
 		!!navigator.clipboard?.read;
-	const pasteFromClipboard = async () => {
+	/**
+	 * Pastes from the system clipboard (R-035): a picture, or elements copied on a board as JSON,
+	 * here or elsewhere; failing that, what was last copied on this board.
+	 */
+	const pasteFromClipboard = async (at?: [number, number]) => {
 		setImageError("");
+		const internal = () => {
+			const ctrl = ctl.current;
+			if (!ctrl?.hasClipboard) return false;
+			ctrl.paste(at);
+			return true;
+		};
 		try {
 			for (const item of await navigator.clipboard.read()) {
 				const type = item.types.find((t) => t.startsWith("image/"));
 				if (type) return insertImage.current(await item.getType(type));
+				if (item.types.includes("text/plain")) {
+					const text = await (await item.getType("text/plain")).text();
+					const clip = parseClipboard(text);
+					if (clip) return pasteClip.current(clip, at);
+				}
 			}
-			setImageError("W schowku nie ma obrazu");
+			if (!internal())
+				setImageError("W schowku nie ma obrazu ani elementów tablicy");
 		} catch {
-			setImageError("Nie można odczytać schowka (brak zgody)");
+			if (!internal()) setImageError("Nie można odczytać schowka (brak zgody)");
 		}
 	};
 
@@ -425,7 +500,7 @@ export function BoardView({
 			icon: "paste",
 			disabled: !ctrl.hasClipboard && !canReadClipboard,
 			onSelect: () =>
-				ctrl.hasClipboard ? ctrl.paste(menu.at) : pasteFromClipboard(),
+				canReadClipboard ? pasteFromClipboard(menu.at) : ctrl.paste(menu.at),
 		};
 		if (!menu.onObject) {
 			return [
@@ -438,7 +513,17 @@ export function BoardView({
 			];
 		}
 		return [
-			{ label: "Kopiuj", icon: "copy", onSelect: () => ctrl.copySelected() },
+			{
+				label: "Kopiuj",
+				icon: "copy",
+				onSelect: () => {
+					if (!ctrl.copySelected()) return;
+					// Also to the system clipboard, so it can be pasted on another board.
+					navigator.clipboard
+						?.writeText(serializeSelection(ctrl.selection, boardId))
+						.catch(() => {});
+				},
+			},
 			paste,
 			{
 				label: "Duplikuj",
@@ -522,7 +607,7 @@ export function BoardView({
 					hasSelection: (ctl.current?.selection.length ?? 0) > 0,
 					canPaste: canReadClipboard,
 					onFile: (file) => insertImage.current(file),
-					onPaste: pasteFromClipboard,
+					onPaste: () => pasteFromClipboard(),
 					onDelete: () => ctl.current?.deleteSelected(),
 				}}
 				onUndo={() => ctl.current?.undo()}

@@ -1,5 +1,6 @@
 import type { Board, Point, Stroke } from "./board";
 import { intersects } from "./bounds";
+import type { ClipElement } from "./clipboard";
 import { constrainEnd } from "./draw-aids";
 import { findHit, objectHit } from "./hit";
 import {
@@ -366,6 +367,17 @@ export class Controller {
 	 */
 	paste(at?: [number, number]): string[] {
 		return this.addCopies(this.clipboard, at);
+	}
+
+	/**
+	 * Adds elements that came from outside, from the system clipboard (R-035), as new elements
+	 * of this author on top, selected, as one undo step. Same placement as `paste`.
+	 */
+	pasteSource(els: ClipElement[], at?: [number, number]): string[] {
+		return this.addCopies(
+			els.map((el) => ({ ...el, id: "", authorId: this.authorId, z: 0 })),
+			at,
+		);
 	}
 
 	/** Copies the selection a little below and right of it and selects the copies. */
