@@ -94,6 +94,24 @@ describe("geomBox", () => {
 	});
 });
 
+describe("ellipse transforms", () => {
+	const ellipse: Stroke = { ...base, kind: "ellipse", points: pts([10, 20], [110, 70]) };
+
+	test("its box is the two corners", () => {
+		expect(geomBox(ellipse)).toEqual({ minX: 10, minY: 20, maxX: 110, maxY: 70 });
+	});
+
+	test("scaling about a corner scales the box", () => {
+		expect(geomBox(scaleEl(ellipse, [10, 20], 2))).toEqual({ minX: 10, minY: 20, maxX: 210, maxY: 120 });
+	});
+
+	test("rotating about its centre only changes the angle", () => {
+		const r = rotateEl(ellipse, centerOf(ellipse), Math.PI / 2);
+		expect(r.rot).toBeCloseTo(Math.PI / 2);
+		expect(geomBox(r)).toEqual(geomBox(ellipse));
+	});
+});
+
 describe("rotatePoint and toLocal", () => {
 	test("rotates a point around a centre", () => {
 		close(rotatePoint([1, 0], [0, 0], Math.PI / 2), [0, 1]);

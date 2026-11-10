@@ -9,6 +9,7 @@ const freehand: Stroke = { ...base, points: pts([0, 0], [5, 5]) };
 const line: Stroke = { ...base, kind: "line", points: pts([0, 0], [5, 5]) };
 const rect: Stroke = { ...base, kind: "rect", points: pts([0, 0], [5, 5]) };
 const circle: Stroke = { ...base, kind: "circle", points: pts([0, 0], [5, 0]) };
+const ellipse: Stroke = { ...base, kind: "ellipse", points: pts([0, 0], [10, 5]) };
 const text: Stroke = {
 	...base,
 	kind: "text",
@@ -53,6 +54,7 @@ describe("applyStyle", () => {
 	test("fill applies to rectangles and circles, and null removes it", () => {
 		expect(applyStyle(rect, { fill: "#0f0" }).fill).toBe("#0f0");
 		expect(applyStyle(circle, { fill: "#0f0" }).fill).toBe("#0f0");
+		expect(applyStyle(ellipse, { fill: "#0f0" }).fill).toBe("#0f0");
 		expect(applyStyle(line, { fill: "#0f0" }).fill).toBeUndefined();
 		const filled = applyStyle(rect, { fill: "#0f0" });
 		expect("fill" in applyStyle(filled, { fill: null })).toBe(false);

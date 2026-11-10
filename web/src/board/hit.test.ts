@@ -292,3 +292,43 @@ describe("objectHit (selecting by clicking)", () => {
 		expect(objectHit(t, 500, 500, 4)).toBe(false);
 	});
 });
+
+describe("ellipse hit testing", () => {
+	const base = { id: "el", authorId: "a", color: "#000", size: 4, z: 0 };
+	// box 200 x 100 at (0,0): centre (100, 50), radii 100 and 50
+	const ellipse: Stroke = { ...base, kind: "ellipse", points: [[0, 0, 0.5], [200, 100, 0.5]] };
+
+	test("the outline is hit at its extremes", () => {
+		expect(strokeHit(ellipse, 200, 50, 4)).toBe(true);
+		expect(strokeHit(ellipse, 100, 0, 4)).toBe(true);
+		expect(strokeHit(ellipse, 0, 50, 4)).toBe(true);
+		expect(strokeHit(ellipse, 100, 100, 4)).toBe(true);
+	});
+
+	test("the middle and the corners of the box are not on the outline", () => {
+		expect(strokeHit(ellipse, 100, 50, 4)).toBe(false);
+		expect(strokeHit(ellipse, 2, 2, 4)).toBe(false);
+	});
+
+	test("a point well away is not hit", () => {
+		expect(strokeHit(ellipse, 400, 400, 4)).toBe(false);
+	});
+
+	test("a drag from bottom-right to top-left is the same ellipse", () => {
+		const flipped: Stroke = { ...ellipse, points: [[200, 100, 0.5], [0, 0, 0.5]] };
+		expect(strokeHit(flipped, 200, 50, 4)).toBe(true);
+		expect(strokeHit(flipped, 100, 50, 4)).toBe(false);
+	});
+
+	test("a filled ellipse is selected anywhere inside, an open one only on its outline", () => {
+		expect(objectHit(ellipse, 100, 50, 4)).toBe(false);
+		expect(objectHit({ ...ellipse, fill: "#f00" }, 100, 50, 4)).toBe(true);
+		expect(objectHit({ ...ellipse, fill: "#f00" }, 2, 2, 4)).toBe(false); // the box corner is outside the ellipse
+	});
+
+	test("a rotated ellipse is hit where it now is", () => {
+		const turned: Stroke = { ...ellipse, rot: Math.PI / 2 }; // now 100 wide and 200 tall around (100, 50)
+		expect(strokeHit(turned, 100, 150, 4)).toBe(true); // the old right extreme is now at the bottom
+		expect(strokeHit(turned, 200, 50, 4)).toBe(false);
+	});
+});
