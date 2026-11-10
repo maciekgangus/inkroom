@@ -137,3 +137,26 @@ describe("BoardTitle (R-045)", () => {
 		expect(button.title).toContain(long);
 	});
 });
+
+describe("the tick next to the field", () => {
+	test("saves the name, like Enter", async () => {
+		const onRename = vi.fn(async () => {});
+		const root = document.createElement("div");
+		document.body.append(root);
+		await act(async () => {
+			render(<BoardTitle name="Matma" editable onRename={onRename} />, root);
+		});
+		await act(async () => {
+			(root.querySelector("button.name") as HTMLElement).click();
+		});
+		const input = root.querySelector("input") as HTMLInputElement;
+		await act(async () => {
+			input.value = "Fizyka";
+			input.dispatchEvent(new Event("input", { bubbles: true }));
+		});
+		await act(async () => {
+			(root.querySelector('[aria-label="save name"]') as HTMLElement).click();
+		});
+		expect(onRename).toHaveBeenCalledWith("Fizyka");
+	});
+});

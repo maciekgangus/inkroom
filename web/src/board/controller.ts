@@ -405,7 +405,7 @@ export class Controller {
 	private newLook(tool: Settings["tool"]): { dash?: Dash; opacity?: number } {
 		const style = this.settings.lineStyle;
 		let dash: Dash | undefined;
-		if (tool === "pen" && style === "natural") dash = style;
+		if (tool === "pen" && style && style !== "solid") dash = style;
 		if (
 			(tool === "line" || tool === "shape") &&
 			(style === "dashed" || style === "dotted")
@@ -1014,6 +1014,10 @@ export class Controller {
 			// The frame is hidden while turning: only the glow follows the objects.
 			this.renderer.setHighlight?.(edit.drafts);
 			this.renderer.setSelection?.(null);
+			// Neither do the dots stay behind while the figure turns.
+			this.renderer.setEndpoints?.(null);
+			this.renderer.setVertices?.(null);
+			this.renderer.setAdjust?.(null);
 		} else {
 			this.showSelection(edit.drafts);
 		}

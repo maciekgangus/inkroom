@@ -199,11 +199,11 @@ describe("the shape tool (R-033)", () => {
 		]);
 	});
 
-	test("the pen ignores dashed and dotted, text takes no line style", () => {
+	test("the pen takes dashed and dotted, text takes no line style", () => {
 		settings.tool = "pen";
 		settings.lineStyle = "dashed";
 		draw([300, 200]);
-		expect(board.strokes[0].dash).toBeUndefined();
+		expect(board.strokes[0].dash).toBe("dashed");
 		c.addText("hi", 10, 10);
 		expect(board.strokes[1].dash).toBeUndefined();
 	});

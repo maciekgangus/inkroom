@@ -736,7 +736,7 @@ canvas {
 	flex: none;
 }
 .topbar .board-title {
-	width: 200px;
+	width: 280px;
 	max-width: none;
 	box-sizing: border-box;
 }
@@ -792,4 +792,22 @@ canvas {
 .toolbar .group.dimmed {
 	opacity: 0.35;
 	pointer-events: none;
+}
+
+/* The tick that saves a new name, next to the field. */
+.board-title .name-ok {
+	flex: none;
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius);
+	background: var(--accent);
+	color: #fff;
+	font-size: 15px;
+	line-height: 1;
+	cursor: pointer;
+}
+.board-title .name-ok:hover {
+	filter: brightness(1.1);
 }

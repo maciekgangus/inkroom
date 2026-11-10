@@ -17,8 +17,34 @@ import type { Rect, Viewport } from "./viewport";
 /** The most selected elements that still get the neon glow; a bigger selection just has its frame. */
 const GLOW_MAX = 25;
 
-/** Freehand strokes are filled outlines; shapes are stroked paths; text is drawn directly. */
-const isFilled = (s: Stroke) => !s.kind || s.kind === "stroke";
+const isFreehand = (s: Stroke) => !s.kind || s.kind === "stroke";
+
+/**
+ * Freehand strokes are filled outlines (the pen's width follows the hand); a dashed or dotted one
+ * is stroked along its path instead, as a line is. Shapes are stroked paths; text is drawn directly.
+ */
+const isFilled = (s: Stroke) =>
+	isFreehand(s) && s.dash !== "dashed" && s.dash !== "dotted";
+
+/** The path a freehand stroke runs along, smoothed through the midpoints of its samples. */
+function centerline(s: Stroke): Path2D | null {
+	const pts = s.points;
+	if (pts.length === 0) return null;
+	const path = new Path2D();
+	path.moveTo(pts[0][0], pts[0][1]);
+	if (pts.length === 1) {
+		path.lineTo(pts[0][0], pts[0][1]); // a tap: a dot, with the round cap
+		return path;
+	}
+	for (let i = 1; i < pts.length - 1; i++) {
+		const mx = (pts[i][0] + pts[i + 1][0]) / 2;
+		const my = (pts[i][1] + pts[i + 1][1]) / 2;
+		path.quadraticCurveTo(pts[i][0], pts[i][1], mx, my);
+	}
+	const last = pts[pts.length - 1];
+	path.lineTo(last[0], last[1]);
+	return path;
+}
 
 function outlinePath(stroke: Stroke): Path2D | null {
 	const outline = getStroke(stroke.points, strokeOptions(stroke));
@@ -73,6 +99,7 @@ function extraPaths(
 
 /** The path of a line, rectangle or circle; null for anything else. */
 function shapePath(s: Stroke): Path2D | null {
+	if (isFreehand(s)) return centerline(s);
 	const [a, b] = s.points;
 	if (!b) return null;
 	const path = new Path2D();

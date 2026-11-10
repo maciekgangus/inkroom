@@ -61,12 +61,12 @@ describe("PropertiesPanel", () => {
 		expect(root.querySelector(".properties")).toBeNull();
 	});
 
-	test("a freehand stroke offers colour, width and opacity, but no dash or fill", () => {
+	test("a freehand stroke offers colour, width, opacity and line style, but no fill", () => {
 		mount([freehand]);
 		expect(has("prop color #d32f2f")).toBe(true);
 		expect(slider("prop size")).not.toBeNull();
 		expect(slider("prop opacity")).not.toBeNull();
-		expect(has("prop dash dashed")).toBe(false);
+		expect(has("prop dash dashed")).toBe(true);
 		expect(has("prop fill none")).toBe(false);
 	});
 
@@ -74,7 +74,7 @@ describe("PropertiesPanel", () => {
 		mount([freehand]);
 		expect(has("prop dash solid")).toBe(true);
 		expect(has("prop dash natural")).toBe(true);
-		expect(has("prop dash dotted")).toBe(false);
+		expect(has("prop dash dotted")).toBe(true);
 		btn("prop dash natural")?.click();
 		expect(onChange).toHaveBeenLastCalledWith({ dash: "natural" });
 	});

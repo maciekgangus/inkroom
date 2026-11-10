@@ -46,7 +46,7 @@ describe("applyStyle", () => {
 	test("dash applies to lines and shapes, not to freehand strokes, text or images", () => {
 		for (const el of [line, rect, circle])
 			expect(applyStyle(el, { dash: "dashed" }).dash).toBe("dashed");
-		for (const el of [freehand, text, image])
+		for (const el of [text, image])
 			expect(applyStyle(el, { dash: "dashed" }).dash).toBeUndefined();
 	});
 
@@ -200,8 +200,10 @@ describe("the natural pen style (R-037)", () => {
 			expect(applyStyle(el, { dash: "natural" }).dash).toBeUndefined();
 	});
 
-	test("dashed and dotted still apply to lines and shapes only", () => {
-		expect(applyStyle(freehand, { dash: "dashed" }).dash).toBeUndefined();
+	test("dashed and dotted apply to the pen too, not to text or images", () => {
+		expect(applyStyle(freehand, { dash: "dashed" }).dash).toBe("dashed");
+		expect(applyStyle(freehand, { dash: "dotted" }).dash).toBe("dotted");
+		expect(applyStyle(text, { dash: "dashed" }).dash).toBeUndefined();
 		expect(applyStyle(rect, { dash: "dotted" }).dash).toBe("dotted");
 	});
 
@@ -211,7 +213,12 @@ describe("the natural pen style (R-037)", () => {
 	});
 
 	test("the style row offers what the selection can take", () => {
-		expect(dashOptions([freehand])).toEqual(["solid", "natural"]);
+		expect(dashOptions([freehand])).toEqual([
+			"solid",
+			"dashed",
+			"dotted",
+			"natural",
+		]);
 		expect(dashOptions([rect])).toEqual(["solid", "dashed", "dotted"]);
 		expect(dashOptions([line, ellipse])).toEqual(["solid", "dashed", "dotted"]);
 		expect(dashOptions([freehand, rect])).toEqual([

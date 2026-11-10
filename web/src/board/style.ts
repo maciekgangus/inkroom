@@ -29,17 +29,17 @@ const isShape = (el: Stroke) =>
 const isFreehand = (el: Stroke) => !el.kind || el.kind === "stroke";
 const isDashable = (el: Stroke) => el.kind === "line" || isShape(el);
 
-/** Lines and shapes take solid, dashed and dotted; freehand strokes solid and natural (R-037). */
+/** Lines and shapes take solid, dashed and dotted; freehand strokes all four (R-037). */
 function dashFits(el: Stroke, dash: Dash): boolean {
 	if (isDashable(el)) return dash !== "natural";
-	if (isFreehand(el)) return dash === "solid" || dash === "natural";
-	return false;
+	return isFreehand(el);
 }
 
 /** The styles the line style row offers for a selection, solid first. */
 export function dashOptions(els: Stroke[]): Dash[] {
 	const options: Dash[] = ["solid"];
-	if (els.some(isDashable)) options.push("dashed", "dotted");
+	if (els.some((e) => isDashable(e) || isFreehand(e)))
+		options.push("dashed", "dotted");
 	if (els.some(isFreehand)) options.push("natural");
 	return options;
 }

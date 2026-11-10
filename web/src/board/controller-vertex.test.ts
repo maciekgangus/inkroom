@@ -153,3 +153,59 @@ describe("dragging a vertex of a figure (R-047)", () => {
 		expect(lastDots()?.[0][0]).toBeCloseTo(60);
 	});
 });
+
+describe("the dots while a figure turns (R-047)", () => {
+	test("all the dots are put away during the turn and come back after it", () => {
+		const board = new Board();
+		const dots: (Vec[] | null)[] = [];
+		const renderer: Renderer = {
+			drawLive: vi.fn(),
+			redraw: vi.fn(),
+			setSelection: vi.fn(),
+			setHighlight: vi.fn(),
+			setDrag: vi.fn(),
+			setVertices: (v) => void dots.push(v),
+		};
+		const c = new Controller(
+			board,
+			renderer,
+			{ tool: "select", color: "#111", size: 4 },
+			new Viewport(),
+			"me",
+			() => "n",
+		);
+		board.addStroke(shape("trapezoid"));
+		c.select("s");
+		// the rotation handle: above the frame (its top is 100 - 16, and 28 px more)
+		c.pointerDown(ev([220, 100 - 16 - 28]));
+		c.pointerMove(ev([320, 120]));
+		expect(dots[dots.length - 1]).toBeNull();
+		c.pointerUp(ev([320, 120]));
+		expect(dots[dots.length - 1]).toHaveLength(4);
+	});
+});
+
+describe("the pen takes the line style (R-037)", () => {
+	test("a new stroke is dashed or dotted when the style says so, with the pen", () => {
+		const board = new Board();
+		const renderer: Renderer = { drawLive: vi.fn(), redraw: vi.fn() };
+		const settings = {
+			tool: "pen" as const,
+			color: "#111",
+			size: 4,
+			lineStyle: "dotted" as const,
+		};
+		const c = new Controller(
+			board,
+			renderer,
+			settings,
+			new Viewport(),
+			"me",
+			() => "n",
+		);
+		c.pointerDown(ev([10, 10]));
+		c.pointerMove(ev([50, 50]));
+		c.pointerUp(ev([50, 50]));
+		expect(board.strokes[0].dash).toBe("dotted");
+	});
+});

@@ -62,18 +62,32 @@ export function BoardTitle({ name, editable, onRename }: Props) {
 	return (
 		<div class="board-title">
 			{editing ? (
-				<input
-					ref={field}
-					aria-label="board name"
-					value={draft}
-					maxLength={MAX_LENGTH}
-					onInput={(e) => setDraft((e.currentTarget as HTMLInputElement).value)}
-					onBlur={() => finish(true)}
-					onKeyDown={(e) => {
-						if (e.key === "Enter") finish(true);
-						if (e.key === "Escape") finish(false);
-					}}
-				/>
+				<>
+					<input
+						ref={field}
+						aria-label="board name"
+						value={draft}
+						maxLength={MAX_LENGTH}
+						onInput={(e) =>
+							setDraft((e.currentTarget as HTMLInputElement).value)
+						}
+						onBlur={() => finish(true)}
+						onKeyDown={(e) => {
+							if (e.key === "Enter") finish(true);
+							if (e.key === "Escape") finish(false);
+						}}
+					/>
+					<button
+						type="button"
+						class="name-ok"
+						aria-label="save name"
+						title="Zapisz nazwę (Enter)"
+						onMouseDown={(e) => e.preventDefault()}
+						onClick={() => finish(true)}
+					>
+						✓
+					</button>
+				</>
 			) : (
 				<button
 					type="button"
