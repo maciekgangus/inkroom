@@ -45,6 +45,15 @@ describe("TextEditor", () => {
 		root.remove();
 	});
 
+	test("starts with the given text when editing an existing one", async () => {
+		render(null, root);
+		await act(async () => {
+			render(<TextEditor x={0} y={0} fontSize={20} color="#000" initialText={"old\ntext"} onCommit={onCommit} onCancel={onCancel} />, root);
+		});
+		expect(field().value).toBe("old\ntext");
+		expect(field().rows).toBe(2);
+	});
+
 	test("is placed at the given screen position with the given size and colour, and takes focus", () => {
 		const style = field().style;
 		expect([style.left, style.top, style.fontSize]).toEqual([
