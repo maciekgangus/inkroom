@@ -10,7 +10,9 @@ describe("ImageControls", () => {
 	let onPaste: () => void;
 	let onDelete: () => void;
 
-	const mount = (props: { hasSelection?: boolean; canPaste?: boolean; error?: string } = {}) => {
+	const mount = (
+		props: { hasSelection?: boolean; canPaste?: boolean; error?: string } = {},
+	) => {
 		render(
 			<ImageControls
 				settings={settings}
@@ -24,7 +26,8 @@ describe("ImageControls", () => {
 			root,
 		);
 	};
-	const btn = (label: string) => root.querySelector(`[aria-label="${label}"]`) as HTMLButtonElement | null;
+	const btn = (label: string) =>
+		root.querySelector(`[aria-label="${label}"]`) as HTMLButtonElement | null;
 
 	beforeEach(() => {
 		root = document.createElement("div");
@@ -38,8 +41,13 @@ describe("ImageControls", () => {
 		mount();
 		const input = root.querySelector('input[type="file"]') as HTMLInputElement;
 		expect(input.accept).toBe("image/*");
-		const file = new File([new Uint8Array([1])], "a.png", { type: "image/png" });
-		Object.defineProperty(input, "files", { value: [file], configurable: true });
+		const file = new File([new Uint8Array([1])], "a.png", {
+			type: "image/png",
+		});
+		Object.defineProperty(input, "files", {
+			value: [file],
+			configurable: true,
+		});
 		input.dispatchEvent(new Event("change", { bubbles: true }));
 		expect(onFile).toHaveBeenCalledWith(file);
 	});
@@ -76,6 +84,8 @@ describe("ImageControls", () => {
 
 	test("shows an error message", () => {
 		mount({ error: "Obraz jest za duży" });
-		expect(root.querySelector('[role="alert"]')?.textContent).toBe("Obraz jest za duży");
+		expect(root.querySelector('[role="alert"]')?.textContent).toBe(
+			"Obraz jest za duży",
+		);
 	});
 });

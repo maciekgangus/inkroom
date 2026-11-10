@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
-import { type ImageLike, ImageCache } from "./image-cache";
+import { ImageCache, type ImageLike } from "./image-cache";
 
 class FakeImage implements ImageLike {
 	src = "";
