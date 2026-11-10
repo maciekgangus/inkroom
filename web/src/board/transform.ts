@@ -89,31 +89,73 @@ export function translateEl(el: Stroke, dx: number, dy: number): Stroke {
 	return mapPoints(el, (p) => [p[0] + dx, p[1] + dy, p[2]]);
 }
 
-/**
- * The element scaled uniformly by `k` about a board point, as it appears on the board. Line
- * width stays; a text's font size grows with it.
- */
+/** The element scaled uniformly by `k` about a board point. */
 export function scaleEl(el: Stroke, anchor: Vec, k: number): Stroke {
+	return scaleElBy(el, anchor, k, k, 0);
+}
+
+/**
+ * The element scaled about a board point by `kx` and `ky` along the axes of a frame turned by
+ * `angle`, so a corner handle can stretch width and height independently. Line width stays.
+ * The element's centre moves like every other point; its geometry scales in its own axes,
+ * which line up with the frame's (or swap with them at a quarter turn). A circle, a text and
+ * an element turned in between cannot be sheared, so they grow evenly by the geometric mean.
+ */
+export function scaleElBy(
+	el: Stroke,
+	anchor: Vec,
+	kx: number,
+	ky: number,
+	angle: number,
+): Stroke {
 	const c = centerOf(el);
-	// The element's centre moves like every other point; its geometry scales around it.
-	const nc: Vec = [
-		anchor[0] + k * (c[0] - anchor[0]),
-		anchor[1] + k * (c[1] - anchor[1]),
-	];
+	let nc: Vec;
+	let lx: number;
+	let ly: number;
+	if (kx === ky) {
+		nc = [
+			anchor[0] + kx * (c[0] - anchor[0]),
+			anchor[1] + kx * (c[1] - anchor[1]),
+		];
+		lx = kx;
+		ly = ky;
+	} else {
+		const v = rotatePoint(c, anchor, -angle);
+		nc = rotatePoint(
+			[
+				anchor[0] + kx * (v[0] - anchor[0]),
+				anchor[1] + ky * (v[1] - anchor[1]),
+			],
+			anchor,
+			angle,
+		);
+		const rel = Math.abs(wrapAngle((el.rot ?? 0) - angle));
+		const near = (a: number, b: number) => Math.abs(a - b) < 1e-6;
+		const even = Math.sqrt(kx * ky);
+		if (el.kind === "circle" || el.kind === "text") {
+			lx = ly = even;
+		} else if (near(rel, 0) || near(rel, Math.PI)) {
+			[lx, ly] = [kx, ky];
+		} else if (near(rel, Math.PI / 2)) {
+			[lx, ly] = [ky, kx];
+		} else {
+			lx = ly = even;
+		}
+	}
 	const scaled = mapPoints(el, (p) => [
-		nc[0] + k * (p[0] - c[0]),
-		nc[1] + k * (p[1] - c[1]),
+		nc[0] + lx * (p[0] - c[0]),
+		nc[1] + ly * (p[1] - c[1]),
 		p[2],
 	]);
 	return el.kind === "text"
-		? { ...scaled, fontSize: fontSizeOf(el) * k }
+		? { ...scaled, fontSize: fontSizeOf(el) * Math.sqrt(lx * ly) }
 		: scaled;
 }
 
-const wrapAngle = (a: number) => {
+function wrapAngle(a: number): number {
 	const turn = 2 * Math.PI;
 	return ((((a + Math.PI) % turn) + turn) % turn) - Math.PI;
-};
+}
 
 /** The element turned by `delta` radians around a board point (its own centre for a lone element). */
 export function rotateEl(el: Stroke, pivot: Vec, delta: number): Stroke {

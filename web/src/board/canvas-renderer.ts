@@ -1,10 +1,16 @@
 import { getStroke } from "perfect-freehand";
+import { type Background, drawBackground } from "./background";
 import type { Stroke } from "./board";
 import { intersects, strokeBounds } from "./bounds";
 import type { Renderer } from "./controller";
 import type { ImageCache } from "./image-cache";
 import { imageRect } from "./image-geometry";
-import { type Frame, HANDLE_PX, ROT_OFFSET_PX } from "./selection-frame";
+import {
+	type Frame,
+	HANDLE_PX,
+	ROT_OFFSET_PX,
+	showsBox,
+} from "./selection-frame";
 import { fontSizeOf, LINE_HEIGHT } from "./text";
 import { centerOf } from "./transform";
 import type { Rect, Viewport } from "./viewport";
@@ -144,8 +150,12 @@ export class CanvasRenderer implements Renderer {
 	private cache = new WeakMap<Stroke, Cached>();
 	private selection: Frame | null = null;
 	private marquee: Rect | null = null;
+	private highlight: Stroke[] = [];
 	/** Maps a stored ink colour to the colour painted (dark mode swaps black and white). */
 	ink: (color: string) => string = (c) => c;
+	/** Which grid to draw under the elements (R-027, R-032) and in which colour. */
+	background: Background = "plain";
+	gridColor = "#dcdee8";
 
 	constructor(
 		private committedCanvas: HTMLCanvasElement,
@@ -180,6 +190,12 @@ export class CanvasRenderer implements Renderer {
 		this.paintLive();
 	}
 
+	/** Makes the selected elements glow like neon (an empty list clears it). */
+	setHighlight(els: Stroke[]): void {
+		this.highlight = els;
+		this.paintLive();
+	}
+
 	/** Shows the rubber band of a selection being dragged (null hides it). */
 	setMarquee(rect: Rect | null): void {
 		this.marquee = rect;
@@ -190,6 +206,11 @@ export class CanvasRenderer implements Renderer {
 	setRemoteLive(strokes: Stroke[]): void {
 		this.remote = strokes;
 		this.paintLive();
+	}
+
+	/** Repaints with what is already known (after the background or its colour changed). */
+	refresh(): void {
+		this.paint();
 	}
 
 	/** Repaints everything from `strokes` with the current view. */
@@ -223,6 +244,15 @@ export class CanvasRenderer implements Renderer {
 		const ctx = this.committed;
 		if (!ctx) return;
 		this.begin(ctx);
+		drawBackground(
+			ctx,
+			this.background,
+			this.viewport,
+			innerWidth,
+			innerHeight,
+			window.devicePixelRatio || 1,
+			this.gridColor,
+		);
 		const view = this.viewport.worldRect(innerWidth, innerHeight);
 		for (const s of this.strokes) {
 			let c = this.cache.get(s);
@@ -277,7 +307,8 @@ export class CanvasRenderer implements Renderer {
 		ctx.rotate(f.rot);
 		ctx.strokeStyle = "#1976d2";
 		ctx.lineWidth = 2 * px;
-		ctx.strokeRect(-f.w / 2, -f.h / 2, f.w, f.h);
+		// A lone stroke, line or text only glows: its handles show, the box does not (R-034).
+		if (showsBox(this.highlight)) ctx.strokeRect(-f.w / 2, -f.h / 2, f.w, f.h);
 		const stem = ROT_OFFSET_PX * px;
 		ctx.beginPath();
 		ctx.moveTo(0, -f.h / 2);
@@ -297,6 +328,28 @@ export class CanvasRenderer implements Renderer {
 		]) {
 			ctx.fillRect(x - h / 2, y - h / 2, h, h);
 			ctx.strokeRect(x - h / 2, y - h / 2, h, h);
+		}
+		ctx.restore();
+	}
+
+	/** A neon glow along the element itself: its shape drawn with a bright, blurred shadow. */
+	private drawGlow(ctx: CanvasRenderingContext2D, s: Stroke): void {
+		const dpr = window.devicePixelRatio || 1;
+		const path = elementPath(s);
+		const color = s.kind === "image" ? "#fff" : this.ink(s.color);
+		ctx.save();
+		ctx.shadowColor = "#00d4ff";
+		// The blur is in device pixels whatever the zoom; two passes make it brighter.
+		for (const blur of [10, 22]) {
+			ctx.shadowBlur = blur * dpr;
+			if (s.kind === "image") {
+				const r = imageRect(s);
+				withLook(ctx, s, () =>
+					ctx.strokeRect(r.minX, r.minY, r.maxX - r.minX, r.maxY - r.minY),
+				);
+			} else {
+				drawElement(ctx, s, path, color, s.fill ? this.ink(s.fill) : undefined);
+			}
 		}
 		ctx.restore();
 	}
@@ -323,6 +376,7 @@ export class CanvasRenderer implements Renderer {
 				s.fill ? this.ink(s.fill) : undefined,
 			);
 		}
+		for (const s of this.highlight) this.drawGlow(ctx, s);
 		if (this.selection) this.drawFrame(ctx, this.selection);
 		if (this.marquee) this.drawMarquee(ctx, this.marquee);
 	}

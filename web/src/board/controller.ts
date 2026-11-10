@@ -8,12 +8,14 @@ import {
 	HANDLE_PX,
 	hitFrameHandle,
 	oppositeCorner,
+	pointInFrame,
 	ROT_OFFSET_PX,
 } from "./selection-frame";
 import { applyStyle, type StylePatch } from "./style";
 import {
 	rotateEl,
-	scaleEl,
+	rotatePoint,
+	scaleElBy,
 	snapAngle,
 	softSnapAngle,
 	translateEl,
@@ -41,6 +43,8 @@ export interface Renderer {
 	redraw(strokes: Stroke[]): void;
 	/** Shows the selection frame and handles (null hides them). */
 	setSelection?(frame: Frame | null): void;
+	/** Makes the selected elements glow (an empty list clears it). */
+	setHighlight?(els: Stroke[]): void;
 	/** Shows the rubber band while dragging over empty space (null hides it). */
 	setMarquee?(rect: Rect | null): void;
 }
@@ -66,7 +70,8 @@ export const ERASER_RADIUS = 10;
 /** A shape dragged less than this many screen pixels is treated as a stray click and dropped. */
 const MIN_SHAPE_PX = 2;
 /** How far from an object (screen pixels) a click still selects it. */
-const HIT_PX = 6;
+/** How far (px) from an element still grabs it: generous, so thin lines are easy to catch. */
+const HIT_PX = 10;
 /** The smallest a selection can be scaled down to, in screen pixels. */
 const MIN_SELECTION_PX = 24;
 const SNAP_STEP = Math.PI / 12; // 15 degrees, with Shift
@@ -91,6 +96,8 @@ type Edit =
 			drafts: Stroke[];
 			frame: Frame;
 			startAngle: number;
+			/** The angle of the group's frame while it is being turned. */
+			frameRot: number;
 	  }
 	| {
 			mode: "marquee";
@@ -125,6 +132,8 @@ export class Controller {
 	private rightPress: { x: number; y: number; moved: boolean } | null = null;
 	private textTap = false;
 	private selectedIds: string[] = [];
+	/** The angle of a group's frame, so a turned group keeps the size of its frame. */
+	private groupRot = 0;
 	/** Elements copied with copySelected, pasted by paste (not shared between clients). */
 	private clipboard: Stroke[] = [];
 	private edit: Edit | null = null;
@@ -321,6 +330,7 @@ export class Controller {
 
 	/** Selects elements by id (null or an empty list clears the selection) and shows their frame. */
 	select(ids: string | string[] | null): void {
+		this.groupRot = 0; // a new selection starts with an upright frame
 		this.selectedIds =
 			ids === null ? [] : Array.isArray(ids) ? [...ids] : [ids];
 		this.showFrame();
@@ -389,6 +399,10 @@ export class Controller {
 	 */
 	contextTarget(clientX: number, clientY: number): boolean {
 		const [x, y] = this.viewport.toWorld(clientX, clientY);
+		// The empty inside of a group's frame belongs to the group.
+		const group = this.selection;
+		const frame = group.length > 1 ? frameOf(group, this.groupRot) : null;
+		if (frame && pointInFrame(frame, [x, y])) return true;
 		const hit = [...this.board.strokes]
 			.reverse()
 			.find((s) => objectHit(s, x, y, HIT_PX / this.viewport.scale));
@@ -461,14 +475,20 @@ export class Controller {
 	}
 
 	private showFrame(): void {
-		this.renderer.setSelection?.(frameOf(this.selection));
+		this.showSelection(this.selection);
+	}
+
+	/** The glow on every selected element, and the frame with the handles that edit them. */
+	private showSelection(els: Stroke[], rot = this.groupRot): void {
+		this.renderer.setHighlight?.(els);
+		this.renderer.setSelection?.(frameOf(els, rot));
 	}
 
 	private startSelect(e: PointerInput): void {
 		const p = this.viewport.toWorld(e.clientX, e.clientY);
 		const px = 1 / this.viewport.scale;
 		const sel = this.selection;
-		const frame = frameOf(sel);
+		const frame = frameOf(sel, this.groupRot);
 		if (frame) {
 			const handle = hitFrameHandle(
 				frame,
@@ -484,6 +504,7 @@ export class Controller {
 					drafts: sel,
 					frame,
 					startAngle,
+					frameRot: frame.rot,
 				};
 				return;
 			}
@@ -546,15 +567,33 @@ export class Controller {
 			edit.drafts = edit.originals.map((el) => translateEl(el, dx, dy));
 		} else if (edit.mode === "scale") {
 			const { anchor, handle, frame } = edit;
-			const reach =
-				Math.hypot(handle[0] - anchor[0], handle[1] - anchor[1]) || 1;
-			const kMin =
+			const kMinX =
 				MIN_SELECTION_PX / (this.viewport.scale * Math.max(frame.w, 1));
-			const k = Math.max(
-				Math.hypot(p[0] - anchor[0], p[1] - anchor[1]) / reach,
-				kMin,
+			const kMinY =
+				MIN_SELECTION_PX / (this.viewport.scale * Math.max(frame.h, 1));
+			let kx: number;
+			let ky: number;
+			if (e.shiftKey) {
+				// Shift keeps the proportions: one factor, from the distance to the anchor.
+				const reach =
+					Math.hypot(handle[0] - anchor[0], handle[1] - anchor[1]) || 1;
+				kx = ky = Math.max(
+					Math.hypot(p[0] - anchor[0], p[1] - anchor[1]) / reach,
+					kMinX,
+				);
+			} else {
+				// Otherwise each side follows the pointer along the frame's own axes, never
+				// flipping or collapsing.
+				const v = rotatePoint(p, anchor, -frame.rot);
+				const h = rotatePoint(handle, anchor, -frame.rot);
+				const factor = (now: number, start: number, min: number) =>
+					Math.abs(start) < 1e-6 ? 1 : Math.max(now / start, min);
+				kx = factor(v[0] - anchor[0], h[0] - anchor[0], kMinX);
+				ky = factor(v[1] - anchor[1], h[1] - anchor[1], kMinY);
+			}
+			edit.drafts = edit.originals.map((el) =>
+				scaleElBy(el, anchor, kx, ky, frame.rot),
 			);
-			edit.drafts = edit.originals.map((el) => scaleEl(el, anchor, k));
 		} else {
 			const { frame } = edit;
 			const raw =
@@ -564,6 +603,7 @@ export class Controller {
 				? snapAngle(target, SNAP_STEP)
 				: softSnapAngle(target, SOFT_SNAP);
 			const pivot: Vec = [frame.cx, frame.cy];
+			edit.frameRot = snapped;
 			edit.drafts = edit.originals.map((el) =>
 				rotateEl(el, pivot, snapped - frame.rot),
 			);
@@ -571,7 +611,13 @@ export class Controller {
 		// A local preview only: nothing is sent and no history is written until release.
 		for (const d of edit.drafts)
 			this.board.applyRemote({ t: "update", stroke: d });
-		this.renderer.setSelection?.(frameOf(edit.drafts));
+		if (edit.mode === "rotate") {
+			// The frame is hidden while turning: only the glow follows the objects.
+			this.renderer.setHighlight?.(edit.drafts);
+			this.renderer.setSelection?.(null);
+		} else {
+			this.showSelection(edit.drafts);
+		}
 		this.renderer.redraw(this.board.strokes);
 	}
 
@@ -592,17 +638,24 @@ export class Controller {
 		const unchanged = edit.drafts.every(
 			(d, i) => JSON.stringify(d) === JSON.stringify(edit.originals[i]),
 		);
-		if (unchanged) return; // pressed and released without really moving
+		if (unchanged) {
+			this.showFrame(); // pressed and released without really moving: bring the frame back
+			return;
+		}
 		// Put the originals back, then record the change once: one undo step, one update each.
 		for (const o of edit.originals)
 			this.board.applyRemote({ t: "update", stroke: o });
 		this.board.updateMany(this.authorId, edit.drafts);
+		// A turned group's frame stays turned (and the same size) until the selection changes.
+		if (edit.mode === "rotate" && edit.originals.length > 1)
+			this.groupRot = edit.frameRot;
 		this.showFrame();
 		this.renderer.redraw(this.board.strokes);
 	}
 
 	/** Keeps the selection in step after undo or redo changed the board. */
 	private syncSelection(): void {
+		this.groupRot = 0;
 		this.selectedIds = this.selection.map((s) => s.id);
 		this.showFrame();
 		this.onSelectionChange?.();

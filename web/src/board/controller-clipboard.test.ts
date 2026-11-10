@@ -146,6 +146,14 @@ describe("Controller clipboard, duplicate and layer order", () => {
 		expect(c.sendToBack()).toBe(false);
 	});
 
+	test("contextTarget treats the empty inside of a group's frame as the group", () => {
+		c.select(["r1", "r3"]); // frame (100,100)-(650,200); x = 350 is empty between them
+		expect(c.contextTarget(350, 150)).toBe(true);
+		expect(c.selection.map((s) => s.id)).toEqual(["r1", "r3"]);
+		expect(c.contextTarget(350, 260)).toBe(false); // below the frame
+		expect(c.selection).toEqual([]);
+	});
+
 	test("contextTarget selects the object under the point, or clears the selection on empty space", () => {
 		expect(c.contextTarget(200, 150)).toBe(true);
 		expect(c.selection.map((s) => s.id)).toEqual(["r1"]);
