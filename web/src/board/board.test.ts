@@ -279,4 +279,29 @@ describe("Board", () => {
 			});
 		});
 	});
+
+	describe("erasing many elements at once", () => {
+		test("eraseMany removes them all, reports a remove each, and is one undo step", () => {
+			board.addStroke(stroke("1"));
+			board.addStroke(stroke("2"));
+			board.addStroke(stroke("3"));
+			const ops: BoardOp[] = [];
+			board.onOp = (op) => ops.push(op);
+			expect(board.eraseMany("a", ["1", "3", "ghost"])).toBe(true);
+			expect(ids(board)).toEqual(["2"]);
+			expect(ops).toEqual([
+				{ t: "remove", id: "1" },
+				{ t: "remove", id: "3" },
+			]);
+			expect(board.undo("a")).toBe(true);
+			expect(ids(board)).toEqual(["1", "2", "3"]);
+			expect(board.redo("a")).toBe(true);
+			expect(ids(board)).toEqual(["2"]);
+		});
+
+		test("returns false when none of them exist", () => {
+			expect(board.eraseMany("a", ["ghost"])).toBe(false);
+			expect(board.undo("a")).toBe(false);
+		});
+	});
 });

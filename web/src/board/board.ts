@@ -52,6 +52,8 @@ interface Action {
 	stroke: Stroke;
 	/** For an update: every element changed by one gesture, as it was and as it became. */
 	changes?: { before: Stroke; after: Stroke }[];
+	/** For an add or erase of several elements at once: all of them (`stroke` is the first). */
+	group?: Stroke[];
 }
 
 interface History {
@@ -92,6 +94,18 @@ export class Board {
 		this.remove(strokeId);
 		this.record(authorId, { type: "erase", stroke });
 		this.onOp?.({ t: "remove", id: strokeId });
+		return true;
+	}
+
+	/** Erases several elements as one undo step. Returns false if none of them exists. */
+	eraseMany(authorId: string, strokeIds: string[]): boolean {
+		const group = strokeIds
+			.map((id) => this.strokes.find((s) => s.id === id))
+			.filter((s): s is Stroke => !!s);
+		if (group.length === 0) return false;
+		for (const s of group) this.remove(s.id);
+		this.record(authorId, { type: "erase", stroke: group[0], group });
+		for (const s of group) this.onOp?.({ t: "remove", id: s.id });
 		return true;
 	}
 
@@ -187,11 +201,15 @@ export class Board {
 				this.onOp?.({ t: "update", stroke: version });
 			}
 		} else if (what === "add") {
-			this.insert(action.stroke);
-			this.onOp?.({ t: "add", stroke: action.stroke });
+			for (const s of action.group ?? [action.stroke]) {
+				this.insert(s);
+				this.onOp?.({ t: "add", stroke: s });
+			}
 		} else {
-			this.remove(action.stroke.id);
-			this.onOp?.({ t: "remove", id: action.stroke.id });
+			for (const s of action.group ?? [action.stroke]) {
+				this.remove(s.id);
+				this.onOp?.({ t: "remove", id: s.id });
+			}
 		}
 	}
 
