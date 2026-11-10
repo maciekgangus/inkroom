@@ -1,6 +1,8 @@
 import { useState } from "preact/hooks";
 import type { Settings } from "./board/controller";
 import { Icon } from "./icon";
+import { ImageControls, type ImageControlsProps } from "./image-controls";
+import { selectTool, TOOL_KEYS } from "./shortcuts";
 import { displayColor, useTheme } from "./theme";
 
 export const COLORS = ["#111111", "#d32f2f", "#1976d2", "#388e3c", "#f57c00"];
@@ -23,6 +25,12 @@ export const SIZES = [2, 5, 10];
 
 interface Props {
 	settings: Settings;
+	/** True while something is selected: the properties panel then owns colour and size. */
+	hasSelection?: boolean;
+	/** The image group (add, and on a tablet paste and delete); left out, there is none. */
+	images?: ImageControlsProps;
+	/** Called after the tool changed, so the board can show the matching cursor at once. */
+	onToolChange?: () => void;
 	onUndo: () => void;
 	onRedo: () => void;
 }
@@ -48,11 +56,19 @@ const colourTools: Settings["tool"][] = [
 ];
 
 /** Tool palette: tools, color, size, undo/redo. Mutates `settings` in place. */
-export function Toolbar({ settings, onUndo, onRedo }: Props) {
+export function Toolbar({
+	settings,
+	hasSelection = false,
+	images,
+	onToolChange,
+	onUndo,
+	onRedo,
+}: Props) {
 	const [, rerender] = useState(0);
 	const set = (patch: Partial<Settings>) => {
 		Object.assign(settings, patch);
 		rerender((n) => n + 1);
+		if (patch.tool) onToolChange?.();
 	};
 	const [paletteOpen, setPaletteOpen] = useState(false);
 	const theme = useTheme();
@@ -89,66 +105,77 @@ export function Toolbar({ settings, onUndo, onRedo }: Props) {
 						key={tool}
 						aria-label={tool}
 						aria-pressed={settings.tool === tool}
-						title={label}
+						title={
+							TOOL_KEYS[tool] ? `${label} (${TOOL_KEYS[tool]?.label})` : label
+						}
 						class={on(settings.tool === tool)}
-						onClick={() => set({ tool })}
+						onClick={() => {
+							selectTool(settings, tool);
+							rerender((n) => n + 1);
+							onToolChange?.();
+						}}
 					>
 						<Icon name={tool} />
 					</button>
 				))}
 			</div>
-			<div class="group">
-				{COLORS.map((c) => swatch(c))}
-				<button
-					type="button"
-					aria-label="more colors"
-					aria-pressed={drawing && custom}
-					aria-expanded={paletteOpen}
-					title="Więcej kolorów"
-					class={`swatch more ${on(drawing && custom)}`}
-					style={
-						custom
-							? { background: displayColor(settings.color, theme) }
-							: undefined
-					}
-					onClick={() => setPaletteOpen(!paletteOpen)}
-				>
-					{!custom && <Icon name="plus" />}
-				</button>
-				{paletteOpen && (
-					<div class="palette">
-						{MORE_COLORS.map((c) => swatch(c, () => setPaletteOpen(false)))}
-						<label class="custom">
-							Własny kolor
-							<input
-								type="color"
-								aria-label="custom color"
-								value={custom ? settings.color : "#5b5bf0"}
-								onInput={(e) =>
-									pick((e.currentTarget as HTMLInputElement).value)
-								}
-							/>
-						</label>
-					</div>
-				)}
-			</div>
-			<div class="group">
-				{SIZES.map((s) => (
+			{!hasSelection && (
+				<div class="group">
+					{COLORS.map((c) => swatch(c))}
 					<button
 						type="button"
-						key={s}
-						aria-label={`size ${s}`}
-						aria-pressed={settings.size === s}
-						class={on(settings.size === s)}
-						onClick={() => set({ size: s })}
+						aria-label="more colors"
+						aria-pressed={drawing && custom}
+						aria-expanded={paletteOpen}
+						title="Więcej kolorów"
+						class={`swatch more ${on(drawing && custom)}`}
+						style={
+							custom
+								? { background: displayColor(settings.color, theme) }
+								: undefined
+						}
+						onClick={() => setPaletteOpen(!paletteOpen)}
 					>
-						<span
-							class="dot"
-							style={{ width: `${s + 2}px`, height: `${s + 2}px` }}
-						/>
+						{!custom && <Icon name="plus" />}
 					</button>
-				))}
-			</div>
+					{paletteOpen && (
+						<div class="palette">
+							{MORE_COLORS.map((c) => swatch(c, () => setPaletteOpen(false)))}
+							<label class="custom">
+								Własny kolor
+								<input
+									type="color"
+									aria-label="custom color"
+									value={custom ? settings.color : "#5b5bf0"}
+									onInput={(e) =>
+										pick((e.currentTarget as HTMLInputElement).value)
+									}
+								/>
+							</label>
+						</div>
+					)}
+				</div>
+			)}
+			{!hasSelection && (
+				<div class="group">
+					{SIZES.map((s) => (
+						<button
+							type="button"
+							key={s}
+							aria-label={`size ${s}`}
+							aria-pressed={settings.size === s}
+							class={on(settings.size === s)}
+							onClick={() => set({ size: s })}
+						>
+							<span
+								class="dot"
+								style={{ width: `${s + 2}px`, height: `${s + 2}px` }}
+							/>
+						</button>
+					))}
+				</div>
+			)}
+			{images && <ImageControls {...images} />}
 			<div class="group">
 				<button type="button" aria-label="undo" title="Cofnij" onClick={onUndo}>
 					<Icon name="undo" />

@@ -5,8 +5,11 @@ import {
 	frameOf,
 	hitFrameHandle,
 	oppositeCorner,
+	pointInFrame,
 	rotationHandlePos,
+	showsBox,
 } from "./selection-frame";
+import { rotateEl } from "./transform";
 
 const base = { id: "e", authorId: "a", color: "#000", size: 4, z: 0 };
 const rect = (
@@ -124,5 +127,73 @@ describe("oppositeCorner", () => {
 			oppositeCorner("se"),
 			oppositeCorner("sw"),
 		]).toEqual(["se", "sw", "nw", "ne"]);
+	});
+});
+
+describe("showsBox (R-034)", () => {
+	const pt = (x: number, y: number) => [x, y, 0.5] as [number, number, number];
+	const el = (kind?: Stroke["kind"]): Stroke => ({
+		...base,
+		...(kind ? { kind } : {}),
+		points: [pt(0, 0), pt(10, 10)],
+	});
+
+	test("a lone stroke, line or text has handles but no outline box, it glows", () => {
+		expect(showsBox([el()])).toBe(false);
+		expect(showsBox([el("line")])).toBe(false);
+		expect(showsBox([el("text")])).toBe(false);
+	});
+
+	test("images and shapes keep the outline box", () => {
+		expect(showsBox([el("image")])).toBe(true);
+		expect(showsBox([el("rect")])).toBe(true);
+		expect(showsBox([el("circle")])).toBe(true);
+		expect(showsBox([el("ellipse")])).toBe(true);
+	});
+
+	test("several elements get the outline box, and nothing selected shows none", () => {
+		expect(showsBox([el(), el("line")])).toBe(true);
+		expect(showsBox([])).toBe(false);
+	});
+});
+
+describe("pointInFrame", () => {
+	const f = { cx: 100, cy: 100, w: 80, h: 40, rot: 0 };
+
+	test("is true inside the frame and false outside", () => {
+		expect(pointInFrame(f, [100, 100])).toBe(true);
+		expect(pointInFrame(f, [60, 80])).toBe(true); // a corner
+		expect(pointInFrame(f, [59, 100])).toBe(false);
+		expect(pointInFrame(f, [100, 121])).toBe(false);
+	});
+
+	test("follows the rotation of the frame", () => {
+		const turned = { ...f, rot: Math.PI / 2 }; // now 40 wide and 80 tall on the board
+		expect(pointInFrame(turned, [100, 135])).toBe(true);
+		expect(pointInFrame(turned, [135, 100])).toBe(false);
+	});
+});
+
+describe("frameOf with a group rotation", () => {
+	const a = rect([100, 100], [300, 200]);
+	const b = rect([400, 100], [450, 150]);
+
+	test("a turned group keeps the size of its frame and the frame turns with it", () => {
+		const before = frameOf([a, b]);
+		if (!before) throw new Error("no frame");
+		const pivot: [number, number] = [before.cx, before.cy];
+		const delta = 0.6;
+		const turned = [a, b].map((e) => rotateEl(e, pivot, delta));
+		const after = frameOf(turned, delta);
+		if (!after) throw new Error("no frame");
+		expect(after.w).toBeCloseTo(before.w);
+		expect(after.h).toBeCloseTo(before.h);
+		expect(after.cx).toBeCloseTo(before.cx);
+		expect(after.cy).toBeCloseTo(before.cy);
+		expect(after.rot).toBeCloseTo(delta);
+	});
+
+	test("without a rotation it is the upright box, as before", () => {
+		expect(frameOf([a, b], 0)).toEqual(frameOf([a, b]));
 	});
 });

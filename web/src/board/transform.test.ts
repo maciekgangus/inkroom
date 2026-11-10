@@ -7,6 +7,7 @@ import {
 	rotateEl,
 	rotatePoint,
 	scaleEl,
+	scaleElBy,
 	snapAngle,
 	softSnapAngle,
 	toLocal,
@@ -290,5 +291,69 @@ describe("snapAngle and softSnapAngle", () => {
 		expect(softSnapAngle(0.02, tol)).toBe(0);
 		expect(softSnapAngle(Math.PI / 2 + 0.03, tol)).toBeCloseTo(Math.PI / 2);
 		expect(softSnapAngle(0.3, tol)).toBe(0.3);
+	});
+});
+
+describe("scaleElBy (free scaling)", () => {
+	const size = (el: Stroke) => {
+		const b = geomBox(el);
+		return [b.maxX - b.minX, b.maxY - b.minY];
+	};
+
+	test("stretches a rectangle in one direction only, about the anchor", () => {
+		const r = rect([100, 100], [300, 200]);
+		const out = scaleElBy(r, [100, 100], 2, 1, 0);
+		expect(size(out)).toEqual([400, 100]);
+		expect(geomBox(out).minX).toBe(100);
+		expect(geomBox(out).minY).toBe(100);
+	});
+
+	test("with equal factors it is the uniform scale", () => {
+		const r = { ...rect([100, 100], [300, 200]), rot: 0.4 };
+		expect(scaleElBy(r, [50, 50], 1.5, 1.5, 0.9)).toEqual(
+			scaleEl(r, [50, 50], 1.5),
+		);
+	});
+
+	test("the factors follow the frame's axes: a frame turned a quarter treats x as the board's y", () => {
+		const r = rect([100, 100], [300, 200]); // 200 wide, 100 tall, not turned
+		const out = scaleElBy(r, [100, 100], 2, 1, Math.PI / 2); // frame x axis points down
+		expect(size(out)[0]).toBeCloseTo(200); // width untouched
+		expect(size(out)[1]).toBeCloseTo(200); // height doubled
+	});
+
+	test("an element turned with the frame is stretched along its own axes", () => {
+		const r = { ...rect([100, 100], [300, 200]), rot: Math.PI / 2 };
+		const out = scaleElBy(r, [200, 150], 2, 1, Math.PI / 2);
+		expect(size(out)[0]).toBeCloseTo(400);
+		expect(size(out)[1]).toBeCloseTo(100);
+	});
+
+	test("an ellipse is stretched freely like a rectangle", () => {
+		const ellipse: Stroke = {
+			...base,
+			kind: "ellipse",
+			points: pts([100, 100], [300, 200]),
+		};
+		const out = scaleElBy(ellipse, [100, 100], 2, 1, 0);
+		expect(size(out)).toEqual([400, 100]);
+	});
+
+	test("a circle and a text can only grow evenly, by the geometric mean", () => {
+		const circle: Stroke = {
+			...base,
+			kind: "circle",
+			points: pts([100, 100], [110, 100]),
+		};
+		const c2 = scaleElBy(circle, [100, 100], 4, 1, 0);
+		expect(geomBox(c2).maxX - geomBox(c2).minX).toBeCloseTo(40); // radius 10 -> 20
+		const text: Stroke = {
+			...base,
+			kind: "text",
+			text: "hi",
+			fontSize: 20,
+			points: pts([0, 0]),
+		};
+		expect(scaleElBy(text, [0, 0], 4, 1, 0).fontSize).toBeCloseTo(40);
 	});
 });

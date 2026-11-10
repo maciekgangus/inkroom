@@ -1,9 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
-import {
-	BACKGROUNDS,
-	type Background,
-	backgroundStyle,
-} from "./board/background";
+import { BACKGROUNDS, type Background } from "./board/background";
 import type { Stroke } from "./board/board";
 import { Board } from "./board/board";
 import { CanvasRenderer } from "./board/canvas-renderer";
@@ -14,13 +10,16 @@ import { defaultSize, placeCentered } from "./board/image-geometry";
 import { prepareImage, uploadImage } from "./board/image-upload";
 import { fontSizeFor, fontSizeOf } from "./board/text";
 import { Viewport } from "./board/viewport";
+import { ContextMenu, type MenuItem } from "./context-menu";
 import { Cursors } from "./cursors";
 import { Icon } from "./icon";
-import { ImageControls } from "./image-controls";
+import { hasFinePointer } from "./pointer";
 import { PropertiesPanel } from "./properties-panel";
+import { applyToolShortcut } from "./shortcuts";
 import { type SocketLike, SyncClient } from "./sync/sync";
 import { TextEditor } from "./text-editor";
 import { currentTheme, displayColor, useTheme } from "./theme";
+import { toolCursor } from "./tool-cursor";
 import { COLORS, SIZES, Toolbar } from "./toolbar";
 import { ZoomControls } from "./zoom-controls";
 
@@ -82,6 +81,15 @@ export function BoardView({
 	/** Adds a picked, pasted or dropped image to the board (set up by the effect below). */
 	const insertImage = useRef<(file: Blob) => void>(() => {});
 	const [imageError, setImageError] = useState("");
+	/** Shows the cursor of the active tool on the board (set up by the effect below). */
+	const applyCursor = useRef<() => void>(() => {});
+	/** The open right-click menu: where, what is under it and the board position clicked. */
+	const [menu, setMenu] = useState<{
+		x: number;
+		y: number;
+		onObject: boolean;
+		at: [number, number];
+	} | null>(null);
 
 	useEffect(() => {
 		const committed = committedRef.current;
@@ -112,6 +120,7 @@ export function BoardView({
 			},
 			redraw: (strokes) => canvas.redraw(strokes),
 			setSelection: (frame) => canvas.setSelection(frame),
+			setHighlight: (els) => canvas.setHighlight(els),
 			setMarquee: (rect) => canvas.setMarquee(rect),
 		};
 		const controller = new Controller(
@@ -123,9 +132,24 @@ export function BoardView({
 			newId,
 		);
 		ctl.current = controller;
+		let shownCursor = "";
+		applyCursor.current = () => {
+			const want = toolCursor(settings.tool, controller.panning);
+			if (want === shownCursor) return;
+			shownCursor = want;
+			live.style.cursor = want;
+		};
+		applyCursor.current();
 		controller.onTextRequest = ([x, y]) => setTextAt({ x, y });
 		controller.onTextEdit = (el) => setEditingText(el);
 		controller.onSelectionChange = () => setTick((t) => t + 1);
+		// A right click (R-029): the menu, but only with a mouse; tablets have none (R-028).
+		controller.onRightClick = (e) => {
+			if (!hasFinePointer()) return;
+			const onObject = controller.contextTarget(e.clientX, e.clientY);
+			const at = viewport.toWorld(e.clientX, e.clientY);
+			setMenu({ x: e.clientX, y: e.clientY, onObject, at });
+		};
 
 		const changed = () => {
 			canvas.redraw(board.strokes);
@@ -179,6 +203,7 @@ export function BoardView({
 			if (e.pointerType === "touch") return gestures.down(e);
 			live.setPointerCapture(e.pointerId);
 			controller.pointerDown(e);
+			applyCursor.current();
 		};
 		const move = (e: PointerEvent) => {
 			if (e.pointerType === "touch") return gestures.move(e);
@@ -186,16 +211,21 @@ export function BoardView({
 			const [x, y] = viewport.toWorld(e.clientX, e.clientY);
 			sync.cursorMove(x, y);
 			controller.pointerMove(e);
+			applyCursor.current(); // a safety net: whichever way the tool changed, it shows
 		};
 		const leave = (e: PointerEvent) => {
 			if (e.pointerType !== "touch") sync.cursorHide();
 		};
-		const up = (e: PointerEvent) =>
-			e.pointerType === "touch" ? gestures.up(e) : controller.pointerUp(e);
-		const cancel = (e: PointerEvent) =>
-			e.pointerType === "touch"
-				? gestures.cancel(e)
-				: controller.pointerCancel(e);
+		const up = (e: PointerEvent) => {
+			if (e.pointerType === "touch") return gestures.up(e);
+			controller.pointerUp(e);
+			applyCursor.current();
+		};
+		const cancel = (e: PointerEvent) => {
+			if (e.pointerType === "touch") return gestures.cancel(e);
+			controller.pointerCancel(e);
+			applyCursor.current();
+		};
 		const wheel = (e: WheelEvent) => {
 			e.preventDefault(); // otherwise Ctrl + wheel (and trackpad pinch) zooms the whole page
 			const k = e.deltaMode === 1 ? LINE_HEIGHT_PX : 1;
@@ -229,7 +259,14 @@ export function BoardView({
 				i.type.startsWith("image/"),
 			);
 			const file = item?.getAsFile();
-			if (!file) return;
+			if (!file) {
+				// Nothing to paste from the system: paste what was copied on the board.
+				if (controller.hasClipboard) {
+					e.preventDefault();
+					controller.paste();
+				}
+				return;
+			}
 			e.preventDefault();
 			insertImage.current(file);
 		};
@@ -244,6 +281,11 @@ export function BoardView({
 		};
 		const key = (e: KeyboardEvent) => {
 			if (typing(e)) return; // typing, not undoing the board
+			if (!e.repeat && applyToolShortcut(e, settings)) {
+				e.preventDefault();
+				setTick((t) => t + 1);
+				return;
+			}
 			if (
 				(e.key === "Delete" || e.key === "Backspace") &&
 				controller.deleteSelected()
@@ -251,7 +293,20 @@ export function BoardView({
 				e.preventDefault();
 				return;
 			}
-			if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "z") return;
+			const ctrlKey = e.ctrlKey || e.metaKey;
+			if (ctrlKey && e.key.toLowerCase() === "c" && controller.copySelected()) {
+				e.preventDefault();
+				return;
+			}
+			if (
+				ctrlKey &&
+				e.key.toLowerCase() === "d" &&
+				controller.duplicateSelected()
+			) {
+				e.preventDefault();
+				return;
+			}
+			if (!ctrlKey || e.key.toLowerCase() !== "z") return;
 			e.preventDefault();
 			if (e.shiftKey) controller.redo();
 			else controller.undo();
@@ -295,6 +350,21 @@ export function BoardView({
 		};
 	}, [settings, viewport, boardId, authorId, name, connect]);
 
+	// The grid is drawn on the board canvas (R-032): tell it the kind and the theme's colour.
+	useEffect(() => {
+		const canvas = rendererRef.current;
+		if (!canvas) return;
+		canvas.background = background;
+		canvas.gridColor =
+			getComputedStyle(document.documentElement)
+				.getPropertyValue("--grid")
+				.trim() || canvas.gridColor;
+		canvas.refresh();
+	}, [background, theme]);
+
+	// Whatever changed the tool (a key, the toolbar, adding an image), the cursor follows.
+	useEffect(() => applyCursor.current());
+
 	// The ink colours depend on the theme (black and white swap in dark mode).
 	useEffect(() => {
 		if (theme) viewChanged.current();
@@ -329,13 +399,59 @@ export function BoardView({
 		}
 	};
 
+	/** Opens the system file picker (used by the menu, which has no input of its own). */
+	const pickImage = () => {
+		const input = document.createElement("input");
+		input.type = "file";
+		input.accept = "image/*";
+		input.onchange = () => {
+			for (const file of Array.from(input.files ?? []))
+				insertImage.current(file);
+		};
+		input.click();
+	};
+
+	const menuItems = (): MenuItem[] => {
+		const ctrl = ctl.current;
+		if (!menu || !ctrl) return [];
+		const paste: MenuItem = {
+			label: "Wklej",
+			icon: "paste",
+			disabled: !ctrl.hasClipboard && !canReadClipboard,
+			onSelect: () =>
+				ctrl.hasClipboard ? ctrl.paste(menu.at) : pasteFromClipboard(),
+		};
+		if (!menu.onObject) {
+			return [
+				paste,
+				{
+					label: "Wstaw obraz z pliku",
+					icon: "image",
+					onSelect: pickImage,
+				},
+			];
+		}
+		return [
+			{ label: "Kopiuj", icon: "copy", onSelect: () => ctrl.copySelected() },
+			paste,
+			{
+				label: "Duplikuj",
+				icon: "duplicate",
+				onSelect: () => ctrl.duplicateSelected(),
+			},
+			{
+				label: "Na wierzch",
+				icon: "front",
+				onSelect: () => ctrl.bringToFront(),
+			},
+			{ label: "Na spód", icon: "back", onSelect: () => ctrl.sendToBack() },
+			{ label: "Usuń", icon: "trash", onSelect: () => ctrl.deleteSelected() },
+		];
+	};
+
 	return (
 		<>
-			<div
-				class="board-bg"
-				data-background={background}
-				style={backgroundStyle(background, viewport)}
-			/>
+			<div class="board-bg" data-background={background} />
 			<canvas id="board" ref={committedRef} />
 			<canvas id="live" ref={liveRef} />
 			{editingText && (
@@ -386,20 +502,35 @@ export function BoardView({
 					onCancel={() => setTextAt(null)}
 				/>
 			)}
-			<ImageControls
-				hasSelection={(ctl.current?.selection.length ?? 0) > 0}
-				canPaste={canReadClipboard}
-				error={imageError}
-				onFile={(file) => insertImage.current(file)}
-				onPaste={pasteFromClipboard}
-				onDelete={() => ctl.current?.deleteSelected()}
-			/>
 			<Cursors cursors={syncRef.current?.cursors() ?? []} viewport={viewport} />
 			<Toolbar
 				settings={settings}
+				onToolChange={() => applyCursor.current()}
+				hasSelection={(ctl.current?.selection.length ?? 0) > 0}
+				images={{
+					fine: hasFinePointer(),
+					hasSelection: (ctl.current?.selection.length ?? 0) > 0,
+					canPaste: canReadClipboard,
+					onFile: (file) => insertImage.current(file),
+					onPaste: pasteFromClipboard,
+					onDelete: () => ctl.current?.deleteSelected(),
+				}}
 				onUndo={() => ctl.current?.undo()}
 				onRedo={() => ctl.current?.redo()}
 			/>
+			{menu && (
+				<ContextMenu
+					x={menu.x}
+					y={menu.y}
+					items={menuItems()}
+					onClose={() => setMenu(null)}
+				/>
+			)}
+			{imageError && (
+				<div class="toast" role="alert">
+					{imageError}
+				</div>
+			)}
 			{onSetBackground && (
 				<div class="backgrounds">
 					{BACKGROUNDS.map((b) => (

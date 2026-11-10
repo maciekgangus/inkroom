@@ -1,5 +1,5 @@
 import type { Stroke } from "./board";
-import { geomBox, rotatePoint, worldBounds } from "./transform";
+import { elementCorners, geomBox, rotatePoint, worldBounds } from "./transform";
 
 type Vec = [number, number];
 
@@ -20,11 +20,29 @@ export type Corner = "nw" | "ne" | "se" | "sw";
 export type Handle = Corner | "rot";
 
 /**
+ * Whether the selection frame is drawn as an outline box (R-034): images, shapes and several
+ * elements get one; a lone stroke, line or text shows only its handles and glows, so no big
+ * box covers what was selected. The handles work the same either way.
+ */
+export function showsBox(els: Stroke[]): boolean {
+	if (els.length === 0) return false;
+	if (els.length > 1) return true;
+	const kind = els[0].kind;
+	return (
+		kind === "image" ||
+		kind === "rect" ||
+		kind === "circle" ||
+		kind === "ellipse"
+	);
+}
+
+/**
  * The frame around the selected elements: a lone element gets its own (possibly rotated) box,
  * several get the upright box around all of them as they appear on the board.
  */
-export function frameOf(els: Stroke[]): Frame | null {
+export function frameOf(els: Stroke[], groupRot = 0): Frame | null {
 	if (els.length === 0) return null;
+	if (els.length > 1 && groupRot !== 0) return turnedFrame(els, groupRot);
 	if (els.length === 1) {
 		const b = geomBox(els[0]);
 		return {
@@ -53,6 +71,40 @@ export function frameOf(els: Stroke[]): Frame | null {
 		h: maxY - minY,
 		rot: 0,
 	};
+}
+
+/** Whether a board point lies inside the (possibly rotated) frame. */
+export function pointInFrame(f: Frame, p: Vec): boolean {
+	const [x, y] = rotatePoint(p, [f.cx, f.cy], -f.rot);
+	return Math.abs(x - f.cx) <= f.w / 2 && Math.abs(y - f.cy) <= f.h / 2;
+}
+
+/**
+ * The box around several elements measured in axes turned by `rot`, so a group that was turned
+ * keeps the size of its frame and the frame turns with it, instead of growing to cover the
+ * corners of the turned elements.
+ */
+function turnedFrame(els: Stroke[], rot: number): Frame {
+	const origin: Vec = [0, 0];
+	let minX = Number.POSITIVE_INFINITY;
+	let minY = Number.POSITIVE_INFINITY;
+	let maxX = Number.NEGATIVE_INFINITY;
+	let maxY = Number.NEGATIVE_INFINITY;
+	for (const el of els) {
+		for (const corner of elementCorners(el)) {
+			const [x, y] = rotatePoint(corner, origin, -rot);
+			minX = Math.min(minX, x);
+			minY = Math.min(minY, y);
+			maxX = Math.max(maxX, x);
+			maxY = Math.max(maxY, y);
+		}
+	}
+	const [cx, cy] = rotatePoint(
+		[(minX + maxX) / 2, (minY + maxY) / 2],
+		origin,
+		rot,
+	);
+	return { cx, cy, w: maxX - minX, h: maxY - minY, rot };
 }
 
 const at = (f: Frame, dx: number, dy: number): Vec =>

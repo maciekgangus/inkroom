@@ -36,7 +36,7 @@ describe("Toolbar", () => {
 		const pen = root.querySelector('[aria-label="pen"]') as HTMLElement;
 		expect(pen.querySelector("svg")).not.toBeNull();
 		expect(pen.textContent).toBe("");
-		expect(pen.title).toBe("Pióro");
+		expect(pen.title).toBe("Pióro (F)");
 		expect(root.querySelector('[aria-label="undo"] svg')).not.toBeNull();
 	});
 
@@ -152,5 +152,88 @@ describe("Toolbar", () => {
 		click("redo");
 		expect(onUndo).toHaveBeenCalledOnce();
 		expect(onRedo).toHaveBeenCalledOnce();
+	});
+
+	test("hides colour and size while something is selected, the properties panel owns them", () => {
+		expect(root.querySelector('[aria-label="size 5"]')).not.toBeNull();
+		act(() =>
+			render(
+				<Toolbar
+					settings={settings}
+					hasSelection
+					onUndo={onUndo}
+					onRedo={onRedo}
+				/>,
+				root,
+			),
+		);
+		expect(root.querySelector('[aria-label^="color "]')).toBeNull();
+		expect(root.querySelector('[aria-label="more colors"]')).toBeNull();
+		expect(root.querySelector('[aria-label="size 5"]')).toBeNull();
+		expect(root.querySelector('[aria-label="select"]')).not.toBeNull();
+		expect(root.querySelector('[aria-label="undo"]')).not.toBeNull();
+	});
+
+	test("shows the image group before undo and redo when given one", () => {
+		expect(root.querySelector('[aria-label="add image"]')).toBeNull();
+		act(() =>
+			render(
+				<Toolbar
+					settings={settings}
+					images={{
+						fine: true,
+						hasSelection: false,
+						canPaste: false,
+						onFile: vi.fn(),
+						onPaste: vi.fn(),
+						onDelete: vi.fn(),
+					}}
+					onUndo={onUndo}
+					onRedo={onRedo}
+				/>,
+				root,
+			),
+		);
+		const labels = Array.from(root.querySelectorAll("button")).map((b) =>
+			b.getAttribute("aria-label"),
+		);
+		expect(labels.indexOf("add image")).toBeGreaterThan(-1);
+		expect(labels.indexOf("add image")).toBeLessThan(labels.indexOf("undo"));
+	});
+
+	test("every tool with a shortcut shows its key in the tooltip", () => {
+		const title = (tool: string) =>
+			(root.querySelector(`[aria-label="${tool}"]`) as HTMLElement).title;
+		expect(title("select")).toBe("Zaznacz (Esc)");
+		expect(title("pan")).toBe("Ręka (M)");
+		expect(title("eraser")).toBe("Gumka (E)");
+		expect(title("line")).toBe("Linia (L)");
+		expect(title("rect")).toBe("Prostokąt (K)");
+		expect(title("text")).toBe("Tekst (T)");
+		expect(title("circle")).toBe("Owal");
+	});
+
+	test("clicking a shape tool and leaving it remembers it for K", () => {
+		click("circle");
+		click("pen");
+		expect(settings.lastShape).toBe("circle");
+	});
+
+	test("tells its parent when the tool changes, so the board can update the cursor", () => {
+		const onToolChange = vi.fn();
+		act(() =>
+			render(
+				<Toolbar
+					settings={settings}
+					onToolChange={onToolChange}
+					onUndo={onUndo}
+					onRedo={onRedo}
+				/>,
+				root,
+			),
+		);
+		click("eraser");
+		expect(onToolChange).toHaveBeenCalledOnce();
+		expect(settings.tool).toBe("eraser");
 	});
 });
