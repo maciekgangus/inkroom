@@ -138,4 +138,34 @@ describe("the shape tool (R-033)", () => {
 		draw([300, 200]);
 		expect(board.strokes[0].kind).toBe("line");
 	});
+
+	test("starting a new drawing drops the selection at once", () => {
+		draw([300, 200]); // selects the rectangle, the tool becomes Select
+		expect(c.selection).toHaveLength(1);
+		settings.tool = "shape";
+		c.pointerDown(ev(500, 100));
+		expect(c.selection).toEqual([]);
+		c.pointerUp(ev(500, 100));
+	});
+
+	test.each(["pen", "line", "text"] as const)(
+		"also with the %s tool",
+		(tool) => {
+			draw([300, 200]);
+			settings.tool = tool;
+			c.pointerDown(ev(500, 100));
+			expect(c.selection).toEqual([]);
+			c.pointerUp(ev(500, 100));
+		},
+	);
+
+	test("the eraser and the hand leave the selection alone", () => {
+		draw([300, 200]);
+		for (const tool of ["eraser", "pan"] as const) {
+			settings.tool = tool;
+			c.pointerDown(ev(900, 900));
+			expect(c.selection).toHaveLength(1);
+			c.pointerUp(ev(900, 900));
+		}
+	});
 });

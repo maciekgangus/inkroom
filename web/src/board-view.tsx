@@ -22,7 +22,7 @@ import { Cursors } from "./cursors";
 import { Icon } from "./icon";
 import { hasFinePointer } from "./pointer";
 import { PropertiesPanel } from "./properties-panel";
-import { applyToolShortcut } from "./shortcuts";
+import { applyToolShortcut, dropsSelection } from "./shortcuts";
 import { type SocketLike, SyncClient } from "./sync/sync";
 import { TextEditor } from "./text-editor";
 import { currentTheme, displayColor, useTheme } from "./theme";
@@ -342,7 +342,10 @@ export function BoardView({
 		};
 		const key = (e: KeyboardEvent) => {
 			if (typing(e)) return; // typing, not undoing the board
-			if (!e.repeat && applyToolShortcut(e, settings)) {
+			if (
+				!e.repeat &&
+				applyToolShortcut(e, settings, () => controller.select(null))
+			) {
 				e.preventDefault();
 				setTick((t) => t + 1);
 				return;
@@ -600,7 +603,11 @@ export function BoardView({
 			<Cursors cursors={syncRef.current?.cursors() ?? []} viewport={viewport} />
 			<Toolbar
 				settings={settings}
-				onToolChange={() => applyCursor.current()}
+				onToolChange={() => {
+					// Choosing a drawing tool lets go of the selection, so colour and width are back.
+					if (dropsSelection(settings.tool)) ctl.current?.select(null);
+					applyCursor.current();
+				}}
 				hasSelection={(ctl.current?.selection.length ?? 0) > 0}
 				images={{
 					fine: hasFinePointer(),

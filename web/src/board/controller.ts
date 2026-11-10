@@ -191,6 +191,9 @@ export class Controller {
 			this.startSelect(e);
 			return;
 		}
+		// Anything that draws starts clean: what was selected before is let go of.
+		if (["pen", "line", "shape", "text"].includes(this.settings.tool))
+			this.select(null);
 		if (this.settings.tool === "eraser") {
 			this.erase(e);
 			return;
