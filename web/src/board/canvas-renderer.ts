@@ -18,6 +18,9 @@ import { fontSizeOf, LINE_HEIGHT } from "./text";
 import { centerOf } from "./transform";
 import type { Rect, Viewport } from "./viewport";
 
+/** The most selected elements that still get the neon glow; a bigger selection just has its frame. */
+const GLOW_MAX = 25;
+
 /** Freehand strokes are filled outlines; shapes are stroked paths; text is drawn directly. */
 const isFilled = (s: Stroke) => !s.kind || s.kind === "stroke";
 
@@ -209,6 +212,15 @@ export class CanvasRenderer implements Renderer {
 	private selection: Frame | null = null;
 	private marquee: Rect | null = null;
 	private highlight: Stroke[] = [];
+	/** Elements being dragged: drawn on the live layer, left out of the committed one (performance). */
+	private drag: {
+		ids: Set<string>;
+		elements: Stroke[];
+		offset?: [number, number];
+	} | null = null;
+	/** Repaints asked for since the last frame; they are merged into one per frame. */
+	private pending = { committed: false, live: false };
+	private raf = 0;
 	/** The ends of a selected line, drawn as dots to drag (R-041). */
 	private endpoints: [number, number][] | null = null;
 	/** Maps a stored ink colour to the colour painted (dark mode swaps black and white). */
@@ -247,42 +259,90 @@ export class CanvasRenderer implements Renderer {
 	/** Shows the selection frame, corner handles and rotation handle (null hides them). */
 	setSelection(frame: Frame | null): void {
 		this.selection = frame;
-		this.paintLive();
+		this.schedule(false, true);
 	}
 
 	/** Shows dots at the ends of a selected line (null hides them). */
 	setEndpoints(ends: [number, number][] | null): void {
 		this.endpoints = ends;
-		this.paintLive();
+		this.schedule(false, true);
 	}
 
 	/** Makes the selected elements glow like neon (an empty list clears it). */
 	setHighlight(els: Stroke[]): void {
 		this.highlight = els;
-		this.paintLive();
+		this.schedule(false, true);
 	}
 
 	/** Shows the rubber band of a selection being dragged (null hides it). */
 	setMarquee(rect: Rect | null): void {
 		this.marquee = rect;
-		this.paintLive();
+		this.schedule(false, true);
 	}
 
 	/** Sets other people's unfinished strokes. */
 	setRemoteLive(strokes: Stroke[]): void {
 		this.remote = strokes;
-		this.paintLive();
+		this.schedule(false, true);
 	}
 
 	/** Repaints with what is already known (after the background or its colour changed). */
 	refresh(): void {
-		this.paint();
+		this.schedule(true, true);
 	}
 
-	/** Repaints everything from `strokes` with the current view. */
+	/** Repaints everything from `strokes` with the current view (once per frame at most). */
 	redraw(strokes: Stroke[]): void {
 		this.strokes = strokes;
-		this.paint();
+		this.schedule(true, true);
+	}
+
+	/**
+	 * Draws elements being dragged on the live layer and leaves them out of the committed one,
+	 * which is painted once when the drag begins instead of at every move. With an `offset` the
+	 * elements are the originals, moved by it: their cached outlines are reused.
+	 */
+	setDrag(
+		drag: {
+			ids: string[];
+			elements: Stroke[];
+			offset?: [number, number];
+		} | null,
+	): void {
+		const was = this.drag;
+		this.drag = drag && {
+			ids: new Set(drag.ids),
+			elements: drag.elements,
+			offset: drag.offset,
+		};
+		const same =
+			was &&
+			this.drag &&
+			was.ids.size === this.drag.ids.size &&
+			[...this.drag.ids].every((id) => was.ids.has(id));
+		this.schedule(!same, true);
+	}
+
+	/** Asks for a repaint of the layers; all the asks of one frame are served together. */
+	private schedule(committed: boolean, live: boolean): void {
+		this.pending.committed ||= committed;
+		this.pending.live ||= live;
+		if (this.raf) return;
+		if (typeof requestAnimationFrame !== "function") {
+			this.flush();
+			return;
+		}
+		this.raf = requestAnimationFrame(() => {
+			this.raf = 0;
+			this.flush();
+		});
+	}
+
+	private flush(): void {
+		const { committed, live } = this.pending;
+		this.pending = { committed: false, live: false };
+		if (committed) this.paintCommitted();
+		if (live) this.paintLive();
 	}
 
 	private paint(): void {
@@ -321,25 +381,47 @@ export class CanvasRenderer implements Renderer {
 		);
 		const view = this.viewport.worldRect(innerWidth, innerHeight);
 		for (const s of this.strokes) {
-			let c = this.cache.get(s);
-			if (!c) {
-				c = { bounds: strokeBounds(s) };
-				this.cache.set(s, c);
-			}
-			if (!intersects(c.bounds, view)) continue;
-			if (s.kind === "image") {
-				this.drawImage(ctx, s);
-				continue;
-			}
-			if (c.path === undefined) c.path = elementPath(s);
-			drawElement(
-				ctx,
-				s,
-				c.path,
-				this.ink(s.color),
-				s.fill ? this.ink(s.fill) : undefined,
-			);
+			if (this.drag?.ids.has(s.id)) continue; // drawn on the live layer while dragged
+			this.drawStroke(ctx, s, view);
 		}
+	}
+
+	/** Draws one element if it is in view, shifted by (dx, dy) when it is being moved. */
+	private drawStroke(
+		ctx: CanvasRenderingContext2D,
+		s: Stroke,
+		view: Rect,
+		dx = 0,
+		dy = 0,
+	): void {
+		let c = this.cache.get(s);
+		if (!c) {
+			c = { bounds: strokeBounds(s) };
+			this.cache.set(s, c);
+		}
+		const b = c.bounds;
+		const seen =
+			dx || dy
+				? {
+						minX: b.minX + dx,
+						minY: b.minY + dy,
+						maxX: b.maxX + dx,
+						maxY: b.maxY + dy,
+					}
+				: b;
+		if (!intersects(seen, view)) return;
+		if (s.kind === "image") {
+			this.drawImage(ctx, s);
+			return;
+		}
+		if (c.path === undefined) c.path = elementPath(s);
+		drawElement(
+			ctx,
+			s,
+			c.path,
+			this.ink(s.color),
+			s.fill ? this.ink(s.fill) : undefined,
+		);
 	}
 
 	/** Draws a photo, or a grey placeholder while it loads (or if it failed). */
@@ -466,7 +548,17 @@ export class CanvasRenderer implements Renderer {
 				s.fill ? this.ink(s.fill) : undefined,
 			);
 		}
-		for (const s of this.highlight) this.drawGlow(ctx, s);
+		if (this.drag) {
+			const view = this.viewport.worldRect(innerWidth, innerHeight);
+			const [dx, dy] = this.drag.offset ?? [0, 0];
+			ctx.save();
+			ctx.translate(dx, dy);
+			for (const s of this.drag.elements) this.drawStroke(ctx, s, view, dx, dy);
+			ctx.restore();
+		}
+		// A glow is a blurred shadow, which is costly: not while dragging, not on a big selection.
+		if (!this.drag && this.highlight.length <= GLOW_MAX)
+			for (const s of this.highlight) this.drawGlow(ctx, s);
 		if (this.endpoints) this.drawEndpoints(ctx, this.endpoints);
 		if (this.selection) this.drawFrame(ctx, this.selection);
 		if (this.marquee) this.drawMarquee(ctx, this.marquee);

@@ -48,6 +48,18 @@ export interface Renderer {
 	redraw(strokes: Stroke[]): void;
 	/** Shows the selection frame and handles (null hides them). */
 	setSelection?(frame: Frame | null): void;
+	/**
+	 * Draws elements being dragged on a layer of their own while the rest of the board stays as
+	 * it is, so a drag does not repaint everything (null ends it). `elements` are the originals
+	 * with an `offset` when they are only moved, or the changed elements otherwise.
+	 */
+	setDrag?(
+		drag: {
+			ids: string[];
+			elements: Stroke[];
+			offset?: [number, number];
+		} | null,
+	): void;
 	/** Shows dots at the ends of a selected line, to drag them (null hides them, R-041). */
 	setEndpoints?(ends: [number, number][] | null): void;
 	/** Makes the selected elements glow (an empty list clears it). */
@@ -674,9 +686,11 @@ export class Controller {
 			this.renderer.setMarquee?.(edit.rect);
 			return;
 		}
+		let offset: [number, number] | undefined;
 		if (edit.mode === "move") {
 			const dx = p[0] - edit.start[0];
 			const dy = p[1] - edit.start[1];
+			offset = [dx, dy];
 			edit.drafts = edit.originals.map((el) => translateEl(el, dx, dy));
 		} else if (edit.mode === "endpoint") {
 			const [orig] = edit.originals;
@@ -739,8 +753,17 @@ export class Controller {
 			);
 		}
 		// A local preview only: nothing is sent and no history is written until release.
-		for (const d of edit.drafts)
-			this.board.applyRemote({ t: "update", stroke: d });
+		if (this.renderer.setDrag) {
+			// The renderer draws the dragged elements on a layer of its own; the board waits.
+			this.renderer.setDrag({
+				ids: edit.originals.map((s) => s.id),
+				elements: offset ? edit.originals : edit.drafts,
+				offset,
+			});
+		} else {
+			for (const d of edit.drafts)
+				this.board.applyRemote({ t: "update", stroke: d });
+		}
 		if (edit.mode === "rotate") {
 			// The frame is hidden while turning: only the glow follows the objects.
 			this.renderer.setHighlight?.(edit.drafts);
@@ -748,7 +771,7 @@ export class Controller {
 		} else {
 			this.showSelection(edit.drafts);
 		}
-		this.renderer.redraw(this.board.strokes);
+		if (!this.renderer.setDrag) this.renderer.redraw(this.board.strokes);
 	}
 
 	private finishEdit(): void {
@@ -769,6 +792,7 @@ export class Controller {
 			(d, i) => JSON.stringify(d) === JSON.stringify(edit.originals[i]),
 		);
 		if (unchanged) {
+			this.renderer.setDrag?.(null);
 			this.showFrame(); // pressed and released without really moving: bring the frame back
 			return;
 		}
@@ -776,6 +800,7 @@ export class Controller {
 		for (const o of edit.originals)
 			this.board.applyRemote({ t: "update", stroke: o });
 		this.board.updateMany(this.authorId, edit.drafts);
+		this.renderer.setDrag?.(null);
 		// A turned group's frame stays turned (and the same size) until the selection changes.
 		if (edit.mode === "rotate" && edit.originals.length > 1)
 			this.groupRot = edit.frameRot;

@@ -16,7 +16,8 @@ import { defaultSize, placeCentered } from "./board/image-geometry";
 import { prepareImage, uploadImage } from "./board/image-upload";
 import { loadShape } from "./board/shapes";
 import { fontSizeFor, fontSizeOf } from "./board/text";
-import { Viewport } from "./board/viewport";
+import { MAX_SCALE, MIN_SCALE, Viewport } from "./board/viewport";
+import { stepZoom, wheelZoomFactor } from "./board/zoom";
 import { ContextMenu, type MenuItem } from "./context-menu";
 import { Cursors } from "./cursors";
 import { Icon } from "./icon";
@@ -35,7 +36,6 @@ export const newId = () =>
 	`${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
 const ZOOM_STEP = 1.25;
-const WHEEL_ZOOM_SPEED = 0.01;
 const LINE_HEIGHT_PX = 16;
 
 interface Props {
@@ -93,6 +93,11 @@ export function BoardView({
 	/** Adds a picked, pasted or dropped image to the board (set up by the effect below). */
 	const insertImage = useRef<(file: Blob) => void>(() => {});
 	const [imageError, setImageError] = useState("");
+	/** Smooth zoom: eases the view towards a target scale around a screen point (set up below). */
+	const zoomAnim = useRef<{
+		to: (scale: number, sx: number, sy: number) => void;
+		target: () => number;
+	}>({ to: () => {}, target: () => 1 });
 	/** Pastes elements read from the system clipboard (set up by the effect below). */
 	const pasteClip = useRef<(clip: ParsedClip, at?: [number, number]) => void>(
 		() => {},
@@ -138,6 +143,7 @@ export function BoardView({
 			setSelection: (frame) => canvas.setSelection(frame),
 			setHighlight: (els) => canvas.setHighlight(els),
 			setEndpoints: (ends) => canvas.setEndpoints(ends),
+			setDrag: (drag) => canvas.setDrag(drag),
 			setMarquee: (rect) => canvas.setMarquee(rect),
 		};
 		const controller = new Controller(
@@ -174,6 +180,29 @@ export function BoardView({
 			setTick((t) => t + 1);
 		};
 		viewChanged.current = changed;
+		// Zoom eases towards its target one frame at a time, so the percent runs on smoothly.
+		const anim = { target: viewport.scale, sx: 0, sy: 0, raf: 0, last: 0 };
+		const frame = (now: number) => {
+			const dt = Math.min(now - anim.last, 100);
+			anim.last = now;
+			const next = stepZoom(viewport.scale, anim.target, dt);
+			viewport.setScaleAt(anim.sx, anim.sy, next);
+			changed();
+			anim.raf = next === anim.target ? 0 : requestAnimationFrame(frame);
+		};
+		zoomAnim.current = {
+			to: (scale, sx, sy) => {
+				anim.target = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale));
+				anim.sx = sx;
+				anim.sy = sy;
+				if (!anim.raf) {
+					anim.last = performance.now();
+					anim.raf = requestAnimationFrame(frame);
+				}
+			},
+			// While it runs, the next zoom builds on where it is going, not where it is.
+			target: () => (anim.raf ? anim.target : viewport.scale),
+		};
 		const gestures = new TouchGestures(
 			viewport,
 			() => controller.busy,
@@ -271,14 +300,14 @@ export function BoardView({
 			e.preventDefault(); // otherwise Ctrl + wheel (and trackpad pinch) zooms the whole page
 			const k = e.deltaMode === 1 ? LINE_HEIGHT_PX : 1;
 			if (e.ctrlKey || e.metaKey) {
-				viewport.zoomAt(
+				zoomAnim.current.to(
+					zoomAnim.current.target() * wheelZoomFactor(e.deltaY, e.deltaMode),
 					e.clientX,
 					e.clientY,
-					Math.exp(-e.deltaY * k * WHEEL_ZOOM_SPEED),
 				);
-			} else {
-				viewport.panBy(-e.deltaX * k, -e.deltaY * k);
+				return;
 			}
+			viewport.panBy(-e.deltaX * k, -e.deltaY * k);
 			changed();
 		};
 		const prevent = (e: Event) => e.preventDefault();
@@ -398,6 +427,7 @@ export function BoardView({
 		document.addEventListener("touchmove", prevent, { passive: false });
 
 		return () => {
+			cancelAnimationFrame(anim.raf);
 			sync.close();
 			removeEventListener("resize", resize);
 			removeEventListener("keydown", key);
@@ -446,10 +476,12 @@ export function BoardView({
 	}, []);
 
 	// The buttons zoom around the centre of the screen.
-	const zoomTo = (next: (current: number) => number) => {
-		viewport.setScaleAt(innerWidth / 2, innerHeight / 2, next(viewport.scale));
-		viewChanged.current();
-	};
+	const zoomTo = (next: (current: number) => number) =>
+		zoomAnim.current.to(
+			next(zoomAnim.current.target()),
+			innerWidth / 2,
+			innerHeight / 2,
+		);
 
 	const canReadClipboard =
 		typeof navigator !== "undefined" &&

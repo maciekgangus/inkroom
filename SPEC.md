@@ -80,6 +80,7 @@ Miary to propozycje startowe, do potwierdzenia po pierwszych testach na prawdziw
 | N-009 | Uruchamianie i wdrożenie | całość startuje jedną komendą `docker compose up`; ta sama konfiguracja lokalnie i na serwerze; sekrety w `.env` poza repo; dane (baza, zapisane tablice) w wolumenach z kopią zapasową (ADR 0002) |
 | N-010 | Palm rejection | oparcie dłoni na ekranie nie zostawia śladów podczas rysowania rysikiem; rysik ma pierwszeństwo przed dotykiem |
 | N-011 | Konflikty przy współpracy | jednoczesna edycja przez kilka osób nie gubi elementów; gdy dwie osoby zmieniają ten sam element, wygrywa ostatnia zmiana, bez błędu i bez blokowania |
+| N-012 | Płynność edycji | przeciąganie dużego zaznaczenia (700 elementów, tekst i kreski) odbywa się z co najmniej 30 klatkami na sekundę, bez przemalowywania całej tablicy przy każdym ruchu; zoom kółkiem idzie płynnie procent po procencie (jeden ząbek kółka to około 10%) |
 
 ## 5. Etapy
 1. Etap 0, szkielet: wybór stosu (ADR 0001), repo, pusta aplikacja z testem. Gotowe, gdy działa komenda testowa, `docker compose up` uruchamia pustą aplikację i `claude` czyta CLAUDE.md.
@@ -129,3 +130,4 @@ Miary to propozycje startowe, do potwierdzenia po pierwszych testach na prawdziw
 - 2026-11-10: dodano R-038 (pasek: gotowe grubości i okno z suwakami grubości i przezroczystości, lista stylów linii z ikonami); R-037 wybiera się teraz na tej liście.
 - 2026-11-10: dodano R-039 (katalog kształtów z kategoriami: wielokąty, regularne, zaokrąglone, bryły 3D, krzywe) i R-040 (układ współrzędnych jako osobny obiekt).
 - 2026-11-10: dodano R-041 (uchwyty edycji: osiem uchwytów ramki, kropki na końcach linii, później kropki w wierzchołkach figur) i R-042 (menu przyczepione do obiektu, na później).
+- 2026-11-10: dodano N-012 (płynność edycji): zmierzone przeciąganie 700 zaznaczonych elementów z 157 ms na 11 ms na klatkę, zoom animowany w skali logarytmicznej.
