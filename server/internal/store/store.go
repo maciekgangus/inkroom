@@ -27,11 +27,13 @@ type User struct {
 
 // Board is a saved board.
 type Board struct {
-	ID        string
-	OwnerID   int64
-	Name      string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID      string
+	OwnerID int64
+	Name    string
+	// Background is the board's shared backdrop: plain, dots, grid or lines (ADR 0010).
+	Background string
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
 }
 
 // Op is one change to a board's strokes: add a stroke if it is not there yet, replace an
@@ -94,7 +96,23 @@ CREATE INDEX images_board ON images(board_id);
 `
 
 // migrations run in order; the number applied is kept in PRAGMA user_version.
-var migrations = []string{schema, imagesSchema}
+var migrations = []string{
+	schema,
+	imagesSchema,
+	"ALTER TABLE boards ADD COLUMN background TEXT NOT NULL DEFAULT 'plain'",
+}
+
+// DefaultBackground is the background of a new board.
+const DefaultBackground = "plain"
+
+// ValidBackground reports whether v names a board background.
+func ValidBackground(v string) bool {
+	switch v {
+	case "plain", "dots", "grid", "lines":
+		return true
+	}
+	return false
+}
 
 // Open opens (creating if needed) the database at path and applies migrations.
 func Open(path string) (*Store, error) {
@@ -197,20 +215,20 @@ func (s *Store) CreateBoard(id string, ownerID int64, name string) (Board, error
 	if err != nil {
 		return Board{}, err
 	}
-	return Board{ID: id, OwnerID: ownerID, Name: name, CreatedAt: now, UpdatedAt: now}, nil
+	return Board{ID: id, OwnerID: ownerID, Name: name, Background: DefaultBackground, CreatedAt: now, UpdatedAt: now}, nil
 }
 
 func scanBoard(sc interface{ Scan(...any) error }) (Board, error) {
 	var b Board
 	var created, updated int64
-	if err := sc.Scan(&b.ID, &b.OwnerID, &b.Name, &created, &updated); err != nil {
+	if err := sc.Scan(&b.ID, &b.OwnerID, &b.Name, &b.Background, &created, &updated); err != nil {
 		return Board{}, err
 	}
 	b.CreatedAt, b.UpdatedAt = time.Unix(created, 0), time.Unix(updated, 0)
 	return b, nil
 }
 
-const boardCols = "b.id, b.owner_id, b.name, b.created_at, b.updated_at"
+const boardCols = "b.id, b.owner_id, b.name, b.background, b.created_at, b.updated_at"
 
 // Board returns a board by id.
 func (s *Store) Board(id string) (Board, error) {
@@ -221,6 +239,17 @@ func (s *Store) Board(id string) (Board, error) {
 // RenameBoard changes a board's name.
 func (s *Store) RenameBoard(id, name string) error {
 	return s.mustAffect(s.db.Exec("UPDATE boards SET name = ? WHERE id = ?", name, id))
+}
+
+// SetBoardBackground changes a board's background; the caller validates the value.
+func (s *Store) SetBoardBackground(id, background string) error {
+	return s.mustAffect(s.db.Exec("UPDATE boards SET background = ? WHERE id = ?", background, id))
+}
+
+// LoadBackground returns a board's background.
+func (s *Store) LoadBackground(id string) (string, error) {
+	b, err := s.Board(id)
+	return b.Background, err
 }
 
 // DeleteBoard removes a board with its strokes and visit records.

@@ -44,6 +44,9 @@ Priorytety: P1 do pierwszej lekcji, P2 zaraz po niej, P3 później. Statusy: pro
 | R-021 | Każdy rysowany element (kreska, linia, prostokąt, okrąg, tekst, obraz) jest obiektem: kreska odręczna to jeden obiekt (zbiór punktów) zaznaczany, przesuwany i kasowany w całości. Narzędzie "Zaznacz" łapie obiekt (klik) lub kilka (ramka, Shift) i pozwala je przesuwać, skalować i obracać; każdy uczestnik z prawem rysowania może edytować cudze obiekty (jak R-004) | P2 | done |
 | R-022 | Edycja właściwości zaznaczonych obiektów: kolor, grubość linii (rozmiar czcionki dla tekstu), styl linii (ciągła, kreskowana, kropkowana), wypełnienie kształtów, przezroczystość, treść tekstu (dwuklik); zmiana jest cofalna (R-008) i widoczna dla wszystkich (R-006) | P2 | done |
 | R-023 | Operacje na zaznaczeniu: usuń, duplikuj, kopiuj i wklej, na wierzch i na spód (kolejność warstw), grupowanie obiektów w stałą grupę | P3 | proposed |
+| R-025 | Rozszerzona paleta kolorów: 5 szybkich kolorów zostaje w pasku narzędzi, a obok wysuwany panel z ok. 12 dodatkowymi kolorami i dowolnym kolorem z próbnika; wybrany kolor działa dla pióra, kształtów i tekstu | P2 | done |
+| R-026 | Tryb ciemny całej aplikacji, łącznie z tablicą: domyślnie według ustawienia systemu, ręczny przełącznik zapamiętywany na urządzeniu; to ustawienie osobiste, niewspółdzielone. Domyślny czarny tusz jest w trybie ciemnym wyświetlany jako biały (a biały jako czarny), pozostałe kolory bez zmian, więc ta sama tablica jest czytelna w obu trybach | P2 | done |
+| R-027 | Tło tablicy do wyboru: gładkie, kropki, kratka, linie; wspólne dla wszystkich na tablicy, ustawia je twórca, zapisuje się razem z tablicą i zmienia u wszystkich na żywo; tło przesuwa się i skaluje razem z płótnem | P2 | done |
 
 ## 4. Wymagania niefunkcjonalne
 Miary to propozycje startowe, do potwierdzenia po pierwszych testach na prawdziwej lekcji.
@@ -91,3 +94,4 @@ Miary to propozycje startowe, do potwierdzenia po pierwszych testach na prawdziw
 - 2026-11-10: R-015 (obrazy) `done` po teście ręcznym: wklejanie, wybór pliku, upuszczanie, zmiana rozmiaru i przesuwanie (operacja `update`), zdjęcia w SQLite; ADR 0007, plan w `docs/plan-images.md`.
 - 2026-11-10: model obiektów: dodano R-021 (zaznaczanie, przesuwanie, skalowanie i obracanie wszystkich elementów), R-022 (edycja właściwości: kolor, grubość, styl, wypełnienie, przezroczystość, tekst), R-023 (usuń, duplikuj, kopiuj, kolejność, grupy); R-004 bez zmian (gumka dalej kasuje cały obiekt, nie obraz).
 - 2026-11-10: R-021 i R-022 `done` po teście ręcznym: zaznaczanie, przesuwanie, skalowanie i obracanie wszystkich elementów, panel właściwości (kolor, grubość, styl, wypełnienie, przezroczystość), edycja tekstu dwuklikiem; ADR 0008, plan w `docs/plan-object-model.md`. R-023 zostaje `proposed`.
+- 2026-11-09: dodano R-025 (rozszerzona paleta kolorów), R-026 (tryb ciemny z tablicą) i R-027 (wspólne tło tablicy ustawiane przez twórcę).

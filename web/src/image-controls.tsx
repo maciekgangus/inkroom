@@ -1,9 +1,7 @@
-import { useRef, useState } from "preact/hooks";
-import type { Settings } from "./board/controller";
+import { useRef } from "preact/hooks";
 import "./image-controls.css";
 
 interface Props {
-	settings: Settings;
 	hasSelection: boolean;
 	/** True where the browser lets us read the clipboard (HTTPS or localhost). */
 	canPaste: boolean;
@@ -15,7 +13,6 @@ interface Props {
 
 /** Adding an image (picker, paste), the select tool and deleting the selected image. */
 export function ImageControls({
-	settings,
 	hasSelection,
 	canPaste,
 	error,
@@ -24,7 +21,6 @@ export function ImageControls({
 	onDelete,
 }: Props) {
 	const input = useRef<HTMLInputElement>(null);
-	const [, rerender] = useState(0);
 
 	return (
 		<div class="image-controls">
@@ -51,17 +47,6 @@ export function ImageControls({
 					Wklej obraz
 				</button>
 			)}
-			<button
-				type="button"
-				aria-label="select"
-				class={settings.tool === "select" ? "active" : ""}
-				onClick={() => {
-					settings.tool = "select";
-					rerender((n) => n + 1);
-				}}
-			>
-				Zaznacz
-			</button>
 			{hasSelection && (
 				<button
 					type="button"

@@ -85,16 +85,18 @@ function dashPattern(s: Stroke): number[] {
 	return [];
 }
 
-/** Draws one element; `path` is its (cached) path, unused for text. */
+/** Draws one element in `color` (and `fill`, for shapes); `path` is its (cached) path, unused for text. */
 function drawElement(
 	ctx: CanvasRenderingContext2D,
 	s: Stroke,
 	path: Path2D | null,
+	color: string,
+	fill?: string,
 ): void {
 	withLook(ctx, s, () => {
 		if (s.kind === "text") {
 			const fs = fontSizeOf(s);
-			ctx.fillStyle = s.color;
+			ctx.fillStyle = color;
 			ctx.font = `${fs}px system-ui, sans-serif`;
 			ctx.textBaseline = "top";
 			const [x, y] = s.points[0];
@@ -104,14 +106,14 @@ function drawElement(
 				ctx.fillText(line, x, y + i * lineHeight + halfLeading);
 			});
 		} else if (path && isFilled(s)) {
-			ctx.fillStyle = s.color;
+			ctx.fillStyle = color;
 			ctx.fill(path);
 		} else if (path) {
-			if (s.fill) {
-				ctx.fillStyle = s.fill;
+			if (fill) {
+				ctx.fillStyle = fill;
 				ctx.fill(path);
 			}
-			ctx.strokeStyle = s.color;
+			ctx.strokeStyle = color;
 			ctx.lineWidth = s.size;
 			ctx.lineCap = "round";
 			ctx.lineJoin = "round";
@@ -142,6 +144,8 @@ export class CanvasRenderer implements Renderer {
 	private cache = new WeakMap<Stroke, Cached>();
 	private selection: Frame | null = null;
 	private marquee: Rect | null = null;
+	/** Maps a stored ink colour to the colour painted (dark mode swaps black and white). */
+	ink: (color: string) => string = (c) => c;
 
 	constructor(
 		private committedCanvas: HTMLCanvasElement,
@@ -232,7 +236,13 @@ export class CanvasRenderer implements Renderer {
 				continue;
 			}
 			if (c.path === undefined) c.path = elementPath(s);
-			drawElement(ctx, s, c.path);
+			drawElement(
+				ctx,
+				s,
+				c.path,
+				this.ink(s.color),
+				s.fill ? this.ink(s.fill) : undefined,
+			);
 		}
 	}
 
@@ -305,7 +315,13 @@ export class CanvasRenderer implements Renderer {
 		this.begin(ctx);
 		// Unfinished elements keep changing, so their paths are not cached.
 		for (const s of [...this.remote, ...(this.local ? [this.local] : [])]) {
-			drawElement(ctx, s, elementPath(s));
+			drawElement(
+				ctx,
+				s,
+				elementPath(s),
+				this.ink(s.color),
+				s.fill ? this.ink(s.fill) : undefined,
+			);
 		}
 		if (this.selection) this.drawFrame(ctx, this.selection);
 		if (this.marquee) this.drawMarquee(ctx, this.marquee);

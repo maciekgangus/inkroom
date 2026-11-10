@@ -303,5 +303,65 @@ describe("App", () => {
 			expect(root.querySelector('input[name="name"]')).toBeNull();
 			expect(createSocket).toHaveBeenCalledOnce();
 		});
+
+		describe("background", () => {
+			const open = async (owner: boolean) => {
+				const api = mockApi({
+					"GET /api/me": LOGGED_IN,
+					[`GET /api/boards/${ID}`]: { body: { id: ID, name: "Matma", owner } },
+					[`PUT /api/boards/${ID}/background`]: { status: 204 },
+				});
+				const socket = fakeSocket();
+				await mount({ path: `/b/${ID}`, createSocket: () => socket });
+				await vi.waitFor(() =>
+					expect(root.querySelectorAll("canvas")).toHaveLength(2),
+				);
+				return { api, socket };
+			};
+			const shown = () =>
+				root.querySelector(".board-bg")?.getAttribute("data-background");
+			const pick = (name: string) =>
+				root.querySelector(
+					`[aria-label="background ${name}"]`,
+				) as HTMLButtonElement | null;
+
+			test("everyone sees the background the server sends", async () => {
+				const { socket } = await open(false);
+				expect(shown()).toBe("plain");
+				await act(async () => {
+					socket.onmessage?.({
+						data: JSON.stringify({
+							t: "snapshot",
+							strokes: [],
+							background: "grid",
+						}),
+					});
+				});
+				expect(shown()).toBe("grid");
+				await act(async () => {
+					socket.onmessage?.({
+						data: JSON.stringify({ t: "background", value: "lines" }),
+					});
+				});
+				expect(shown()).toBe("lines");
+			});
+
+			test("only the owner gets the background buttons", async () => {
+				await open(false);
+				expect(pick("grid")).toBeNull();
+			});
+
+			test("the owner picks a background and it is saved", async () => {
+				const { api } = await open(true);
+				await act(async () => {
+					pick("dots")?.click();
+				});
+				expect(shown()).toBe("dots");
+				expect(pick("dots")?.getAttribute("aria-pressed")).toBe("true");
+				expect(api.called(`PUT /api/boards/${ID}/background`)[0].body).toEqual({
+					background: "dots",
+				});
+			});
+		});
 	});
 });

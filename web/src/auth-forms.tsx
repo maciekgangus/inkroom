@@ -25,7 +25,7 @@ export function AuthForms({ onAuth }: { onAuth: (email: string) => void }) {
 
 	return (
 		<main class="center">
-			<h1>Inkroom</h1>
+			<h1 class="brand">Inkroom</h1>
 			<form
 				class="stack"
 				onSubmit={(e) => {

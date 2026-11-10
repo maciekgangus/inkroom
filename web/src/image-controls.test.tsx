@@ -1,11 +1,9 @@
 import { render } from "preact";
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import type { Settings } from "./board/controller";
 import { ImageControls } from "./image-controls";
 
 describe("ImageControls", () => {
 	let root: HTMLElement;
-	let settings: Settings;
 	let onFile: (file: File) => void;
 	let onPaste: () => void;
 	let onDelete: () => void;
@@ -15,7 +13,6 @@ describe("ImageControls", () => {
 	) => {
 		render(
 			<ImageControls
-				settings={settings}
 				hasSelection={props.hasSelection ?? false}
 				canPaste={props.canPaste ?? false}
 				error={props.error ?? ""}
@@ -31,7 +28,6 @@ describe("ImageControls", () => {
 
 	beforeEach(() => {
 		root = document.createElement("div");
-		settings = { tool: "pen", color: "#111", size: 4 };
 		onFile = vi.fn();
 		onPaste = vi.fn();
 		onDelete = vi.fn();
@@ -58,12 +54,6 @@ describe("ImageControls", () => {
 		const click = vi.spyOn(input, "click");
 		btn("add image")?.click();
 		expect(click).toHaveBeenCalled();
-	});
-
-	test("the select button switches to the select tool", () => {
-		mount();
-		btn("select")?.click();
-		expect(settings.tool).toBe("select");
 	});
 
 	test("the delete button is there only while an image is selected", () => {
