@@ -84,12 +84,15 @@ export const setBackground = (id: string, background: string) =>
  */
 export async function boardInfo(
 	id: string,
-): Promise<{ owner: boolean } | null> {
+): Promise<{ owner: boolean; name: string } | null> {
 	try {
-		const b = await request<{ owner?: boolean }>("GET", `/api/boards/${id}`);
-		return { owner: b.owner === true };
+		const b = await request<{ owner?: boolean; name?: string }>(
+			"GET",
+			`/api/boards/${id}`,
+		);
+		return { owner: b.owner === true, name: b.name ?? "" };
 	} catch (e) {
 		if (e instanceof ApiError && e.status === 404) return null;
-		return { owner: false };
+		return { owner: false, name: "" };
 	}
 }

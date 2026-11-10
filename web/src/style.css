@@ -607,3 +607,92 @@ canvas {
 	height: 44px;
 	padding: 0;
 }
+
+/* The board's name at the top left and who is on it at the top right (R-045, R-046). */
+.board-title,
+.participants {
+	position: fixed;
+	top: 12px;
+	z-index: 1;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: color-mix(in srgb, var(--surface) 85%, transparent);
+	-webkit-backdrop-filter: blur(12px);
+	backdrop-filter: blur(12px);
+	box-shadow: var(--shadow);
+	-webkit-user-select: none;
+	user-select: none;
+}
+.board-title {
+	left: 12px;
+	max-width: min(280px, 30vw);
+	height: 40px;
+	padding: 0 6px;
+}
+.board-title .name,
+.board-title input {
+	min-width: 0;
+	max-width: 100%;
+	height: 28px;
+	padding: 0 8px;
+	border: 1px solid transparent;
+	border-radius: var(--radius);
+	background: transparent;
+	color: var(--text);
+	font: inherit;
+	font-size: 14px;
+	font-weight: 600;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.board-title button.name {
+	cursor: text;
+}
+.board-title button.name:hover {
+	background: var(--surface-hover);
+}
+.board-title input {
+	width: 220px;
+	border-color: var(--accent);
+	background: var(--surface);
+	-webkit-user-select: text;
+	user-select: text;
+}
+.board-title-error {
+	font-size: 12px;
+	color: var(--danger);
+}
+.participants {
+	right: 12px;
+	height: 40px;
+	padding: 0 8px;
+}
+.participant,
+.participants-more {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	border-radius: 50%;
+	font-size: 13px;
+	font-weight: 600;
+	color: #fff;
+}
+.participant.self {
+	box-shadow:
+		0 0 0 2px var(--surface),
+		0 0 0 4px var(--accent);
+}
+.participants-more {
+	width: auto;
+	min-width: 28px;
+	padding: 0 6px;
+	border-radius: 14px;
+	background: var(--surface-hover);
+	color: var(--muted);
+}

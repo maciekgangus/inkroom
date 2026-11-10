@@ -234,3 +234,14 @@ func TestUpdatesAreWrittenAsReplaceOperations(t *testing.T) {
 		t.Fatalf("got %+v", ops)
 	}
 }
+
+func TestHubSetNameReachesTheClientsOfThatBoard(t *testing.T) {
+	h := hubFor(t, newFake())
+	_, c := joinHub(t, h, "b1")
+	recv(t, c) // snapshot
+	h.SetName("b1", "Nowa nazwa")
+	if m := recv(t, c); m["t"] != "name" || m["value"] != "Nowa nazwa" {
+		t.Fatalf("message = %v", m)
+	}
+	h.SetName("no-such-board", "x") // nobody there: nothing happens
+}

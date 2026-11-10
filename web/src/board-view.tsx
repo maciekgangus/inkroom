@@ -18,13 +18,15 @@ import { loadShape } from "./board/shapes";
 import { fontSizeFor, fontSizeOf } from "./board/text";
 import { MAX_SCALE, MIN_SCALE, Viewport } from "./board/viewport";
 import { stepZoom, wheelZoomFactor } from "./board/zoom";
+import { BoardTitle } from "./board-title";
 import { ContextMenu, type MenuItem } from "./context-menu";
 import { Cursors } from "./cursors";
 import { Icon } from "./icon";
+import { Participants } from "./participants";
 import { hasFinePointer } from "./pointer";
 import { PropertiesPanel } from "./properties-panel";
 import { applyToolShortcut, dropsSelection } from "./shortcuts";
-import { type SocketLike, SyncClient } from "./sync/sync";
+import { type Peer, type SocketLike, SyncClient } from "./sync/sync";
 import { TextEditor } from "./text-editor";
 import { currentTheme, displayColor, useTheme } from "./theme";
 import { toolCursor } from "./tool-cursor";
@@ -46,6 +48,10 @@ interface Props {
 	name: string;
 	/** Opens the board's websocket. */
 	connect: () => SocketLike;
+	/** The board's name, shown at the top left (R-045). */
+	boardName: string;
+	/** Saves a new name; given only to the board's owner (R-045). */
+	onRename?: (name: string) => Promise<void>;
 	/** Saves a new shared background; given only to the board's owner (R-027). */
 	onSetBackground?: (background: Background) => Promise<void>;
 }
@@ -62,6 +68,8 @@ export function BoardView({
 	boardId,
 	authorId,
 	name,
+	boardName,
+	onRename,
 	connect,
 	onSetBackground,
 }: Props) {
@@ -93,6 +101,10 @@ export function BoardView({
 	/** Adds a picked, pasted or dropped image to the board (set up by the effect below). */
 	const insertImage = useRef<(file: Blob) => void>(() => {});
 	const [imageError, setImageError] = useState("");
+	/** The board's name, kept up to date when the owner renames it (R-045). */
+	const [title, setTitle] = useState(boardName);
+	/** Who is on the board (R-046). */
+	const [peers, setPeers] = useState<Peer[]>([]);
 	/** Smooth zoom: eases the view towards a target scale around a screen point (set up below). */
 	const zoomAnim = useRef<{
 		to: (scale: number, sx: number, sy: number) => void;
@@ -127,6 +139,8 @@ export function BoardView({
 			self: { authorId, name },
 			onCursors: () => setTick((t) => t + 1),
 			onBackground: setBackground,
+			onPeers: setPeers,
+			onName: setTitle,
 			onUpdate: () => {
 				canvas.redraw(board.strokes);
 				canvas.setRemoteLive(sync.liveStrokes());
@@ -633,6 +647,15 @@ export function BoardView({
 					onCancel={() => setTextAt(null)}
 				/>
 			)}
+			<BoardTitle
+				name={title}
+				editable={!!onRename}
+				onRename={async (n) => {
+					await onRename?.(n);
+					setTitle(n);
+				}}
+			/>
+			<Participants peers={peers} selfId={authorId} />
 			<Cursors cursors={syncRef.current?.cursors() ?? []} viewport={viewport} />
 			<Toolbar
 				settings={settings}

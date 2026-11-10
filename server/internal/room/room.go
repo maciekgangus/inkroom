@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/maciekgangus/inkroom/server/internal/store"
@@ -13,14 +14,37 @@ import (
 
 const maxIDLen = 64
 
+// maxNameLen is the longest participant name kept, in characters.
+const maxNameLen = 40
+
 // Client is one connected participant. Messages for it are queued on Send.
 type Client struct {
 	// Send carries outgoing JSON messages; it is closed when the client is dropped.
 	Send chan []byte
 
+	// ID and Name say who is behind the connection; they are empty for an anonymous client.
+	// Only identified clients are listed to the others as participants (R-046).
+	ID   string
+	Name string
+
 	once    sync.Once
 	mu      sync.Mutex
 	dropped bool
+}
+
+// Identify says who the client is. The name is trimmed and cut to maxNameLen characters; a
+// missing name or an id that is empty or too long leaves the client anonymous.
+func (c *Client) Identify(id, name string) {
+	id = strings.TrimSpace(id)
+	name = strings.TrimSpace(name)
+	if r := []rune(name); len(r) > maxNameLen {
+		name = strings.TrimSpace(string(r[:maxNameLen]))
+	}
+	if id == "" || len(id) > maxIDLen || name == "" {
+		c.ID, c.Name = "", ""
+		return
+	}
+	c.ID, c.Name = id, name
 }
 
 // NewClient returns a client whose outgoing queue holds up to buffer messages.
@@ -122,6 +146,10 @@ func (r *Room) Join(c *Client) {
 	r.clients[c] = newPresence()
 	if !c.trySend(r.snapshotLocked()) {
 		r.leaveLocked(c)
+		return
+	}
+	if c.ID != "" {
+		r.broadcastLocked(r.peersLocked(), nil)
 	}
 }
 
@@ -139,6 +167,15 @@ func (r *Room) SetBackground(value string) {
 	defer r.mu.Unlock()
 	r.background = value
 	b, _ := json.Marshal(map[string]string{"t": "background", "value": value})
+	r.broadcastLocked(b, nil)
+}
+
+// SetName changes the board's name and tells everyone. The caller has already checked that the
+// board's owner asked for it and saved the value.
+func (r *Room) SetName(value string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	b, _ := json.Marshal(map[string]string{"t": "name", "value": value})
 	r.broadcastLocked(b, nil)
 }
 
@@ -225,6 +262,32 @@ func (r *Room) Handle(c *Client, raw []byte) error {
 	return nil
 }
 
+// peersLocked is the message that lists who is on the board: the identified clients, once
+// per id, ordered by name.
+func (r *Room) peersLocked() []byte {
+	type peer struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+	seen := map[string]bool{}
+	peers := []peer{}
+	for c := range r.clients {
+		if c.ID == "" || seen[c.ID] {
+			continue
+		}
+		seen[c.ID] = true
+		peers = append(peers, peer{ID: c.ID, Name: c.Name})
+	}
+	sort.Slice(peers, func(i, j int) bool {
+		if peers[i].Name != peers[j].Name {
+			return peers[i].Name < peers[j].Name
+		}
+		return peers[i].ID < peers[j].ID
+	})
+	b, _ := json.Marshal(map[string]any{"t": "peers", "peers": peers})
+	return b
+}
+
 func (r *Room) snapshotLocked() []byte {
 	entries := make([]entry, 0, len(r.strokes))
 	for _, e := range r.strokes {
@@ -264,6 +327,9 @@ func (r *Room) leaveLocked(c *Client) {
 	}
 	if len(p.cursors) > 0 {
 		r.broadcastLocked(dropMessage("cursor_drop", p.cursors), nil)
+	}
+	if c.ID != "" {
+		r.broadcastLocked(r.peersLocked(), nil)
 	}
 }
 

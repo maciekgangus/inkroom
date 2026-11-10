@@ -84,8 +84,33 @@
 	min-width: 120px;
 	height: 4px;
 	margin: 0;
-	accent-color: var(--accent);
+	border-radius: 2px;
+	background: linear-gradient(
+		to right,
+		var(--accent) var(--fill, 0%),
+		var(--border) var(--fill, 0%)
+	);
+	-webkit-appearance: none;
+	appearance: none;
 	cursor: pointer;
+}
+.slider input::-webkit-slider-thumb {
+	width: 16px;
+	height: 16px;
+	border: 2px solid var(--surface);
+	border-radius: 50%;
+	background: var(--accent);
+	box-shadow: 0 1px 3px #0005;
+	-webkit-appearance: none;
+	appearance: none;
+}
+.slider input::-moz-range-thumb {
+	width: 12px;
+	height: 12px;
+	border: 2px solid var(--surface);
+	border-radius: 50%;
+	background: var(--accent);
+	box-shadow: 0 1px 3px #0005;
 }
 .slider .value {
 	min-width: 48px;

@@ -445,4 +445,84 @@ describe("SyncClient", () => {
 			c.close();
 		});
 	});
+
+	describe("who is on the board and its name (R-045, R-046)", () => {
+		const connected = (extra: Record<string, unknown> = {}) => {
+			const socket = new FakeSocket();
+			const update = vi.fn();
+			const c = new SyncClient(new Board(), {
+				createSocket: () => socket,
+				onUpdate: update,
+				...extra,
+			});
+			c.connect();
+			socket.open();
+			return { socket, update, c };
+		};
+
+		test("the list of people is reported as it arrives, without repainting the board", () => {
+			const onPeers = vi.fn();
+			const { socket, update, c } = connected({ onPeers });
+			socket.receive({ t: "snapshot", strokes: [] });
+			update.mockClear();
+			socket.receive({
+				t: "peers",
+				peers: [
+					{ id: "a1", name: "Ann" },
+					{ id: "b1", name: "Bob" },
+				],
+			});
+			expect(onPeers).toHaveBeenLastCalledWith([
+				{ id: "a1", name: "Ann" },
+				{ id: "b1", name: "Bob" },
+			]);
+			expect(c.peers()).toEqual([
+				{ id: "a1", name: "Ann" },
+				{ id: "b1", name: "Bob" },
+			]);
+			expect(update).not.toHaveBeenCalled();
+			c.close();
+		});
+
+		test("entries that are not a person are skipped", () => {
+			const onPeers = vi.fn();
+			const { socket, c } = connected({ onPeers });
+			socket.receive({
+				t: "peers",
+				peers: [
+					{ id: "a1", name: "Ann" },
+					{ id: 3 },
+					"x",
+					null,
+					{ name: "no id" },
+				],
+			});
+			expect(onPeers).toHaveBeenLastCalledWith([{ id: "a1", name: "Ann" }]);
+			socket.receive({ t: "peers", peers: "nope" });
+			expect(onPeers).toHaveBeenCalledTimes(1);
+			c.close();
+		});
+
+		test("when the connection drops nobody is shown as here until the server says so again", () => {
+			const onPeers = vi.fn();
+			const { socket, c } = connected({ onPeers });
+			socket.receive({ t: "peers", peers: [{ id: "a1", name: "Ann" }] });
+			socket.drop();
+			expect(onPeers).toHaveBeenLastCalledWith([]);
+			expect(c.peers()).toEqual([]);
+			c.close();
+		});
+
+		test("a new name of the board is reported, only a real text", () => {
+			const onName = vi.fn();
+			const { socket, update, c } = connected({ onName });
+			socket.receive({ t: "name", value: "Lekcja 5" });
+			expect(onName).toHaveBeenLastCalledWith("Lekcja 5");
+			expect(update).not.toHaveBeenCalled();
+			socket.receive({ t: "name", value: 7 });
+			socket.receive({ t: "name", value: "" });
+			expect(onName).toHaveBeenCalledTimes(1);
+			c.close();
+		});
+	});
 });

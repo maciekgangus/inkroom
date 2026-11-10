@@ -16,9 +16,13 @@ export function Slider({
 	onInput: (v: number) => void;
 	onChange: (v: number) => void;
 }) {
+	// The browser fills the track only up to the middle of the thumb, so at the maximum it looks
+	// unfilled; the fill is drawn from this value instead.
+	const fill = Math.min(100, Math.max(0, ((value - min) / (max - min)) * 100));
 	return (
 		<label class="slider">
 			<input
+				style={{ "--fill": `${fill}%` }}
 				type="range"
 				aria-label={label}
 				min={min}

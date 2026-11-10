@@ -11,6 +11,12 @@ export interface SocketLike {
 }
 
 /** Another person's pointer, in board coordinates. */
+/** Someone on the board: a stable id and the name they gave (R-046). */
+export interface Peer {
+	id: string;
+	name: string;
+}
+
 export interface RemoteCursor {
 	id: string;
 	name: string;
@@ -26,6 +32,10 @@ interface Options {
 	onCursors?: () => void;
 	/** Called with the board's shared background, on joining and whenever the owner changes it. */
 	onBackground?: (background: Background) => void;
+	/** Called with who is on the board whenever that changes (and with nobody when we lose the connection). */
+	onPeers?: (peers: Peer[]) => void;
+	/** Called with the board's name whenever the owner renames it (R-045). */
+	onName?: (name: string) => void;
 	/** Clock in ms; tests replace it. */
 	now?: () => number;
 	/** Called whenever the board or the remote live strokes changed (time to redraw). */
@@ -51,6 +61,7 @@ const MAX_DELAY_MS = 5000;
  */
 export class SyncClient {
 	private socket: SocketLike | null = null;
+	private peersIn: Peer[] = [];
 	private isOpen = false;
 	private closed = false;
 	private attempts = 0;
@@ -115,6 +126,11 @@ export class SyncClient {
 		});
 	}
 
+	/** Who is on the board, as the server last told us. */
+	peers(): Peer[] {
+		return this.peersIn;
+	}
+
 	/** Other people's cursors that updated recently. */
 	cursors(): RemoteCursor[] {
 		const cutoff = this.now() - CURSOR_TTL_MS;
@@ -126,6 +142,18 @@ export class SyncClient {
 			x,
 			y,
 		}));
+	}
+
+	/** Keeps the entries that are a person (a text id and a text name) and reports the list. */
+	private setPeers(raw: unknown[]): void {
+		this.peersIn = raw.flatMap((p) => {
+			if (typeof p !== "object" || p === null) return [];
+			const { id, name } = p as { id?: unknown; name?: unknown };
+			return typeof id === "string" && typeof name === "string"
+				? [{ id, name }]
+				: [];
+		});
+		this.opts.onPeers?.(this.peersIn);
 	}
 
 	private now(): number {
@@ -225,6 +253,7 @@ export class SyncClient {
 			hidden?: boolean;
 			t: string;
 			background?: unknown;
+			peers?: unknown;
 			value?: unknown;
 			strokes?: Stroke[];
 			stroke?: Stroke;
@@ -241,6 +270,12 @@ export class SyncClient {
 			case "background":
 				if (isBackground(m.value)) this.opts.onBackground?.(m.value);
 				return; // the pattern is not on the canvas
+			case "peers":
+				if (Array.isArray(m.peers)) this.setPeers(m.peers as unknown[]);
+				return;
+			case "name":
+				if (typeof m.value === "string" && m.value) this.opts.onName?.(m.value);
+				return;
 			case "snapshot":
 				if (isBackground(m.background)) this.opts.onBackground?.(m.background);
 				this.board.setStrokes(m.strokes ?? []);
@@ -337,6 +372,7 @@ export class SyncClient {
 
 	private dropped(): void {
 		this.isOpen = false;
+		this.setPeers([]); // the server lists everyone again when we are back
 		this.cursorSent = null;
 		this.cursorsIn.clear();
 		this.opts.onCursors?.();

@@ -149,6 +149,7 @@ func (a *app) renameBoard(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Błąd serwera")
 		return
 	}
+	a.hub.SetName(b.ID, name) // everyone on the board sees the new name at once
 	w.WriteHeader(http.StatusNoContent)
 }
 
