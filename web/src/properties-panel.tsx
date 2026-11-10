@@ -7,6 +7,7 @@ import {
 	styleOf,
 } from "./board/style";
 import { Icon } from "./icon";
+import { Slider } from "./slider";
 import "./properties-panel.css";
 
 /** How each line style is shown on its button; the natural pen gets a wave icon. */
@@ -27,44 +28,6 @@ interface Props {
 	onPreview?: (patch: StylePatch) => void;
 	/** A final change: a click, or a slider released. */
 	onChange: (patch: StylePatch) => void;
-}
-
-/** A slider with its value next to it: `input` while moving, `change` on release. */
-function Slider({
-	label,
-	min,
-	max,
-	value,
-	unit,
-	onInput,
-	onChange,
-}: {
-	label: string;
-	min: number;
-	max: number;
-	value: number;
-	unit: string;
-	onInput: (v: number) => void;
-	onChange: (v: number) => void;
-}) {
-	return (
-		<label class="slider">
-			<input
-				type="range"
-				aria-label={label}
-				min={min}
-				max={max}
-				step={1}
-				value={value}
-				onInput={(e) => onInput(Number(e.currentTarget.value))}
-				onChange={(e) => onChange(Number(e.currentTarget.value))}
-			/>
-			<span class="value">
-				{value}
-				{unit}
-			</span>
-		</label>
-	);
 }
 
 /** Edits the style of the selection: colour, width, line style, fill and opacity. */

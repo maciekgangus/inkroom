@@ -4,6 +4,7 @@ import { SHAPES, saveShape } from "./board/shapes";
 import { Icon } from "./icon";
 import { ImageControls, type ImageControlsProps } from "./image-controls";
 import { selectTool, TOOL_KEYS } from "./shortcuts";
+import { StrokeControls } from "./stroke-controls";
 import { displayColor, useTheme } from "./theme";
 
 export const COLORS = ["#111111", "#d32f2f", "#1976d2", "#388e3c", "#f57c00"];
@@ -22,7 +23,7 @@ export const MORE_COLORS = [
 	"#eab308",
 	"#ff7043",
 ];
-export const SIZES = [2, 5, 10];
+export { SIZES } from "./stroke-controls";
 
 interface Props {
 	settings: Settings;
@@ -212,31 +213,7 @@ export function Toolbar({
 			)}
 			{!hasSelection && (
 				<div class="group">
-					{SIZES.map((s) => (
-						<button
-							type="button"
-							key={s}
-							aria-label={`size ${s}`}
-							aria-pressed={settings.size === s}
-							class={on(settings.size === s)}
-							onClick={() => set({ size: s })}
-						>
-							<span
-								class="dot"
-								style={{ width: `${s + 2}px`, height: `${s + 2}px` }}
-							/>
-						</button>
-					))}
-					<button
-						type="button"
-						aria-label="natural pen"
-						aria-pressed={!!settings.natural}
-						title="Naturalne pióro"
-						class={on(!!settings.natural)}
-						onClick={() => set({ natural: !settings.natural })}
-					>
-						<Icon name="wave" />
-					</button>
+					<StrokeControls settings={settings} onChange={set} />
 				</div>
 			)}
 			{images && <ImageControls {...images} />}

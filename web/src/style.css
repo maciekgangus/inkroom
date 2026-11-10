@@ -503,7 +503,8 @@ canvas {
 }
 
 /* The shape button has a list of shapes behind it (R-033): a small corner mark hints at it. */
-.shape-wrap {
+.shape-wrap,
+.flyout-wrap {
 	position: relative;
 	display: flex;
 }
@@ -520,7 +521,9 @@ canvas {
 	border-bottom-color: currentColor;
 	opacity: 0.55;
 }
-.shape-list {
+.shape-list,
+.style-list,
+.stroke-popover {
 	position: absolute;
 	top: calc(100% + 12px);
 	left: 0;
@@ -534,7 +537,8 @@ canvas {
 	background: var(--surface);
 	box-shadow: var(--shadow);
 }
-.toolbar .shape-list button {
+.toolbar .shape-list button,
+.toolbar .style-list button {
 	display: flex;
 	align-items: center;
 	justify-content: flex-start;
@@ -548,10 +552,26 @@ canvas {
 	font-size: 14px;
 	text-align: left;
 }
-.toolbar .shape-list button:hover {
+.toolbar .shape-list button:hover,
+.toolbar .style-list button:hover {
 	background: var(--surface-hover);
 }
-.toolbar .shape-list button.active {
+.toolbar .shape-list button.active,
+.toolbar .style-list button.active {
 	background: var(--accent-soft);
 	color: var(--accent);
+}
+
+.stroke-popover {
+	min-width: 280px;
+	gap: 2px;
+	padding: 10px 12px;
+}
+.stroke-popover .slider-title {
+	margin-top: 4px;
+	font-size: 12px;
+	color: var(--muted);
+}
+.stroke-popover .slider {
+	padding: 0;
 }

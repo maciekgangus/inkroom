@@ -282,6 +282,34 @@ describe("Toolbar", () => {
 		});
 	});
 
+	test("the quick widths, the slider window and the line style list are in the toolbar (R-038)", () => {
+		for (const label of [
+			"size 2",
+			"size 5",
+			"size 10",
+			"stroke settings",
+			"line style",
+		])
+			expect(root.querySelector(`[aria-label="${label}"]`)).not.toBeNull();
+		expect(root.querySelector('[aria-label="natural pen"]')).toBeNull();
+	});
+
+	test("they are hidden while something is selected, the properties panel has them then", () => {
+		act(() =>
+			render(
+				<Toolbar
+					settings={settings}
+					hasSelection
+					onUndo={onUndo}
+					onRedo={onRedo}
+				/>,
+				root,
+			),
+		);
+		for (const label of ["size 5", "stroke settings", "line style"])
+			expect(root.querySelector(`[aria-label="${label}"]`)).toBeNull();
+	});
+
 	test("tells its parent when the tool changes, so the board can update the cursor", () => {
 		const onToolChange = vi.fn();
 		act(() =>
@@ -298,36 +326,5 @@ describe("Toolbar", () => {
 		click("eraser");
 		expect(onToolChange).toHaveBeenCalledOnce();
 		expect(settings.tool).toBe("eraser");
-	});
-
-	describe("the natural pen toggle (R-037)", () => {
-		test("is next to the widths, shows its state and switches the style of new strokes", () => {
-			const toggle = root.querySelector(
-				'[aria-label="natural pen"]',
-			) as HTMLElement;
-			expect(toggle).not.toBeNull();
-			expect(toggle.querySelector("svg")).not.toBeNull();
-			expect(toggle.title).toBe("Naturalne pióro");
-			expect(toggle.getAttribute("aria-pressed")).toBe("false");
-			click("natural pen");
-			expect(settings.natural).toBe(true);
-			click("natural pen");
-			expect(settings.natural).toBe(false);
-		});
-
-		test("is hidden while something is selected, like the widths", () => {
-			act(() =>
-				render(
-					<Toolbar
-						settings={settings}
-						hasSelection
-						onUndo={onUndo}
-						onRedo={onRedo}
-					/>,
-					root,
-				),
-			);
-			expect(root.querySelector('[aria-label="natural pen"]')).toBeNull();
-		});
 	});
 });

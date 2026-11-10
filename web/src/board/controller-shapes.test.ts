@@ -169,20 +169,53 @@ describe("the shape tool (R-033)", () => {
 		}
 	});
 
-	test("the pen draws the natural style when it is switched on, and not otherwise (R-037)", () => {
+	test("the pen draws the natural style when it is chosen, and the ordinary one otherwise (R-037)", () => {
 		settings.tool = "pen";
 		draw([300, 200]);
 		expect(board.strokes[0].dash).toBeUndefined();
-		settings.natural = true;
+		settings.lineStyle = "natural";
 		draw([400, 300]);
 		expect(board.strokes[1].dash).toBe("natural");
 	});
 
-	test("lines and shapes ignore the natural pen", () => {
-		settings.natural = true;
+	test("lines and shapes take dashed or dotted, and ignore the natural pen (R-038)", () => {
+		settings.lineStyle = "natural";
 		draw([300, 200]); // a rectangle
 		settings.tool = "line";
 		draw([500, 300]);
 		for (const s of board.strokes) expect(s.dash).toBeUndefined();
+		for (const style of ["dashed", "dotted"] as const) {
+			settings.lineStyle = style;
+			settings.tool = "shape";
+			draw([300, 200]);
+			settings.tool = "line";
+			draw([500, 300]);
+		}
+		expect(board.strokes.slice(2).map((s) => s.dash)).toEqual([
+			"dashed",
+			"dashed",
+			"dotted",
+			"dotted",
+		]);
+	});
+
+	test("the pen ignores dashed and dotted, text takes no line style", () => {
+		settings.tool = "pen";
+		settings.lineStyle = "dashed";
+		draw([300, 200]);
+		expect(board.strokes[0].dash).toBeUndefined();
+		c.addText("hi", 10, 10);
+		expect(board.strokes[1].dash).toBeUndefined();
+	});
+
+	test("new elements get the opacity of the settings, and none at full opacity (R-038)", () => {
+		settings.tool = "pen";
+		draw([300, 200]);
+		settings.opacity = 0.4;
+		draw([400, 300]);
+		c.addText("hi", 10, 10);
+		expect(board.strokes[0].opacity).toBeUndefined();
+		expect(board.strokes[1].opacity).toBe(0.4);
+		expect(board.strokes[2].opacity).toBe(0.4);
 	});
 });

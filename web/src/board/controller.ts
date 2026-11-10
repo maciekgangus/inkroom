@@ -14,7 +14,7 @@ import {
 	ROT_OFFSET_PX,
 } from "./selection-frame";
 import type { ShapeChoice } from "./shapes";
-import { applyStyle, type StylePatch } from "./style";
+import { applyStyle, type Dash, type StylePatch } from "./style";
 import {
 	rotateEl,
 	rotatePoint,
@@ -57,8 +57,10 @@ export interface Settings {
 	tool: "pen" | "eraser" | "pan" | "line" | "shape" | "text" | "select";
 	/** Which shape the shape tool draws (R-033); a rectangle if none was chosen. */
 	shape?: ShapeChoice;
-	/** The pen draws the natural style (R-037) instead of the ordinary one. */
-	natural?: boolean;
+	/** The line style of new elements (R-038): what fits the tool is used, the rest is ignored. */
+	lineStyle?: Dash;
+	/** Opacity of new elements, 0 to 1; full if none (R-038). */
+	opacity?: number;
 	color: string;
 	size: number;
 }
@@ -215,9 +217,7 @@ export class Controller {
 			...(isShapeTool(tool)
 				? { kind: tool === "shape" ? (this.settings.shape ?? "rect") : "line" }
 				: {}),
-			...(tool === "pen" && this.settings.natural
-				? { dash: "natural" as const }
-				: {}),
+			...this.newLook(tool),
 			points: isShapeTool(tool) ? [start, [...start]] : [start],
 		};
 		this.renderer.drawLive(this.current);
@@ -306,6 +306,23 @@ export class Controller {
 		this.pointerUp(e);
 	}
 
+	/** The line style and opacity new elements get from the settings, where they fit the tool. */
+	private newLook(tool: Settings["tool"]): { dash?: Dash; opacity?: number } {
+		const style = this.settings.lineStyle;
+		let dash: Dash | undefined;
+		if (tool === "pen" && style === "natural") dash = style;
+		if (
+			(tool === "line" || tool === "shape") &&
+			(style === "dashed" || style === "dotted")
+		)
+			dash = style;
+		const opacity = this.settings.opacity;
+		return {
+			...(dash ? { dash } : {}),
+			...(opacity !== undefined && opacity < 1 ? { opacity } : {}),
+		};
+	}
+
 	/** Adds a text element at a board position; blank text is ignored. */
 	addText(text: string, x: number, y: number): void {
 		if (!text.trim()) return;
@@ -317,6 +334,7 @@ export class Controller {
 			z: this.nextZ(),
 			kind: "text",
 			text,
+			...this.newLook("text"),
 			points: [[x, y, 0.5]],
 		});
 		this.renderer.redraw(this.board.strokes);
