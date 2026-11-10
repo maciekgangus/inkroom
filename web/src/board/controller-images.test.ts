@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { Board, type BoardOp, type Stroke } from "./board";
-import { Controller, type PointerInput, type Renderer, type Settings } from "./controller";
+import {
+	Controller,
+	type PointerInput,
+	type Renderer,
+	type Settings,
+} from "./controller";
 import { imageRect } from "./image-geometry";
 import { Viewport } from "./viewport";
 
@@ -21,7 +26,8 @@ describe("Controller with images", () => {
 	let ops: BoardOp[];
 	let id: string;
 
-	const rectOf = () => imageRect(board.strokes.find((s) => s.id === id) as Stroke);
+	const rectOf = () =>
+		imageRect(board.strokes.find((s) => s.id === id) as Stroke);
 
 	beforeEach(() => {
 		board = new Board();
@@ -29,7 +35,14 @@ describe("Controller with images", () => {
 		settings = { tool: "select", color: "#111", size: 4 };
 		viewport = new Viewport();
 		let n = 0;
-		c = new Controller(board, renderer, settings, viewport, "me", () => `e${++n}`);
+		c = new Controller(
+			board,
+			renderer,
+			settings,
+			viewport,
+			"me",
+			() => `e${++n}`,
+		);
 		id = c.addImage("img1", { minX: 100, minY: 100, maxX: 300, maxY: 200 }); // 200 x 100
 		c.select(null);
 		ops = [];
@@ -37,11 +50,26 @@ describe("Controller with images", () => {
 	});
 
 	test("addImage creates an image element with its source and two corners, and selects it", () => {
-		const fresh = new Controller(board, renderer, settings, viewport, "me", () => "x1");
-		const newId = fresh.addImage("pic", { minX: 10, minY: 20, maxX: 110, maxY: 70 });
+		const fresh = new Controller(
+			board,
+			renderer,
+			settings,
+			viewport,
+			"me",
+			() => "x1",
+		);
+		const newId = fresh.addImage("pic", {
+			minX: 10,
+			minY: 20,
+			maxX: 110,
+			maxY: 70,
+		});
 		const el = board.strokes.find((s) => s.id === newId) as Stroke;
 		expect(el).toMatchObject({ kind: "image", src: "pic", authorId: "me" });
-		expect(el.points.map((p) => [p[0], p[1]])).toEqual([[10, 20], [110, 70]]);
+		expect(el.points.map((p) => [p[0], p[1]])).toEqual([
+			[10, 20],
+			[110, 70],
+		]);
 		expect(fresh.selected?.id).toBe(newId);
 	});
 
@@ -57,7 +85,12 @@ describe("Controller with images", () => {
 		c.pointerUp(ev("pen", 150, 150));
 		expect(c.selected?.id).toBe(id);
 		expect(onChange).toHaveBeenCalled();
-		expect(renderer.setSelection).toHaveBeenLastCalledWith({ minX: 100, minY: 100, maxX: 300, maxY: 200 });
+		expect(renderer.setSelection).toHaveBeenLastCalledWith({
+			minX: 100,
+			minY: 100,
+			maxX: 300,
+			maxY: 200,
+		});
 	});
 
 	test("pressing empty space or a non-image element clears the selection", () => {
