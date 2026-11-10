@@ -57,6 +57,8 @@ export interface Settings {
 	tool: "pen" | "eraser" | "pan" | "line" | "shape" | "text" | "select";
 	/** Which shape the shape tool draws (R-033); a rectangle if none was chosen. */
 	shape?: ShapeChoice;
+	/** The pen draws the natural style (R-037) instead of the ordinary one. */
+	natural?: boolean;
 	color: string;
 	size: number;
 }
@@ -212,6 +214,9 @@ export class Controller {
 			z: this.nextZ(),
 			...(isShapeTool(tool)
 				? { kind: tool === "shape" ? (this.settings.shape ?? "rect") : "line" }
+				: {}),
+			...(tool === "pen" && this.settings.natural
+				? { dash: "natural" as const }
 				: {}),
 			points: isShapeTool(tool) ? [start, [...start]] : [start],
 		};

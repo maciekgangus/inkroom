@@ -70,6 +70,23 @@ describe("PropertiesPanel", () => {
 		expect(has("prop fill none")).toBe(false);
 	});
 
+	test("a freehand stroke can switch to the natural pen and back to solid", () => {
+		mount([freehand]);
+		expect(has("prop dash solid")).toBe(true);
+		expect(has("prop dash natural")).toBe(true);
+		expect(has("prop dash dotted")).toBe(false);
+		btn("prop dash natural")?.click();
+		expect(onChange).toHaveBeenLastCalledWith({ dash: "natural" });
+	});
+
+	test("a rectangle has no natural pen, a mixed selection has all four", () => {
+		mount([rect]);
+		expect(has("prop dash natural")).toBe(false);
+		mount([rect, freehand]);
+		for (const d of ["solid", "dashed", "dotted", "natural"])
+			expect(has(`prop dash ${d}`)).toBe(true);
+	});
+
 	test("a rectangle also offers dash and fill", () => {
 		mount([rect]);
 		expect(has("prop dash dotted")).toBe(true);

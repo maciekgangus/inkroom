@@ -226,4 +226,10 @@ describe("rehomeImages", () => {
 			"Nie można skopiować obrazu z innej tablicy",
 		);
 	});
+
+	test("the natural pen style travels with the stroke", () => {
+		const stroke: Stroke = { ...pen, dash: "natural" };
+		const clip = parseClipboard(serializeSelection([stroke], "b"));
+		expect(clip?.elements[0].dash).toBe("natural");
+	});
 });

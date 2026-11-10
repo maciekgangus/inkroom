@@ -2,7 +2,7 @@ import type { Stroke } from "./board";
 import { isPolygonKind } from "./shapes";
 import { fontSizeFor, fontSizeOf } from "./text";
 
-export type Dash = "solid" | "dashed" | "dotted";
+export type Dash = "solid" | "dashed" | "dotted" | "natural";
 
 /** Changes to apply to elements; each only touches the kinds it makes sense for. */
 export interface StylePatch {
@@ -25,7 +25,24 @@ const isShape = (el: Stroke) =>
 	el.kind === "circle" ||
 	el.kind === "ellipse" ||
 	isPolygonKind(el.kind);
+/** A freehand stroke: no kind, or the explicit stroke kind. */
+const isFreehand = (el: Stroke) => !el.kind || el.kind === "stroke";
 const isDashable = (el: Stroke) => el.kind === "line" || isShape(el);
+
+/** Lines and shapes take solid, dashed and dotted; freehand strokes solid and natural (R-037). */
+function dashFits(el: Stroke, dash: Dash): boolean {
+	if (isDashable(el)) return dash !== "natural";
+	if (isFreehand(el)) return dash === "solid" || dash === "natural";
+	return false;
+}
+
+/** The styles the line style row offers for a selection, solid first. */
+export function dashOptions(els: Stroke[]): Dash[] {
+	const options: Dash[] = ["solid"];
+	if (els.some(isDashable)) options.push("dashed", "dotted");
+	if (els.some(isFreehand)) options.push("natural");
+	return options;
+}
 
 /** The element with the patch applied where it applies (see ADR 0008). */
 export function applyStyle(el: Stroke, patch: StylePatch): Stroke {
@@ -37,7 +54,7 @@ export function applyStyle(el: Stroke, patch: StylePatch): Stroke {
 	}
 	if (patch.fontSize !== undefined && el.kind === "text")
 		out.fontSize = clamp(patch.fontSize, 4, 400);
-	if (patch.dash !== undefined && isDashable(el)) {
+	if (patch.dash !== undefined && dashFits(el, patch.dash)) {
 		if (patch.dash === "solid") delete out.dash;
 		else out.dash = patch.dash;
 	}
@@ -58,7 +75,7 @@ export function capabilities(els: Stroke[]) {
 	return {
 		color: els.some((e) => e.kind !== "image"),
 		size: els.some((e) => e.kind !== "image"),
-		dash: els.some(isDashable),
+		dash: dashOptions(els).length > 1,
 		fill: els.some(isShape),
 		text: els.some((e) => e.kind === "text"),
 		/** Only texts are selected: the size slider is then a font size. */

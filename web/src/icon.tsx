@@ -19,6 +19,7 @@ const ICONS = {
 	undo: "M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11",
 	redo: "m15 14 5-5-5-5M20 9H9.5a5.5 5.5 0 0 0 0 11H13",
 	plus: "M12 5v14M5 12h14",
+	wave: "M3 15c3-7 5-7 8-2.5s5 4.5 10-3",
 	trapezoid: "M8 6h8l4 12H4Z",
 	rhombus: "M12 3l8 9-8 9-8-9Z",
 	parallelogram: "M8 6h12l-4 12H4Z",

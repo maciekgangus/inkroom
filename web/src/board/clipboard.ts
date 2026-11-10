@@ -27,7 +27,7 @@ const KINDS: ElementKind[] = [
 	"text",
 	"image",
 ];
-const DASHES = ["solid", "dashed", "dotted"];
+const DASHES = ["solid", "dashed", "dotted", "natural"];
 
 /**
  * The text to put on the system clipboard for these elements (R-035): JSON with the marker

@@ -299,4 +299,35 @@ describe("Toolbar", () => {
 		expect(onToolChange).toHaveBeenCalledOnce();
 		expect(settings.tool).toBe("eraser");
 	});
+
+	describe("the natural pen toggle (R-037)", () => {
+		test("is next to the widths, shows its state and switches the style of new strokes", () => {
+			const toggle = root.querySelector(
+				'[aria-label="natural pen"]',
+			) as HTMLElement;
+			expect(toggle).not.toBeNull();
+			expect(toggle.querySelector("svg")).not.toBeNull();
+			expect(toggle.title).toBe("Naturalne pióro");
+			expect(toggle.getAttribute("aria-pressed")).toBe("false");
+			click("natural pen");
+			expect(settings.natural).toBe(true);
+			click("natural pen");
+			expect(settings.natural).toBe(false);
+		});
+
+		test("is hidden while something is selected, like the widths", () => {
+			act(() =>
+				render(
+					<Toolbar
+						settings={settings}
+						hasSelection
+						onUndo={onUndo}
+						onRedo={onRedo}
+					/>,
+					root,
+				),
+			);
+			expect(root.querySelector('[aria-label="natural pen"]')).toBeNull();
+		});
+	});
 });

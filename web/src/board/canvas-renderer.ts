@@ -12,6 +12,7 @@ import {
 	showsBox,
 } from "./selection-frame";
 import { isPolygonKind, polygonPoints } from "./shapes";
+import { strokeOptions } from "./stroke-style";
 import { fontSizeOf, LINE_HEIGHT } from "./text";
 import { centerOf } from "./transform";
 import type { Rect, Viewport } from "./viewport";
@@ -20,13 +21,7 @@ import type { Rect, Viewport } from "./viewport";
 const isFilled = (s: Stroke) => !s.kind || s.kind === "stroke";
 
 function outlinePath(stroke: Stroke): Path2D | null {
-	const outline = getStroke(stroke.points, {
-		size: stroke.size,
-		thinning: 0.6,
-		smoothing: 0.5,
-		streamline: 0.4,
-		simulatePressure: false,
-	});
+	const outline = getStroke(stroke.points, strokeOptions(stroke));
 	if (outline.length < 2) return null;
 	const path = new Path2D();
 	path.moveTo(outline[0][0], outline[0][1]);

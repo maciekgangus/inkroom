@@ -227,6 +227,16 @@ export function Toolbar({
 							/>
 						</button>
 					))}
+					<button
+						type="button"
+						aria-label="natural pen"
+						aria-pressed={!!settings.natural}
+						title="Naturalne pióro"
+						class={on(!!settings.natural)}
+						onClick={() => set({ natural: !settings.natural })}
+					>
+						<Icon name="wave" />
+					</button>
 				</div>
 			)}
 			{images && <ImageControls {...images} />}

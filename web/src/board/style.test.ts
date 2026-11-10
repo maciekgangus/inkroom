@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import type { Stroke } from "./board";
-import { applyStyle, capabilities, styleOf } from "./style";
+import { applyStyle, capabilities, dashOptions, styleOf } from "./style";
 
 const base = { id: "e", authorId: "a", color: "#111", size: 4, z: 0 };
 const pts = (...p: [number, number][]) =>
@@ -85,7 +85,7 @@ describe("capabilities", () => {
 		expect(capabilities([freehand])).toEqual({
 			color: true,
 			size: true,
-			dash: false,
+			dash: true,
 			fill: false,
 			text: false,
 			textOnly: false,
@@ -191,4 +191,43 @@ describe("polygon shapes take fill and line style like other shapes (R-033)", ()
 			expect(applyStyle(poly(kind), { dash: "dotted" }).dash).toBe("dotted");
 		},
 	);
+});
+
+describe("the natural pen style (R-037)", () => {
+	test("it applies to freehand strokes only", () => {
+		expect(applyStyle(freehand, { dash: "natural" }).dash).toBe("natural");
+		for (const el of [line, rect, circle, text, image])
+			expect(applyStyle(el, { dash: "natural" }).dash).toBeUndefined();
+	});
+
+	test("dashed and dotted still apply to lines and shapes only", () => {
+		expect(applyStyle(freehand, { dash: "dashed" }).dash).toBeUndefined();
+		expect(applyStyle(rect, { dash: "dotted" }).dash).toBe("dotted");
+	});
+
+	test("solid takes the natural style off again", () => {
+		const natural = applyStyle(freehand, { dash: "natural" });
+		expect(applyStyle(natural, { dash: "solid" }).dash).toBeUndefined();
+	});
+
+	test("the style row offers what the selection can take", () => {
+		expect(dashOptions([freehand])).toEqual(["solid", "natural"]);
+		expect(dashOptions([rect])).toEqual(["solid", "dashed", "dotted"]);
+		expect(dashOptions([line, ellipse])).toEqual(["solid", "dashed", "dotted"]);
+		expect(dashOptions([freehand, rect])).toEqual([
+			"solid",
+			"dashed",
+			"dotted",
+			"natural",
+		]);
+		expect(dashOptions([text])).toEqual(["solid"]);
+		expect(dashOptions([image])).toEqual(["solid"]);
+	});
+
+	test("a freehand stroke now has a style row, a text or image still does not", () => {
+		expect(capabilities([freehand]).dash).toBe(true);
+		expect(capabilities([rect]).dash).toBe(true);
+		expect(capabilities([text]).dash).toBe(false);
+		expect(capabilities([image]).dash).toBe(false);
+	});
 });

@@ -168,4 +168,21 @@ describe("the shape tool (R-033)", () => {
 			c.pointerUp(ev(900, 900));
 		}
 	});
+
+	test("the pen draws the natural style when it is switched on, and not otherwise (R-037)", () => {
+		settings.tool = "pen";
+		draw([300, 200]);
+		expect(board.strokes[0].dash).toBeUndefined();
+		settings.natural = true;
+		draw([400, 300]);
+		expect(board.strokes[1].dash).toBe("natural");
+	});
+
+	test("lines and shapes ignore the natural pen", () => {
+		settings.natural = true;
+		draw([300, 200]); // a rectangle
+		settings.tool = "line";
+		draw([500, 300]);
+		for (const s of board.strokes) expect(s.dash).toBeUndefined();
+	});
 });

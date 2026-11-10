@@ -2,16 +2,20 @@ import type { Stroke } from "./board/board";
 import {
 	capabilities,
 	type Dash,
+	dashOptions,
 	type StylePatch,
 	styleOf,
 } from "./board/style";
+import { Icon } from "./icon";
 import "./properties-panel.css";
 
-const DASHES: { dash: Dash; label: string }[] = [
-	{ dash: "solid", label: "━" },
-	{ dash: "dashed", label: "╌" },
-	{ dash: "dotted", label: "┈" },
-];
+/** How each line style is shown on its button; the natural pen gets a wave icon. */
+const DASH_LABELS: Record<Dash, string> = {
+	solid: "━",
+	dashed: "╌",
+	dotted: "┈",
+	natural: "",
+};
 
 interface Props {
 	/** The selected elements; the panel shows the values of the first. */
@@ -119,7 +123,7 @@ export function PropertiesPanel({
 			)}
 			{can.dash && (
 				<div class="row">
-					{DASHES.map(({ dash, label }) => (
+					{dashOptions(elements).map((dash) => (
 						<button
 							type="button"
 							key={dash}
@@ -127,7 +131,7 @@ export function PropertiesPanel({
 							class={on(now.dash === dash)}
 							onClick={() => onChange({ dash })}
 						>
-							{label}
+							{dash === "natural" ? <Icon name="wave" /> : DASH_LABELS[dash]}
 						</button>
 					))}
 				</div>
