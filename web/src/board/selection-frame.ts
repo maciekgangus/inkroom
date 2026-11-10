@@ -3,6 +3,10 @@ import { geomBox, rotatePoint, worldBounds } from "./transform";
 
 type Vec = [number, number];
 
+/** Grab radius of a handle and how far the rotation handle floats above the frame, in screen pixels. */
+export const HANDLE_PX = 12;
+export const ROT_OFFSET_PX = 28;
+
 /** The frame drawn around the selection: centre, size and rotation. */
 export interface Frame {
 	cx: number;

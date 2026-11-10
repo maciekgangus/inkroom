@@ -1,10 +1,20 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { Board, type BoardOp, type Stroke } from "./board";
-import { Controller, type PointerInput, type Renderer, type Settings } from "./controller";
+import {
+	Controller,
+	type PointerInput,
+	type Renderer,
+	type Settings,
+} from "./controller";
 import { cornerPos, frameOf, rotationHandlePos } from "./selection-frame";
 import { Viewport } from "./viewport";
 
-const ev = (type: string, x: number, y: number, extra: Partial<PointerInput> = {}): PointerInput => ({
+const ev = (
+	type: string,
+	x: number,
+	y: number,
+	extra: Partial<PointerInput> = {},
+): PointerInput => ({
 	pointerId: 1,
 	pointerType: type,
 	clientX: x,
@@ -17,7 +27,12 @@ const SHIFT = { shiftKey: true };
 const base = { authorId: "a", color: "#111", size: 4, z: 0 };
 const pt = (x: number, y: number) => [x, y, 0.5] as [number, number, number];
 /** A filled rectangle, so it can be grabbed anywhere inside. */
-const box = (id: string, a: [number, number], b: [number, number], extra: Partial<Stroke> = {}): Stroke => ({
+const box = (
+	id: string,
+	a: [number, number],
+	b: [number, number],
+	extra: Partial<Stroke> = {},
+): Stroke => ({
 	...base,
 	id,
 	kind: "rect",
@@ -35,22 +50,43 @@ describe("Controller selection", () => {
 	let ops: BoardOp[];
 
 	const get = (id: string) => board.strokes.find((s) => s.id === id) as Stroke;
-	const corners = (id: string) => get(id).points.map((p) => [Math.round(p[0] * 1000) / 1000, Math.round(p[1] * 1000) / 1000]);
+	const corners = (id: string) =>
+		get(id).points.map((p) => [
+			Math.round(p[0] * 1000) / 1000,
+			Math.round(p[1] * 1000) / 1000,
+		]);
 	const selIds = () => c.selection.map((s) => s.id);
-	const drag = (from: [number, number], to: [number, number], extra: Partial<PointerInput> = {}) => {
+	const drag = (
+		from: [number, number],
+		to: [number, number],
+		extra: Partial<PointerInput> = {},
+	) => {
 		c.pointerDown(ev("pen", ...from, extra));
 		c.pointerMove(ev("pen", ...to, extra));
 		c.pointerUp(ev("pen", ...to, extra));
 	};
-	const click = (x: number, y: number, extra: Partial<PointerInput> = {}) => drag([x, y], [x, y], extra);
+	const click = (x: number, y: number, extra: Partial<PointerInput> = {}) =>
+		drag([x, y], [x, y], extra);
 
 	beforeEach(() => {
 		board = new Board();
-		renderer = { drawLive: vi.fn(), redraw: vi.fn(), setSelection: vi.fn(), setMarquee: vi.fn() };
+		renderer = {
+			drawLive: vi.fn(),
+			redraw: vi.fn(),
+			setSelection: vi.fn(),
+			setMarquee: vi.fn(),
+		};
 		settings = { tool: "select", color: "#111", size: 4 };
 		viewport = new Viewport();
 		let n = 0;
-		c = new Controller(board, renderer, settings, viewport, "me", () => `e${++n}`);
+		c = new Controller(
+			board,
+			renderer,
+			settings,
+			viewport,
+			"me",
+			() => `e${++n}`,
+		);
 		board.addStroke(box("r1", [100, 100], [300, 200])); // 200 x 100
 		board.addStroke(box("r2", [400, 100], [450, 150]));
 		ops = [];
@@ -60,8 +96,15 @@ describe("Controller selection", () => {
 	describe("choosing what is selected", () => {
 		test("addImage creates an image element with its source and corners, and selects it", () => {
 			const id = c.addImage("pic", { minX: 10, minY: 20, maxX: 110, maxY: 70 });
-			expect(get(id)).toMatchObject({ kind: "image", src: "pic", authorId: "me" });
-			expect(corners(id)).toEqual([[10, 20], [110, 70]]);
+			expect(get(id)).toMatchObject({
+				kind: "image",
+				src: "pic",
+				authorId: "me",
+			});
+			expect(corners(id)).toEqual([
+				[10, 20],
+				[110, 70],
+			]);
 			expect(selIds()).toEqual([id]);
 		});
 
@@ -72,7 +115,11 @@ describe("Controller selection", () => {
 		});
 
 		test("clicking an object of any kind selects it", () => {
-			board.addStroke({ ...base, id: "pen1", points: [pt(0, 400), pt(200, 400)] });
+			board.addStroke({
+				...base,
+				id: "pen1",
+				points: [pt(0, 400), pt(200, 400)],
+			});
 			click(100, 402);
 			expect(selIds()).toEqual(["pen1"]);
 			click(200, 150);
@@ -102,9 +149,21 @@ describe("Controller selection", () => {
 
 		test("the selection frame follows what is selected", () => {
 			c.select("r1");
-			expect(renderer.setSelection).toHaveBeenLastCalledWith({ cx: 200, cy: 150, w: 200, h: 100, rot: 0 });
+			expect(renderer.setSelection).toHaveBeenLastCalledWith({
+				cx: 200,
+				cy: 150,
+				w: 200,
+				h: 100,
+				rot: 0,
+			});
 			c.select(["r1", "r2"]);
-			expect(renderer.setSelection).toHaveBeenLastCalledWith({ cx: 275, cy: 125, w: 350, h: 100, rot: 0 });
+			expect(renderer.setSelection).toHaveBeenLastCalledWith({
+				cx: 275,
+				cy: 150,
+				w: 350,
+				h: 100,
+				rot: 0,
+			});
 		});
 
 		test("touch never selects or edits, and other tools leave objects alone", () => {
@@ -119,6 +178,7 @@ describe("Controller selection", () => {
 	describe("rubber-band selection", () => {
 		beforeEach(() => {
 			board.addStroke(box("far", [800, 800], [850, 850]));
+			ops.length = 0;
 		});
 
 		test("dragging over empty space selects whatever the frame touches", () => {
@@ -131,7 +191,12 @@ describe("Controller selection", () => {
 		test("shows the rubber band while dragging and hides it on release", () => {
 			c.pointerDown(ev("pen", 50, 50));
 			c.pointerMove(ev("pen", 320, 220));
-			expect(renderer.setMarquee).toHaveBeenLastCalledWith({ minX: 50, minY: 50, maxX: 320, maxY: 220 });
+			expect(renderer.setMarquee).toHaveBeenLastCalledWith({
+				minX: 50,
+				minY: 50,
+				maxX: 320,
+				maxY: 220,
+			});
 			c.pointerUp(ev("pen", 320, 220));
 			expect(renderer.setMarquee).toHaveBeenLastCalledWith(null);
 			expect(ops).toEqual([]); // selecting changes nothing on the board
@@ -157,11 +222,17 @@ describe("Controller selection", () => {
 			expect(corners("r1")[0]).toEqual([120, 110]);
 			c.pointerMove(ev("pen", 230, 170));
 			c.pointerUp(ev("pen", 230, 170));
-			expect(corners("r1")).toEqual([[130, 120], [330, 220]]);
+			expect(corners("r1")).toEqual([
+				[130, 120],
+				[330, 220],
+			]);
 			expect(ops).toHaveLength(1);
 			expect(ops[0]).toMatchObject({ t: "update" });
 			c.undo();
-			expect(corners("r1")).toEqual([[100, 100], [300, 200]]);
+			expect(corners("r1")).toEqual([
+				[100, 100],
+				[300, 200],
+			]);
 			expect(selIds()).toEqual(["r1"]);
 		});
 
@@ -193,10 +264,16 @@ describe("Controller selection", () => {
 		test("dragging a corner scales from the opposite corner with proportions kept", () => {
 			c.select("r1");
 			drag([300, 200], [500, 300]); // the se handle
-			expect(corners("r1")).toEqual([[100, 100], [500, 300]]);
+			expect(corners("r1")).toEqual([
+				[100, 100],
+				[500, 300],
+			]);
 			expect(ops).toHaveLength(1);
 			c.undo();
-			expect(corners("r1")).toEqual([[100, 100], [300, 200]]);
+			expect(corners("r1")).toEqual([
+				[100, 100],
+				[300, 200],
+			]);
 		});
 
 		test("the handle is as big on screen whatever the zoom", () => {
@@ -215,7 +292,15 @@ describe("Controller selection", () => {
 		});
 
 		test("a text's font size grows with it", () => {
-			board.addStroke({ ...base, id: "t1", kind: "text", text: "hello", size: 5, fontSize: 20, points: [pt(600, 600)] });
+			board.addStroke({
+				...base,
+				id: "t1",
+				kind: "text",
+				text: "hello",
+				size: 5,
+				fontSize: 20,
+				points: [pt(600, 600)],
+			});
 			c.select("t1");
 			const f = frameOf([get("t1")]);
 			if (!f) throw new Error("no frame");
@@ -229,7 +314,10 @@ describe("Controller selection", () => {
 		test("scales several objects around the selection's opposite corner", () => {
 			c.select(["r1", "r2"]); // frame (100,100)-(450,200)
 			drag([450, 200], [800, 300]); // se corner to twice the distance from nw (350 -> 700 wide)
-			expect(corners("r1")).toEqual([[100, 100], [500, 300]]);
+			expect(corners("r1")).toEqual([
+				[100, 100],
+				[500, 300],
+			]);
 			expect(ops).toHaveLength(2);
 		});
 	});
@@ -241,7 +329,10 @@ describe("Controller selection", () => {
 			if (!f) throw new Error("no frame");
 			return rotationHandlePos(f, 28);
 		};
-		const around = (angleFromUp: number): [number, number] => [center.x + 100 * Math.sin(angleFromUp), center.y - 100 * Math.cos(angleFromUp)];
+		const around = (angleFromUp: number): [number, number] => [
+			center.x + 100 * Math.sin(angleFromUp),
+			center.y - 100 * Math.cos(angleFromUp),
+		];
 
 		test("dragging the rotation handle turns the object, as one update", () => {
 			c.select("r1");
@@ -327,14 +418,23 @@ describe("Controller selection", () => {
 
 	describe("text", () => {
 		beforeEach(() => {
-			board.addStroke({ ...base, id: "t1", kind: "text", text: "hello", size: 5, points: [pt(600, 600)] });
+			board.addStroke({
+				...base,
+				id: "t1",
+				kind: "text",
+				text: "hello",
+				size: 5,
+				points: [pt(600, 600)],
+			});
 		});
 
 		test("editTextAt reports the text under the pointer", () => {
 			const onTextEdit = vi.fn();
 			c.onTextEdit = onTextEdit;
 			c.editTextAt(610, 610);
-			expect(onTextEdit).toHaveBeenCalledWith(expect.objectContaining({ id: "t1" }));
+			expect(onTextEdit).toHaveBeenCalledWith(
+				expect.objectContaining({ id: "t1" }),
+			);
 			onTextEdit.mockClear();
 			c.editTextAt(100, 100); // a rectangle, not a text
 			expect(onTextEdit).not.toHaveBeenCalled();

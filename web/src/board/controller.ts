@@ -1,12 +1,24 @@
 import type { Board, Point, Stroke } from "./board";
-import { findHit } from "./hit";
+import { intersects } from "./bounds";
+import { findHit, objectHit } from "./hit";
 import {
-	type Corner,
-	hitHandle,
-	imageRect,
-	moveRect,
-	resizeFromCorner,
-} from "./image-geometry";
+	cornerPos,
+	type Frame,
+	frameOf,
+	HANDLE_PX,
+	hitFrameHandle,
+	oppositeCorner,
+	ROT_OFFSET_PX,
+} from "./selection-frame";
+import { applyStyle, type StylePatch } from "./style";
+import {
+	rotateEl,
+	scaleEl,
+	snapAngle,
+	softSnapAngle,
+	translateEl,
+	worldBounds,
+} from "./transform";
 import type { Rect, Viewport } from "./viewport";
 
 /** The subset of PointerEvent the controller reads. */
@@ -18,6 +30,8 @@ export interface PointerInput {
 	pressure: number;
 	/** Which button changed state (1 = middle mouse button). */
 	button?: number;
+	/** Shift held: add to the selection, snap a rotation. */
+	shiftKey?: boolean;
 	getCoalescedEvents?: () => PointerInput[];
 }
 
@@ -25,8 +39,10 @@ export interface PointerInput {
 export interface Renderer {
 	drawLive(stroke: Stroke | null): void;
 	redraw(strokes: Stroke[]): void;
-	/** Shows the selection frame and handles of the selected image (null hides them). */
-	setSelection?(rect: Rect | null): void;
+	/** Shows the selection frame and handles (null hides them). */
+	setSelection?(frame: Frame | null): void;
+	/** Shows the rubber band while dragging over empty space (null hides it). */
+	setMarquee?(rect: Rect | null): void;
 }
 
 /** Current tool settings, mutated by the toolbar. */
@@ -47,18 +63,40 @@ export interface Settings {
 const ERASER_RADIUS = 10;
 /** A shape dragged less than this many screen pixels is treated as a stray click and dropped. */
 const MIN_SHAPE_PX = 2;
-/** Grab radius of a selection handle and the smallest width an image can be resized to, in screen pixels. */
-const HANDLE_PX = 12;
-const MIN_IMAGE_PX = 24;
+/** How far from an object (screen pixels) a click still selects it. */
+const HIT_PX = 6;
+/** The smallest a selection can be scaled down to, in screen pixels. */
+const MIN_SELECTION_PX = 24;
+const SNAP_STEP = Math.PI / 12; // 15 degrees, with Shift
+const SOFT_SNAP = (3 * Math.PI) / 180; // pulls onto right angles
 
-/** An image being moved or resized; `draft` is the preview currently applied to the board. */
-interface Edit {
-	mode: "move" | "resize";
-	corner?: Corner;
-	start: [number, number];
-	original: Stroke;
-	draft: Stroke;
-}
+type Vec = [number, number];
+
+/** A gesture in progress on the selection; `drafts` is the preview currently on the board. */
+type Edit =
+	| { mode: "move"; start: Vec; originals: Stroke[]; drafts: Stroke[] }
+	| {
+			mode: "scale";
+			originals: Stroke[];
+			drafts: Stroke[];
+			frame: Frame;
+			anchor: Vec;
+			handle: Vec;
+	  }
+	| {
+			mode: "rotate";
+			originals: Stroke[];
+			drafts: Stroke[];
+			frame: Frame;
+			startAngle: number;
+	  }
+	| {
+			mode: "marquee";
+			start: Vec;
+			additive: boolean;
+			base: string[];
+			rect: Rect | null;
+	  };
 
 const withRect = (el: Stroke, r: Rect): Stroke => ({
 	...el,
@@ -79,10 +117,12 @@ export class Controller {
 	private lastZ = 0;
 	private panFrom: { x: number; y: number } | null = null;
 	private textTap = false;
-	private selectedId: string | null = null;
+	private selectedIds: string[] = [];
 	private edit: Edit | null = null;
 	/** Called when the selected image changes, so the UI can show or hide its controls. */
 	onSelectionChange: (() => void) | null = null;
+	/** Called with a text element when it is double-clicked, so the UI can edit its content. */
+	onTextEdit: ((el: Stroke) => void) | null = null;
 	/** Called with the board position when the text tool is tapped; the UI then asks for the text. */
 	onTextRequest: ((at: [number, number]) => void) | null = null;
 
@@ -97,7 +137,12 @@ export class Controller {
 
 	/** The selected image, if any. */
 	get selected(): Stroke | null {
-		return this.board.strokes.find((s) => s.id === this.selectedId) ?? null;
+		return this.selection[0] ?? null;
+	}
+
+	/** The selected elements that are still on the board. */
+	get selection(): Stroke[] {
+		return this.board.strokes.filter((s) => this.selectedIds.includes(s.id));
 	}
 
 	/** True while a pen or mouse pointer is down (touch gestures must then be ignored). */
@@ -237,51 +282,122 @@ export class Controller {
 		return el.id;
 	}
 
-	/** Selects an image (or clears the selection with null) and shows its frame. */
-	select(id: string | null): void {
-		this.selectedId = id;
-		const el = this.selected;
-		this.renderer.setSelection?.(el ? imageRect(el) : null);
+	/** Selects elements by id (null or an empty list clears the selection) and shows their frame. */
+	select(ids: string | string[] | null): void {
+		this.selectedIds =
+			ids === null ? [] : Array.isArray(ids) ? [...ids] : [ids];
+		this.showFrame();
 		this.onSelectionChange?.();
 	}
 
-	/** Removes the selected image (undoable). Returns false if nothing is selected. */
+	/** Removes everything selected, as one undo step. Returns false if nothing is selected. */
 	deleteSelected(): boolean {
-		const el = this.selected;
-		if (!el || !this.board.eraseStroke(this.authorId, el.id)) return false;
+		if (!this.board.eraseMany(this.authorId, this.selectedIds)) return false;
 		this.select(null);
 		this.renderer.redraw(this.board.strokes);
 		return true;
 	}
 
+	/** Applies a style change to the selection as one undo step; false if nothing changed. */
+	setProps(patch: StylePatch): boolean {
+		const before = this.selection;
+		const changed = before
+			.map((el) => applyStyle(el, patch))
+			.filter((next, i) => JSON.stringify(next) !== JSON.stringify(before[i]));
+		if (changed.length === 0 || !this.board.updateMany(this.authorId, changed))
+			return false;
+		this.showFrame();
+		this.renderer.redraw(this.board.strokes);
+		return true;
+	}
+
+	/** Tells the UI which text sits under a (double-clicked) screen position, if any. */
+	editTextAt(clientX: number, clientY: number): void {
+		const [x, y] = this.viewport.toWorld(clientX, clientY);
+		const reach = HIT_PX / this.viewport.scale;
+		const hit = [...this.board.strokes]
+			.reverse()
+			.find((s) => s.kind === "text" && objectHit(s, x, y, reach));
+		if (hit) this.onTextEdit?.(hit);
+	}
+
+	/** Sets a text element's content; blank content deletes it. */
+	commitText(id: string, text: string): void {
+		const el = this.board.strokes.find((s) => s.id === id);
+		if (!el) return;
+		if (text.trim()) {
+			this.board.updateMany(this.authorId, [{ ...el, text }]);
+		} else {
+			this.board.eraseMany(this.authorId, [id]);
+			this.selectedIds = this.selectedIds.filter((x) => x !== id);
+		}
+		this.showFrame();
+		this.renderer.redraw(this.board.strokes);
+	}
+
+	private showFrame(): void {
+		this.renderer.setSelection?.(frameOf(this.selection));
+	}
+
 	private startSelect(e: PointerInput): void {
 		const p = this.viewport.toWorld(e.clientX, e.clientY);
-		const sel = this.selected;
-		const corner = sel
-			? hitHandle(imageRect(sel), p, HANDLE_PX / this.viewport.scale)
-			: null;
-		if (sel && corner) {
-			this.edit = {
-				mode: "resize",
-				corner,
-				start: p,
-				original: sel,
-				draft: sel,
-			};
-			return;
-		}
-		const hit = [...this.board.strokes].reverse().find((s) => {
-			if (s.kind !== "image") return false;
-			const r = imageRect(s);
-			return (
-				p[0] >= r.minX && p[0] <= r.maxX && p[1] >= r.minY && p[1] <= r.maxY
+		const px = 1 / this.viewport.scale;
+		const sel = this.selection;
+		const frame = frameOf(sel);
+		if (frame) {
+			const handle = hitFrameHandle(
+				frame,
+				p,
+				HANDLE_PX * px,
+				ROT_OFFSET_PX * px,
 			);
-		});
-		if (hit) {
-			this.select(hit.id);
-			this.edit = { mode: "move", start: p, original: hit, draft: hit };
+			if (handle === "rot") {
+				const startAngle = Math.atan2(p[1] - frame.cy, p[0] - frame.cx);
+				this.edit = {
+					mode: "rotate",
+					originals: sel,
+					drafts: sel,
+					frame,
+					startAngle,
+				};
+				return;
+			}
+			if (handle) {
+				const anchor = cornerPos(frame, oppositeCorner(handle));
+				this.edit = {
+					mode: "scale",
+					originals: sel,
+					drafts: sel,
+					frame,
+					anchor,
+					handle: cornerPos(frame, handle),
+				};
+				return;
+			}
+		}
+		const hit = [...this.board.strokes]
+			.reverse()
+			.find((s) => objectHit(s, p[0], p[1], HIT_PX * px));
+		if (hit && e.shiftKey) {
+			const on = this.selectedIds.includes(hit.id);
+			this.select(
+				on
+					? this.selectedIds.filter((id) => id !== hit.id)
+					: [...this.selectedIds, hit.id],
+			);
+		} else if (hit) {
+			if (!this.selectedIds.includes(hit.id)) this.select(hit.id);
+			const now = this.selection;
+			this.edit = { mode: "move", start: p, originals: now, drafts: now };
 		} else {
-			this.select(null);
+			if (!e.shiftKey) this.select(null);
+			this.edit = {
+				mode: "marquee",
+				start: p,
+				additive: !!e.shiftKey,
+				base: [...this.selectedIds],
+				rect: null,
+			};
 		}
 	}
 
@@ -289,39 +405,81 @@ export class Controller {
 		const edit = this.edit;
 		if (!edit) return;
 		const p = this.viewport.toWorld(e.clientX, e.clientY);
-		const base = imageRect(edit.original);
-		const rect =
-			edit.mode === "resize" && edit.corner
-				? resizeFromCorner(
-						base,
-						edit.corner,
-						p,
-						MIN_IMAGE_PX / this.viewport.scale,
-					)
-				: moveRect(base, p[0] - edit.start[0], p[1] - edit.start[1]);
-		edit.draft = withRect(edit.original, rect);
+		if (edit.mode === "marquee") {
+			edit.rect = {
+				minX: Math.min(edit.start[0], p[0]),
+				minY: Math.min(edit.start[1], p[1]),
+				maxX: Math.max(edit.start[0], p[0]),
+				maxY: Math.max(edit.start[1], p[1]),
+			};
+			this.renderer.setMarquee?.(edit.rect);
+			return;
+		}
+		if (edit.mode === "move") {
+			const dx = p[0] - edit.start[0];
+			const dy = p[1] - edit.start[1];
+			edit.drafts = edit.originals.map((el) => translateEl(el, dx, dy));
+		} else if (edit.mode === "scale") {
+			const { anchor, handle, frame } = edit;
+			const reach =
+				Math.hypot(handle[0] - anchor[0], handle[1] - anchor[1]) || 1;
+			const kMin =
+				MIN_SELECTION_PX / (this.viewport.scale * Math.max(frame.w, 1));
+			const k = Math.max(
+				Math.hypot(p[0] - anchor[0], p[1] - anchor[1]) / reach,
+				kMin,
+			);
+			edit.drafts = edit.originals.map((el) => scaleEl(el, anchor, k));
+		} else {
+			const { frame } = edit;
+			const raw =
+				Math.atan2(p[1] - frame.cy, p[0] - frame.cx) - edit.startAngle;
+			const target = frame.rot + raw;
+			const snapped = e.shiftKey
+				? snapAngle(target, SNAP_STEP)
+				: softSnapAngle(target, SOFT_SNAP);
+			const pivot: Vec = [frame.cx, frame.cy];
+			edit.drafts = edit.originals.map((el) =>
+				rotateEl(el, pivot, snapped - frame.rot),
+			);
+		}
 		// A local preview only: nothing is sent and no history is written until release.
-		this.board.applyRemote({ t: "update", stroke: edit.draft });
-		this.renderer.setSelection?.(rect);
+		for (const d of edit.drafts)
+			this.board.applyRemote({ t: "update", stroke: d });
+		this.renderer.setSelection?.(frameOf(edit.drafts));
 		this.renderer.redraw(this.board.strokes);
 	}
 
 	private finishEdit(): void {
 		const edit = this.edit;
 		this.edit = null;
-		if (!edit || edit.draft === edit.original) return;
-		// Put the original back, then record the change once so it is one undo step and one message.
-		this.board.applyRemote({ t: "update", stroke: edit.original });
-		this.board.updateElement(this.authorId, edit.draft);
-		this.renderer.setSelection?.(imageRect(edit.draft));
+		if (!edit) return;
+		if (edit.mode === "marquee") {
+			this.renderer.setMarquee?.(null);
+			const r = edit.rect;
+			if (!r) return;
+			const ids = this.board.strokes
+				.filter((s) => intersects(worldBounds(s), r))
+				.map((s) => s.id);
+			this.select(edit.additive ? [...new Set([...edit.base, ...ids])] : ids);
+			return;
+		}
+		const unchanged = edit.drafts.every(
+			(d, i) => JSON.stringify(d) === JSON.stringify(edit.originals[i]),
+		);
+		if (unchanged) return; // pressed and released without really moving
+		// Put the originals back, then record the change once: one undo step, one update each.
+		for (const o of edit.originals)
+			this.board.applyRemote({ t: "update", stroke: o });
+		this.board.updateMany(this.authorId, edit.drafts);
+		this.showFrame();
 		this.renderer.redraw(this.board.strokes);
 	}
 
-	/** Keeps the selection frame in step after undo or redo changed the board. */
+	/** Keeps the selection in step after undo or redo changed the board. */
 	private syncSelection(): void {
-		const el = this.selected;
-		if (!el) this.selectedId = null;
-		this.renderer.setSelection?.(el ? imageRect(el) : null);
+		this.selectedIds = this.selection.map((s) => s.id);
+		this.showFrame();
 		this.onSelectionChange?.();
 	}
 
