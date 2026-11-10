@@ -118,6 +118,8 @@ export class Controller {
 	private panFrom: { x: number; y: number } | null = null;
 	private textTap = false;
 	private selectedIds: string[] = [];
+	/** Elements copied with copySelected, pasted by paste (not shared between clients). */
+	private clipboard: Stroke[] = [];
 	private edit: Edit | null = null;
 	/** Called when the selected image changes, so the UI can show or hide its controls. */
 	onSelectionChange: (() => void) | null = null;
@@ -294,6 +296,94 @@ export class Controller {
 	deleteSelected(): boolean {
 		if (!this.board.eraseMany(this.authorId, this.selectedIds)) return false;
 		this.select(null);
+		this.renderer.redraw(this.board.strokes);
+		return true;
+	}
+
+	/** True when copySelected has put something to paste. */
+	get hasClipboard(): boolean {
+		return this.clipboard.length > 0;
+	}
+
+	/** Remembers the selection for paste. Returns false if nothing is selected. */
+	copySelected(): boolean {
+		const sel = this.selection;
+		if (sel.length === 0) return false;
+		this.clipboard = sel;
+		return true;
+	}
+
+	/**
+	 * Adds copies of the clipboard on top, as one undo step, and selects them. Their top-left
+	 * corner lands on `at` (board coordinates), or a little below and right of the originals.
+	 * Returns the new ids (empty if the clipboard is empty).
+	 */
+	paste(at?: [number, number]): string[] {
+		return this.addCopies(this.clipboard, at);
+	}
+
+	/** Copies the selection a little below and right of it and selects the copies. */
+	duplicateSelected(): boolean {
+		return this.addCopies(this.selection).length > 0;
+	}
+
+	/** Moves the selection above every other element, keeping its own order. */
+	bringToFront(): boolean {
+		const sel = this.selection;
+		if (sel.length === 0) return false;
+		const moved = sel.map((el) => ({ ...el, z: this.nextZ() }));
+		return this.reorder(moved);
+	}
+
+	/** Moves the selection below every other element, keeping its own order. */
+	sendToBack(): boolean {
+		const sel = this.selection;
+		if (sel.length === 0) return false;
+		const lowest = Math.min(...this.board.strokes.map((s) => s.z));
+		const moved = sel.map((el, i) => ({
+			...el,
+			z: lowest - sel.length + i,
+		}));
+		return this.reorder(moved);
+	}
+
+	/**
+	 * Prepares a right click at a screen position: the object under it becomes the selection
+	 * (unless it already is part of it); on empty space the selection is cleared. Returns
+	 * whether there is an object there.
+	 */
+	contextTarget(clientX: number, clientY: number): boolean {
+		const [x, y] = this.viewport.toWorld(clientX, clientY);
+		const hit = [...this.board.strokes]
+			.reverse()
+			.find((s) => objectHit(s, x, y, HIT_PX / this.viewport.scale));
+		if (!hit) {
+			this.select(null);
+			return false;
+		}
+		if (!this.selectedIds.includes(hit.id)) this.select(hit.id);
+		return true;
+	}
+
+	private addCopies(source: Stroke[], at?: [number, number]): string[] {
+		if (source.length === 0) return [];
+		const left = Math.min(...source.map((s) => worldBounds(s).minX));
+		const top = Math.min(...source.map((s) => worldBounds(s).minY));
+		const [dx, dy] = at ? [at[0] - left, at[1] - top] : [20, 20];
+		const copies = source.map((s) => ({
+			...translateEl(s, dx, dy),
+			id: this.newId(),
+			authorId: this.authorId,
+			z: this.nextZ(),
+		}));
+		this.board.addMany(this.authorId, copies);
+		this.renderer.redraw(this.board.strokes);
+		this.select(copies.map((s) => s.id));
+		return copies.map((s) => s.id);
+	}
+
+	private reorder(moved: Stroke[]): boolean {
+		if (!this.board.updateMany(this.authorId, moved)) return false;
 		this.renderer.redraw(this.board.strokes);
 		return true;
 	}
