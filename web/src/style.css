@@ -811,3 +811,31 @@ canvas {
 .board-title .name-ok:hover {
 	filter: brightness(1.1);
 }
+
+/* The map of the board, above the zoom controls. */
+.minimap {
+	position: fixed;
+	right: 12px;
+	bottom: 68px;
+	z-index: 1;
+	padding: 6px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: color-mix(in srgb, var(--surface) 90%, transparent);
+	-webkit-backdrop-filter: blur(12px);
+	backdrop-filter: blur(12px);
+	box-shadow: var(--shadow);
+	touch-action: none;
+}
+.minimap canvas {
+	position: static; /* not the full-screen board canvases */
+	inset: auto;
+	display: block;
+	border-radius: calc(var(--radius-lg) - 4px);
+	background: var(--surface-hover);
+	cursor: crosshair;
+}
+.zoom button.active {
+	background: var(--accent-soft);
+	color: var(--accent);
+}

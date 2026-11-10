@@ -21,6 +21,7 @@ import { TouchGestures } from "./board/gestures";
 import { ImageCache } from "./board/image-cache";
 import { defaultSize, placeCentered } from "./board/image-geometry";
 import { prepareImage, uploadImage } from "./board/image-upload";
+import { contentBounds, fitView } from "./board/minimap";
 import { loadShape } from "./board/shapes";
 import { applyStyle, type StylePatch } from "./board/style";
 import { fontSizeFor, fontSizeOf, fontsChanged } from "./board/text";
@@ -32,6 +33,7 @@ import { BoardTitle } from "./board-title";
 import { ContextMenu, type MenuItem } from "./context-menu";
 import { Cursors } from "./cursors";
 import { Icon } from "./icon";
+import { Minimap } from "./minimap";
 import { Participants } from "./participants";
 import { hasFinePointer } from "./pointer";
 import { PropertiesPanel } from "./properties-panel";
@@ -142,6 +144,23 @@ export function BoardView({
 	const theme = useTheme();
 	/** Repaints after the view changed (set up by the effect below). */
 	const viewChanged = useRef<() => void>(() => {});
+	const boardRef = useRef<Board | null>(null);
+	/** The map of the board in a corner; whether it is shown is remembered on this device. */
+	const [mapOpen, setMapOpenState] = useState(() => {
+		try {
+			return localStorage.getItem("inkroom.map") !== "0";
+		} catch {
+			return true;
+		}
+	});
+	const setMapOpen = (open: boolean) => {
+		setMapOpenState(open);
+		try {
+			localStorage.setItem("inkroom.map", open ? "1" : "0");
+		} catch {
+			// private mode: the choice is just not remembered
+		}
+	};
 	/** Adds a picked, pasted or dropped image to the board (set up by the effect below). */
 	const insertImage = useRef<(file: Blob) => void>(() => {});
 	const [imageError, setImageError] = useState("");
@@ -174,6 +193,7 @@ export function BoardView({
 		if (!committed || !live) return;
 
 		const board = new Board();
+		boardRef.current = board;
 		const images = new ImageCache(boardId, () => canvas.redraw(board.strokes));
 		const canvas = new CanvasRenderer(committed, live, viewport, images);
 		canvas.ink = (c) => displayColor(c, currentTheme());
@@ -193,6 +213,7 @@ export function BoardView({
 			onPeers: setPeers,
 			onName: setTitle,
 			onUpdate: () => {
+				setTick((t) => t + 1); // the map of the board follows what others draw
 				ctl.current?.refreshSelection();
 				canvas.redraw(board.strokes);
 				canvas.setRemoteLive(sync.liveStrokes());
@@ -890,7 +911,24 @@ export function BoardView({
 					))}
 				</div>
 			)}
+			{mapOpen && ctl.current && (
+				<Minimap
+					strokes={boardRef.current?.strokes ?? []}
+					viewport={viewport}
+					screen={{ w: innerWidth, h: innerHeight }}
+					ink={(c) => displayColor(c, currentTheme())}
+					onNavigate={() => viewChanged.current()}
+				/>
+			)}
 			<ZoomControls
+				mapOpen={mapOpen}
+				onToggleMap={() => setMapOpen(!mapOpen)}
+				onFit={() => {
+					const all = contentBounds(boardRef.current?.strokes ?? []);
+					if (!all) return;
+					fitView(viewport, all, innerWidth, innerHeight);
+					viewChanged.current();
+				}}
 				scale={scale}
 				onZoomIn={() => zoomTo((s) => s * ZOOM_STEP)}
 				onZoomOut={() => zoomTo((s) => s / ZOOM_STEP)}
