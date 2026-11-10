@@ -1,8 +1,10 @@
+import { Icon, type IconName } from "./icon";
 /** Width of the slider's thumb in px; the CSS draws it this size and the fill follows its middle. */
 export const THUMB_PX = 16;
 
 /** A slider with its value next to it: `input` while moving, `change` on release. */
 export function Slider({
+	icon,
 	label,
 	min,
 	max,
@@ -11,6 +13,8 @@ export function Slider({
 	onInput,
 	onChange,
 }: {
+	/** An icon in front, saying what the slider is for. */
+	icon?: IconName;
 	label: string;
 	min: number;
 	max: number;
@@ -25,6 +29,11 @@ export function Slider({
 	const p = span > 0 ? Math.min(1, Math.max(0, (value - min) / span)) : 0;
 	return (
 		<label class="slider">
+			{icon && (
+				<span class="slider-icon">
+					<Icon name={icon} />
+				</span>
+			)}
 			<input
 				style={{ "--p": String(p) }}
 				type="range"

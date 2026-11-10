@@ -40,7 +40,7 @@ import { type Peer, type SocketLike, SyncClient } from "./sync/sync";
 import { TextEditor } from "./text-editor";
 import { currentTheme, displayColor, useTheme } from "./theme";
 import { toolCursor } from "./tool-cursor";
-import { COLORS, SIZES, Toolbar } from "./toolbar";
+import { COLORS, MORE_COLORS, SIZES, Toolbar } from "./toolbar";
 import { ZoomControls } from "./zoom-controls";
 
 /** Not crypto.randomUUID: it is missing on http:// pages (LAN testing on an iPad). */
@@ -790,6 +790,7 @@ export function BoardView({
 			<PropertiesPanel
 				elements={panelElements}
 				colors={COLORS}
+				palette={[...COLORS, ...MORE_COLORS]}
 				anchor={panelAnchor}
 				onClose={typing ? undefined : () => setClosedFor(selectionKey)}
 				display={(c) => displayColor(c, currentTheme())}

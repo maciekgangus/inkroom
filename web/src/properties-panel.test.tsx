@@ -266,3 +266,50 @@ describe("the cross in the panel's title", () => {
 		expect(onClose).toHaveBeenCalledTimes(1);
 	});
 });
+
+describe("the colour windows of the panel", () => {
+	const show = (els: Stroke[], palette?: string[]) => {
+		const root = document.createElement("div");
+		render(
+			<PropertiesPanel
+				elements={els}
+				colors={COLORS}
+				palette={palette}
+				onChange={() => {}}
+			/>,
+			root,
+		);
+		return root;
+	};
+
+	test("show the current colour, and that a shape has no fill, without words on the buttons", () => {
+		const root = show([{ ...rect, color: "#d32f2f" }]);
+		const names = [...root.querySelectorAll(".color-name")].map(
+			(n) => n.textContent,
+		);
+		expect(names).toEqual(["#D32F2F", "brak"]);
+		expect(root.textContent).not.toContain("Bez wypełnienia");
+		expect(
+			root.querySelector('[aria-label="prop fill none"] svg'),
+		).not.toBeNull();
+	});
+
+	test("offer the whole palette, and a tile for any other colour", () => {
+		const palette = [...COLORS, "#6b7280", "#8d5a2b"];
+		const root = show([rect], palette);
+		expect(root.querySelectorAll('[aria-label^="prop color #"]')).toHaveLength(
+			palette.length,
+		);
+		expect(
+			root.querySelector('[aria-label="prop color custom"]'),
+		).not.toBeNull();
+		expect(
+			root.querySelector('[aria-label="prop fill custom"]'),
+		).not.toBeNull();
+	});
+
+	test("the sliders say what they are for with an icon", () => {
+		const root = show([rect]);
+		expect(root.querySelectorAll(".slider .slider-icon svg")).toHaveLength(2); // width, opacity
+	});
+});

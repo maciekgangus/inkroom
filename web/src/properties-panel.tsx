@@ -8,7 +8,7 @@ import {
 } from "./board/style";
 import type { Rect } from "./board/viewport";
 import { panelPosition, panelTitle } from "./floating-panel";
-import { Icon } from "./icon";
+import { Icon, type IconName } from "./icon";
 import { Slider } from "./slider";
 import "./properties-panel.css";
 import { useLayoutEffect, useRef, useState } from "preact/hooks";
@@ -25,6 +25,8 @@ interface Props {
 	/** The selected elements; the panel shows the values of the first. */
 	elements: Stroke[];
 	colors: string[];
+	/** The whole palette offered under the current colour; defaults to `colors`. */
+	palette?: string[];
 	/** How a stored colour is shown (dark mode swaps black and white); defaults to as is. */
 	display?: (color: string) => string;
 	/**
@@ -44,6 +46,7 @@ interface Props {
 export function PropertiesPanel({
 	elements,
 	colors,
+	palette,
 	display = (c) => c,
 	anchor = null,
 	onPreview = () => {},
@@ -101,22 +104,21 @@ export function PropertiesPanel({
 			</div>
 			{can.color && (
 				<div class="row">
-					{colors.map((c) => (
-						<button
-							type="button"
-							key={c}
-							aria-label={`prop color ${c}`}
-							class={`swatch ${on(now.color === c)}`}
-							style={{ background: display(c) }}
-							onClick={() => onChange({ color: c })}
-						/>
-					))}
+					<ColorBlock
+						icon="pen"
+						prefix="prop color"
+						current={now.color}
+						colors={palette ?? colors}
+						display={display}
+						onPick={(c) => c !== null && onChange({ color: c })}
+					/>
 				</div>
 			)}
 			{can.size && (
 				<div class="row">
 					{can.textOnly ? (
 						<Slider
+							icon="text"
 							label="prop font size"
 							min={8}
 							max={200}
@@ -127,6 +129,7 @@ export function PropertiesPanel({
 						/>
 					) : (
 						<Slider
+							icon="width"
 							label="prop size"
 							min={1}
 							max={50}
@@ -155,28 +158,20 @@ export function PropertiesPanel({
 			)}
 			{can.fill && (
 				<div class="row">
-					<button
-						type="button"
-						aria-label="prop fill none"
-						class={on(now.fill === null)}
-						onClick={() => onChange({ fill: null })}
-					>
-						Bez wypełnienia
-					</button>
-					{colors.map((c) => (
-						<button
-							type="button"
-							key={c}
-							aria-label={`prop fill ${c}`}
-							class={`swatch ${on(now.fill === c)}`}
-							style={{ background: display(c) }}
-							onClick={() => onChange({ fill: c })}
-						/>
-					))}
+					<ColorBlock
+						icon="bucket"
+						prefix="prop fill"
+						current={now.fill}
+						colors={palette ?? colors}
+						display={display}
+						onPick={(c) => onChange({ fill: c })}
+						allowNone
+					/>
 				</div>
 			)}
 			<div class="row">
 				<Slider
+					icon="opacity"
 					label="prop opacity"
 					min={1}
 					max={100}
@@ -185,6 +180,83 @@ export function PropertiesPanel({
 					onInput={(v) => onPreview({ opacity: v / 100 })}
 					onChange={(v) => onChange({ opacity: v / 100 })}
 				/>
+			</div>
+		</div>
+	);
+}
+
+/**
+ * A colour to choose: a window showing the current one (or that there is none), and under it the
+ * palette with a tile of its own for any other colour. With `allowNone` the first tile clears it.
+ */
+function ColorBlock({
+	icon,
+	prefix,
+	current,
+	colors,
+	display,
+	onPick,
+	allowNone = false,
+}: {
+	icon: IconName;
+	prefix: string;
+	current: string | null;
+	colors: string[];
+	display: (color: string) => string;
+	onPick: (color: string | null) => void;
+	allowNone?: boolean;
+}) {
+	return (
+		<div class="color-block">
+			<div class="color-current">
+				<span class="color-icon">
+					<Icon name={icon} />
+				</span>
+				<span
+					class={`chip${current === null ? " none" : ""}`}
+					style={
+						current === null ? undefined : { background: display(current) }
+					}
+				>
+					{current === null && <Icon name="no-fill" />}
+				</span>
+				<span class="color-name">
+					{current === null ? "brak" : display(current).toUpperCase()}
+				</span>
+			</div>
+			<div class="palette-grid">
+				{allowNone && (
+					<button
+						type="button"
+						aria-label={`${prefix} none`}
+						title="Bez wypełnienia"
+						class={`swatch none ${current === null ? "active" : ""}`}
+						onClick={() => onPick(null)}
+					>
+						<Icon name="no-fill" />
+					</button>
+				)}
+				{colors.map((c) => (
+					<button
+						type="button"
+						key={c}
+						aria-label={`${prefix} ${c}`}
+						class={`swatch ${current === c ? "active" : ""}`}
+						style={{ background: display(c) }}
+						onClick={() => onPick(c)}
+					/>
+				))}
+				<label class="swatch custom" title="Własny kolor">
+					<input
+						type="color"
+						aria-label={`${prefix} custom`}
+						value={
+							current && /^#[0-9a-f]{6}$/i.test(current) ? current : "#5b5bf0"
+						}
+						onInput={(e) => onPick((e.currentTarget as HTMLInputElement).value)}
+					/>
+					<Icon name="plus" />
+				</label>
 			</div>
 		</div>
 	);

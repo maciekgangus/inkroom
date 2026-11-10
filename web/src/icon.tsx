@@ -19,6 +19,13 @@ const ICONS = {
 	undo: "M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11",
 	redo: "m15 14 5-5-5-5M20 9H9.5a5.5 5.5 0 0 0 0 11H13",
 	plus: "M12 5v14M5 12h14",
+	"no-fill":
+		"M6 4h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2ZM4.5 19.5l15-15",
+	bucket:
+		"M5 12 12 5l7 7-6.5 6.5a2 2 0 0 1-2.8 0ZM12 5 9 2M5 12h14M20.5 16s1.5 1.7 1.5 2.7a1.5 1.5 0 0 1-3 0c0-1 1.5-2.7 1.5-2.7Z",
+	opacity:
+		"M12 3s6.5 6.6 6.5 11.2a6.5 6.5 0 0 1-13 0C5.5 9.6 12 3 12 3ZM12 8v12",
+	width: "M4 6h16M4 11h16M4 17.5h16",
 	wave: "M3 15c3-7 5-7 8-2.5s5 4.5 10-3",
 	"style-solid": "M4 12h16",
 	"style-dashed": "M3 12h4M10 12h4M17 12h4",
@@ -40,7 +47,9 @@ const ICONS = {
 };
 
 /** A line icon that takes the colour of the surrounding text. */
-export function Icon({ name }: { name: keyof typeof ICONS }) {
+export type IconName = keyof typeof ICONS;
+
+export function Icon({ name }: { name: IconName }) {
 	return (
 		<svg
 			width="20"
