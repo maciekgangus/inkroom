@@ -40,7 +40,7 @@ const TOOLS: { tool: Settings["tool"]; label: string }[] = [
 	{ tool: "pen", label: "Pióro" },
 	{ tool: "line", label: "Linia" },
 	{ tool: "rect", label: "Prostokąt" },
-	{ tool: "circle", label: "Okrąg" },
+	{ tool: "circle", label: "Owal" },
 	{ tool: "text", label: "Tekst" },
 	{ tool: "eraser", label: "Gumka" },
 	{ tool: "pan", label: "Ręka" },

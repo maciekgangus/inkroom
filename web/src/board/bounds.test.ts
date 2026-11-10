@@ -166,6 +166,29 @@ describe("strokeBounds with rotation", () => {
 	});
 });
 
+describe("strokeBounds for ellipses", () => {
+	test("an ellipse is bounded by its box plus the line width", () => {
+		const el = {
+			id: "e",
+			authorId: "a",
+			color: "#000",
+			size: 4,
+			z: 0,
+			kind: "ellipse" as const,
+			points: [
+				[200, 100, 0.5],
+				[0, 0, 0.5],
+			] as [number, number, number][],
+		};
+		expect(strokeBounds(el)).toEqual({
+			minX: -4,
+			minY: -4,
+			maxX: 204,
+			maxY: 104,
+		});
+	});
+});
+
 describe("intersects", () => {
 	const view = { minX: 0, minY: 0, maxX: 100, maxY: 100 };
 

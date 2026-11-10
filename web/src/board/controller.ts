@@ -1,5 +1,6 @@
 import type { Board, Point, Stroke } from "./board";
 import { intersects } from "./bounds";
+import { constrainEnd } from "./draw-aids";
 import { findHit, objectHit } from "./hit";
 import {
 	cornerPos,
@@ -116,6 +117,8 @@ const withRect = (el: Stroke, r: Rect): Stroke => ({
 });
 
 type ShapeTool = "line" | "rect" | "circle";
+/** What each shape tool creates: the oval tool draws an ellipse (a circle with Shift, R-024). */
+const SHAPE_KIND = { line: "line", rect: "rect", circle: "ellipse" } as const;
 /** How far (px) the right button may move and still count as a click, not a pan. */
 const RIGHT_CLICK_SLOP = 4;
 
@@ -210,7 +213,7 @@ export class Controller {
 			color: this.settings.color,
 			size: this.settings.size,
 			z: this.nextZ(),
-			...(isShapeTool(tool) ? { kind: tool } : {}),
+			...(isShapeTool(tool) ? { kind: SHAPE_KIND[tool] } : {}),
 			points: isShapeTool(tool) ? [start, [...start]] : [start],
 		};
 		this.renderer.drawLive(this.current);
@@ -245,7 +248,7 @@ export class Controller {
 		if (!this.current) return;
 		if (this.current.kind) {
 			// A shape only needs where it ends.
-			this.current.points[1] = this.point(e);
+			this.current.points[1] = this.shapeEnd(e, this.current);
 			this.renderer.drawLive(this.current);
 			return;
 		}
@@ -276,6 +279,8 @@ export class Controller {
 			return;
 		}
 		if (!this.current) return;
+		if (this.current.kind)
+			this.current.points[1] = this.shapeEnd(e, this.current); // Shift as it is on release
 		if (this.current.kind && this.tooSmall(this.current)) {
 			this.current = null;
 			this.renderer.drawLive(null);
@@ -659,6 +664,19 @@ export class Controller {
 		this.selectedIds = this.selection.map((s) => s.id);
 		this.showFrame();
 		this.onSelectionChange?.();
+	}
+
+	/** Where the shape being dragged ends at this pointer position, with Shift's drawing aids applied. */
+	private shapeEnd(e: PointerInput, shape: Stroke): Point {
+		const p = this.point(e);
+		const kind = shape.kind as "line" | "rect" | "ellipse";
+		const [x, y] = constrainEnd(
+			kind,
+			[shape.points[0][0], shape.points[0][1]],
+			[p[0], p[1]],
+			!!e.shiftKey,
+		);
+		return [x, y, p[2]];
 	}
 
 	private tooSmall(shape: Stroke): boolean {

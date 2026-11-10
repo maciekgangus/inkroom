@@ -73,12 +73,37 @@ export function objectHit(
 		)
 			return true;
 	}
+	if (stroke.kind === "ellipse" && stroke.fill) {
+		const { cx, cy, rx, ry } = ellipseOf(stroke);
+		if (
+			rx > 0 &&
+			ry > 0 &&
+			Math.hypot((lx - cx) / rx, (ly - cy) / ry) <= 1 + reach / Math.min(rx, ry)
+		)
+			return true;
+	}
 	if (stroke.kind === "circle" && stroke.fill) {
 		const [c, edge] = stroke.points;
 		const r = Math.hypot(edge[0] - c[0], edge[1] - c[1]);
 		if (Math.hypot(lx - c[0], ly - c[1]) <= r + reach) return true;
 	}
 	return hitLocal(stroke, lx, ly, radius);
+}
+
+/** Centre and radii of an ellipse element (inscribed in the box of its two corners). */
+function ellipseOf(el: Stroke): {
+	cx: number;
+	cy: number;
+	rx: number;
+	ry: number;
+} {
+	const [a, b] = el.points;
+	return {
+		cx: (a[0] + b[0]) / 2,
+		cy: (a[1] + b[1]) / 2,
+		rx: Math.abs(b[0] - a[0]) / 2,
+		ry: Math.abs(b[1] - a[1]) / 2,
+	};
 }
 
 /** The hit test in the element's own, unrotated frame. */
@@ -103,6 +128,13 @@ function hitLocal(
 				[a[0], a[1]],
 			];
 			return nearPolyline(corners, x, y, reach);
+		}
+		case "ellipse": {
+			// Distance from the outline, approximated by how far the normalised radius is from 1.
+			const { cx, cy, rx, ry } = ellipseOf(stroke);
+			if (rx === 0 || ry === 0) return false;
+			const d = Math.hypot((x - cx) / rx, (y - cy) / ry);
+			return Math.abs(d - 1) * Math.min(rx, ry) <= reach;
 		}
 		case "circle": {
 			const [c, edge] = pts;

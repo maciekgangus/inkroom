@@ -148,6 +148,7 @@ describe("showsBox (R-034)", () => {
 		expect(showsBox([el("image")])).toBe(true);
 		expect(showsBox([el("rect")])).toBe(true);
 		expect(showsBox([el("circle")])).toBe(true);
+		expect(showsBox([el("ellipse")])).toBe(true);
 	});
 
 	test("several elements get the outline box, and nothing selected shows none", () => {

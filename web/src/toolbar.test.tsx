@@ -210,7 +210,7 @@ describe("Toolbar", () => {
 		expect(title("line")).toBe("Linia (L)");
 		expect(title("rect")).toBe("Prostokąt (K)");
 		expect(title("text")).toBe("Tekst (T)");
-		expect(title("circle")).toBe("Okrąg");
+		expect(title("circle")).toBe("Owal");
 	});
 
 	test("clicking a shape tool and leaving it remembers it for K", () => {

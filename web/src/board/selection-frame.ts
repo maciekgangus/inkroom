@@ -28,7 +28,12 @@ export function showsBox(els: Stroke[]): boolean {
 	if (els.length === 0) return false;
 	if (els.length > 1) return true;
 	const kind = els[0].kind;
-	return kind === "image" || kind === "rect" || kind === "circle";
+	return (
+		kind === "image" ||
+		kind === "rect" ||
+		kind === "circle" ||
+		kind === "ellipse"
+	);
 }
 
 /**

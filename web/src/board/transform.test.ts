@@ -95,6 +95,38 @@ describe("geomBox", () => {
 	});
 });
 
+describe("ellipse transforms", () => {
+	const ellipse: Stroke = {
+		...base,
+		kind: "ellipse",
+		points: pts([10, 20], [110, 70]),
+	};
+
+	test("its box is the two corners", () => {
+		expect(geomBox(ellipse)).toEqual({
+			minX: 10,
+			minY: 20,
+			maxX: 110,
+			maxY: 70,
+		});
+	});
+
+	test("scaling about a corner scales the box", () => {
+		expect(geomBox(scaleEl(ellipse, [10, 20], 2))).toEqual({
+			minX: 10,
+			minY: 20,
+			maxX: 210,
+			maxY: 120,
+		});
+	});
+
+	test("rotating about its centre only changes the angle", () => {
+		const r = rotateEl(ellipse, centerOf(ellipse), Math.PI / 2);
+		expect(r.rot).toBeCloseTo(Math.PI / 2);
+		expect(geomBox(r)).toEqual(geomBox(ellipse));
+	});
+});
+
 describe("rotatePoint and toLocal", () => {
 	test("rotates a point around a centre", () => {
 		close(rotatePoint([1, 0], [0, 0], Math.PI / 2), [0, 1]);
@@ -295,6 +327,16 @@ describe("scaleElBy (free scaling)", () => {
 		const out = scaleElBy(r, [200, 150], 2, 1, Math.PI / 2);
 		expect(size(out)[0]).toBeCloseTo(400);
 		expect(size(out)[1]).toBeCloseTo(100);
+	});
+
+	test("an ellipse is stretched freely like a rectangle", () => {
+		const ellipse: Stroke = {
+			...base,
+			kind: "ellipse",
+			points: pts([100, 100], [300, 200]),
+		};
+		const out = scaleElBy(ellipse, [100, 100], 2, 1, 0);
+		expect(size(out)).toEqual([400, 100]);
 	});
 
 	test("a circle and a text can only grow evenly, by the geometric mean", () => {

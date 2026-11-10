@@ -50,6 +50,16 @@ function shapePath(s: Stroke): Path2D | null {
 			Math.abs(b[0] - a[0]),
 			Math.abs(b[1] - a[1]),
 		);
+	} else if (s.kind === "ellipse") {
+		path.ellipse(
+			(a[0] + b[0]) / 2,
+			(a[1] + b[1]) / 2,
+			Math.abs(b[0] - a[0]) / 2,
+			Math.abs(b[1] - a[1]) / 2,
+			0,
+			0,
+			Math.PI * 2,
+		);
 	} else if (s.kind === "circle") {
 		path.arc(a[0], a[1], Math.hypot(b[0] - a[0], b[1] - a[1]), 0, Math.PI * 2);
 	} else {
