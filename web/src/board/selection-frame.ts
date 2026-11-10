@@ -67,6 +67,12 @@ export function frameOf(els: Stroke[]): Frame | null {
 	};
 }
 
+/** Whether a board point lies inside the (possibly rotated) frame. */
+export function pointInFrame(f: Frame, p: Vec): boolean {
+	const [x, y] = rotatePoint(p, [f.cx, f.cy], -f.rot);
+	return Math.abs(x - f.cx) <= f.w / 2 && Math.abs(y - f.cy) <= f.h / 2;
+}
+
 const at = (f: Frame, dx: number, dy: number): Vec =>
 	rotatePoint([f.cx + dx, f.cy + dy], [f.cx, f.cy], f.rot);
 

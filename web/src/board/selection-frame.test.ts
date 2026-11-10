@@ -5,6 +5,7 @@ import {
 	frameOf,
 	hitFrameHandle,
 	oppositeCorner,
+	pointInFrame,
 	rotationHandlePos,
 	showsBox,
 } from "./selection-frame";
@@ -151,5 +152,22 @@ describe("showsBox (R-034)", () => {
 	test("several elements get the outline box, and nothing selected shows none", () => {
 		expect(showsBox([el(), el("line")])).toBe(true);
 		expect(showsBox([])).toBe(false);
+	});
+});
+
+describe("pointInFrame", () => {
+	const f = { cx: 100, cy: 100, w: 80, h: 40, rot: 0 };
+
+	test("is true inside the frame and false outside", () => {
+		expect(pointInFrame(f, [100, 100])).toBe(true);
+		expect(pointInFrame(f, [60, 80])).toBe(true); // a corner
+		expect(pointInFrame(f, [59, 100])).toBe(false);
+		expect(pointInFrame(f, [100, 121])).toBe(false);
+	});
+
+	test("follows the rotation of the frame", () => {
+		const turned = { ...f, rot: Math.PI / 2 }; // now 40 wide and 80 tall on the board
+		expect(pointInFrame(turned, [100, 135])).toBe(true);
+		expect(pointInFrame(turned, [135, 100])).toBe(false);
 	});
 });

@@ -8,6 +8,7 @@ import {
 	HANDLE_PX,
 	hitFrameHandle,
 	oppositeCorner,
+	pointInFrame,
 	ROT_OFFSET_PX,
 } from "./selection-frame";
 import { applyStyle, type StylePatch } from "./style";
@@ -392,6 +393,10 @@ export class Controller {
 	 */
 	contextTarget(clientX: number, clientY: number): boolean {
 		const [x, y] = this.viewport.toWorld(clientX, clientY);
+		// The empty inside of a group's frame belongs to the group.
+		const group = this.selection;
+		const frame = group.length > 1 ? frameOf(group) : null;
+		if (frame && pointInFrame(frame, [x, y])) return true;
 		const hit = [...this.board.strokes]
 			.reverse()
 			.find((s) => objectHit(s, x, y, HIT_PX / this.viewport.scale));
