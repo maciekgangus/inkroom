@@ -27,3 +27,6 @@ data/
 
 # keep the example env file tracked
 !.env.example
+
+# graphify output: generated per checkout (copy it into worktrees, never commit it)
+graphify-out/
