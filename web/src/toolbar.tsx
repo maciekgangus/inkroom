@@ -29,6 +29,8 @@ interface Props {
 	hasSelection?: boolean;
 	/** The image group (add, and on a tablet paste and delete); left out, there is none. */
 	images?: ImageControlsProps;
+	/** Called after the tool changed, so the board can show the matching cursor at once. */
+	onToolChange?: () => void;
 	onUndo: () => void;
 	onRedo: () => void;
 }
@@ -58,6 +60,7 @@ export function Toolbar({
 	settings,
 	hasSelection = false,
 	images,
+	onToolChange,
 	onUndo,
 	onRedo,
 }: Props) {
@@ -65,6 +68,7 @@ export function Toolbar({
 	const set = (patch: Partial<Settings>) => {
 		Object.assign(settings, patch);
 		rerender((n) => n + 1);
+		if (patch.tool) onToolChange?.();
 	};
 	const [paletteOpen, setPaletteOpen] = useState(false);
 	const theme = useTheme();
@@ -108,6 +112,7 @@ export function Toolbar({
 						onClick={() => {
 							selectTool(settings, tool);
 							rerender((n) => n + 1);
+							onToolChange?.();
 						}}
 					>
 						<Icon name={tool} />

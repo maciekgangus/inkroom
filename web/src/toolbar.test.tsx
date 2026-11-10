@@ -218,4 +218,22 @@ describe("Toolbar", () => {
 		click("pen");
 		expect(settings.lastShape).toBe("circle");
 	});
+
+	test("tells its parent when the tool changes, so the board can update the cursor", () => {
+		const onToolChange = vi.fn();
+		act(() =>
+			render(
+				<Toolbar
+					settings={settings}
+					onToolChange={onToolChange}
+					onUndo={onUndo}
+					onRedo={onRedo}
+				/>,
+				root,
+			),
+		);
+		click("eraser");
+		expect(onToolChange).toHaveBeenCalledOnce();
+		expect(settings.tool).toBe("eraser");
+	});
 });

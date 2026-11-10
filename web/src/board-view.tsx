@@ -85,6 +85,8 @@ export function BoardView({
 	/** Adds a picked, pasted or dropped image to the board (set up by the effect below). */
 	const insertImage = useRef<(file: Blob) => void>(() => {});
 	const [imageError, setImageError] = useState("");
+	/** Shows the cursor of the active tool on the board (set up by the effect below). */
+	const applyCursor = useRef<() => void>(() => {});
 	/** The open right-click menu: where, what is under it and the board position clicked. */
 	const [menu, setMenu] = useState<{
 		x: number;
@@ -133,6 +135,14 @@ export function BoardView({
 			newId,
 		);
 		ctl.current = controller;
+		let shownCursor = "";
+		applyCursor.current = () => {
+			const want = toolCursor(settings.tool, controller.panning);
+			if (want === shownCursor) return;
+			shownCursor = want;
+			live.style.cursor = want;
+		};
+		applyCursor.current();
 		controller.onTextRequest = ([x, y]) => setTextAt({ x, y });
 		controller.onTextEdit = (el) => setEditingText(el);
 		controller.onSelectionChange = () => setTick((t) => t + 1);
@@ -196,7 +206,7 @@ export function BoardView({
 			if (e.pointerType === "touch") return gestures.down(e);
 			live.setPointerCapture(e.pointerId);
 			controller.pointerDown(e);
-			live.style.cursor = toolCursor(settings.tool, controller.panning);
+			applyCursor.current();
 		};
 		const move = (e: PointerEvent) => {
 			if (e.pointerType === "touch") return gestures.move(e);
@@ -204,6 +214,7 @@ export function BoardView({
 			const [x, y] = viewport.toWorld(e.clientX, e.clientY);
 			sync.cursorMove(x, y);
 			controller.pointerMove(e);
+			applyCursor.current(); // a safety net: whichever way the tool changed, it shows
 		};
 		const leave = (e: PointerEvent) => {
 			if (e.pointerType !== "touch") sync.cursorHide();
@@ -211,12 +222,12 @@ export function BoardView({
 		const up = (e: PointerEvent) => {
 			if (e.pointerType === "touch") return gestures.up(e);
 			controller.pointerUp(e);
-			live.style.cursor = toolCursor(settings.tool);
+			applyCursor.current();
 		};
 		const cancel = (e: PointerEvent) => {
 			if (e.pointerType === "touch") return gestures.cancel(e);
 			controller.pointerCancel(e);
-			live.style.cursor = toolCursor(settings.tool);
+			applyCursor.current();
 		};
 		const wheel = (e: WheelEvent) => {
 			e.preventDefault(); // otherwise Ctrl + wheel (and trackpad pinch) zooms the whole page
@@ -342,6 +353,9 @@ export function BoardView({
 		};
 	}, [settings, viewport, boardId, authorId, name, connect]);
 
+	// Whatever changed the tool (a key, the toolbar, adding an image), the cursor follows.
+	useEffect(() => applyCursor.current());
+
 	// The ink colours depend on the theme (black and white swap in dark mode).
 	useEffect(() => {
 		if (theme) viewChanged.current();
@@ -434,11 +448,7 @@ export function BoardView({
 				style={backgroundStyle(background, viewport)}
 			/>
 			<canvas id="board" ref={committedRef} />
-			<canvas
-				id="live"
-				ref={liveRef}
-				style={{ cursor: toolCursor(settings.tool) }}
-			/>
+			<canvas id="live" ref={liveRef} />
 			{editingText && (
 				<TextEditor
 					key={editingText.id}
@@ -490,6 +500,7 @@ export function BoardView({
 			<Cursors cursors={syncRef.current?.cursors() ?? []} viewport={viewport} />
 			<Toolbar
 				settings={settings}
+				onToolChange={() => applyCursor.current()}
 				hasSelection={(ctl.current?.selection.length ?? 0) > 0}
 				images={{
 					fine: hasFinePointer(),
