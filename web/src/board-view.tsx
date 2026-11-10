@@ -483,6 +483,10 @@ export function BoardView({
 				elements={ctl.current?.selection ?? []}
 				colors={COLORS}
 				display={(c) => displayColor(c, currentTheme())}
+				onPreview={(patch) => {
+					ctl.current?.previewStyle(patch);
+					setTick((t) => t + 1);
+				}}
 				onChange={(patch) => {
 					ctl.current?.setProps(patch);
 					setTick((t) => t + 1);

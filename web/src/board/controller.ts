@@ -137,6 +137,8 @@ export class Controller {
 	private selectedIds: string[] = [];
 	/** The angle of a group's frame, so a turned group keeps the size of its frame. */
 	private groupRot = 0;
+	/** The selection as it was before a live style preview (R-031), until it is committed. */
+	private styleBase: Stroke[] | null = null;
 	/** Elements copied with copySelected, pasted by paste (not shared between clients). */
 	private clipboard: Stroke[] = [];
 	private edit: Edit | null = null;
@@ -335,6 +337,7 @@ export class Controller {
 
 	/** Selects elements by id (null or an empty list clears the selection) and shows their frame. */
 	select(ids: string | string[] | null): void {
+		this.dropStylePreview();
 		this.groupRot = 0; // a new selection starts with an upright frame
 		this.selectedIds =
 			ids === null ? [] : Array.isArray(ids) ? [...ids] : [ids];
@@ -442,8 +445,32 @@ export class Controller {
 		return true;
 	}
 
+	/**
+	 * Shows a style change on the selection at once, without history and without sending it
+	 * (a slider being dragged). `setProps` with the final value then records it as one step.
+	 */
+	previewStyle(patch: StylePatch): void {
+		const base = this.styleBase ?? this.selection;
+		if (base.length === 0) return;
+		this.styleBase = base;
+		const drafts = base.map((el) => applyStyle(el, patch));
+		for (const d of drafts) this.board.applyRemote({ t: "update", stroke: d });
+		this.showSelection(drafts);
+		this.renderer.redraw(this.board.strokes);
+	}
+
+	/** Puts the selection back as it was before an uncommitted preview. */
+	private dropStylePreview(): void {
+		const base = this.styleBase;
+		if (!base) return;
+		this.styleBase = null;
+		for (const o of base) this.board.applyRemote({ t: "update", stroke: o });
+		this.renderer.redraw(this.board.strokes);
+	}
+
 	/** Applies a style change to the selection as one undo step; false if nothing changed. */
 	setProps(patch: StylePatch): boolean {
+		this.dropStylePreview(); // record from the original, not from the preview
 		const before = this.selection;
 		const changed = before
 			.map((el) => applyStyle(el, patch))

@@ -21,6 +21,7 @@ const image: Stroke = {
 describe("PropertiesPanel", () => {
 	let root: HTMLElement;
 	let onChange: (patch: StylePatch) => void;
+	let onPreview: (patch: StylePatch) => void;
 
 	const mount = (elements: Stroke[]) => {
 		render(
@@ -28,6 +29,7 @@ describe("PropertiesPanel", () => {
 				elements={elements}
 				colors={COLORS}
 				onChange={onChange}
+				onPreview={onPreview}
 			/>,
 			root,
 		);
@@ -35,10 +37,23 @@ describe("PropertiesPanel", () => {
 	const btn = (label: string) =>
 		root.querySelector(`[aria-label="${label}"]`) as HTMLButtonElement | null;
 	const has = (label: string) => btn(label) !== null;
+	const slider = (label: string) =>
+		root.querySelector(
+			`input[type="range"][aria-label="${label}"]`,
+		) as HTMLInputElement | null;
+	const move = (
+		el: HTMLInputElement,
+		value: number,
+		event: "input" | "change",
+	) => {
+		el.value = String(value);
+		el.dispatchEvent(new Event(event, { bubbles: true }));
+	};
 
 	beforeEach(() => {
 		root = document.createElement("div");
 		onChange = vi.fn();
+		onPreview = vi.fn();
 	});
 
 	test("shows nothing when nothing is selected", () => {
@@ -49,8 +64,8 @@ describe("PropertiesPanel", () => {
 	test("a freehand stroke offers colour, width and opacity, but no dash or fill", () => {
 		mount([freehand]);
 		expect(has("prop color #d32f2f")).toBe(true);
-		expect(has("prop size 10")).toBe(true);
-		expect(has("prop opacity 0.6")).toBe(true);
+		expect(slider("prop size")).not.toBeNull();
+		expect(slider("prop opacity")).not.toBeNull();
 		expect(has("prop dash dashed")).toBe(false);
 		expect(has("prop fill none")).toBe(false);
 	});
@@ -64,36 +79,65 @@ describe("PropertiesPanel", () => {
 
 	test("an image offers only opacity", () => {
 		mount([image]);
-		expect(has("prop opacity 0.3")).toBe(true);
+		expect(slider("prop opacity")).not.toBeNull();
 		expect(has("prop color #d32f2f")).toBe(false);
-		expect(has("prop size 10")).toBe(false);
+		expect(slider("prop size")).toBeNull();
 	});
 
-	test("a text offers colour and size", () => {
+	test("a text offers colour and a font size, not a line width", () => {
 		mount([text]);
 		expect(has("prop color #d32f2f")).toBe(true);
-		expect(has("prop size 2")).toBe(true);
+		expect(slider("prop font size")).not.toBeNull();
+		expect(slider("prop size")).toBeNull();
 		expect(has("prop dash dashed")).toBe(false);
 	});
 
-	test("each control reports the matching change", () => {
+	test("each button reports the matching change", () => {
 		mount([rect]);
 		btn("prop color #d32f2f")?.click();
-		btn("prop size 10")?.click();
 		btn("prop dash dashed")?.click();
 		btn("prop fill #1976d2")?.click();
 		btn("prop fill none")?.click();
-		btn("prop opacity 0.3")?.click();
 		expect(
 			(onChange as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]),
 		).toEqual([
 			{ color: "#d32f2f" },
-			{ size: 10 },
 			{ dash: "dashed" },
 			{ fill: "#1976d2" },
 			{ fill: null },
-			{ opacity: 0.3 },
 		]);
+	});
+
+	test("the width slider shows pixels, previews while moving and commits on release", () => {
+		mount([{ ...rect, size: 7 }]);
+		const s = slider("prop size") as HTMLInputElement;
+		expect(s.value).toBe("7");
+		expect(root.querySelector(".slider .value")?.textContent).toBe("7 px");
+		move(s, 23, "input");
+		expect(onPreview).toHaveBeenLastCalledWith({ size: 23 });
+		expect(onChange).not.toHaveBeenCalled();
+		move(s, 23, "change");
+		expect(onChange).toHaveBeenCalledWith({ size: 23 });
+	});
+
+	test("the opacity slider is in percent", () => {
+		mount([{ ...rect, opacity: 0.6 }]);
+		const s = slider("prop opacity") as HTMLInputElement;
+		expect(s.value).toBe("60");
+		expect(root.querySelectorAll(".slider .value")[1]?.textContent).toBe("60%");
+		move(s, 35, "input");
+		expect(onPreview).toHaveBeenLastCalledWith({ opacity: 0.35 });
+		move(s, 35, "change");
+		expect(onChange).toHaveBeenCalledWith({ opacity: 0.35 });
+	});
+
+	test("a text's slider is its font size in pixels", () => {
+		mount([{ ...text, fontSize: 30 }]);
+		const s = slider("prop font size") as HTMLInputElement;
+		expect(s.value).toBe("30");
+		expect(root.querySelector(".slider .value")?.textContent).toBe("30 px");
+		move(s, 48, "change");
+		expect(onChange).toHaveBeenCalledWith({ fontSize: 48 });
 	});
 
 	test("highlights the current values of the first selected element", () => {
@@ -101,18 +145,14 @@ describe("PropertiesPanel", () => {
 			{
 				...rect,
 				color: "#d32f2f",
-				size: 10,
 				dash: "dashed",
 				fill: "#1976d2",
-				opacity: 0.6,
 			},
 		]);
 		for (const label of [
 			"prop color #d32f2f",
-			"prop size 10",
 			"prop dash dashed",
 			"prop fill #1976d2",
-			"prop opacity 0.6",
 		]) {
 			expect(btn(label)?.classList.contains("active")).toBe(true);
 		}

@@ -69,3 +69,28 @@
 	display: block;
 	margin: 0 auto;
 }
+
+/* A slider with its number: the track takes the accent colour like an active button. */
+.properties .slider {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	min-height: 40px;
+	padding: 0 6px;
+}
+.properties .slider input {
+	flex: 1;
+	min-width: 120px;
+	height: 4px;
+	margin: 0;
+	accent-color: var(--accent);
+	cursor: pointer;
+}
+.properties .slider .value {
+	min-width: 48px;
+	text-align: right;
+	font-family: var(--mono);
+	font-size: 13px;
+	color: var(--muted);
+}

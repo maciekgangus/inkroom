@@ -163,4 +163,44 @@ describe("Controller clipboard, duplicate and layer order", () => {
 		expect(c.contextTarget(900, 900)).toBe(false);
 		expect(c.selection).toEqual([]);
 	});
+
+	describe("live style preview (R-031)", () => {
+		test("previewStyle changes the look at once but writes no history and sends nothing", () => {
+			c.select("r1");
+			c.previewStyle({ opacity: 0.5 });
+			c.previewStyle({ opacity: 0.3 });
+			expect(get("r1").opacity).toBe(0.3);
+			expect(ops).toEqual([]);
+			expect(board.undo("me")).toBe(false);
+		});
+
+		test("setProps afterwards makes it one undo step, one update, from the original", () => {
+			c.select(["r1", "r2"]);
+			c.previewStyle({ size: 8 });
+			c.previewStyle({ size: 20 });
+			expect(c.setProps({ size: 20 })).toBe(true);
+			expect(ops.map((o) => o.t)).toEqual(["update", "update"]);
+			expect(get("r1").size).toBe(20);
+			board.undo("me");
+			expect(get("r1").size).toBe(4);
+			expect(get("r2").size).toBe(4);
+			expect(board.undo("me")).toBe(false);
+		});
+
+		test("a preview that ended where it began changes nothing", () => {
+			c.select("r1");
+			c.previewStyle({ opacity: 0.5 });
+			c.previewStyle({ opacity: 1 });
+			expect(c.setProps({ opacity: 1 })).toBe(false);
+			expect(ops).toEqual([]);
+			expect(board.undo("me")).toBe(false);
+		});
+
+		test("changing the selection drops a preview that was never committed", () => {
+			c.select("r1");
+			c.previewStyle({ opacity: 0.5 });
+			c.select("r2");
+			expect(get("r1").opacity).toBeUndefined();
+		});
+	});
 });

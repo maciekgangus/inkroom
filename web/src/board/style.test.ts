@@ -88,6 +88,7 @@ describe("capabilities", () => {
 			dash: false,
 			fill: false,
 			text: false,
+			textOnly: false,
 		});
 		expect(capabilities([rect, freehand])).toEqual({
 			color: true,
@@ -95,6 +96,7 @@ describe("capabilities", () => {
 			dash: true,
 			fill: true,
 			text: false,
+			textOnly: false,
 		});
 		expect(capabilities([text])).toEqual({
 			color: true,
@@ -102,6 +104,7 @@ describe("capabilities", () => {
 			dash: false,
 			fill: false,
 			text: true,
+			textOnly: true,
 		});
 		expect(capabilities([image])).toEqual({
 			color: false,
@@ -109,6 +112,7 @@ describe("capabilities", () => {
 			dash: false,
 			fill: false,
 			text: false,
+			textOnly: false,
 		});
 	});
 });
@@ -126,6 +130,7 @@ describe("styleOf", () => {
 		expect(styleOf([r, line])).toEqual({
 			color: "#abc",
 			size: 10,
+			fontSize: 0,
 			dash: "dashed",
 			fill: "#0f0",
 			opacity: 0.5,
@@ -136,9 +141,37 @@ describe("styleOf", () => {
 		expect(styleOf([freehand])).toEqual({
 			color: "#111",
 			size: 4,
+			fontSize: 0,
 			dash: "solid",
 			fill: null,
 			opacity: 1,
 		});
+	});
+});
+
+describe("sliders (R-031)", () => {
+	test("any width in pixels applies, kept between 1 and 50", () => {
+		expect(applyStyle(rect, { size: 17 }).size).toBe(17);
+		expect(applyStyle(rect, { size: 0 }).size).toBe(1);
+		expect(applyStyle(rect, { size: 400 }).size).toBe(50);
+	});
+
+	test("a font size in pixels applies to a text only, kept between 4 and 400", () => {
+		expect(applyStyle(text, { fontSize: 33 }).fontSize).toBe(33);
+		expect(applyStyle(text, { fontSize: 1 }).fontSize).toBe(4);
+		expect(applyStyle(text, { fontSize: 9999 }).fontSize).toBe(400);
+		expect(applyStyle(rect, { fontSize: 33 }).fontSize).toBeUndefined();
+	});
+
+	test("styleOf reports the font size of a text", () => {
+		expect(styleOf([{ ...text, fontSize: 33 }]).fontSize).toBe(33);
+		expect(styleOf([text]).fontSize).toBe(24); // from the pen size 5
+	});
+
+	test("only texts are 'text only', so the panel knows to offer a font size", () => {
+		expect(capabilities([text]).textOnly).toBe(true);
+		expect(capabilities([text, text]).textOnly).toBe(true);
+		expect(capabilities([text, rect]).textOnly).toBe(false);
+		expect(capabilities([rect]).textOnly).toBe(false);
 	});
 });
