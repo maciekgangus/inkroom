@@ -1,10 +1,12 @@
 import { describe, expect, test } from "vitest";
 import type { Stroke } from "./board";
 import {
+	edgePos,
 	frameCorners,
 	frameOf,
 	hitFrameHandle,
 	oppositeCorner,
+	oppositeEdge,
 	pointInFrame,
 	rotationHandlePos,
 	showsBox,
@@ -197,5 +199,44 @@ describe("frameOf with a group rotation", () => {
 
 	test("without a rotation it is the upright box, as before", () => {
 		expect(frameOf([a, b], 0)).toEqual(frameOf([a, b]));
+	});
+});
+
+describe("edge handles (R-041)", () => {
+	const f = { cx: 100, cy: 100, w: 80, h: 40, rot: 0 };
+
+	test("sit in the middle of each side", () => {
+		expect(edgePos(f, "n")).toEqual([100, 80]);
+		expect(edgePos(f, "e")).toEqual([140, 100]);
+		expect(edgePos(f, "s")).toEqual([100, 120]);
+		expect(edgePos(f, "w")).toEqual([60, 100]);
+	});
+
+	test("turn with a turned frame", () => {
+		const turned = { ...f, rot: Math.PI / 2 }; // the east side is now the bottom one
+		const e = edgePos(turned, "e");
+		expect(e[0]).toBeCloseTo(100);
+		expect(e[1]).toBeCloseTo(140);
+	});
+
+	test("are grabbed within the radius, and name the side", () => {
+		expect(hitFrameHandle(f, [140, 103], 6, 30)).toBe("e");
+		expect(hitFrameHandle(f, [100, 117], 6, 30)).toBe("s");
+		expect(hitFrameHandle(f, [100, 100], 6, 30)).toBeNull(); // the inside is not a handle
+	});
+
+	test("lose to a corner when both are in reach", () => {
+		const f2 = { cx: 0, cy: 0, w: 20, h: 20, rot: 0 };
+		// 4 from the south east corner, 6 from the middle of the east side
+		expect(hitFrameHandle(f2, [10, 6], 12, 30)).toBe("se");
+	});
+
+	test("the opposite of a side is the side across", () => {
+		expect([
+			oppositeEdge("n"),
+			oppositeEdge("e"),
+			oppositeEdge("s"),
+			oppositeEdge("w"),
+		]).toEqual(["s", "w", "n", "e"]);
 	});
 });

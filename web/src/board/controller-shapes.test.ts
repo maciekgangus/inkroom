@@ -80,9 +80,9 @@ describe("the shape tool (R-033)", () => {
 
 	test("the shape just drawn can be dragged right away", () => {
 		draw([300, 200]);
-		c.pointerDown(ev(100, 150)); // on the left side of the rectangle
-		c.pointerMove(ev(100, 250));
-		c.pointerUp(ev(100, 250));
+		c.pointerDown(ev(100, 120)); // on the left side, away from its middle handle
+		c.pointerMove(ev(100, 220));
+		c.pointerUp(ev(100, 220));
 		expect(board.strokes[0].points[0][1]).toBeCloseTo(200);
 	});
 

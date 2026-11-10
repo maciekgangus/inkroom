@@ -84,6 +84,30 @@ const mapPoints = (el: Stroke, f: (p: Point) => Point): Stroke => ({
 	points: el.points.map(f),
 });
 
+/** Where a line's two ends are on the board, its turn applied (R-041). */
+export function lineEnds(el: Stroke): [Vec, Vec] {
+	const c = centerOf(el);
+	const [a, b] = el.points;
+	return [
+		rotatePoint([a[0], a[1]], c, el.rot ?? 0),
+		rotatePoint([b[0], b[1]], c, el.rot ?? 0),
+	];
+}
+
+/** The element with its turn moved into its points, so it has none (for editing a line's ends). */
+export function bakeRotation(el: Stroke): Stroke {
+	if (!el.rot) return el;
+	const c = centerOf(el);
+	const { rot, ...rest } = el;
+	return {
+		...rest,
+		points: el.points.map((p) => {
+			const [x, y] = rotatePoint([p[0], p[1]], c, rot);
+			return [x, y, p[2]] as Point;
+		}),
+	};
+}
+
 /** The element moved by (dx, dy). */
 export function translateEl(el: Stroke, dx: number, dy: number): Stroke {
 	return mapPoints(el, (p) => [p[0] + dx, p[1] + dy, p[2]]);

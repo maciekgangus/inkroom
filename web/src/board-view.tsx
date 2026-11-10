@@ -137,6 +137,7 @@ export function BoardView({
 			redraw: (strokes) => canvas.redraw(strokes),
 			setSelection: (frame) => canvas.setSelection(frame),
 			setHighlight: (els) => canvas.setHighlight(els),
+			setEndpoints: (ends) => canvas.setEndpoints(ends),
 			setMarquee: (rect) => canvas.setMarquee(rect),
 		};
 		const controller = new Controller(

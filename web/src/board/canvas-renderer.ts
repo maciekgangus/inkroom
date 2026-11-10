@@ -209,6 +209,8 @@ export class CanvasRenderer implements Renderer {
 	private selection: Frame | null = null;
 	private marquee: Rect | null = null;
 	private highlight: Stroke[] = [];
+	/** The ends of a selected line, drawn as dots to drag (R-041). */
+	private endpoints: [number, number][] | null = null;
 	/** Maps a stored ink colour to the colour painted (dark mode swaps black and white). */
 	ink: (color: string) => string = (c) => c;
 	/** Which grid to draw under the elements (R-027, R-032) and in which colour. */
@@ -245,6 +247,12 @@ export class CanvasRenderer implements Renderer {
 	/** Shows the selection frame, corner handles and rotation handle (null hides them). */
 	setSelection(frame: Frame | null): void {
 		this.selection = frame;
+		this.paintLive();
+	}
+
+	/** Shows dots at the ends of a selected line (null hides them). */
+	setEndpoints(ends: [number, number][] | null): void {
+		this.endpoints = ends;
 		this.paintLive();
 	}
 
@@ -383,6 +391,11 @@ export class CanvasRenderer implements Renderer {
 			[f.w / 2, -f.h / 2],
 			[f.w / 2, f.h / 2],
 			[-f.w / 2, f.h / 2],
+			// the middles of the sides stretch one dimension (R-041)
+			[0, -f.h / 2],
+			[f.w / 2, 0],
+			[0, f.h / 2],
+			[-f.w / 2, 0],
 		]) {
 			ctx.fillRect(x - h / 2, y - h / 2, h, h);
 			ctx.strokeRect(x - h / 2, y - h / 2, h, h);
@@ -412,6 +425,25 @@ export class CanvasRenderer implements Renderer {
 		ctx.restore();
 	}
 
+	/** Dots at the two ends of a line, a constant size on screen: grab one to lengthen or shorten it. */
+	private drawEndpoints(
+		ctx: CanvasRenderingContext2D,
+		ends: [number, number][],
+	): void {
+		const px = 1 / this.viewport.scale;
+		ctx.save();
+		ctx.lineWidth = 2 * px;
+		ctx.strokeStyle = "#fff";
+		ctx.fillStyle = "#e91e63";
+		for (const [x, y] of ends) {
+			ctx.beginPath();
+			ctx.arc(x, y, (HANDLE_PX / 2) * px, 0, Math.PI * 2);
+			ctx.fill();
+			ctx.stroke();
+		}
+		ctx.restore();
+	}
+
 	private drawMarquee(ctx: CanvasRenderingContext2D, r: Rect): void {
 		ctx.fillStyle = "rgba(25, 118, 210, 0.12)";
 		ctx.fillRect(r.minX, r.minY, r.maxX - r.minX, r.maxY - r.minY);
@@ -435,6 +467,7 @@ export class CanvasRenderer implements Renderer {
 			);
 		}
 		for (const s of this.highlight) this.drawGlow(ctx, s);
+		if (this.endpoints) this.drawEndpoints(ctx, this.endpoints);
 		if (this.selection) this.drawFrame(ctx, this.selection);
 		if (this.marquee) this.drawMarquee(ctx, this.marquee);
 	}

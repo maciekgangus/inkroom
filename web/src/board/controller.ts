@@ -4,18 +4,20 @@ import type { ClipElement } from "./clipboard";
 import { constrainEnd } from "./draw-aids";
 import { findHit, objectHit } from "./hit";
 import {
-	cornerPos,
 	type Frame,
 	frameOf,
 	HANDLE_PX,
+	handlePos,
 	hitFrameHandle,
-	oppositeCorner,
+	oppositeHandle,
 	pointInFrame,
 	ROT_OFFSET_PX,
 } from "./selection-frame";
 import type { ShapeChoice } from "./shapes";
 import { applyStyle, type Dash, type StylePatch } from "./style";
 import {
+	bakeRotation,
+	lineEnds,
 	rotateEl,
 	rotatePoint,
 	scaleElBy,
@@ -46,6 +48,8 @@ export interface Renderer {
 	redraw(strokes: Stroke[]): void;
 	/** Shows the selection frame and handles (null hides them). */
 	setSelection?(frame: Frame | null): void;
+	/** Shows dots at the ends of a selected line, to drag them (null hides them, R-041). */
+	setEndpoints?(ends: [number, number][] | null): void;
 	/** Makes the selected elements glow (an empty list clears it). */
 	setHighlight?(els: Stroke[]): void;
 	/** Shows the rubber band while dragging over empty space (null hides it). */
@@ -88,6 +92,13 @@ type Edit =
 			frame: Frame;
 			anchor: Vec;
 			handle: Vec;
+	  }
+	| {
+			mode: "endpoint";
+			originals: Stroke[];
+			drafts: Stroke[];
+			/** Which end of the line is being dragged (R-041). */
+			index: 0 | 1;
 	  }
 	| {
 			mode: "rotate";
@@ -550,14 +561,37 @@ export class Controller {
 	/** The glow on every selected element, and the frame with the handles that edit them. */
 	private showSelection(els: Stroke[], rot = this.groupRot): void {
 		this.renderer.setHighlight?.(els);
-		this.renderer.setSelection?.(frameOf(els, rot));
+		// A lone line has dots at its ends instead of a frame (R-041).
+		const lone = els.length === 1 && els[0].kind === "line";
+		this.renderer.setEndpoints?.(lone ? lineEnds(els[0]) : null);
+		this.renderer.setSelection?.(lone ? null : frameOf(els, rot));
 	}
 
 	private startSelect(e: PointerInput): void {
 		const p = this.viewport.toWorld(e.clientX, e.clientY);
 		const px = 1 / this.viewport.scale;
 		const sel = this.selection;
-		const frame = frameOf(sel, this.groupRot);
+		if (sel.length === 1 && sel[0].kind === "line") {
+			const ends = lineEnds(sel[0]);
+			for (const i of [0, 1] as const) {
+				if (
+					Math.hypot(p[0] - ends[i][0], p[1] - ends[i][1]) <=
+					HANDLE_PX * px
+				) {
+					// The turn goes into the points, so the end can be moved freely.
+					const original = bakeRotation(sel[0]);
+					this.edit = {
+						mode: "endpoint",
+						originals: [original],
+						drafts: [original],
+						index: i,
+					};
+					return;
+				}
+			}
+		}
+		const lone = sel.length === 1 && sel[0].kind === "line";
+		const frame = lone ? null : frameOf(sel, this.groupRot);
 		if (frame) {
 			const handle = hitFrameHandle(
 				frame,
@@ -578,14 +612,14 @@ export class Controller {
 				return;
 			}
 			if (handle) {
-				const anchor = cornerPos(frame, oppositeCorner(handle));
+				const anchor = handlePos(frame, oppositeHandle(handle));
 				this.edit = {
 					mode: "scale",
 					originals: sel,
 					drafts: sel,
 					frame,
 					anchor,
-					handle: cornerPos(frame, handle),
+					handle: handlePos(frame, handle),
 				};
 				return;
 			}
@@ -634,6 +668,23 @@ export class Controller {
 			const dx = p[0] - edit.start[0];
 			const dy = p[1] - edit.start[1];
 			edit.drafts = edit.originals.map((el) => translateEl(el, dx, dy));
+		} else if (edit.mode === "endpoint") {
+			const [orig] = edit.originals;
+			const fixed = orig.points[edit.index === 0 ? 1 : 0];
+			const [x, y] = constrainEnd(
+				"line",
+				[fixed[0], fixed[1]],
+				[p[0], p[1]],
+				!!e.shiftKey,
+			);
+			edit.drafts = [
+				{
+					...orig,
+					points: orig.points.map((pt, i) =>
+						i === edit.index ? ([x, y, pt[2]] as Point) : pt,
+					),
+				},
+			];
 		} else if (edit.mode === "scale") {
 			const { anchor, handle, frame } = edit;
 			const kMinX =
