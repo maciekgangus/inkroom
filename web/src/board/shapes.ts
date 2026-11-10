@@ -33,8 +33,10 @@ export const isPolygonKind = (kind: ElementKind | undefined): boolean =>
 const SLANT = 0.25;
 
 /**
- * The corners of a polygon shape, clockwise from the top left, inside the box spanned by two
- * opposite corners given in any order. The element stores only those two corners.
+ * The corners of a polygon shape inside the box spanned by two opposite corners, clockwise from
+ * the top left when dragged down and to the right. The direction of the drag orients it:
+ * dragging upward turns a trapezoid upside down, dragging to the left mirrors a parallelogram
+ * (a rhombus looks the same either way). The element stores only the two corners, in drag order.
  */
 export function polygonPoints(kind: ElementKind, a: Vec, b: Vec): Vec[] {
 	const minX = Math.min(a[0], b[0]);
@@ -44,36 +46,46 @@ export function polygonPoints(kind: ElementKind, a: Vec, b: Vec): Vec[] {
 	const w = maxX - minX;
 	const midX = (minX + maxX) / 2;
 	const midY = (minY + maxY) / 2;
+	let points: Vec[];
 	switch (kind) {
 		case "rhombus":
-			return [
+			points = [
 				[midX, minY],
 				[maxX, midY],
 				[midX, maxY],
 				[minX, midY],
 			];
+			break;
 		case "trapezoid":
-			return [
+			points = [
 				[minX + SLANT * w, minY],
 				[maxX - SLANT * w, minY],
 				[maxX, maxY],
 				[minX, maxY],
 			];
+			break;
 		case "parallelogram":
-			return [
+			points = [
 				[minX + SLANT * w, minY],
 				[maxX, minY],
 				[maxX - SLANT * w, maxY],
 				[minX, maxY],
 			];
+			break;
 		default:
-			return [
+			points = [
 				[minX, minY],
 				[maxX, minY],
 				[maxX, maxY],
 				[minX, maxY],
 			];
 	}
+	const flipX = b[0] < a[0];
+	const flipY = b[1] < a[1];
+	return points.map(([x, y]) => [
+		flipX ? minX + maxX - x : x,
+		flipY ? minY + maxY - y : y,
+	]);
 }
 
 /** Whether (x, y) lies inside the polygon (even-odd rule). */

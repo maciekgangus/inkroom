@@ -282,10 +282,16 @@ export class Controller {
 			this.renderer.drawLive(null);
 			return;
 		}
-		this.board.addStroke(this.current);
+		const done = this.current;
+		this.board.addStroke(done);
 		this.current = null;
 		this.renderer.drawLive(null);
 		this.renderer.redraw(this.board.strokes);
+		// A shape or line is selected at once, ready to move or resize: the tool becomes Select.
+		if (done.kind) {
+			this.settings.tool = "select";
+			this.select(done.id);
+		}
 	}
 
 	pointerCancel(e: PointerInput): void {

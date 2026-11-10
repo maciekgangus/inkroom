@@ -39,13 +39,46 @@ describe("polygon shapes (R-033)", () => {
 		]);
 	});
 
-	test("the corners may be given in any order", () => {
-		expect(polygonPoints("rhombus", b, a)).toEqual(
-			polygonPoints("rhombus", a, b),
+	test("dragging upward turns a trapezoid upside down, so its wide side is on top", () => {
+		const set = (pts: number[][]) => new Set(pts.map((p) => p.join()));
+		const upsideDown = set([
+			[0, 0],
+			[100, 0],
+			[75, 50],
+			[25, 50],
+		]);
+		// dragged from the bottom up, whichever side it started: a trapezoid is symmetric sideways
+		expect(set(polygonPoints("trapezoid", [0, 50], [100, 0]))).toEqual(
+			upsideDown,
 		);
-		expect(polygonPoints("trapezoid", [100, 0], [0, 50])).toEqual(
-			polygonPoints("trapezoid", a, b),
+		expect(set(polygonPoints("trapezoid", [100, 50], [0, 0]))).toEqual(
+			upsideDown,
 		);
+	});
+
+	test("dragging to the left mirrors a parallelogram", () => {
+		expect(polygonPoints("parallelogram", [100, 0], [0, 50])).toEqual([
+			[75, 0],
+			[0, 0],
+			[25, 50],
+			[100, 50],
+		]);
+	});
+
+	test("dragging up and left together gives the shape back as dragged down and right, turned", () => {
+		const down = polygonPoints("parallelogram", [0, 0], [100, 50]);
+		const up = polygonPoints("parallelogram", [100, 50], [0, 0]);
+		// the same outline, only the corners are listed from the other end
+		expect(new Set(up.map((p) => p.join()))).toEqual(
+			new Set(down.map((p) => p.join())),
+		);
+	});
+
+	test("a rhombus looks the same whichever way it was dragged", () => {
+		const norm = (pts: number[][]) => new Set(pts.map((p) => p.join()));
+		const a2 = polygonPoints("rhombus", a, b);
+		expect(norm(polygonPoints("rhombus", b, a))).toEqual(norm(a2));
+		expect(norm(polygonPoints("rhombus", [100, 0], [0, 50]))).toEqual(norm(a2));
 	});
 
 	test("only the three polygon kinds are polygons", () => {

@@ -63,12 +63,51 @@ describe("the shape tool (R-033)", () => {
 		]);
 	});
 
-	test("can draw many shapes in a row without choosing again", () => {
+	test("the new shape is selected and the tool becomes Select, so it can be moved at once", () => {
 		settings.shape = "rhombus";
 		draw([300, 200]);
-		draw([400, 250]);
+		expect(c.selection.map((s) => s.id)).toEqual([board.strokes[0].id]);
+		expect(settings.tool).toBe("select");
+		expect(settings.shape).toBe("rhombus"); // the choice is kept for the next one
+	});
+
+	test("a line is selected after drawing too", () => {
+		settings.tool = "line";
+		draw([300, 200]);
+		expect(c.selection).toHaveLength(1);
+		expect(settings.tool).toBe("select");
+	});
+
+	test("the shape just drawn can be dragged right away", () => {
+		draw([300, 200]);
+		c.pointerDown(ev(100, 150)); // on the left side of the rectangle
+		c.pointerMove(ev(100, 250));
+		c.pointerUp(ev(100, 250));
+		expect(board.strokes[0].points[0][1]).toBeCloseTo(200);
+	});
+
+	test("freehand strokes and text are not selected: writing goes on", () => {
+		settings.tool = "pen";
+		draw([300, 200]);
+		expect(c.selection).toEqual([]);
+		expect(settings.tool).toBe("pen");
+	});
+
+	test("the next shape of the same kind is one pick of the tool away", () => {
+		settings.shape = "rhombus";
+		draw([300, 200]);
+		settings.tool = "shape"; // what K does
+		draw([500, 300]);
 		expect(board.strokes.map((s) => s.kind)).toEqual(["rhombus", "rhombus"]);
-		expect(settings.tool).toBe("shape");
+	});
+
+	test("a shape dragged upward keeps that direction, so it can be oriented", () => {
+		settings.shape = "trapezoid";
+		c.pointerDown(ev(100, 300));
+		c.pointerMove(ev(300, 100));
+		c.pointerUp(ev(300, 100));
+		const [a, b] = board.strokes[0].points;
+		expect(a[1]).toBeGreaterThan(b[1]); // the first corner is below the second
 	});
 
 	test("with Shift every shape gets a square box", () => {
