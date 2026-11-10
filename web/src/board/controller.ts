@@ -7,6 +7,7 @@ import {
 	frameOf,
 	HANDLE_PX,
 	hitFrameHandle,
+	needsFrame,
 	oppositeCorner,
 	ROT_OFFSET_PX,
 } from "./selection-frame";
@@ -41,6 +42,8 @@ export interface Renderer {
 	redraw(strokes: Stroke[]): void;
 	/** Shows the selection frame and handles (null hides them). */
 	setSelection?(frame: Frame | null): void;
+	/** Makes the selected elements glow (an empty list clears it). */
+	setHighlight?(els: Stroke[]): void;
 	/** Shows the rubber band while dragging over empty space (null hides it). */
 	setMarquee?(rect: Rect | null): void;
 }
@@ -66,7 +69,8 @@ export const ERASER_RADIUS = 10;
 /** A shape dragged less than this many screen pixels is treated as a stray click and dropped. */
 const MIN_SHAPE_PX = 2;
 /** How far from an object (screen pixels) a click still selects it. */
-const HIT_PX = 6;
+/** How far (px) from an element still grabs it: generous, so thin lines are easy to catch. */
+const HIT_PX = 10;
 /** The smallest a selection can be scaled down to, in screen pixels. */
 const MIN_SELECTION_PX = 24;
 const SNAP_STEP = Math.PI / 12; // 15 degrees, with Shift
@@ -461,14 +465,20 @@ export class Controller {
 	}
 
 	private showFrame(): void {
-		this.renderer.setSelection?.(frameOf(this.selection));
+		this.showSelection(this.selection);
+	}
+
+	/** The glow on every selected element, and the frame with handles where it is needed. */
+	private showSelection(els: Stroke[]): void {
+		this.renderer.setHighlight?.(els);
+		this.renderer.setSelection?.(needsFrame(els) ? frameOf(els) : null);
 	}
 
 	private startSelect(e: PointerInput): void {
 		const p = this.viewport.toWorld(e.clientX, e.clientY);
 		const px = 1 / this.viewport.scale;
 		const sel = this.selection;
-		const frame = frameOf(sel);
+		const frame = needsFrame(sel) ? frameOf(sel) : null;
 		if (frame) {
 			const handle = hitFrameHandle(
 				frame,
@@ -571,7 +581,7 @@ export class Controller {
 		// A local preview only: nothing is sent and no history is written until release.
 		for (const d of edit.drafts)
 			this.board.applyRemote({ t: "update", stroke: d });
-		this.renderer.setSelection?.(frameOf(edit.drafts));
+		this.showSelection(edit.drafts);
 		this.renderer.redraw(this.board.strokes);
 	}
 

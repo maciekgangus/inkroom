@@ -20,6 +20,17 @@ export type Corner = "nw" | "ne" | "se" | "sw";
 export type Handle = Corner | "rot";
 
 /**
+ * Whether a selection gets the frame with handles (R-034): images, shapes and several elements
+ * do; a lone stroke, line or text only glows, so no big box covers what was selected.
+ */
+export function needsFrame(els: Stroke[]): boolean {
+	if (els.length === 0) return false;
+	if (els.length > 1) return true;
+	const kind = els[0].kind;
+	return kind === "image" || kind === "rect" || kind === "circle";
+}
+
+/**
  * The frame around the selected elements: a lone element gets its own (possibly rotated) box,
  * several get the upright box around all of them as they appear on the board.
  */

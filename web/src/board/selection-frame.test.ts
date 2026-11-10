@@ -4,6 +4,7 @@ import {
 	frameCorners,
 	frameOf,
 	hitFrameHandle,
+	needsFrame,
 	oppositeCorner,
 	rotationHandlePos,
 } from "./selection-frame";
@@ -124,5 +125,31 @@ describe("oppositeCorner", () => {
 			oppositeCorner("se"),
 			oppositeCorner("sw"),
 		]).toEqual(["se", "sw", "nw", "ne"]);
+	});
+});
+
+describe("needsFrame (R-034)", () => {
+	const pt = (x: number, y: number) => [x, y, 0.5] as [number, number, number];
+	const el = (kind?: Stroke["kind"]): Stroke => ({
+		...base,
+		...(kind ? { kind } : {}),
+		points: [pt(0, 0), pt(10, 10)],
+	});
+
+	test("a lone stroke, line or text glows instead of getting a box", () => {
+		expect(needsFrame([el()])).toBe(false);
+		expect(needsFrame([el("line")])).toBe(false);
+		expect(needsFrame([el("text")])).toBe(false);
+	});
+
+	test("images and shapes keep their frame with handles", () => {
+		expect(needsFrame([el("image")])).toBe(true);
+		expect(needsFrame([el("rect")])).toBe(true);
+		expect(needsFrame([el("circle")])).toBe(true);
+	});
+
+	test("several elements always get a frame, and nothing selected needs none", () => {
+		expect(needsFrame([el(), el("line")])).toBe(true);
+		expect(needsFrame([])).toBe(false);
 	});
 });
