@@ -160,3 +160,51 @@ func TestOnlyTheOwnerCanRenameOrDelete(t *testing.T) {
 		t.Errorf("deleting twice: got %d", got)
 	}
 }
+
+func TestOnlyTheOwnerCanSetTheBackground(t *testing.T) {
+	srv, _, _ := testApp(t)
+	owner := register(t, srv, "a@example.com")
+	other := register(t, srv, "b@example.com")
+	id := createBoard(t, srv, owner, "Matma")
+	path := "/api/boards/" + id + "/background"
+
+	if got := status(call(t, srv, "PUT", path, `{"background":"grid"}`, &other)); got != http.StatusForbidden {
+		t.Errorf("by other: got %d", got)
+	}
+	if got := status(call(t, srv, "PUT", path, `{"background":"grid"}`, nil)); got != http.StatusUnauthorized {
+		t.Errorf("by guest: got %d", got)
+	}
+	if got := status(call(t, srv, "PUT", path, `{"background":"stars"}`, &owner)); got != http.StatusBadRequest {
+		t.Errorf("unknown value: got %d", got)
+	}
+
+	ws := dial(t, srv, id)
+	if m := read(t, ws); m["background"] != "plain" {
+		t.Fatalf("snapshot: got %v", m)
+	}
+	if got := status(call(t, srv, "PUT", path, `{"background":"grid"}`, &owner)); got != http.StatusNoContent {
+		t.Fatalf("by owner: got %d", got)
+	}
+	if m := read(t, ws); m["t"] != "background" || m["value"] != "grid" {
+		t.Fatalf("live change: got %v", m)
+	}
+	if m := read(t, dial(t, srv, id)); m["background"] != "grid" {
+		t.Fatalf("new joiner: got %v", m)
+	}
+}
+
+func TestBoardEndpointTellsTheOwner(t *testing.T) {
+	srv, _, _ := testApp(t)
+	owner := register(t, srv, "a@example.com")
+	other := register(t, srv, "b@example.com")
+	id := createBoard(t, srv, owner, "Matma")
+	if m := decode(t, call(t, srv, "GET", "/api/boards/"+id, "", &owner)); m["owner"] != true {
+		t.Errorf("owner: got %v", m)
+	}
+	if m := decode(t, call(t, srv, "GET", "/api/boards/"+id, "", &other)); m["owner"] != false {
+		t.Errorf("other: got %v", m)
+	}
+	if m := decode(t, call(t, srv, "GET", "/api/boards/"+id, "", nil)); m["owner"] != false {
+		t.Errorf("guest: got %v", m)
+	}
+}

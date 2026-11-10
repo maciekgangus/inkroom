@@ -1,4 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import {
+	BACKGROUNDS,
+	type Background,
+	backgroundStyle,
+} from "./board/background";
 import type { Stroke } from "./board/board";
 import { Board } from "./board/board";
 import { CanvasRenderer } from "./board/canvas-renderer";
@@ -10,10 +15,12 @@ import { prepareImage, uploadImage } from "./board/image-upload";
 import { fontSizeFor, fontSizeOf } from "./board/text";
 import { Viewport } from "./board/viewport";
 import { Cursors } from "./cursors";
+import { Icon } from "./icon";
 import { ImageControls } from "./image-controls";
 import { PropertiesPanel } from "./properties-panel";
 import { type SocketLike, SyncClient } from "./sync/sync";
 import { TextEditor } from "./text-editor";
+import { currentTheme, displayColor, useTheme } from "./theme";
 import { COLORS, SIZES, Toolbar } from "./toolbar";
 import { ZoomControls } from "./zoom-controls";
 
@@ -33,10 +40,26 @@ interface Props {
 	name: string;
 	/** Opens the board's websocket. */
 	connect: () => SocketLike;
+	/** Saves a new shared background; given only to the board's owner (R-027). */
+	onSetBackground?: (background: Background) => Promise<void>;
 }
 
+const BACKGROUND_NAMES: Record<Background, string> = {
+	plain: "Gładkie tło",
+	dots: "Kropki",
+	grid: "Kratka",
+	lines: "Linie",
+};
+
 /** A shared infinite board: two canvas layers, a tool palette, zoom buttons and live sync. */
-export function BoardView({ boardId, authorId, name, connect }: Props) {
+export function BoardView({
+	boardId,
+	authorId,
+	name,
+	connect,
+	onSetBackground,
+}: Props) {
+	const [background, setBackground] = useState<Background>("plain");
 	const committedRef = useRef<HTMLCanvasElement>(null);
 	const liveRef = useRef<HTMLCanvasElement>(null);
 	const settings = useMemo<Settings>(
@@ -52,6 +75,8 @@ export function BoardView({ boardId, authorId, name, connect }: Props) {
 	const [, setTick] = useState(0); // bumped when the view changes, so the text field follows it
 	const ctl = useRef<Controller | null>(null);
 	const syncRef = useRef<SyncClient | null>(null);
+	const rendererRef = useRef<CanvasRenderer | null>(null);
+	const theme = useTheme();
 	/** Repaints after the view changed (set up by the effect below). */
 	const viewChanged = useRef<() => void>(() => {});
 	/** Adds a picked, pasted or dropped image to the board (set up by the effect below). */
@@ -66,10 +91,13 @@ export function BoardView({ boardId, authorId, name, connect }: Props) {
 		const board = new Board();
 		const images = new ImageCache(boardId, () => canvas.redraw(board.strokes));
 		const canvas = new CanvasRenderer(committed, live, viewport, images);
+		canvas.ink = (c) => displayColor(c, currentTheme());
+		rendererRef.current = canvas;
 		const sync = new SyncClient(board, {
 			createSocket: connect,
 			self: { authorId, name },
 			onCursors: () => setTick((t) => t + 1),
+			onBackground: setBackground,
 			onUpdate: () => {
 				canvas.redraw(board.strokes);
 				canvas.setRemoteLive(sync.liveStrokes());
@@ -267,6 +295,11 @@ export function BoardView({ boardId, authorId, name, connect }: Props) {
 		};
 	}, [settings, viewport, boardId, authorId, name, connect]);
 
+	// The ink colours depend on the theme (black and white swap in dark mode).
+	useEffect(() => {
+		if (theme) viewChanged.current();
+	}, [theme]);
+
 	// Expired cursors vanish even if nothing else happens on the board.
 	useEffect(() => {
 		const timer = setInterval(() => setTick((t) => t + 1), 5000);
@@ -298,6 +331,11 @@ export function BoardView({ boardId, authorId, name, connect }: Props) {
 
 	return (
 		<>
+			<div
+				class="board-bg"
+				data-background={background}
+				style={backgroundStyle(background, viewport)}
+			/>
 			<canvas id="board" ref={committedRef} />
 			<canvas id="live" ref={liveRef} />
 			{editingText && (
@@ -316,7 +354,7 @@ export function BoardView({ boardId, authorId, name, connect }: Props) {
 						)[1]
 					}
 					fontSize={fontSizeOf(editingText) * viewport.scale}
-					color={editingText.color}
+					color={displayColor(editingText.color, currentTheme())}
 					initialText={editingText.text ?? ""}
 					onCommit={(text) => {
 						ctl.current?.commitText(editingText.id, text);
@@ -328,6 +366,7 @@ export function BoardView({ boardId, authorId, name, connect }: Props) {
 			<PropertiesPanel
 				elements={ctl.current?.selection ?? []}
 				colors={COLORS}
+				display={(c) => displayColor(c, currentTheme())}
 				onChange={(patch) => {
 					ctl.current?.setProps(patch);
 					setTick((t) => t + 1);
@@ -339,7 +378,7 @@ export function BoardView({ boardId, authorId, name, connect }: Props) {
 					x={viewport.toScreen(textAt.x, textAt.y)[0]}
 					y={viewport.toScreen(textAt.x, textAt.y)[1]}
 					fontSize={fontSizeFor(settings.size) * viewport.scale}
-					color={settings.color}
+					color={displayColor(settings.color, theme)}
 					onCommit={(text) => {
 						ctl.current?.addText(text, textAt.x, textAt.y);
 						setTextAt(null);
@@ -348,7 +387,6 @@ export function BoardView({ boardId, authorId, name, connect }: Props) {
 				/>
 			)}
 			<ImageControls
-				settings={settings}
 				hasSelection={(ctl.current?.selection.length ?? 0) > 0}
 				canPaste={canReadClipboard}
 				error={imageError}
@@ -362,6 +400,26 @@ export function BoardView({ boardId, authorId, name, connect }: Props) {
 				onUndo={() => ctl.current?.undo()}
 				onRedo={() => ctl.current?.redo()}
 			/>
+			{onSetBackground && (
+				<div class="backgrounds">
+					{BACKGROUNDS.map((b) => (
+						<button
+							type="button"
+							key={b}
+							aria-label={`background ${b}`}
+							aria-pressed={background === b}
+							title={BACKGROUND_NAMES[b]}
+							class={background === b ? "active" : ""}
+							onClick={() => {
+								setBackground(b); // shown at once; the server tells everyone else
+								onSetBackground(b).catch(() => {});
+							}}
+						>
+							<Icon name={b} />
+						</button>
+					))}
+				</div>
+			)}
 			<ZoomControls
 				scale={scale}
 				onZoomIn={() => zoomTo((s) => s * ZOOM_STEP)}

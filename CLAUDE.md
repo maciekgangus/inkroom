@@ -4,7 +4,7 @@ Własna, tania tablica interaktywna do prowadzenia korepetycji online, zamiennik
 Źródło prawdy o wymaganiach: @SPEC.md. Decyzje architektoniczne: `docs/decisions/`.
 
 ## Stan projektu
-Etapy 0 do 3 zakończone (szkielet, tablica lokalna, współpraca na żywo, konta i zapis): stos w `docs/decisions/0001-stack.md` (własny canvas + Go + SQLite), protokół w `docs/decisions/0004-sync-protocol.md`, konta i zapis w `docs/decisions/0005-accounts-and-persistence.md`, plany w `docs/plan-stage-*.md`. Zrobione też R-010 (nieskończone płótno, plan w `docs/plan-infinite-canvas.md`) R-012 (kształty i tekst, ADR 0006, plan w `docs/plan-shapes-and-text.md`), R-013 (kursory, plan w `docs/plan-cursors.md`) R-015 (obrazy, ADR 0007, plan w `docs/plan-images.md`) oraz R-021 i R-022 (model obiektów: zaznaczanie, przekształcenia i style, ADR 0008, plan w `docs/plan-object-model.md`). Kolejne wymagania P2/P3 według `SPEC.md`; wdrożenie (Etap 3.5, ADR 0003) i pierwsza lekcja (Etap 4) na koniec.
+Etapy 0 do 3 zakończone (szkielet, tablica lokalna, współpraca na żywo, konta i zapis): stos w `docs/decisions/0001-stack.md` (własny canvas + Go + SQLite), protokół w `docs/decisions/0004-sync-protocol.md`, konta i zapis w `docs/decisions/0005-accounts-and-persistence.md`, plany w `docs/plan-stage-*.md`. Zrobione też R-010 (nieskończone płótno, plan w `docs/plan-infinite-canvas.md`) R-012 (kształty i tekst, ADR 0006, plan w `docs/plan-shapes-and-text.md`), R-013 (kursory, plan w `docs/plan-cursors.md`) R-015 (obrazy, ADR 0007, plan w `docs/plan-images.md`) oraz R-021 i R-022 (model obiektów: zaznaczanie, przekształcenia i style, ADR 0008, plan w `docs/plan-object-model.md`). Przebudowa interfejsu (ikony, zaokrąglone powierzchnie) oraz R-025 (rozszerzona paleta), R-026 (tryb ciemny) i R-027 (wspólne tło tablicy), ADR 0010. Kolejne wymagania P2/P3 według `SPEC.md`; wdrożenie (Etap 3.5, ADR 0003) i pierwsza lekcja (Etap 4) na koniec.
 
 ## Priorytety (w tej kolejności)
 1. Responsywność: kreska pojawia się natychmiast lokalnie, u drugiej osoby bez zauważalnego opóźnienia. Wygoda użytkownika ponad wszystko.
@@ -35,3 +35,15 @@ Stos: serwer w Go (`server/`), klient w TypeScript + Vite + Preact (`web/`). Kom
 - Lokalnie `docker compose up` ładuje `docker-compose.override.yml`, który tworzy publiczne konto testowe (`test@example.test`, hasło w tym pliku). Na serwerze uruchamiać z jawnym `-f docker-compose.yml`, żeby tego konta tam nie było.
 - Wdrożenie: docker compose, najpierw lokalnie, później na domowym VPS (ADR 0002). Sekrety w `.env`, nigdy w obrazach ani w repo.
 - Plugin lub serwer MCP dodawaj dopiero pod konkretny problem, a po dodaniu sprawdź `/context`.
+
+## graphify
+
+This project has a graphify knowledge graph at graphify-out/.
+
+Rules:
+- Before answering architecture or codebase questions, read graphify-out/GRAPH_REPORT.md for god nodes and community structure
+- If graphify-out/wiki/index.md exists, navigate it instead of reading raw files
+- After modifying code files in this session, run `graphify update .` to keep the graph current (AST-only, no API cost)
+
+### Git worktrees i graf
+Każdy agent pracuje we własnym `git worktree` (np. `git worktree add ../inkroom-<temat> -b feature/<temat> origin/main`), a katalog główny zostaje na `main`. `graphify-out/` jest w `.gitignore`, więc nowy worktree dostaje graf przez kopię: `cp -r ../inkroom/graphify-out ./graphify-out`. Po zmergowaniu do `main` graf odbudowuje się w katalogu głównym (`graphify update .`), a worktree kopiują go na nowo. Nowe numery wymagań i ADR rezerwuj po sprawdzeniu `origin/main` i otwartych PR-ów (`gh pr list`), żeby uniknąć kolizji.

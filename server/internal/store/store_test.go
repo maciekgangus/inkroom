@@ -196,6 +196,29 @@ func TestDataSurvivesReopening(t *testing.T) {
 	}
 }
 
+func TestBoardBackground(t *testing.T) {
+	s := open(t)
+	u := user(t, s, "a@example.com")
+	if _, err := s.CreateBoard("b1", u.ID, "Matma"); err != nil {
+		t.Fatal(err)
+	}
+	if bg, err := s.LoadBackground("b1"); err != nil || bg != "plain" {
+		t.Fatalf("default: got %q, %v", bg, err)
+	}
+	if err := s.SetBoardBackground("b1", "grid"); err != nil {
+		t.Fatal(err)
+	}
+	if b, err := s.Board("b1"); err != nil || b.Background != "grid" {
+		t.Fatalf("got %+v, %v", b, err)
+	}
+	if err := s.SetBoardBackground("nope", "grid"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("unknown board: got %v", err)
+	}
+	if !ValidBackground("dots") || !ValidBackground("lines") || ValidBackground("") || ValidBackground("url(x)") {
+		t.Fatal("ValidBackground accepts the wrong values")
+	}
+}
+
 func TestImages(t *testing.T) {
 	s := open(t)
 	u := user(t, s, "a@example.com")

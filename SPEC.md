@@ -45,6 +45,9 @@ Priorytety: P1 do pierwszej lekcji, P2 zaraz po niej, P3 później. Statusy: pro
 | R-022 | Edycja właściwości zaznaczonych obiektów: kolor, grubość linii (rozmiar czcionki dla tekstu), styl linii (ciągła, kreskowana, kropkowana), wypełnienie kształtów, przezroczystość, treść tekstu (dwuklik); zmiana jest cofalna (R-008) i widoczna dla wszystkich (R-006) | P2 | done |
 | R-023 | Operacje na zaznaczeniu: usuń, duplikuj, kopiuj i wklej, na wierzch i na spód (kolejność warstw), grupowanie obiektów w stałą grupę | P3 | proposed |
 | R-024 | Ułatwienia rysowania z klawiszem Shift na komputerze: linia przyciąga się do kątów co 15° (0°, 15°, 30°, 45°, 60°, 75°, 90° itd.), prostokąt staje się kwadratem, elipsa (narzędzie owalu rysuje domyślnie elipsę) staje się kołem; na tabletach bez klawiatury (iPad) ułatwień nie ma | P2 | accepted |
+| R-025 | Rozszerzona paleta kolorów: 5 szybkich kolorów zostaje w pasku narzędzi, a obok wysuwany panel z ok. 12 dodatkowymi kolorami i dowolnym kolorem z próbnika; wybrany kolor działa dla pióra, kształtów i tekstu | P2 | done |
+| R-026 | Tryb ciemny całej aplikacji, łącznie z tablicą: domyślnie według ustawienia systemu, ręczny przełącznik zapamiętywany na urządzeniu; to ustawienie osobiste, niewspółdzielone. Domyślny czarny tusz jest w trybie ciemnym wyświetlany jako biały (a biały jako czarny), pozostałe kolory bez zmian, więc ta sama tablica jest czytelna w obu trybach | P2 | done |
+| R-027 | Tło tablicy do wyboru: gładkie, kropki, kratka, linie; wspólne dla wszystkich na tablicy, ustawia je twórca, zapisuje się razem z tablicą i zmienia u wszystkich na żywo; tło przesuwa się i skaluje razem z płótnem | P2 | done |
 
 ## 4. Wymagania niefunkcjonalne
 Miary to propozycje startowe, do potwierdzenia po pierwszych testach na prawdziwej lekcji.
@@ -93,3 +96,4 @@ Miary to propozycje startowe, do potwierdzenia po pierwszych testach na prawdziw
 - 2026-11-10: model obiektów: dodano R-021 (zaznaczanie, przesuwanie, skalowanie i obracanie wszystkich elementów), R-022 (edycja właściwości: kolor, grubość, styl, wypełnienie, przezroczystość, tekst), R-023 (usuń, duplikuj, kopiuj, kolejność, grupy); R-004 bez zmian (gumka dalej kasuje cały obiekt, nie obraz).
 - 2026-11-10: R-021 i R-022 `done` po teście ręcznym: zaznaczanie, przesuwanie, skalowanie i obracanie wszystkich elementów, panel właściwości (kolor, grubość, styl, wypełnienie, przezroczystość), edycja tekstu dwuklikiem; ADR 0008, plan w `docs/plan-object-model.md`. R-023 zostaje `proposed`.
 - 2026-11-10: ułatwienia rysowania: dodano R-024 (Shift: kąty co 15°, kwadrat, koło) na prośbę użytkownika; R-012: narzędzie okręgu rysuje elipsę (z Shift okrąg), nowy rodzaj elementu `ellipse` (ADR 0009), stare okręgi (`circle`) nadal działają.
+- 2026-11-09: dodano R-025 (rozszerzona paleta kolorów), R-026 (tryb ciemny z tablicą) i R-027 (wspólne tło tablicy ustawiane przez twórcę).

@@ -1,7 +1,9 @@
 import { render } from "preact";
+import { act } from "preact/test-utils";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { Settings } from "./board/controller";
-import { COLORS, SIZES, Toolbar } from "./toolbar";
+import { setTheme } from "./theme";
+import { COLORS, MORE_COLORS, SIZES, Toolbar } from "./toolbar";
 
 describe("Toolbar", () => {
 	let root: HTMLElement;
@@ -14,9 +16,11 @@ describe("Toolbar", () => {
 		settings = { tool: "pen", color: COLORS[0], size: SIZES[1] };
 		onUndo = vi.fn();
 		onRedo = vi.fn();
-		render(
-			<Toolbar settings={settings} onUndo={onUndo} onRedo={onRedo} />,
-			root,
+		act(() =>
+			render(
+				<Toolbar settings={settings} onUndo={onUndo} onRedo={onRedo} />,
+				root,
+			),
 		);
 	});
 
@@ -26,6 +30,75 @@ describe("Toolbar", () => {
 	test("has 5 colors and 3 sizes", () => {
 		expect(COLORS).toHaveLength(5);
 		expect(SIZES).toHaveLength(3);
+	});
+
+	test("tool buttons show an icon and a Polish tooltip instead of a text label", () => {
+		const pen = root.querySelector('[aria-label="pen"]') as HTMLElement;
+		expect(pen.querySelector("svg")).not.toBeNull();
+		expect(pen.textContent).toBe("");
+		expect(pen.title).toBe("Pióro");
+		expect(root.querySelector('[aria-label="undo"] svg')).not.toBeNull();
+	});
+
+	test("the chosen tool, colour and size are marked as pressed", () => {
+		const pressed = () =>
+			[...root.querySelectorAll('[aria-pressed="true"]')].map((b) =>
+				b.getAttribute("aria-label"),
+			);
+		expect(pressed()).toEqual([
+			"pen",
+			`color ${COLORS[0]}`,
+			`size ${SIZES[1]}`,
+		]);
+		act(() => click("eraser"));
+		expect(pressed()).toEqual(["eraser", `size ${SIZES[1]}`]);
+	});
+
+	describe("extended palette", () => {
+		const q = (label: string) =>
+			root.querySelector(`[aria-label="${label}"]`) as HTMLElement | null;
+
+		test("the extra colours stay hidden until the palette is opened", () => {
+			expect(MORE_COLORS).toHaveLength(12);
+			expect(q(`color ${MORE_COLORS[0]}`)).toBeNull();
+			act(() => click("more colors"));
+			for (const c of MORE_COLORS) expect(q(`color ${c}`)).not.toBeNull();
+			expect(q("custom color")?.getAttribute("type")).toBe("color");
+		});
+
+		test("picking an extra colour sets it, closes the palette and marks the palette button", () => {
+			act(() => click("more colors"));
+			act(() => click(`color ${MORE_COLORS[3]}`));
+			expect(settings.color).toBe(MORE_COLORS[3]);
+			expect(q(`color ${MORE_COLORS[3]}`)).toBeNull();
+			expect(q("more colors")?.getAttribute("aria-pressed")).toBe("true");
+			expect(q(`color ${COLORS[0]}`)?.getAttribute("aria-pressed")).toBe(
+				"false",
+			);
+		});
+
+		test("the picker sets any colour and goes back to the pen from the eraser", () => {
+			click("eraser");
+			act(() => click("more colors"));
+			const input = q("custom color") as HTMLInputElement;
+			input.value = "#123456";
+			act(() => {
+				input.dispatchEvent(new Event("input", { bubbles: true }));
+			});
+			expect(settings.color).toBe("#123456");
+			expect(settings.tool).toBe("pen");
+		});
+	});
+
+	test("in dark mode the black swatch is shown as white (the stored colour stays black)", () => {
+		act(() => setTheme("dark"));
+		const black = root.querySelector(
+			`[aria-label="color ${COLORS[0]}"]`,
+		) as HTMLElement;
+		expect(black.style.background).toMatch(/#ffffff|rgb\(255, 255, 255\)/);
+		act(() => black.click());
+		expect(settings.color).toBe(COLORS[0]);
+		act(() => setTheme("light"));
 	});
 
 	test("eraser and pen buttons switch the tool", () => {

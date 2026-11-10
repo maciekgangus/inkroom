@@ -420,4 +420,29 @@ describe("SyncClient", () => {
 			expect(sock().sent).toEqual([{ t: "update", stroke: moved("1") }]);
 		});
 	});
+
+	describe("board background", () => {
+		test("the snapshot and later changes report the background without repainting twice", () => {
+			const onBackground = vi.fn();
+			const b = new Board();
+			const socket = new FakeSocket();
+			const update = vi.fn();
+			const c = new SyncClient(b, {
+				createSocket: () => socket,
+				onUpdate: update,
+				onBackground,
+			});
+			c.connect();
+			socket.open();
+			socket.receive({ t: "snapshot", strokes: [], background: "grid" });
+			expect(onBackground).toHaveBeenLastCalledWith("grid");
+			update.mockClear();
+			socket.receive({ t: "background", value: "dots" });
+			expect(onBackground).toHaveBeenLastCalledWith("dots");
+			expect(update).not.toHaveBeenCalled();
+			socket.receive({ t: "background", value: "stars" });
+			expect(onBackground).toHaveBeenCalledTimes(2);
+			c.close();
+		});
+	});
 });

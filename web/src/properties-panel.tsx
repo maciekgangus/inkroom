@@ -19,11 +19,18 @@ interface Props {
 	/** The selected elements; the panel shows the values of the first. */
 	elements: Stroke[];
 	colors: string[];
+	/** How a stored colour is shown (dark mode swaps black and white); defaults to as is. */
+	display?: (color: string) => string;
 	onChange: (patch: StylePatch) => void;
 }
 
 /** Edits the style of the selection: colour, width, line style, fill and opacity. */
-export function PropertiesPanel({ elements, colors, onChange }: Props) {
+export function PropertiesPanel({
+	elements,
+	colors,
+	display = (c) => c,
+	onChange,
+}: Props) {
 	if (elements.length === 0) return null;
 	const can = capabilities(elements);
 	const now = styleOf(elements);
@@ -39,7 +46,7 @@ export function PropertiesPanel({ elements, colors, onChange }: Props) {
 							key={c}
 							aria-label={`prop color ${c}`}
 							class={`swatch ${on(now.color === c)}`}
-							style={{ background: c }}
+							style={{ background: display(c) }}
 							onClick={() => onChange({ color: c })}
 						/>
 					))}
@@ -94,7 +101,7 @@ export function PropertiesPanel({ elements, colors, onChange }: Props) {
 							key={c}
 							aria-label={`prop fill ${c}`}
 							class={`swatch ${on(now.fill === c)}`}
-							style={{ background: c }}
+							style={{ background: display(c) }}
 							onClick={() => onChange({ fill: c })}
 						/>
 					))}
