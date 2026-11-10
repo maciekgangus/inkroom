@@ -155,4 +155,36 @@ describe("Controller resizing and group rotation", () => {
 		expect(after.w / after.h).toBeCloseTo(turned.w / turned.h);
 		expect(after.w).toBeGreaterThan(turned.w);
 	});
+
+	test("the frame is hidden while turning and comes back on release", () => {
+		c.select(["r1", "r2"]);
+		const f = lastFrame();
+		const h = rotationHandlePos(f, 28);
+		c.pointerDown(ev(h[0], h[1]));
+		c.pointerMove(ev(f.cx + 150, f.cy + 120));
+		expect(frames[frames.length - 1]).toBeNull(); // nothing to look at while turning
+		c.pointerUp(ev(f.cx + 150, f.cy + 120));
+		expect(frames[frames.length - 1]).not.toBeNull();
+		expect(lastFrame().rot).not.toBe(0);
+	});
+
+	test("it stays visible while stretching", () => {
+		c.select("r1");
+		c.pointerDown(ev(300, 200));
+		c.pointerMove(ev(400, 240));
+		expect(frames[frames.length - 1]).not.toBeNull();
+		c.pointerUp(ev(400, 240));
+	});
+
+	test("the frame comes back even if the turn ended where it started", () => {
+		c.select("r1");
+		const f = lastFrame();
+		const h = rotationHandlePos(f, 28);
+		c.pointerDown(ev(h[0], h[1]));
+		c.pointerMove(ev(f.cx + 150, f.cy));
+		expect(frames[frames.length - 1]).toBeNull();
+		c.pointerMove(ev(h[0], h[1]));
+		c.pointerUp(ev(h[0], h[1]));
+		expect(frames[frames.length - 1]).not.toBeNull();
+	});
 });

@@ -611,10 +611,13 @@ export class Controller {
 		// A local preview only: nothing is sent and no history is written until release.
 		for (const d of edit.drafts)
 			this.board.applyRemote({ t: "update", stroke: d });
-		this.showSelection(
-			edit.drafts,
-			edit.mode === "rotate" ? edit.frameRot : this.groupRot,
-		);
+		if (edit.mode === "rotate") {
+			// The frame is hidden while turning: only the glow follows the objects.
+			this.renderer.setHighlight?.(edit.drafts);
+			this.renderer.setSelection?.(null);
+		} else {
+			this.showSelection(edit.drafts);
+		}
 		this.renderer.redraw(this.board.strokes);
 	}
 
@@ -635,7 +638,10 @@ export class Controller {
 		const unchanged = edit.drafts.every(
 			(d, i) => JSON.stringify(d) === JSON.stringify(edit.originals[i]),
 		);
-		if (unchanged) return; // pressed and released without really moving
+		if (unchanged) {
+			this.showFrame(); // pressed and released without really moving: bring the frame back
+			return;
+		}
 		// Put the originals back, then record the change once: one undo step, one update each.
 		for (const o of edit.originals)
 			this.board.applyRemote({ t: "update", stroke: o });
