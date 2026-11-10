@@ -354,7 +354,7 @@ export function BoardView({
 						)[1]
 					}
 					fontSize={fontSizeOf(editingText) * viewport.scale}
-					color={editingText.color}
+					color={displayColor(editingText.color, currentTheme())}
 					initialText={editingText.text ?? ""}
 					onCommit={(text) => {
 						ctl.current?.commitText(editingText.id, text);
@@ -366,6 +366,7 @@ export function BoardView({
 			<PropertiesPanel
 				elements={ctl.current?.selection ?? []}
 				colors={COLORS}
+				display={(c) => displayColor(c, currentTheme())}
 				onChange={(patch) => {
 					ctl.current?.setProps(patch);
 					setTick((t) => t + 1);
