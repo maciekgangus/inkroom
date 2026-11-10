@@ -19,9 +19,11 @@ import { Cursors } from "./cursors";
 import { Icon } from "./icon";
 import { hasFinePointer } from "./pointer";
 import { PropertiesPanel } from "./properties-panel";
+import { applyToolShortcut } from "./shortcuts";
 import { type SocketLike, SyncClient } from "./sync/sync";
 import { TextEditor } from "./text-editor";
 import { currentTheme, displayColor, useTheme } from "./theme";
+import { toolCursor } from "./tool-cursor";
 import { COLORS, SIZES, Toolbar } from "./toolbar";
 import { ZoomControls } from "./zoom-controls";
 
@@ -83,6 +85,8 @@ export function BoardView({
 	/** Adds a picked, pasted or dropped image to the board (set up by the effect below). */
 	const insertImage = useRef<(file: Blob) => void>(() => {});
 	const [imageError, setImageError] = useState("");
+	/** Shows the cursor of the active tool on the board (set up by the effect below). */
+	const applyCursor = useRef<() => void>(() => {});
 	/** The open right-click menu: where, what is under it and the board position clicked. */
 	const [menu, setMenu] = useState<{
 		x: number;
@@ -131,9 +135,24 @@ export function BoardView({
 			newId,
 		);
 		ctl.current = controller;
+		let shownCursor = "";
+		applyCursor.current = () => {
+			const want = toolCursor(settings.tool, controller.panning);
+			if (want === shownCursor) return;
+			shownCursor = want;
+			live.style.cursor = want;
+		};
+		applyCursor.current();
 		controller.onTextRequest = ([x, y]) => setTextAt({ x, y });
 		controller.onTextEdit = (el) => setEditingText(el);
 		controller.onSelectionChange = () => setTick((t) => t + 1);
+		// A right click (R-029): the menu, but only with a mouse; tablets have none (R-028).
+		controller.onRightClick = (e) => {
+			if (!hasFinePointer()) return;
+			const onObject = controller.contextTarget(e.clientX, e.clientY);
+			const at = viewport.toWorld(e.clientX, e.clientY);
+			setMenu({ x: e.clientX, y: e.clientY, onObject, at });
+		};
 
 		const changed = () => {
 			canvas.redraw(board.strokes);
@@ -187,6 +206,7 @@ export function BoardView({
 			if (e.pointerType === "touch") return gestures.down(e);
 			live.setPointerCapture(e.pointerId);
 			controller.pointerDown(e);
+			applyCursor.current();
 		};
 		const move = (e: PointerEvent) => {
 			if (e.pointerType === "touch") return gestures.move(e);
@@ -194,16 +214,21 @@ export function BoardView({
 			const [x, y] = viewport.toWorld(e.clientX, e.clientY);
 			sync.cursorMove(x, y);
 			controller.pointerMove(e);
+			applyCursor.current(); // a safety net: whichever way the tool changed, it shows
 		};
 		const leave = (e: PointerEvent) => {
 			if (e.pointerType !== "touch") sync.cursorHide();
 		};
-		const up = (e: PointerEvent) =>
-			e.pointerType === "touch" ? gestures.up(e) : controller.pointerUp(e);
-		const cancel = (e: PointerEvent) =>
-			e.pointerType === "touch"
-				? gestures.cancel(e)
-				: controller.pointerCancel(e);
+		const up = (e: PointerEvent) => {
+			if (e.pointerType === "touch") return gestures.up(e);
+			controller.pointerUp(e);
+			applyCursor.current();
+		};
+		const cancel = (e: PointerEvent) => {
+			if (e.pointerType === "touch") return gestures.cancel(e);
+			controller.pointerCancel(e);
+			applyCursor.current();
+		};
 		const wheel = (e: WheelEvent) => {
 			e.preventDefault(); // otherwise Ctrl + wheel (and trackpad pinch) zooms the whole page
 			const k = e.deltaMode === 1 ? LINE_HEIGHT_PX : 1;
@@ -248,12 +273,6 @@ export function BoardView({
 			e.preventDefault();
 			insertImage.current(file);
 		};
-		const contextmenu = (e: MouseEvent) => {
-			if (!hasFinePointer()) return; // tablets have no right click (R-028)
-			const onObject = controller.contextTarget(e.clientX, e.clientY);
-			const at = viewport.toWorld(e.clientX, e.clientY);
-			setMenu({ x: e.clientX, y: e.clientY, onObject, at });
-		};
 		const dragover = (e: DragEvent) => e.preventDefault(); // allow dropping files here
 		const drop = (e: DragEvent) => {
 			const files = Array.from(e.dataTransfer?.files ?? []).filter((f) =>
@@ -265,6 +284,11 @@ export function BoardView({
 		};
 		const key = (e: KeyboardEvent) => {
 			if (typing(e)) return; // typing, not undoing the board
+			if (!e.repeat && applyToolShortcut(e, settings)) {
+				e.preventDefault();
+				setTick((t) => t + 1);
+				return;
+			}
 			if (
 				(e.key === "Delete" || e.key === "Backspace") &&
 				controller.deleteSelected()
@@ -304,7 +328,6 @@ export function BoardView({
 		live.addEventListener("pointerleave", leave);
 		live.addEventListener("wheel", wheel, { passive: false });
 		live.addEventListener("dblclick", dblclick);
-		live.addEventListener("contextmenu", contextmenu);
 		live.addEventListener("mousedown", middle);
 		// Block Safari gestures and the context menu over the board.
 		for (const ev of gestureEvents) document.addEventListener(ev, prevent);
@@ -324,12 +347,14 @@ export function BoardView({
 			live.removeEventListener("pointerleave", leave);
 			live.removeEventListener("wheel", wheel);
 			live.removeEventListener("dblclick", dblclick);
-			live.removeEventListener("contextmenu", contextmenu);
 			live.removeEventListener("mousedown", middle);
 			for (const ev of gestureEvents) document.removeEventListener(ev, prevent);
 			document.removeEventListener("touchmove", prevent);
 		};
 	}, [settings, viewport, boardId, authorId, name, connect]);
+
+	// Whatever changed the tool (a key, the toolbar, adding an image), the cursor follows.
+	useEffect(() => applyCursor.current());
 
 	// The ink colours depend on the theme (black and white swap in dark mode).
 	useEffect(() => {
@@ -475,6 +500,7 @@ export function BoardView({
 			<Cursors cursors={syncRef.current?.cursors() ?? []} viewport={viewport} />
 			<Toolbar
 				settings={settings}
+				onToolChange={() => applyCursor.current()}
 				hasSelection={(ctl.current?.selection.length ?? 0) > 0}
 				images={{
 					fine: hasFinePointer(),

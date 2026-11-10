@@ -28,7 +28,7 @@ export interface PointerInput {
 	clientX: number;
 	clientY: number;
 	pressure: number;
-	/** Which button changed state (1 = middle mouse button). */
+	/** Which button changed state (0 left, 1 middle, 2 right; missing counts as left). */
 	button?: number;
 	/** Shift held: add to the selection, snap a rotation. */
 	shiftKey?: boolean;
@@ -56,11 +56,13 @@ export interface Settings {
 		| "circle"
 		| "text"
 		| "select";
+	/** The shape tool K goes back to: the last one chosen (R-030); a rectangle if none. */
+	lastShape?: "rect" | "circle";
 	color: string;
 	size: number;
 }
 
-const ERASER_RADIUS = 10;
+export const ERASER_RADIUS = 10;
 /** A shape dragged less than this many screen pixels is treated as a stray click and dropped. */
 const MIN_SHAPE_PX = 2;
 /** How far from an object (screen pixels) a click still selects it. */
@@ -107,6 +109,9 @@ const withRect = (el: Stroke, r: Rect): Stroke => ({
 });
 
 type ShapeTool = "line" | "rect" | "circle";
+/** How far (px) the right button may move and still count as a click, not a pan. */
+const RIGHT_CLICK_SLOP = 4;
+
 const isShapeTool = (t: Settings["tool"]): t is ShapeTool =>
 	t === "line" || t === "rect" || t === "circle";
 
@@ -116,6 +121,8 @@ export class Controller {
 	private current: Stroke | null = null;
 	private lastZ = 0;
 	private panFrom: { x: number; y: number } | null = null;
+	/** Set while the right button is down: where it went down and whether it has moved (R-029). */
+	private rightPress: { x: number; y: number; moved: boolean } | null = null;
 	private textTap = false;
 	private selectedIds: string[] = [];
 	/** Elements copied with copySelected, pasted by paste (not shared between clients). */
@@ -127,6 +134,8 @@ export class Controller {
 	onTextEdit: ((el: Stroke) => void) | null = null;
 	/** Called with the board position when the text tool is tapped; the UI then asks for the text. */
 	onTextRequest: ((at: [number, number]) => void) | null = null;
+	/** Called when the right button is released without moving, so the UI can open its menu. */
+	onRightClick: ((e: PointerInput) => void) | null = null;
 
 	constructor(
 		private board: Board,
@@ -147,6 +156,11 @@ export class Controller {
 		return this.board.strokes.filter((s) => this.selectedIds.includes(s.id));
 	}
 
+	/** True while the board is being dragged (hand tool, middle or right button). */
+	get panning(): boolean {
+		return this.panFrom !== null;
+	}
+
 	/** True while a pen or mouse pointer is down (touch gestures must then be ignored). */
 	get busy(): boolean {
 		return this.activeId !== null;
@@ -154,8 +168,16 @@ export class Controller {
 
 	pointerDown(e: PointerInput): void {
 		if (e.pointerType === "touch" || this.activeId !== null) return;
+		const button = e.button ?? 0;
+		if (button > 2) return; // back, forward and eraser buttons do nothing
 		this.activeId = e.pointerId;
-		if (e.button === 1 || this.settings.tool === "pan") {
+		if (button === 2) {
+			// Right button: pan for a moment, whatever the tool; a click opens the menu.
+			this.rightPress = { x: e.clientX, y: e.clientY, moved: false };
+			this.panFrom = { x: e.clientX, y: e.clientY };
+			return;
+		}
+		if (button === 1 || this.settings.tool === "pan") {
 			this.panFrom = { x: e.clientX, y: e.clientY };
 			return;
 		}
@@ -188,6 +210,13 @@ export class Controller {
 	pointerMove(e: PointerInput): void {
 		if (e.pointerId !== this.activeId) return;
 		if (this.panFrom) {
+			const press = this.rightPress;
+			if (
+				press &&
+				Math.hypot(e.clientX - press.x, e.clientY - press.y) > RIGHT_CLICK_SLOP
+			) {
+				press.moved = true;
+			}
 			this.viewport.panBy(
 				e.clientX - this.panFrom.x,
 				e.clientY - this.panFrom.y,
@@ -222,6 +251,12 @@ export class Controller {
 		if (e.pointerId !== this.activeId) return;
 		this.activeId = null;
 		this.panFrom = null;
+		const press = this.rightPress;
+		this.rightPress = null;
+		if (press) {
+			if (!press.moved) this.onRightClick?.(e);
+			return;
+		}
 		if (this.textTap) {
 			this.textTap = false;
 			this.onTextRequest?.(this.viewport.toWorld(e.clientX, e.clientY));

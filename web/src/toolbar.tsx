@@ -2,6 +2,7 @@ import { useState } from "preact/hooks";
 import type { Settings } from "./board/controller";
 import { Icon } from "./icon";
 import { ImageControls, type ImageControlsProps } from "./image-controls";
+import { selectTool, TOOL_KEYS } from "./shortcuts";
 import { displayColor, useTheme } from "./theme";
 
 export const COLORS = ["#111111", "#d32f2f", "#1976d2", "#388e3c", "#f57c00"];
@@ -28,6 +29,8 @@ interface Props {
 	hasSelection?: boolean;
 	/** The image group (add, and on a tablet paste and delete); left out, there is none. */
 	images?: ImageControlsProps;
+	/** Called after the tool changed, so the board can show the matching cursor at once. */
+	onToolChange?: () => void;
 	onUndo: () => void;
 	onRedo: () => void;
 }
@@ -57,6 +60,7 @@ export function Toolbar({
 	settings,
 	hasSelection = false,
 	images,
+	onToolChange,
 	onUndo,
 	onRedo,
 }: Props) {
@@ -64,6 +68,7 @@ export function Toolbar({
 	const set = (patch: Partial<Settings>) => {
 		Object.assign(settings, patch);
 		rerender((n) => n + 1);
+		if (patch.tool) onToolChange?.();
 	};
 	const [paletteOpen, setPaletteOpen] = useState(false);
 	const theme = useTheme();
@@ -100,9 +105,15 @@ export function Toolbar({
 						key={tool}
 						aria-label={tool}
 						aria-pressed={settings.tool === tool}
-						title={label}
+						title={
+							TOOL_KEYS[tool] ? `${label} (${TOOL_KEYS[tool]?.label})` : label
+						}
 						class={on(settings.tool === tool)}
-						onClick={() => set({ tool })}
+						onClick={() => {
+							selectTool(settings, tool);
+							rerender((n) => n + 1);
+							onToolChange?.();
+						}}
 					>
 						<Icon name={tool} />
 					</button>
