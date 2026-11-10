@@ -77,28 +77,28 @@ describe("Controller resizing and group rotation", () => {
 
 	test("a corner handle stretches width and height independently", () => {
 		c.select("r1");
-		drag([300, 200], [500, 250]); // se corner; nw (100,100) stays
+		drag([316, 216], [516, 266]); // se corner; nw (100,100) stays
 		expect(size("r1")).toEqual([400, 150]);
 		expect(geomBox(get("r1")).minX).toBe(100);
 	});
 
 	test("it can be made narrower without changing the height", () => {
 		c.select("r1");
-		drag([300, 200], [200, 200]);
+		drag([316, 216], [216, 216]);
 		expect(size("r1")[0]).toBeCloseTo(100);
 		expect(size("r1")[1]).toBeCloseTo(100);
 	});
 
 	test("with Shift the proportions are kept", () => {
 		c.select("r1");
-		drag([300, 200], [500, 250], true);
+		drag([316, 216], [516, 266], true);
 		const [w, h] = size("r1");
 		expect(w / h).toBeCloseTo(2);
 	});
 
 	test("it cannot be flipped or collapsed by dragging past the opposite corner", () => {
 		c.select("r1");
-		drag([300, 200], [20, 20]);
+		drag([316, 216], [36, 36]);
 		const [w, h] = size("r1");
 		expect(w).toBeGreaterThan(0);
 		expect(h).toBeGreaterThan(0);
@@ -146,13 +146,14 @@ describe("Controller resizing and group rotation", () => {
 		const turned = lastFrame();
 		const se = cornerPos(turned, "se");
 		const nw = cornerPos(turned, "nw");
+		const inner = (f: { w: number; h: number }) => (f.w - 32) / (f.h - 32); // minus the margins
 		drag(
 			se,
 			[se[0] + (se[0] - nw[0]) * 0.5, se[1] + (se[1] - nw[1]) * 0.5],
 			true,
 		);
 		const after = lastFrame();
-		expect(after.w / after.h).toBeCloseTo(turned.w / turned.h);
+		expect(inner(after)).toBeCloseTo(inner(turned));
 		expect(after.w).toBeGreaterThan(turned.w);
 	});
 

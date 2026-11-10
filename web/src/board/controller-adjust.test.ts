@@ -190,3 +190,69 @@ describe("a shape being drawn is a new object at every step", () => {
 		);
 	});
 });
+
+describe("handles stand off the object and follow it (R-041)", () => {
+	const mk = () => {
+		const board = new Board();
+		const frames: ({ w: number; h: number } | null)[] = [];
+		const ends: unknown[] = [];
+		const renderer: Renderer = {
+			drawLive: vi.fn(),
+			redraw: vi.fn(),
+			setSelection: (f) => void frames.push(f),
+			setEndpoints: (e) => void ends.push(e),
+		};
+		const c = new Controller(
+			board,
+			renderer,
+			{ tool: "select", color: "#111", size: 4 },
+			new Viewport(),
+			"me",
+			() => "n",
+		);
+		return { board, c, frames, ends };
+	};
+	const press = (x: number, y: number): PointerInput => ({
+		pointerId: 1,
+		pointerType: "mouse",
+		clientX: x,
+		clientY: y,
+		pressure: 0.5,
+		button: 0,
+	});
+
+	test("every frame is wider than the object, by the same margin as a line's", () => {
+		const { board, c, frames } = mk();
+		board.addStroke(shape("rect"));
+		c.select("s");
+		expect(frames[frames.length - 1]).toMatchObject({
+			w: 240 + 32,
+			h: 180 + 32,
+		});
+	});
+
+	test("dragging a handle that stands off the object scales it by what the pointer moved", () => {
+		const { board, c } = mk();
+		board.addStroke(shape("rect"));
+		c.select("s");
+		// the south east handle is at (340 + 16, 280 + 16); move it 60 right and 30 down
+		c.pointerDown(press(356, 296));
+		c.pointerMove(press(416, 326));
+		c.pointerUp(press(416, 326));
+		expect(board.strokes[0].points.map((p) => p.slice(0, 2))).toEqual([
+			[100, 100],
+			[400, 310],
+		]);
+	});
+
+	test("erasing the selected element takes its handles away", () => {
+		const { board, c, frames, ends } = mk();
+		board.addStroke(shape("line"));
+		c.select("s");
+		expect(ends[ends.length - 1]).not.toBeNull();
+		board.eraseStroke("me", "s");
+		c.refreshSelection();
+		expect(ends[ends.length - 1]).toBeNull();
+		expect(frames[frames.length - 1]).toBeNull();
+	});
+});

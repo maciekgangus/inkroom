@@ -149,19 +149,20 @@ describe("Controller selection", () => {
 
 		test("the selection frame follows what is selected", () => {
 			c.select("r1");
+			// the frame stands a margin (16 px each side) off the objects
 			expect(renderer.setSelection).toHaveBeenLastCalledWith({
 				cx: 200,
 				cy: 150,
-				w: 200,
-				h: 100,
+				w: 232,
+				h: 132,
 				rot: 0,
 			});
 			c.select(["r1", "r2"]);
 			expect(renderer.setSelection).toHaveBeenLastCalledWith({
 				cx: 275,
 				cy: 150,
-				w: 350,
-				h: 100,
+				w: 382,
+				h: 132,
 				rot: 0,
 			});
 		});
@@ -263,7 +264,7 @@ describe("Controller selection", () => {
 	describe("scaling", () => {
 		test("dragging a corner scales from the opposite corner with proportions kept", () => {
 			c.select("r1");
-			drag([300, 200], [500, 300]); // the se handle
+			drag([316, 216], [516, 316]); // the se handle, a margin off the corner
 			expect(corners("r1")).toEqual([
 				[100, 100],
 				[500, 300],
@@ -279,14 +280,14 @@ describe("Controller selection", () => {
 		test("the handle is as big on screen whatever the zoom", () => {
 			c.select("r1");
 			viewport.scale = 2; // a 12 px grab radius is 6 board units
-			drag([(300 + 5) * 2, 200 * 2], [700, 460]);
+			drag([(300 + 8) * 2, (200 + 8) * 2], [700, 460]);
 			expect(corners("r1")[0]).toEqual([100, 100]); // scaled from the nw corner, not moved
 			expect(ops).toHaveLength(1);
 		});
 
 		test("cannot be shrunk to nothing", () => {
 			c.select("r1");
-			drag([300, 200], [101, 101]);
+			drag([316, 216], [117, 117]);
 			const [a, b] = corners("r1");
 			expect(b[0] - a[0]).toBeGreaterThan(5);
 		});
@@ -306,14 +307,17 @@ describe("Controller selection", () => {
 			if (!f) throw new Error("no frame");
 			const se = cornerPos(f, "se");
 			const nw = cornerPos(f, "nw");
-			// pull the se corner to twice its distance from the nw corner
-			drag(se, [nw[0] + 2 * (se[0] - nw[0]), nw[1] + 2 * (se[1] - nw[1])]);
+			// pull the se corner to twice its distance from the nw corner (the handle is a margin off)
+			drag(
+				[se[0] + 16, se[1] + 16],
+				[nw[0] + 2 * (se[0] - nw[0]) + 16, nw[1] + 2 * (se[1] - nw[1]) + 16],
+			);
 			expect(get("t1").fontSize).toBeCloseTo(40);
 		});
 
 		test("scales several objects around the selection's opposite corner", () => {
 			c.select(["r1", "r2"]); // frame (100,100)-(450,200)
-			drag([450, 200], [800, 300]); // se corner to twice the distance from nw (350 -> 700 wide)
+			drag([466, 216], [816, 316]); // se corner to twice the distance from nw (350 -> 700 wide)
 			expect(corners("r1")).toEqual([
 				[100, 100],
 				[500, 300],
@@ -327,7 +331,7 @@ describe("Controller selection", () => {
 		const handle = (): [number, number] => {
 			const f = frameOf(c.selection);
 			if (!f) throw new Error("no frame");
-			return rotationHandlePos(f, 28);
+			return rotationHandlePos({ ...f, w: f.w + 32, h: f.h + 32 }, 28);
 		};
 		const around = (angleFromUp: number): [number, number] => [
 			center.x + 100 * Math.sin(angleFromUp),
@@ -365,7 +369,7 @@ describe("Controller selection", () => {
 			c.select(["r1", "r2"]); // frame centre (275, 125)
 			const f = frameOf(c.selection);
 			if (!f) throw new Error("no frame");
-			const h = rotationHandlePos(f, 28);
+			const h = rotationHandlePos({ ...f, w: f.w + 32, h: f.h + 32 }, 28);
 			drag(h, [f.cx + 100, f.cy]); // a quarter turn
 			expect(get("r1").rot).toBeCloseTo(Math.PI / 2);
 			expect(get("r2").rot).toBeCloseTo(Math.PI / 2);

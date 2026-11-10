@@ -84,35 +84,35 @@ describe("edit handles (R-041)", () => {
 	describe("the sides of a frame stretch one dimension", () => {
 		test("the east side changes only the width, the west side stays", () => {
 			c.select("r");
-			drag([300, 150], [400, 150]);
+			drag([316, 150], [416, 150]);
 			const b = geomBox(get("r"));
 			expect([b.minX, b.maxX, b.minY, b.maxY]).toEqual([100, 400, 100, 200]);
 		});
 
 		test("the west side moves the left edge, the right one stays", () => {
 			c.select("r");
-			drag([100, 150], [40, 150]);
+			drag([84, 150], [24, 150]);
 			const b = geomBox(get("r"));
 			expect([b.minX, b.maxX, b.minY, b.maxY]).toEqual([40, 300, 100, 200]);
 		});
 
 		test("the north side changes only the height, the bottom stays", () => {
 			c.select("r");
-			drag([200, 100], [200, 50]);
+			drag([200, 84], [200, 34]);
 			const b = geomBox(get("r"));
 			expect([b.minX, b.maxX, b.minY, b.maxY]).toEqual([100, 300, 50, 200]);
 		});
 
 		test("the south side moves the bottom edge", () => {
 			c.select("r");
-			drag([200, 200], [200, 260]);
+			drag([200, 216], [200, 276]);
 			const b = geomBox(get("r"));
 			expect([b.minX, b.maxX, b.minY, b.maxY]).toEqual([100, 300, 100, 260]);
 		});
 
 		test("a side cannot be pulled past the other one", () => {
 			c.select("r");
-			drag([300, 150], [20, 150]);
+			drag([316, 150], [36, 150]);
 			const b = geomBox(get("r"));
 			expect(b.maxX).toBeGreaterThan(b.minX);
 			expect(b.minX).toBeCloseTo(100);

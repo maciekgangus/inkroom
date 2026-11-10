@@ -137,3 +137,4 @@ Miary to propozycje startowe, do potwierdzenia po pierwszych testach na prawdziw
 - 2026-11-10: dodano N-012 (płynność edycji): zmierzone przeciąganie 700 zaznaczonych elementów z 157 ms na 11 ms na klatkę, zoom animowany w skali logarytmicznej.
 - 2026-11-10: dodano R-043 (dalsza optymalizacja wydajności, dla mocniejszego modelu), R-044 (pole tekstowe jako obszar), R-045 (nazwa tablicy u góry, zmiana przez właściciela) i R-046 (aktywni uczestnicy w rogu).
 - 2026-11-10: po teście: suwaki wypełniają się równo z kciukiem; górny pasek łączy nazwę tablicy, narzędzia i uczestników; tekst ma wbudowaną czcionkę (Inter); panel narzędzi (R-042) pływa przy obiekcie i przy pisanym tekście.
+- 2026-11-10: uchwyty zaznaczenia są jednakowe dla wszystkich obiektów: różowe kropki (rogi, środki boków, obrót) stojące 16 px od obiektu, bez obramowania; uchwyty zaznaczonego, a usuniętego lub zmienionego zdalnie obiektu odświeżają się.

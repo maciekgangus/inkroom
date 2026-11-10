@@ -189,6 +189,7 @@ export function BoardView({
 			onPeers: setPeers,
 			onName: setTitle,
 			onUpdate: () => {
+				ctl.current?.refreshSelection();
 				canvas.redraw(board.strokes);
 				canvas.setRemoteLive(sync.liveStrokes());
 			},

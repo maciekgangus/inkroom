@@ -108,13 +108,13 @@ describe("dragging on a layer of its own (performance)", () => {
 
 	test("scaling hands over the changed elements, without an offset", () => {
 		c.select("r1");
-		c.pointerDown(ev(300, 200)); // the south east corner
-		c.pointerMove(ev(500, 300));
+		c.pointerDown(ev(316, 216)); // the south east handle, a margin off the corner
+		c.pointerMove(ev(516, 316));
 		const d = lastDrag();
 		expect(d?.offset).toBeUndefined();
 		expect(d?.elements[0].points[1].slice(0, 2)).toEqual([500, 300]);
 		expect(get("r1").points[1].slice(0, 2)).toEqual([300, 200]); // still not on the board
-		c.pointerUp(ev(500, 300));
+		c.pointerUp(ev(516, 316));
 		expect(get("r1").points[1].slice(0, 2)).toEqual([500, 300]);
 		expect(lastDrag()).toBeNull();
 	});

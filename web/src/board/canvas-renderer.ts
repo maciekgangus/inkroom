@@ -5,12 +5,7 @@ import { intersects, strokeBounds } from "./bounds";
 import type { Renderer } from "./controller";
 import type { ImageCache } from "./image-cache";
 import { imageRect } from "./image-geometry";
-import {
-	type Frame,
-	HANDLE_PX,
-	ROT_OFFSET_PX,
-	showsBox,
-} from "./selection-frame";
+import { type Frame, HANDLE_PX, ROT_OFFSET_PX } from "./selection-frame";
 import { partsOf } from "./shape-parts";
 import { isPolygonKind } from "./shapes";
 import { strokeOptions } from "./stroke-style";
@@ -463,28 +458,22 @@ export class CanvasRenderer implements Renderer {
 		});
 	}
 
-	/** Frame, corner handles and rotation handle, a constant size on screen whatever the zoom. */
+	/**
+	 * The handles that edit the selection, all alike: pink dots a little off the object (no outline
+	 * box), at the corners and the middles of the sides, and one above for turning. A constant size
+	 * on screen whatever the zoom.
+	 */
 	private drawFrame(ctx: CanvasRenderingContext2D, f: Frame): void {
 		const px = 1 / this.viewport.scale;
 		ctx.save();
 		ctx.translate(f.cx, f.cy);
 		ctx.rotate(f.rot);
-		ctx.strokeStyle = "#1976d2";
 		ctx.lineWidth = 2 * px;
-		// A lone stroke, line or text only glows: its handles show, the box does not (R-034).
-		if (showsBox(this.highlight)) ctx.strokeRect(-f.w / 2, -f.h / 2, f.w, f.h);
+		ctx.strokeStyle = "#fff";
+		ctx.fillStyle = "#e91e63";
 		const stem = ROT_OFFSET_PX * px;
-		ctx.beginPath();
-		ctx.moveTo(0, -f.h / 2);
-		ctx.lineTo(0, -f.h / 2 - stem);
-		ctx.stroke();
-		ctx.fillStyle = "#fff";
-		ctx.beginPath();
-		ctx.arc(0, -f.h / 2 - stem, (HANDLE_PX / 2) * px, 0, Math.PI * 2);
-		ctx.fill();
-		ctx.stroke();
-		const h = (HANDLE_PX - 2) * px;
 		for (const [x, y] of [
+			[0, -f.h / 2 - stem],
 			[-f.w / 2, -f.h / 2],
 			[f.w / 2, -f.h / 2],
 			[f.w / 2, f.h / 2],
@@ -495,8 +484,10 @@ export class CanvasRenderer implements Renderer {
 			[0, f.h / 2],
 			[-f.w / 2, 0],
 		]) {
-			ctx.fillRect(x - h / 2, y - h / 2, h, h);
-			ctx.strokeRect(x - h / 2, y - h / 2, h, h);
+			ctx.beginPath();
+			ctx.arc(x, y, (HANDLE_PX / 2) * px, 0, Math.PI * 2);
+			ctx.fill();
+			ctx.stroke();
 		}
 		ctx.restore();
 	}

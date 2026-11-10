@@ -109,6 +109,8 @@ type Edit =
 			frame: Frame;
 			anchor: Vec;
 			handle: Vec;
+			/** How far the grabbed handle stands outside the object, in board units, with sign. */
+			pad: Vec;
 	  }
 	| {
 			mode: "adjust";
@@ -698,10 +700,10 @@ export class Controller {
 		return h ? rotatePoint(h, centerOf(el), el.rot ?? 0) : null;
 	}
 
-	/** The frame of a selection; a lone line, which has no height, gets one a little wider. */
+	/** The frame of a selection, always a little wider than what it holds, so handles never sit on it. */
 	private frameFor(els: Stroke[], rot: number): Frame | null {
 		const f = frameOf(els, rot);
-		if (!f || els.length !== 1 || els[0].kind !== "line") return f;
+		if (!f) return f;
 		const pad = (2 * LINE_FRAME_PAD_PX) / this.viewport.scale;
 		return { ...f, w: f.w + pad, h: f.h + pad };
 	}
@@ -768,14 +770,20 @@ export class Controller {
 				return;
 			}
 			if (handle) {
-				const anchor = handlePos(frame, oppositeHandle(handle));
+				// The scaling is worked out on the object's own frame, the handles stand off it.
+				const base = frameOf(sel, this.groupRot) ?? frame;
+				const gap = LINE_FRAME_PAD_PX * px;
 				this.edit = {
 					mode: "scale",
 					originals: sel,
 					drafts: sel,
-					frame,
-					anchor,
-					handle: handlePos(frame, handle),
+					frame: base,
+					anchor: handlePos(base, oppositeHandle(handle)),
+					handle: handlePos(base, handle),
+					pad: [
+						(handle.includes("e") ? 1 : handle.includes("w") ? -1 : 0) * gap,
+						(handle.includes("s") ? 1 : handle.includes("n") ? -1 : 0) * gap,
+					],
 				};
 				return;
 			}
@@ -809,7 +817,7 @@ export class Controller {
 	private dragEdit(e: PointerInput): void {
 		const edit = this.edit;
 		if (!edit) return;
-		const p = this.viewport.toWorld(e.clientX, e.clientY);
+		let p = this.viewport.toWorld(e.clientX, e.clientY);
 		if (edit.mode === "marquee") {
 			edit.rect = {
 				minX: Math.min(edit.start[0], p[0]),
@@ -860,7 +868,13 @@ export class Controller {
 				},
 			];
 		} else if (edit.mode === "scale") {
-			const { anchor, handle, frame } = edit;
+			const { anchor, handle, frame, pad } = edit;
+			if (pad[0] || pad[1]) {
+				// The pointer holds a handle outside the object: bring it back onto the object's frame.
+				const c: Vec = [frame.cx, frame.cy];
+				const local = rotatePoint(p, c, -frame.rot);
+				p = rotatePoint([local[0] - pad[0], local[1] - pad[1]], c, frame.rot);
+			}
 			const kMinX =
 				MIN_SELECTION_PX / (this.viewport.scale * Math.max(frame.w, 1));
 			const kMinY =
@@ -958,6 +972,18 @@ export class Controller {
 		this.renderer.redraw(this.board.strokes);
 	}
 
+	/**
+	 * Brings the glow, frame and handles in step with the board after it changed under the
+	 * selection (a remote edit, an erase): what was selected may have moved or be gone.
+	 */
+	refreshSelection(): void {
+		if (this.edit) return; // a gesture in progress draws its own preview
+		const before = this.selectedIds.length;
+		this.selectedIds = this.selection.map((s) => s.id);
+		this.showFrame();
+		if (before !== this.selectedIds.length) this.onSelectionChange?.();
+	}
+
 	/** Keeps the selection in step after undo or redo changed the board. */
 	private syncSelection(): void {
 		this.groupRot = 0;
@@ -1022,6 +1048,7 @@ export class Controller {
 		);
 		if (hit && this.board.eraseStroke(this.authorId, hit.id)) {
 			this.renderer.redraw(this.board.strokes);
+			this.refreshSelection(); // an erased selected element must not leave its handles
 		}
 	}
 }
