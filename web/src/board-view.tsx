@@ -14,9 +14,10 @@ import { defaultSize, placeCentered } from "./board/image-geometry";
 import { prepareImage, uploadImage } from "./board/image-upload";
 import { fontSizeFor, fontSizeOf } from "./board/text";
 import { Viewport } from "./board/viewport";
+import { ContextMenu, type MenuItem } from "./context-menu";
 import { Cursors } from "./cursors";
 import { Icon } from "./icon";
-import { ImageControls } from "./image-controls";
+import { hasFinePointer } from "./pointer";
 import { PropertiesPanel } from "./properties-panel";
 import { type SocketLike, SyncClient } from "./sync/sync";
 import { TextEditor } from "./text-editor";
@@ -82,6 +83,13 @@ export function BoardView({
 	/** Adds a picked, pasted or dropped image to the board (set up by the effect below). */
 	const insertImage = useRef<(file: Blob) => void>(() => {});
 	const [imageError, setImageError] = useState("");
+	/** The open right-click menu: where, what is under it and the board position clicked. */
+	const [menu, setMenu] = useState<{
+		x: number;
+		y: number;
+		onObject: boolean;
+		at: [number, number];
+	} | null>(null);
 
 	useEffect(() => {
 		const committed = committedRef.current;
@@ -229,9 +237,22 @@ export function BoardView({
 				i.type.startsWith("image/"),
 			);
 			const file = item?.getAsFile();
-			if (!file) return;
+			if (!file) {
+				// Nothing to paste from the system: paste what was copied on the board.
+				if (controller.hasClipboard) {
+					e.preventDefault();
+					controller.paste();
+				}
+				return;
+			}
 			e.preventDefault();
 			insertImage.current(file);
+		};
+		const contextmenu = (e: MouseEvent) => {
+			if (!hasFinePointer()) return; // tablets have no right click (R-028)
+			const onObject = controller.contextTarget(e.clientX, e.clientY);
+			const at = viewport.toWorld(e.clientX, e.clientY);
+			setMenu({ x: e.clientX, y: e.clientY, onObject, at });
 		};
 		const dragover = (e: DragEvent) => e.preventDefault(); // allow dropping files here
 		const drop = (e: DragEvent) => {
@@ -251,7 +272,20 @@ export function BoardView({
 				e.preventDefault();
 				return;
 			}
-			if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "z") return;
+			const ctrlKey = e.ctrlKey || e.metaKey;
+			if (ctrlKey && e.key.toLowerCase() === "c" && controller.copySelected()) {
+				e.preventDefault();
+				return;
+			}
+			if (
+				ctrlKey &&
+				e.key.toLowerCase() === "d" &&
+				controller.duplicateSelected()
+			) {
+				e.preventDefault();
+				return;
+			}
+			if (!ctrlKey || e.key.toLowerCase() !== "z") return;
 			e.preventDefault();
 			if (e.shiftKey) controller.redo();
 			else controller.undo();
@@ -270,6 +304,7 @@ export function BoardView({
 		live.addEventListener("pointerleave", leave);
 		live.addEventListener("wheel", wheel, { passive: false });
 		live.addEventListener("dblclick", dblclick);
+		live.addEventListener("contextmenu", contextmenu);
 		live.addEventListener("mousedown", middle);
 		// Block Safari gestures and the context menu over the board.
 		for (const ev of gestureEvents) document.addEventListener(ev, prevent);
@@ -289,6 +324,7 @@ export function BoardView({
 			live.removeEventListener("pointerleave", leave);
 			live.removeEventListener("wheel", wheel);
 			live.removeEventListener("dblclick", dblclick);
+			live.removeEventListener("contextmenu", contextmenu);
 			live.removeEventListener("mousedown", middle);
 			for (const ev of gestureEvents) document.removeEventListener(ev, prevent);
 			document.removeEventListener("touchmove", prevent);
@@ -327,6 +363,56 @@ export function BoardView({
 		} catch {
 			setImageError("Nie można odczytać schowka (brak zgody)");
 		}
+	};
+
+	/** Opens the system file picker (used by the menu, which has no input of its own). */
+	const pickImage = () => {
+		const input = document.createElement("input");
+		input.type = "file";
+		input.accept = "image/*";
+		input.onchange = () => {
+			for (const file of Array.from(input.files ?? []))
+				insertImage.current(file);
+		};
+		input.click();
+	};
+
+	const menuItems = (): MenuItem[] => {
+		const ctrl = ctl.current;
+		if (!menu || !ctrl) return [];
+		const paste: MenuItem = {
+			label: "Wklej",
+			icon: "paste",
+			disabled: !ctrl.hasClipboard && !canReadClipboard,
+			onSelect: () =>
+				ctrl.hasClipboard ? ctrl.paste(menu.at) : pasteFromClipboard(),
+		};
+		if (!menu.onObject) {
+			return [
+				paste,
+				{
+					label: "Wstaw obraz z pliku",
+					icon: "image",
+					onSelect: pickImage,
+				},
+			];
+		}
+		return [
+			{ label: "Kopiuj", icon: "copy", onSelect: () => ctrl.copySelected() },
+			paste,
+			{
+				label: "Duplikuj",
+				icon: "duplicate",
+				onSelect: () => ctrl.duplicateSelected(),
+			},
+			{
+				label: "Na wierzch",
+				icon: "front",
+				onSelect: () => ctrl.bringToFront(),
+			},
+			{ label: "Na spód", icon: "back", onSelect: () => ctrl.sendToBack() },
+			{ label: "Usuń", icon: "trash", onSelect: () => ctrl.deleteSelected() },
+		];
 	};
 
 	return (
@@ -386,21 +472,34 @@ export function BoardView({
 					onCancel={() => setTextAt(null)}
 				/>
 			)}
-			<ImageControls
-				hasSelection={(ctl.current?.selection.length ?? 0) > 0}
-				canPaste={canReadClipboard}
-				error={imageError}
-				onFile={(file) => insertImage.current(file)}
-				onPaste={pasteFromClipboard}
-				onDelete={() => ctl.current?.deleteSelected()}
-			/>
 			<Cursors cursors={syncRef.current?.cursors() ?? []} viewport={viewport} />
 			<Toolbar
 				settings={settings}
 				hasSelection={(ctl.current?.selection.length ?? 0) > 0}
+				images={{
+					fine: hasFinePointer(),
+					hasSelection: (ctl.current?.selection.length ?? 0) > 0,
+					canPaste: canReadClipboard,
+					onFile: (file) => insertImage.current(file),
+					onPaste: pasteFromClipboard,
+					onDelete: () => ctl.current?.deleteSelected(),
+				}}
 				onUndo={() => ctl.current?.undo()}
 				onRedo={() => ctl.current?.redo()}
 			/>
+			{menu && (
+				<ContextMenu
+					x={menu.x}
+					y={menu.y}
+					items={menuItems()}
+					onClose={() => setMenu(null)}
+				/>
+			)}
+			{imageError && (
+				<div class="toast" role="alert">
+					{imageError}
+				</div>
+			)}
 			{onSetBackground && (
 				<div class="backgrounds">
 					{BACKGROUNDS.map((b) => (

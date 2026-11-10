@@ -9,13 +9,13 @@ describe("ImageControls", () => {
 	let onDelete: () => void;
 
 	const mount = (
-		props: { hasSelection?: boolean; canPaste?: boolean; error?: string } = {},
+		props: { hasSelection?: boolean; canPaste?: boolean; fine?: boolean } = {},
 	) => {
 		render(
 			<ImageControls
 				hasSelection={props.hasSelection ?? false}
 				canPaste={props.canPaste ?? false}
-				error={props.error ?? ""}
+				fine={props.fine ?? false}
 				onFile={onFile}
 				onPaste={onPaste}
 				onDelete={onDelete}
@@ -48,7 +48,14 @@ describe("ImageControls", () => {
 		expect(onFile).toHaveBeenCalledWith(file);
 	});
 
-	test("the Obraz button opens the file picker", () => {
+	test("the add button is an icon, not a text label, with a Polish tooltip", () => {
+		mount();
+		expect(btn("add image")?.querySelector("svg")).not.toBeNull();
+		expect(btn("add image")?.textContent).toBe("");
+		expect(btn("add image")?.title).toBe("Obraz z pliku");
+	});
+
+	test("the add button opens the file picker", () => {
 		mount();
 		const input = root.querySelector('input[type="file"]') as HTMLInputElement;
 		const click = vi.spyOn(input, "click");
@@ -56,7 +63,14 @@ describe("ImageControls", () => {
 		expect(click).toHaveBeenCalled();
 	});
 
-	test("the delete button is there only while an image is selected", () => {
+	test("on a PC (fine pointer) only adding from a file is there, the context menu does the rest", () => {
+		mount({ fine: true, canPaste: true, hasSelection: true });
+		expect(btn("add image")).not.toBeNull();
+		expect(btn("paste image")).toBeNull();
+		expect(btn("delete selection")).toBeNull();
+	});
+
+	test("on a tablet the delete button is there only while something is selected", () => {
 		mount();
 		expect(btn("delete selection")).toBeNull();
 		mount({ hasSelection: true });
@@ -64,18 +78,11 @@ describe("ImageControls", () => {
 		expect(onDelete).toHaveBeenCalledOnce();
 	});
 
-	test("the paste button is there only where the browser allows reading the clipboard", () => {
+	test("on a tablet the paste button is there only where the browser allows reading the clipboard", () => {
 		mount();
 		expect(btn("paste image")).toBeNull();
 		mount({ canPaste: true });
 		btn("paste image")?.click();
 		expect(onPaste).toHaveBeenCalledOnce();
-	});
-
-	test("shows an error message", () => {
-		mount({ error: "Obraz jest za duży" });
-		expect(root.querySelector('[role="alert"]')?.textContent).toBe(
-			"Obraz jest za duży",
-		);
 	});
 });

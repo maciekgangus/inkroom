@@ -1,6 +1,7 @@
 import { useState } from "preact/hooks";
 import type { Settings } from "./board/controller";
 import { Icon } from "./icon";
+import { ImageControls, type ImageControlsProps } from "./image-controls";
 import { displayColor, useTheme } from "./theme";
 
 export const COLORS = ["#111111", "#d32f2f", "#1976d2", "#388e3c", "#f57c00"];
@@ -25,6 +26,8 @@ interface Props {
 	settings: Settings;
 	/** True while something is selected: the properties panel then owns colour and size. */
 	hasSelection?: boolean;
+	/** The image group (add, and on a tablet paste and delete); left out, there is none. */
+	images?: ImageControlsProps;
 	onUndo: () => void;
 	onRedo: () => void;
 }
@@ -53,6 +56,7 @@ const colourTools: Settings["tool"][] = [
 export function Toolbar({
 	settings,
 	hasSelection = false,
+	images,
 	onUndo,
 	onRedo,
 }: Props) {
@@ -160,6 +164,7 @@ export function Toolbar({
 					))}
 				</div>
 			)}
+			{images && <ImageControls {...images} />}
 			<div class="group">
 				<button type="button" aria-label="undo" title="Cofnij" onClick={onUndo}>
 					<Icon name="undo" />

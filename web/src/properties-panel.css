@@ -1,3 +1,6 @@
+.text-editor.solid {
+	background: var(--surface);
+}
 /* Same look as the main toolbar: glass surface, round swatches with a ring,
    borderless icon-like buttons and an accent tint for the active one. */
 .properties {
