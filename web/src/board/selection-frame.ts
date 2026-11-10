@@ -34,6 +34,7 @@ export function showsBox(els: Stroke[]): boolean {
 	return (
 		kind === "image" ||
 		kind === "line" ||
+		(kind === "text" && els[0].width !== undefined) ||
 		kind === "rect" ||
 		kind === "circle" ||
 		kind === "ellipse" ||

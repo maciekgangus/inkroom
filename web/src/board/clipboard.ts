@@ -112,6 +112,10 @@ function cleanElement(raw: unknown): ClipElement | null {
 		if (typeof raw.dash !== "string" || !DASHES.includes(raw.dash)) return null;
 		out.dash = raw.dash as ClipElement["dash"];
 	}
+	if (raw.width !== undefined) {
+		if (!isNum(raw.width) || raw.width <= 0) return null;
+		out.width = raw.width;
+	}
 	for (const key of ["rot", "fontSize"] as const) {
 		if (raw[key] !== undefined) {
 			if (!isNum(raw[key])) return null;

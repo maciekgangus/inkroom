@@ -116,4 +116,75 @@ describe("TextEditor", () => {
 		field().dispatchEvent(new FocusEvent("blur"));
 		expect(onCommit).not.toHaveBeenCalled();
 	});
+
+	describe("as an area (R-044)", () => {
+		const mountArea = async (props: Record<string, unknown> = {}) => {
+			onCommit = vi.fn();
+			onCancel = vi.fn();
+			await act(async () => {
+				render(
+					<TextEditor
+						x={120}
+						y={80}
+						fontSize={30}
+						color="#d32f2f"
+						width={300}
+						minHeight={90}
+						onCommit={onCommit}
+						onCancel={onCancel}
+						{...props}
+					/>,
+					root,
+				);
+			});
+		};
+		beforeEach(async () => {
+			root = document.createElement("div"); // a fresh element, not the one used above
+			document.body.append(root);
+			await mountArea();
+		});
+
+		test("is as wide and at least as tall as the area, and wraps", () => {
+			const style = field().style;
+			expect(style.width).toBe("300px");
+			expect(style.minHeight).toBe("90px");
+			expect(field().classList.contains("area")).toBe(true);
+		});
+
+		test("Enter is a new line, not the end of the text", () => {
+			const e = press("Enter");
+			expect(e.defaultPrevented).toBe(false);
+			expect(onCommit).not.toHaveBeenCalled();
+		});
+
+		test("Escape keeps what was typed", () => {
+			field().value = "ala ma kota";
+			press("Escape");
+			expect(onCommit).toHaveBeenCalledWith("ala ma kota");
+			expect(onCancel).not.toHaveBeenCalled();
+		});
+
+		test("Ctrl+Enter ends the text", () => {
+			field().value = "ala";
+			const e = new KeyboardEvent("keydown", {
+				key: "Enter",
+				ctrlKey: true,
+				bubbles: true,
+				cancelable: true,
+			});
+			field().dispatchEvent(e);
+			expect(onCommit).toHaveBeenCalledWith("ala");
+		});
+
+		test("leaving the field keeps the text, once", () => {
+			field().value = "ala";
+			act(() => {
+				field().dispatchEvent(new Event("blur"));
+			});
+			act(() => {
+				field().dispatchEvent(new Event("blur"));
+			});
+			expect(onCommit).toHaveBeenCalledTimes(1);
+		});
+	});
 });

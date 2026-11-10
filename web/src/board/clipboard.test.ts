@@ -232,4 +232,31 @@ describe("rehomeImages", () => {
 		const clip = parseClipboard(serializeSelection([stroke], "b"));
 		expect(clip?.elements[0].dash).toBe("natural");
 	});
+
+	test("the width of a text area travels, only a real size", () => {
+		const area: Stroke = { ...text, width: 240 };
+		expect(
+			parseClipboard(serializeSelection([area], "b"))?.elements[0].width,
+		).toBe(240);
+		const bad = (width: unknown) =>
+			parseClipboard(
+				JSON.stringify({
+					inkroom: 1,
+					board: "b",
+					elements: [
+						{
+							color: "#000",
+							size: 2,
+							kind: "text",
+							text: "x",
+							width,
+							points: [[0, 0, 0.5]],
+						},
+					],
+				}),
+			);
+		expect(bad("wide")).toBeNull();
+		expect(bad(-5)).toBeNull();
+		expect(bad(0)).toBeNull();
+	});
 });

@@ -357,3 +357,47 @@ describe("scaleElBy (free scaling)", () => {
 		expect(scaleElBy(text, [0, 0], 4, 1, 0).fontSize).toBeCloseTo(40);
 	});
 });
+
+describe("scaling a text area (R-044)", () => {
+	const area: Stroke = {
+		...base,
+		kind: "text",
+		text: "ala ma kota",
+		fontSize: 20,
+		width: 200,
+		points: pts([100, 50]),
+	};
+
+	test("a side handle changes only the width: the font stays, the fixed side stays", () => {
+		const east = scaleElBy(area, [100, 80], 1.5, 1, 0); // anchor on the west side
+		expect(east.width).toBe(300);
+		expect(east.fontSize).toBe(20);
+		expect(east.points[0][0]).toBe(100);
+		const west = scaleElBy(area, [300, 80], 0.5, 1, 0); // anchor on the east side
+		expect(west.width).toBe(100);
+		expect(west.points[0][0]).toBe(200); // the right side is still at 300
+		expect(west.fontSize).toBe(20);
+	});
+
+	test("a corner scales the whole area, font included", () => {
+		const big = scaleElBy(area, [100, 50], 2, 2, 0);
+		expect(big.width).toBe(400);
+		expect(big.fontSize).toBe(40);
+		const odd = scaleElBy(area, [100, 50], 2, 3, 0);
+		expect(odd.fontSize).toBeCloseTo(20 * Math.sqrt(6));
+		expect(odd.width).toBeCloseTo(200 * Math.sqrt(6));
+	});
+
+	test("the area never gets narrower than a few letters", () => {
+		expect(
+			scaleElBy(area, [100, 80], 0.001, 1, 0).width,
+		).toBeGreaterThanOrEqual(20);
+	});
+
+	test("a text at a point scales as before: only the font", () => {
+		const point: Stroke = { ...area, width: undefined };
+		const out = scaleElBy(point, [100, 80], 1.5, 1, 0);
+		expect(out.width).toBeUndefined();
+		expect(out.fontSize).toBeCloseTo(20 * Math.sqrt(1.5));
+	});
+});

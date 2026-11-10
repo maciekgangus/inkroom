@@ -137,6 +137,12 @@ const withRect = (el: Stroke, r: Rect): Stroke => ({
 	],
 });
 
+/** How far (px) the text tool may move and still count as a click, not a dragged area. */
+const TEXT_DRAG_SLOP = 6;
+
+/** The narrowest a text area made by dragging is, in board units. */
+const MIN_TEXT_AREA = 40;
+
 /** How much wider than a line its frame is, in screen px, so its handles do not sit on its end dots. */
 const LINE_FRAME_PAD_PX = 16;
 
@@ -155,7 +161,8 @@ export class Controller {
 	private panFrom: { x: number; y: number } | null = null;
 	/** Set while the right button is down: where it went down and whether it has moved (R-029). */
 	private rightPress: { x: number; y: number; moved: boolean } | null = null;
-	private textTap = false;
+	/** Where the text tool was pressed (board and screen), until it is released (R-044). */
+	private textStart: { world: Vec; sx: number; sy: number } | null = null;
 	private selectedIds: string[] = [];
 	/** The angle of a group's frame, so a turned group keeps the size of its frame. */
 	private groupRot = 0;
@@ -168,8 +175,13 @@ export class Controller {
 	onSelectionChange: (() => void) | null = null;
 	/** Called with a text element when it is double-clicked, so the UI can edit its content. */
 	onTextEdit: ((el: Stroke) => void) | null = null;
-	/** Called with the board position when the text tool is tapped; the UI then asks for the text. */
-	onTextRequest: ((at: [number, number]) => void) | null = null;
+	/**
+	 * Called when the text tool is released: with the board position of a click, or with the top
+	 * left corner and the size of the area that was dragged (R-044); the UI then asks for the text.
+	 */
+	onTextRequest:
+		| ((at: [number, number], area?: { w: number; h: number }) => void)
+		| null = null;
 	/** Called when the right button is released without moving, so the UI can open its menu. */
 	onRightClick: ((e: PointerInput) => void) | null = null;
 
@@ -229,7 +241,12 @@ export class Controller {
 			return;
 		}
 		if (this.settings.tool === "text") {
-			this.textTap = true; // acted on at release, so the text field is not stolen back by this click
+			// Acted on at release, so the text field is not stolen back by this click.
+			this.textStart = {
+				world: this.viewport.toWorld(e.clientX, e.clientY),
+				sx: e.clientX,
+				sy: e.clientY,
+			};
 			return;
 		}
 		const tool = this.settings.tool;
@@ -275,6 +292,10 @@ export class Controller {
 			this.erase(e);
 			return;
 		}
+		if (this.textStart) {
+			this.renderer.setMarquee?.(this.textArea(e));
+			return;
+		}
 		if (!this.current) return;
 		if (this.current.kind) {
 			// A shape only needs where it ends.
@@ -299,9 +320,19 @@ export class Controller {
 			if (!press.moved) this.onRightClick?.(e);
 			return;
 		}
-		if (this.textTap) {
-			this.textTap = false;
-			this.onTextRequest?.(this.viewport.toWorld(e.clientX, e.clientY));
+		if (this.textStart) {
+			const area = this.textArea(e);
+			this.textStart = null;
+			this.renderer.setMarquee?.(null);
+			const here = this.viewport.toWorld(e.clientX, e.clientY);
+			if (area) {
+				this.onTextRequest?.([area.minX, area.minY], {
+					w: Math.max(MIN_TEXT_AREA, area.maxX - area.minX),
+					h: area.maxY - area.minY,
+				});
+			} else {
+				this.onTextRequest?.(here);
+			}
 			return;
 		}
 		if (this.edit) {
@@ -349,8 +380,28 @@ export class Controller {
 		};
 	}
 
-	/** Adds a text element at a board position; blank text is ignored. */
-	addText(text: string, x: number, y: number): void {
+	/**
+	 * The area dragged with the text tool so far, in board coordinates; null while the pointer has
+	 * hardly left where it was pressed, which is a click.
+	 */
+	private textArea(e: PointerInput): Rect | null {
+		const start = this.textStart;
+		if (
+			!start ||
+			Math.hypot(e.clientX - start.sx, e.clientY - start.sy) <= TEXT_DRAG_SLOP
+		)
+			return null;
+		const [x, y] = this.viewport.toWorld(e.clientX, e.clientY);
+		return {
+			minX: Math.min(start.world[0], x),
+			minY: Math.min(start.world[1], y),
+			maxX: Math.max(start.world[0], x),
+			maxY: Math.max(start.world[1], y),
+		};
+	}
+
+	/** Adds a text element at a board position, an area with a `width` (R-044); blank text is ignored. */
+	addText(text: string, x: number, y: number, width?: number): void {
 		if (!text.trim()) return;
 		this.board.addStroke({
 			id: this.newId(),
@@ -360,6 +411,7 @@ export class Controller {
 			z: this.nextZ(),
 			kind: "text",
 			text,
+			...(width ? { width } : {}),
 			...this.newLook("text"),
 			points: [[x, y, 0.5]],
 		});

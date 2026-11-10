@@ -14,7 +14,7 @@ import {
 import { partsOf } from "./shape-parts";
 import { isPolygonKind } from "./shapes";
 import { strokeOptions } from "./stroke-style";
-import { fontSizeOf, LINE_HEIGHT } from "./text";
+import { fontSizeOf, LINE_HEIGHT, textLines } from "./text";
 import { centerOf } from "./transform";
 import type { Rect, Viewport } from "./viewport";
 
@@ -162,7 +162,8 @@ function drawElement(
 			const [x, y] = s.points[0];
 			const lineHeight = fs * LINE_HEIGHT;
 			const halfLeading = (lineHeight - fs) / 2; // where a text field puts the first line
-			(s.text ?? "").split("\n").forEach((line, i) => {
+			// A text area is wrapped to its width (R-044), a text at a point keeps its own lines.
+			textLines(s).forEach((line, i) => {
 				ctx.fillText(line, x, y + i * lineHeight + halfLeading);
 			});
 		} else if (path && isFilled(s)) {

@@ -63,6 +63,8 @@ export interface Stroke {
 	opacity?: number;
 	/** Font size of a text in board units; missing means the size table value. */
 	fontSize?: number;
+	/** Width of a text area in board units: the text wraps to it (R-044); missing for a text at a point. */
+	width?: number;
 	id: string;
 	authorId: string;
 	color: string;

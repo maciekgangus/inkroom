@@ -145,6 +145,11 @@ describe("showsBox (R-034)", () => {
 		expect(showsBox([el("text")])).toBe(false);
 	});
 
+	test("a text area keeps its box, a text at a point does not (R-044)", () => {
+		expect(showsBox([{ ...el("text"), width: 200 }])).toBe(true);
+		expect(showsBox([el("text")])).toBe(false);
+	});
+
 	test("a line keeps its box: the dots at its ends come in addition to it (R-041)", () => {
 		expect(showsBox([el("line")])).toBe(true);
 	});

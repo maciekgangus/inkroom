@@ -90,7 +90,12 @@ export function BoardView({
 	/** Board position of the text being typed, if any. */
 	/** An existing text being edited (double-click), if any. */
 	const [editingText, setEditingText] = useState<Stroke | null>(null);
-	const [textAt, setTextAt] = useState<{ x: number; y: number } | null>(null);
+	const [textAt, setTextAt] = useState<{
+		x: number;
+		y: number;
+		/** The area that was dragged, in board units (R-044); none for a click. */
+		area?: { w: number; h: number };
+	} | null>(null);
 	const [, setTick] = useState(0); // bumped when the view changes, so the text field follows it
 	const ctl = useRef<Controller | null>(null);
 	const syncRef = useRef<SyncClient | null>(null);
@@ -177,7 +182,7 @@ export function BoardView({
 			live.style.cursor = want;
 		};
 		applyCursor.current();
-		controller.onTextRequest = ([x, y]) => setTextAt({ x, y });
+		controller.onTextRequest = ([x, y], area) => setTextAt({ x, y, area });
 		controller.onTextEdit = (el) => setEditingText(el);
 		controller.onSelectionChange = () => setTick((t) => t + 1);
 		// A right click (R-029): the menu, but only with a mouse; tablets have none (R-028).
@@ -612,6 +617,11 @@ export function BoardView({
 					}
 					fontSize={fontSizeOf(editingText) * viewport.scale}
 					color={displayColor(editingText.color, currentTheme())}
+					width={
+						editingText.width === undefined
+							? undefined
+							: editingText.width * viewport.scale
+					}
 					initialText={editingText.text ?? ""}
 					onCommit={(text) => {
 						ctl.current?.commitText(editingText.id, text);
@@ -640,8 +650,10 @@ export function BoardView({
 					y={viewport.toScreen(textAt.x, textAt.y)[1]}
 					fontSize={fontSizeFor(settings.size) * viewport.scale}
 					color={displayColor(settings.color, theme)}
+					width={textAt.area ? textAt.area.w * viewport.scale : undefined}
+					minHeight={textAt.area ? textAt.area.h * viewport.scale : undefined}
 					onCommit={(text) => {
-						ctl.current?.addText(text, textAt.x, textAt.y);
+						ctl.current?.addText(text, textAt.x, textAt.y, textAt.area?.w);
 						setTextAt(null);
 					}}
 					onCancel={() => setTextAt(null)}
