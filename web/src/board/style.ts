@@ -13,7 +13,8 @@ export interface StylePatch {
 	opacity?: number;
 }
 
-const isShape = (el: Stroke) => el.kind === "rect" || el.kind === "circle";
+const isShape = (el: Stroke) =>
+	el.kind === "rect" || el.kind === "circle" || el.kind === "ellipse";
 const isDashable = (el: Stroke) => el.kind === "line" || isShape(el);
 
 /** The element with the patch applied where it applies (see ADR 0008). */

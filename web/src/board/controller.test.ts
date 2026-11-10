@@ -362,14 +362,21 @@ describe("Controller", () => {
 	describe("draw aids with Shift", () => {
 		const shifted = { shiftKey: true };
 		const last = () => board.strokes[board.strokes.length - 1];
-		const ends = () => last().points.map((p) => [Math.round(p[0] * 1000) / 1000, Math.round(p[1] * 1000) / 1000]);
+		const ends = () =>
+			last().points.map((p) => [
+				Math.round(p[0] * 1000) / 1000,
+				Math.round(p[1] * 1000) / 1000,
+			]);
 
 		test("a rectangle dragged with Shift is a square", () => {
 			settings.tool = "rect";
 			c.pointerDown(ev("pen", 100, 100));
 			c.pointerMove(ev("pen", 300, 160, shifted));
 			c.pointerUp(ev("pen", 300, 160, shifted));
-			expect(ends()).toEqual([[100, 100], [300, 300]]);
+			expect(ends()).toEqual([
+				[100, 100],
+				[300, 300],
+			]);
 		});
 
 		test("an ellipse dragged with Shift is a circle", () => {
@@ -378,7 +385,10 @@ describe("Controller", () => {
 			c.pointerMove(ev("pen", 300, 160, shifted));
 			c.pointerUp(ev("pen", 300, 160, shifted));
 			expect(last().kind).toBe("ellipse");
-			expect(ends()).toEqual([[100, 100], [300, 300]]);
+			expect(ends()).toEqual([
+				[100, 100],
+				[300, 300],
+			]);
 		});
 
 		test("a line dragged with Shift snaps to 15 degrees and keeps its length", () => {
@@ -386,19 +396,43 @@ describe("Controller", () => {
 			const len = 200;
 			const a = (20 * Math.PI) / 180; // 20 degrees
 			c.pointerDown(ev("pen", 100, 100));
-			c.pointerMove(ev("pen", 100 + len * Math.cos(a), 100 + len * Math.sin(a), shifted));
-			c.pointerUp(ev("pen", 100 + len * Math.cos(a), 100 + len * Math.sin(a), shifted));
+			c.pointerMove(
+				ev("pen", 100 + len * Math.cos(a), 100 + len * Math.sin(a), shifted),
+			);
+			c.pointerUp(
+				ev("pen", 100 + len * Math.cos(a), 100 + len * Math.sin(a), shifted),
+			);
 			const f = (15 * Math.PI) / 180;
-			expect(ends()).toEqual([[100, 100], [Math.round((100 + len * Math.cos(f)) * 1000) / 1000, Math.round((100 + len * Math.sin(f)) * 1000) / 1000]]);
+			expect(ends()).toEqual([
+				[100, 100],
+				[
+					Math.round((100 + len * Math.cos(f)) * 1000) / 1000,
+					Math.round((100 + len * Math.sin(f)) * 1000) / 1000,
+				],
+			]);
 		});
 
 		test("the preview follows Shift as it is pressed and released during the drag", () => {
 			settings.tool = "rect";
 			c.pointerDown(ev("pen", 0, 0));
 			c.pointerMove(ev("pen", 100, 40, shifted));
-			expect(renderer.drawLive).toHaveBeenLastCalledWith(expect.objectContaining({ points: [[0, 0, 0.5], [100, 100, 0.5]] }));
+			expect(renderer.drawLive).toHaveBeenLastCalledWith(
+				expect.objectContaining({
+					points: [
+						[0, 0, 0.5],
+						[100, 100, 0.5],
+					],
+				}),
+			);
 			c.pointerMove(ev("pen", 100, 40));
-			expect(renderer.drawLive).toHaveBeenLastCalledWith(expect.objectContaining({ points: [[0, 0, 0.5], [100, 40, 0.5]] }));
+			expect(renderer.drawLive).toHaveBeenLastCalledWith(
+				expect.objectContaining({
+					points: [
+						[0, 0, 0.5],
+						[100, 40, 0.5],
+					],
+				}),
+			);
 		});
 
 		test("the state of Shift at release decides the final shape", () => {
@@ -406,7 +440,10 @@ describe("Controller", () => {
 			c.pointerDown(ev("pen", 0, 0));
 			c.pointerMove(ev("pen", 100, 40));
 			c.pointerUp(ev("pen", 100, 40, shifted));
-			expect(ends()).toEqual([[0, 0], [100, 100]]);
+			expect(ends()).toEqual([
+				[0, 0],
+				[100, 100],
+			]);
 		});
 
 		test("without Shift shapes stay free", () => {
@@ -414,7 +451,10 @@ describe("Controller", () => {
 			c.pointerDown(ev("pen", 0, 0));
 			c.pointerMove(ev("pen", 100, 40));
 			c.pointerUp(ev("pen", 100, 40));
-			expect(ends()).toEqual([[0, 0], [100, 40]]);
+			expect(ends()).toEqual([
+				[0, 0],
+				[100, 40],
+			]);
 		});
 
 		test("Shift does not affect freehand drawing", () => {

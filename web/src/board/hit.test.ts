@@ -296,7 +296,14 @@ describe("objectHit (selecting by clicking)", () => {
 describe("ellipse hit testing", () => {
 	const base = { id: "el", authorId: "a", color: "#000", size: 4, z: 0 };
 	// box 200 x 100 at (0,0): centre (100, 50), radii 100 and 50
-	const ellipse: Stroke = { ...base, kind: "ellipse", points: [[0, 0, 0.5], [200, 100, 0.5]] };
+	const ellipse: Stroke = {
+		...base,
+		kind: "ellipse",
+		points: [
+			[0, 0, 0.5],
+			[200, 100, 0.5],
+		],
+	};
 
 	test("the outline is hit at its extremes", () => {
 		expect(strokeHit(ellipse, 200, 50, 4)).toBe(true);
@@ -315,7 +322,13 @@ describe("ellipse hit testing", () => {
 	});
 
 	test("a drag from bottom-right to top-left is the same ellipse", () => {
-		const flipped: Stroke = { ...ellipse, points: [[200, 100, 0.5], [0, 0, 0.5]] };
+		const flipped: Stroke = {
+			...ellipse,
+			points: [
+				[200, 100, 0.5],
+				[0, 0, 0.5],
+			],
+		};
 		expect(strokeHit(flipped, 200, 50, 4)).toBe(true);
 		expect(strokeHit(flipped, 100, 50, 4)).toBe(false);
 	});

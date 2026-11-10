@@ -9,7 +9,11 @@ const freehand: Stroke = { ...base, points: pts([0, 0], [5, 5]) };
 const line: Stroke = { ...base, kind: "line", points: pts([0, 0], [5, 5]) };
 const rect: Stroke = { ...base, kind: "rect", points: pts([0, 0], [5, 5]) };
 const circle: Stroke = { ...base, kind: "circle", points: pts([0, 0], [5, 0]) };
-const ellipse: Stroke = { ...base, kind: "ellipse", points: pts([0, 0], [10, 5]) };
+const ellipse: Stroke = {
+	...base,
+	kind: "ellipse",
+	points: pts([0, 0], [10, 5]),
+};
 const text: Stroke = {
 	...base,
 	kind: "text",

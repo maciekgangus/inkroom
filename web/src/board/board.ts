@@ -7,13 +7,14 @@ export type ElementKind =
 	| "line"
 	| "rect"
 	| "circle"
+	| "ellipse"
 	| "text"
 	| "image";
 
 /**
  * One element on the board: a freehand stroke, a shape or a text. Immutable once added.
  * `z` (client clock, ms) orders drawing; ties break by id. Geometry is in `points`
- * (board coordinates): line = start and end, rect = two corners, circle = centre and a
+ * (board coordinates): line = start and end, rect and ellipse = two corners, circle = centre and a
  * point on it, text = the top-left anchor.
  */
 export interface Stroke {

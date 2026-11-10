@@ -24,4 +24,4 @@ Trafianie w elipsę (gumka, zaznaczanie) używa przybliżonej odległości od ko
 ## Konsekwencje
 - Serwer i zapis bez zmian. Protokół bez zmian (nowy `kind` jest tylko danymi).
 - Klient: nowy rodzaj w geometrii (ramka jak prostokąt), trafianiu, rysowaniu (`Path2D.ellipse`), stylach (wypełnienie i kreskowanie jak kształty).
-- Etykieta narzędzia w pasku zmienia się z "Okrąg" na "Owal".
+- Narzędzie w pasku nazywa się "Owal", a jego ikona jest owalem (pasek jest teraz oparty na ikonach).

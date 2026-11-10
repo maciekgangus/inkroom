@@ -95,14 +95,28 @@ describe("geomBox", () => {
 });
 
 describe("ellipse transforms", () => {
-	const ellipse: Stroke = { ...base, kind: "ellipse", points: pts([10, 20], [110, 70]) };
+	const ellipse: Stroke = {
+		...base,
+		kind: "ellipse",
+		points: pts([10, 20], [110, 70]),
+	};
 
 	test("its box is the two corners", () => {
-		expect(geomBox(ellipse)).toEqual({ minX: 10, minY: 20, maxX: 110, maxY: 70 });
+		expect(geomBox(ellipse)).toEqual({
+			minX: 10,
+			minY: 20,
+			maxX: 110,
+			maxY: 70,
+		});
 	});
 
 	test("scaling about a corner scales the box", () => {
-		expect(geomBox(scaleEl(ellipse, [10, 20], 2))).toEqual({ minX: 10, minY: 20, maxX: 210, maxY: 120 });
+		expect(geomBox(scaleEl(ellipse, [10, 20], 2))).toEqual({
+			minX: 10,
+			minY: 20,
+			maxX: 210,
+			maxY: 120,
+		});
 	});
 
 	test("rotating about its centre only changes the angle", () => {
