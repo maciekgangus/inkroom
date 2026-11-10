@@ -23,7 +23,8 @@ export type Handle = Corner | Edge | "rot";
 
 /**
  * Whether the selection frame is drawn as an outline box (R-034): images, shapes and several
- * elements get one; a lone stroke, line or text shows only its handles and glows, so no big
+ * elements get one, and so does a line (its end dots come in addition, R-041); a lone stroke or
+ * text shows only its handles and glows, so no big
  * box covers what was selected. The handles work the same either way.
  */
 export function showsBox(els: Stroke[]): boolean {
@@ -32,6 +33,7 @@ export function showsBox(els: Stroke[]): boolean {
 	const kind = els[0].kind;
 	return (
 		kind === "image" ||
+		kind === "line" ||
 		kind === "rect" ||
 		kind === "circle" ||
 		kind === "ellipse" ||

@@ -134,13 +134,38 @@ describe("edit handles (R-041)", () => {
 	});
 
 	describe("a line has dots at its ends", () => {
-		test("a lone line shows its two ends and no frame", () => {
+		test("a lone line shows its two ends and keeps its frame, a little wider than the line", () => {
 			c.select("l");
 			expect(lastEnds()).toEqual([
 				[100, 500],
 				[300, 500],
 			]);
-			expect(frames[frames.length - 1]).toBeNull();
+			const f = frames[frames.length - 1] as {
+				cx: number;
+				cy: number;
+				w: number;
+				h: number;
+			};
+			expect(f).not.toBeNull();
+			expect(f.cx).toBeCloseTo(200);
+			expect(f.cy).toBeCloseTo(500);
+			expect(f.w).toBeGreaterThan(200); // padded, so the corner squares do not sit on the end dots
+			expect(f.h).toBeGreaterThan(0); // and the line, which has no height, has a box to hold
+		});
+
+		test("the frame of a line stretches and turns it like any other frame", () => {
+			c.select("l");
+			const f = frames[frames.length - 1] as {
+				cx: number;
+				cy: number;
+				w: number;
+				h: number;
+			};
+			// the east side handle, pulled out by 100
+			drag([f.cx + f.w / 2, f.cy], [f.cx + f.w / 2 + 100, f.cy]);
+			const [a, b] = get("l").points;
+			expect(b[0] - a[0]).toBeGreaterThan(250);
+			expect(a[1]).toBeCloseTo(500);
 		});
 
 		test("other elements show no end dots, and several lines get a frame", () => {

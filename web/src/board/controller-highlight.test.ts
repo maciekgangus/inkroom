@@ -69,9 +69,9 @@ describe("Controller selection look (R-034)", () => {
 		for (const s of [line("l"), pen("p"), rect("r")]) board.addStroke(s);
 	});
 
-	test("a lone line glows and has dots at its ends, a lone stroke keeps its handles", () => {
+	test("a lone line glows, keeps its frame and has dots at its ends too", () => {
 		c.select("l");
-		expect(renderer.setSelection.mock.lastCall?.[0]).toBeNull();
+		expect(renderer.setSelection.mock.lastCall?.[0]).not.toBeNull();
 		expect(renderer.setEndpoints.mock.lastCall?.[0]).not.toBeNull();
 		expect(
 			renderer.setHighlight.mock.lastCall?.[0].map((s: Stroke) => s.id),

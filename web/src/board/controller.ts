@@ -125,6 +125,9 @@ const withRect = (el: Stroke, r: Rect): Stroke => ({
 	],
 });
 
+/** How much wider than a line its frame is, in screen px, so its handles do not sit on its end dots. */
+const LINE_FRAME_PAD_PX = 16;
+
 /** How far (px) the right button may move and still count as a click, not a pan. */
 const RIGHT_CLICK_SLOP = 4;
 
@@ -558,13 +561,21 @@ export class Controller {
 		this.showSelection(this.selection);
 	}
 
+	/** The frame of a selection; a lone line, which has no height, gets one a little wider. */
+	private frameFor(els: Stroke[], rot: number): Frame | null {
+		const f = frameOf(els, rot);
+		if (!f || els.length !== 1 || els[0].kind !== "line") return f;
+		const pad = (2 * LINE_FRAME_PAD_PX) / this.viewport.scale;
+		return { ...f, w: f.w + pad, h: f.h + pad };
+	}
+
 	/** The glow on every selected element, and the frame with the handles that edit them. */
 	private showSelection(els: Stroke[], rot = this.groupRot): void {
 		this.renderer.setHighlight?.(els);
 		// A lone line has dots at its ends instead of a frame (R-041).
 		const lone = els.length === 1 && els[0].kind === "line";
 		this.renderer.setEndpoints?.(lone ? lineEnds(els[0]) : null);
-		this.renderer.setSelection?.(lone ? null : frameOf(els, rot));
+		this.renderer.setSelection?.(this.frameFor(els, rot));
 	}
 
 	private startSelect(e: PointerInput): void {
@@ -590,8 +601,7 @@ export class Controller {
 				}
 			}
 		}
-		const lone = sel.length === 1 && sel[0].kind === "line";
-		const frame = lone ? null : frameOf(sel, this.groupRot);
+		const frame = this.frameFor(sel, this.groupRot);
 		if (frame) {
 			const handle = hitFrameHandle(
 				frame,

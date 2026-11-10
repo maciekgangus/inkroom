@@ -140,10 +140,13 @@ describe("showsBox (R-034)", () => {
 		points: [pt(0, 0), pt(10, 10)],
 	});
 
-	test("a lone stroke, line or text has handles but no outline box, it glows", () => {
+	test("a lone stroke or text has handles but no outline box, it glows", () => {
 		expect(showsBox([el()])).toBe(false);
-		expect(showsBox([el("line")])).toBe(false);
 		expect(showsBox([el("text")])).toBe(false);
+	});
+
+	test("a line keeps its box: the dots at its ends come in addition to it (R-041)", () => {
+		expect(showsBox([el("line")])).toBe(true);
 	});
 
 	test("images and shapes keep the outline box", () => {
