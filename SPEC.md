@@ -41,8 +41,8 @@ Priorytety: P1 do pierwszej lekcji, P2 zaraz po niej, P3 później. Statusy: pro
 | R-018 | Kilku uczestników jednocześnie na jednej tablicy | P2 | done |
 | R-019 | Usunięcie tablicy tylko przez twórcę, z potwierdzeniem; usunięcie jest trwałe, a link przestaje działać | P1 | done |
 | R-020 | Przywracanie wcześniejszej wersji tablicy (historia/snapshoty), np. po przypadkowym skasowaniu cudzej pracy | P3 | proposed |
-| R-021 | Każdy rysowany element (kreska, linia, prostokąt, okrąg, tekst, obraz) jest obiektem: kreska odręczna to jeden obiekt (zbiór punktów) zaznaczany, przesuwany i kasowany w całości. Narzędzie "Zaznacz" łapie obiekt (klik) lub kilka (ramka, Shift) i pozwala je przesuwać, skalować i obracać; każdy uczestnik z prawem rysowania może edytować cudze obiekty (jak R-004) | P2 | proposed |
-| R-022 | Edycja właściwości zaznaczonych obiektów: kolor, grubość linii (rozmiar czcionki dla tekstu), styl linii (ciągła, kreskowana, kropkowana), wypełnienie kształtów, przezroczystość, treść tekstu (dwuklik); zmiana jest cofalna (R-008) i widoczna dla wszystkich (R-006) | P2 | proposed |
+| R-021 | Każdy rysowany element (kreska, linia, prostokąt, okrąg, tekst, obraz) jest obiektem: kreska odręczna to jeden obiekt (zbiór punktów) zaznaczany, przesuwany i kasowany w całości. Narzędzie "Zaznacz" łapie obiekt (klik) lub kilka (ramka, Shift) i pozwala je przesuwać, skalować i obracać; każdy uczestnik z prawem rysowania może edytować cudze obiekty (jak R-004) | P2 | accepted |
+| R-022 | Edycja właściwości zaznaczonych obiektów: kolor, grubość linii (rozmiar czcionki dla tekstu), styl linii (ciągła, kreskowana, kropkowana), wypełnienie kształtów, przezroczystość, treść tekstu (dwuklik); zmiana jest cofalna (R-008) i widoczna dla wszystkich (R-006) | P2 | accepted |
 | R-023 | Operacje na zaznaczeniu: usuń, duplikuj, kopiuj i wklej, na wierzch i na spód (kolejność warstw), grupowanie obiektów w stałą grupę | P3 | proposed |
 
 ## 4. Wymagania niefunkcjonalne

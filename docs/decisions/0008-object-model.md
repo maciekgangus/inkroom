@@ -1,6 +1,6 @@
 # 0008. Model obiektów: edycja, przekształcenia i style
 
-- Status: proposed
+- Status: accepted
 - Data: 2026-11-10
 
 ## Kontekst
