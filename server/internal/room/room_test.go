@@ -286,3 +286,35 @@ func TestInvalidCursorsAreRejected(t *testing.T) {
 		}
 	}
 }
+
+func TestSnapshotCarriesTheBackground(t *testing.T) {
+	r := New()
+	if m := recv(t, join(r)); m["background"] != "plain" {
+		t.Fatalf("default: got %v", m)
+	}
+	r.SetBackground("grid")
+	if m := recv(t, join(r)); m["background"] != "grid" {
+		t.Fatalf("after change: got %v", m)
+	}
+}
+
+func TestSetBackgroundIsBroadcastToEveryone(t *testing.T) {
+	r := New()
+	a, b := join(r), join(r)
+	recv(t, a)
+	recv(t, b)
+	r.SetBackground("dots")
+	for _, c := range []*Client{a, b} {
+		if m := recv(t, c); m["t"] != "background" || m["value"] != "dots" {
+			t.Fatalf("got %v", m)
+		}
+	}
+}
+
+func TestClientsCannotChangeTheBackground(t *testing.T) {
+	r := New()
+	c := join(r)
+	if err := r.Handle(c, []byte(`{"t":"background","value":"grid"}`)); err == nil {
+		t.Fatal("a background message from a client must be rejected")
+	}
+}

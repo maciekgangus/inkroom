@@ -98,7 +98,7 @@ func (a *app) listBoards(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"owned": toJSON(owned), "visited": toJSON(visited)})
 }
 
-// getBoard tells whether a board exists (anyone with the link may ask).
+// getBoard tells whether a board exists and whether the caller owns it (anyone with the link may ask).
 func (a *app) getBoard(w http.ResponseWriter, r *http.Request) {
 	b, err := a.st.Board(r.PathValue("id"))
 	if errors.Is(err, store.ErrNotFound) {
@@ -109,7 +109,8 @@ func (a *app) getBoard(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Błąd serwera")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"id": b.ID, "name": b.Name})
+	u, loggedIn := a.auth.User(r)
+	writeJSON(w, http.StatusOK, map[string]any{"id": b.ID, "name": b.Name, "owner": loggedIn && u.ID == b.OwnerID})
 }
 
 // ownedBoard loads the board named in the URL and checks that the caller owns it.
@@ -148,6 +149,28 @@ func (a *app) renameBoard(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Błąd serwera")
 		return
 	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// setBackground lets the owner change the board's background; everyone on the board sees it at once.
+func (a *app) setBackground(w http.ResponseWriter, r *http.Request) {
+	b, ok := a.ownedBoard(w, r)
+	if !ok || !auth.RequireJSON(w, r) {
+		return
+	}
+	var body struct {
+		Background string `json:"background"`
+	}
+	err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodyBytes)).Decode(&body)
+	if err != nil || !store.ValidBackground(body.Background) {
+		writeError(w, http.StatusBadRequest, "Nieznane tło")
+		return
+	}
+	if err := a.st.SetBoardBackground(b.ID, body.Background); err != nil {
+		writeError(w, http.StatusInternalServerError, "Błąd serwera")
+		return
+	}
+	a.hub.SetBackground(b.ID, body.Background)
 	w.WriteHeader(http.StatusNoContent)
 }
 

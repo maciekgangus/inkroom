@@ -75,12 +75,21 @@ export const renameBoard = (id: string, name: string) =>
 export const deleteBoard = (id: string) =>
 	request<void>("DELETE", `/api/boards/${id}`);
 
-/** False only when the server says the board does not exist; other failures count as "exists". */
-export async function boardExists(id: string): Promise<boolean> {
+export const setBackground = (id: string, background: string) =>
+	request<void>("PUT", `/api/boards/${id}/background`, { background });
+
+/**
+ * Whether we own the board, or null when the server says it does not exist.
+ * Other failures count as an existing board that is not ours.
+ */
+export async function boardInfo(
+	id: string,
+): Promise<{ owner: boolean } | null> {
 	try {
-		await request("GET", `/api/boards/${id}`);
-		return true;
+		const b = await request<{ owner?: boolean }>("GET", `/api/boards/${id}`);
+		return { owner: b.owner === true };
 	} catch (e) {
-		return !(e instanceof ApiError && e.status === 404);
+		if (e instanceof ApiError && e.status === 404) return null;
+		return { owner: false };
 	}
 }

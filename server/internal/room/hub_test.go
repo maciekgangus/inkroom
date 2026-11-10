@@ -10,14 +10,15 @@ import (
 )
 
 type fakeStore struct {
-	mu      sync.Mutex
-	strokes map[string][][]byte
-	applied map[string][]store.Op
-	loads   map[string]int
+	mu          sync.Mutex
+	strokes     map[string][][]byte
+	applied     map[string][]store.Op
+	loads       map[string]int
+	backgrounds map[string]string
 }
 
 func newFake() *fakeStore {
-	return &fakeStore{strokes: map[string][][]byte{}, applied: map[string][]store.Op{}, loads: map[string]int{}}
+	return &fakeStore{strokes: map[string][][]byte{}, applied: map[string][]store.Op{}, loads: map[string]int{}, backgrounds: map[string]string{}}
 }
 
 func (f *fakeStore) LoadStrokes(id string) ([][]byte, error) {
@@ -25,6 +26,15 @@ func (f *fakeStore) LoadStrokes(id string) ([][]byte, error) {
 	defer f.mu.Unlock()
 	f.loads[id]++
 	return f.strokes[id], nil
+}
+
+func (f *fakeStore) LoadBackground(id string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if bg := f.backgrounds[id]; bg != "" {
+		return bg, nil
+	}
+	return "plain", nil
 }
 
 func (f *fakeStore) Apply(id string, ops []store.Op, _ time.Time) error {
@@ -185,5 +195,27 @@ func TestJoinFailsWhenTheBoardCannotBeLoaded(t *testing.T) {
 	defer h.Close()
 	if _, err := h.Join("b1", NewClient(4)); err == nil {
 		t.Fatal("expected an error")
+	}
+}
+
+func TestJoinLoadsTheSavedBackground(t *testing.T) {
+	f := newFake()
+	f.backgrounds["b1"] = "lines"
+	h := hubFor(t, f)
+	_, c := joinHub(t, h, "b1")
+	if m := recv(t, c); m["background"] != "lines" {
+		t.Fatalf("got %v", m)
+	}
+}
+
+func TestHubSetBackgroundReachesTheLoadedRoomOnly(t *testing.T) {
+	h := hubFor(t, newFake())
+	_, c := joinHub(t, h, "b1")
+	recv(t, c)
+	h.SetBackground("other", "grid") // not loaded: nothing happens
+	none(t, c)
+	h.SetBackground("b1", "grid")
+	if m := recv(t, c); m["t"] != "background" || m["value"] != "grid" {
+		t.Fatalf("got %v", m)
 	}
 }

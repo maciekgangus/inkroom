@@ -11,6 +11,7 @@ import (
 // Persister is where rooms are loaded from and saved to.
 type Persister interface {
 	LoadStrokes(boardID string) ([][]byte, error)
+	LoadBackground(boardID string) (string, error)
 	Apply(boardID string, ops []store.Op, at time.Time) error
 }
 
@@ -57,7 +58,11 @@ func (h *Hub) Join(boardID string, c *Client) (*Room, error) {
 		if err != nil {
 			return nil, err
 		}
-		r = newPersisted(saved)
+		background, err := h.p.LoadBackground(boardID)
+		if err != nil {
+			return nil, err
+		}
+		r = newPersisted(saved, background)
 		h.rooms[boardID] = r
 	}
 	r.Join(c)
@@ -72,6 +77,15 @@ func (h *Hub) Leave(boardID string, r *Room, c *Client) {
 	if h.rooms[boardID] == r && r.empty() {
 		h.flushRoom(boardID, r)
 		delete(h.rooms, boardID)
+	}
+}
+
+// SetBackground passes a saved background change to the board's room, if anyone is in it.
+func (h *Hub) SetBackground(boardID, value string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if r := h.rooms[boardID]; r != nil {
+		r.SetBackground(value)
 	}
 }
 

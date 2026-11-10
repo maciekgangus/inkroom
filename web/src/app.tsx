@@ -4,6 +4,7 @@ import { AuthForms } from "./auth-forms";
 import { BoardView, newId } from "./board-view";
 import { Panel } from "./panel";
 import type { SocketLike } from "./sync/sync";
+import { ThemeToggle } from "./theme";
 
 const BOARD_PATH = /^\/b\/([0-9a-f]{32})$/;
 const NAME_KEY = "inkroom.name";
@@ -42,8 +43,18 @@ export function App({
 	createSocket = realSocket,
 }: Props) {
 	const match = BOARD_PATH.exec(path);
-	if (!match) return <Home navigate={navigate} />;
-	return <BoardPage id={match[1]} createSocket={createSocket} />;
+	return (
+		<>
+			{match ? (
+				<BoardPage id={match[1]} createSocket={createSocket} />
+			) : (
+				<Home navigate={navigate} />
+			)}
+			<div class="corner">
+				<ThemeToggle />
+			</div>
+		</>
+	);
 }
 
 function Home({ navigate }: { navigate: (to: string) => void }) {
@@ -66,13 +77,15 @@ function BoardPage({
 	id: string;
 	createSocket: (url: string) => SocketLike;
 }) {
-	const [exists, setExists] = useState<boolean | undefined>(undefined);
+	const [info, setInfo] = useState<{ owner: boolean } | null | undefined>(
+		undefined,
+	);
 	const [account, setAccount] = useState<string | null | undefined>(undefined);
 	const [guestName, setGuestName] = useState(() =>
 		stored(localStorage, NAME_KEY),
 	);
 	useEffect(() => {
-		api.boardExists(id).then(setExists);
+		api.boardInfo(id).then(setInfo);
 		api.me().then(setAccount, () => setAccount(null));
 	}, [id]);
 
@@ -92,8 +105,8 @@ function BoardPage({
 		return () => createSocket(url);
 	}, [id, name, createSocket]);
 
-	if (exists === undefined || account === undefined) return null;
-	if (!exists) {
+	if (info === undefined || account === undefined) return null;
+	if (!info) {
 		return (
 			<main class="center">
 				<h1>Nie ma takiej tablicy</h1>
@@ -113,7 +126,14 @@ function BoardPage({
 			/>
 		);
 	}
-	return <BoardView authorId={authorId} name={name} connect={connect} />;
+	return (
+		<BoardView
+			authorId={authorId}
+			name={name}
+			connect={connect}
+			onSetBackground={info.owner ? (b) => api.setBackground(id, b) : undefined}
+		/>
+	);
 }
 
 function NamePrompt({ onSubmit }: { onSubmit: (name: string) => void }) {

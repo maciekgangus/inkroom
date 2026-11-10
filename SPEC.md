@@ -41,6 +41,9 @@ Priorytety: P1 do pierwszej lekcji, P2 zaraz po niej, P3 później. Statusy: pro
 | R-018 | Kilku uczestników jednocześnie na jednej tablicy | P2 | done |
 | R-019 | Usunięcie tablicy tylko przez twórcę, z potwierdzeniem; usunięcie jest trwałe, a link przestaje działać | P1 | done |
 | R-020 | Przywracanie wcześniejszej wersji tablicy (historia/snapshoty), np. po przypadkowym skasowaniu cudzej pracy | P3 | proposed |
+| R-021 | Rozszerzona paleta kolorów: 5 szybkich kolorów zostaje w pasku narzędzi, a obok wysuwany panel z ok. 12 dodatkowymi kolorami i dowolnym kolorem z próbnika; wybrany kolor działa dla pióra, kształtów i tekstu | P2 | done |
+| R-022 | Tryb ciemny całej aplikacji, łącznie z tablicą: domyślnie według ustawienia systemu, ręczny przełącznik zapamiętywany na urządzeniu; to ustawienie osobiste, niewspółdzielone. Domyślny czarny tusz jest w trybie ciemnym wyświetlany jako biały (a biały jako czarny), pozostałe kolory bez zmian, więc ta sama tablica jest czytelna w obu trybach | P2 | done |
+| R-023 | Tło tablicy do wyboru: gładkie, kropki, kratka, linie; wspólne dla wszystkich na tablicy, ustawia je twórca, zapisuje się razem z tablicą i zmienia u wszystkich na żywo; tło przesuwa się i skaluje razem z płótnem | P2 | done |
 
 ## 4. Wymagania niefunkcjonalne
 Miary to propozycje startowe, do potwierdzenia po pierwszych testach na prawdziwej lekcji.
@@ -85,3 +88,4 @@ Miary to propozycje startowe, do potwierdzenia po pierwszych testach na prawdziw
 - 2026-11-09: R-010 (nieskończone płótno) `done` po teście na iPadzie: widok lokalny (przesuwanie, zoom 10–500%), przyciski zoomu w rogu, dwa palce, Ctrl + kółko, narzędzie Ręka; plan w `docs/plan-infinite-canvas.md`.
 - 2026-11-09: R-012 (linia, prostokąt, okrąg, tekst) `done` po teście ręcznym; elementy z polem `kind` w ADR 0006, plan w `docs/plan-shapes-and-text.md`.
 - 2026-11-09: R-013 (kursory pozostałych osób) `done` po teście ręcznym; wiadomości `cursor` i `cursor_drop` bez zapisu, plan w `docs/plan-cursors.md`.
+- 2026-11-09: dodano R-021 (rozszerzona paleta kolorów), R-022 (tryb ciemny z tablicą) i R-023 (wspólne tło tablicy ustawiane przez twórcę).
