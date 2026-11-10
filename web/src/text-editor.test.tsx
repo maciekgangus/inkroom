@@ -48,7 +48,18 @@ describe("TextEditor", () => {
 	test("starts with the given text when editing an existing one", async () => {
 		render(null, root);
 		await act(async () => {
-			render(<TextEditor x={0} y={0} fontSize={20} color="#000" initialText={"old\ntext"} onCommit={onCommit} onCancel={onCancel} />, root);
+			render(
+				<TextEditor
+					x={0}
+					y={0}
+					fontSize={20}
+					color="#000"
+					initialText={"old\ntext"}
+					onCommit={onCommit}
+					onCancel={onCancel}
+				/>,
+				root,
+			);
 		});
 		expect(field().value).toBe("old\ntext");
 		expect(field().rows).toBe(2);

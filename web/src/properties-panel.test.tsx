@@ -6,20 +6,34 @@ import { PropertiesPanel } from "./properties-panel";
 
 const COLORS = ["#111111", "#d32f2f", "#1976d2"];
 const base = { id: "e", authorId: "a", color: "#111111", size: 5, z: 0 };
-const pts = (...p: [number, number][]) => p.map(([x, y]) => [x, y, 0.5] as [number, number, number]);
+const pts = (...p: [number, number][]) =>
+	p.map(([x, y]) => [x, y, 0.5] as [number, number, number]);
 const freehand: Stroke = { ...base, points: pts([0, 0], [5, 5]) };
 const rect: Stroke = { ...base, kind: "rect", points: pts([0, 0], [5, 5]) };
 const text: Stroke = { ...base, kind: "text", text: "hi", points: pts([0, 0]) };
-const image: Stroke = { ...base, kind: "image", src: "x", points: pts([0, 0], [5, 5]) };
+const image: Stroke = {
+	...base,
+	kind: "image",
+	src: "x",
+	points: pts([0, 0], [5, 5]),
+};
 
 describe("PropertiesPanel", () => {
 	let root: HTMLElement;
 	let onChange: (patch: StylePatch) => void;
 
 	const mount = (elements: Stroke[]) => {
-		render(<PropertiesPanel elements={elements} colors={COLORS} onChange={onChange} />, root);
+		render(
+			<PropertiesPanel
+				elements={elements}
+				colors={COLORS}
+				onChange={onChange}
+			/>,
+			root,
+		);
 	};
-	const btn = (label: string) => root.querySelector(`[aria-label="${label}"]`) as HTMLButtonElement | null;
+	const btn = (label: string) =>
+		root.querySelector(`[aria-label="${label}"]`) as HTMLButtonElement | null;
 	const has = (label: string) => btn(label) !== null;
 
 	beforeEach(() => {
@@ -70,7 +84,9 @@ describe("PropertiesPanel", () => {
 		btn("prop fill #1976d2")?.click();
 		btn("prop fill none")?.click();
 		btn("prop opacity 0.3")?.click();
-		expect((onChange as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0])).toEqual([
+		expect(
+			(onChange as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]),
+		).toEqual([
 			{ color: "#d32f2f" },
 			{ size: 10 },
 			{ dash: "dashed" },
@@ -81,8 +97,23 @@ describe("PropertiesPanel", () => {
 	});
 
 	test("highlights the current values of the first selected element", () => {
-		mount([{ ...rect, color: "#d32f2f", size: 10, dash: "dashed", fill: "#1976d2", opacity: 0.6 }]);
-		for (const label of ["prop color #d32f2f", "prop size 10", "prop dash dashed", "prop fill #1976d2", "prop opacity 0.6"]) {
+		mount([
+			{
+				...rect,
+				color: "#d32f2f",
+				size: 10,
+				dash: "dashed",
+				fill: "#1976d2",
+				opacity: 0.6,
+			},
+		]);
+		for (const label of [
+			"prop color #d32f2f",
+			"prop size 10",
+			"prop dash dashed",
+			"prop fill #1976d2",
+			"prop opacity 0.6",
+		]) {
 			expect(btn(label)?.classList.contains("active")).toBe(true);
 		}
 		expect(btn("prop color #111111")?.classList.contains("active")).toBe(false);

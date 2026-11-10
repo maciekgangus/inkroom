@@ -1,0 +1,47 @@
+.properties {
+	position: fixed;
+	right: 12px;
+	top: 64px;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 8px;
+	max-width: 260px;
+	background: #fffe;
+	border: 1px solid #ccc;
+	border-radius: 10px;
+	z-index: 1;
+	-webkit-user-select: none;
+	user-select: none;
+}
+.properties .row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	align-items: center;
+}
+.properties button {
+	min-width: 36px;
+	min-height: 36px;
+	padding: 0 8px;
+	border: 1px solid #bbb;
+	border-radius: 8px;
+	background: #fff;
+	font-size: 14px;
+}
+.properties button.swatch {
+	min-width: 30px;
+	width: 30px;
+	height: 30px;
+	padding: 0;
+	border-radius: 50%;
+}
+.properties button.active {
+	border-color: #1976d2;
+	box-shadow: 0 0 0 2px #1976d2;
+}
+.properties .dot {
+	display: inline-block;
+	background: #111;
+	border-radius: 50%;
+}
