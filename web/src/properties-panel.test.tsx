@@ -61,12 +61,12 @@ describe("PropertiesPanel", () => {
 		expect(root.querySelector(".properties")).toBeNull();
 	});
 
-	test("a freehand stroke offers colour, width and opacity, but no dash or fill", () => {
+	test("a freehand stroke offers colour, width, opacity and line style, but no fill", () => {
 		mount([freehand]);
 		expect(has("prop color #d32f2f")).toBe(true);
 		expect(slider("prop size")).not.toBeNull();
 		expect(slider("prop opacity")).not.toBeNull();
-		expect(has("prop dash dashed")).toBe(false);
+		expect(has("prop dash dashed")).toBe(true);
 		expect(has("prop fill none")).toBe(false);
 	});
 
@@ -74,7 +74,7 @@ describe("PropertiesPanel", () => {
 		mount([freehand]);
 		expect(has("prop dash solid")).toBe(true);
 		expect(has("prop dash natural")).toBe(true);
-		expect(has("prop dash dotted")).toBe(false);
+		expect(has("prop dash dotted")).toBe(true);
 		btn("prop dash natural")?.click();
 		expect(onChange).toHaveBeenLastCalledWith({ dash: "natural" });
 	});
@@ -179,5 +179,137 @@ describe("PropertiesPanel", () => {
 	test("with no fill, 'no fill' is the highlighted choice", () => {
 		mount([rect]);
 		expect(btn("prop fill none")?.classList.contains("active")).toBe(true);
+	});
+
+	describe("attached to an object (R-042)", () => {
+		const mountAt = (
+			elements: Stroke[],
+			anchor: { minX: number; minY: number; maxX: number; maxY: number } | null,
+		) => {
+			render(
+				<PropertiesPanel
+					elements={elements}
+					colors={COLORS}
+					anchor={anchor}
+					onChange={onChange}
+					onPreview={onPreview}
+				/>,
+				root,
+			);
+			return root.querySelector(".properties") as HTMLElement;
+		};
+		const box = { minX: 400, minY: 200, maxX: 600, maxY: 300 };
+
+		test("is placed near the object it edits", () => {
+			const panel = mountAt([rect], box);
+			expect(panel.classList.contains("floating")).toBe(true);
+			expect(panel.style.top).toBe("312px");
+		});
+
+		test("without an anchor it keeps the corner it always had", () => {
+			const panel = mountAt([rect], null);
+			expect(panel.classList.contains("floating")).toBe(false);
+			expect(panel.style.top).toBe("");
+		});
+
+		test("names the class of the object in a title", () => {
+			mountAt([text], box);
+			expect(root.querySelector(".panel-title")?.textContent).toBe("Tekst");
+			mountAt([rect, text], box);
+			expect(root.querySelector(".panel-title")?.textContent).toBe(
+				"Zaznaczenie (2)",
+			);
+		});
+
+		test("clicking a button does not take the focus from a text field being edited", () => {
+			mountAt([rect], box);
+			const button = btn("prop dash dashed") as HTMLElement;
+			const e = new MouseEvent("mousedown", {
+				bubbles: true,
+				cancelable: true,
+			});
+			button.dispatchEvent(e);
+			expect(e.defaultPrevented).toBe(true);
+		});
+
+		test("a slider can still be grabbed", () => {
+			mountAt([rect], box);
+			const s = slider("prop size") as HTMLInputElement;
+			const e = new MouseEvent("mousedown", {
+				bubbles: true,
+				cancelable: true,
+			});
+			s.dispatchEvent(e);
+			expect(e.defaultPrevented).toBe(false);
+		});
+	});
+});
+
+describe("the cross in the panel's title", () => {
+	test("is offered when the board can put the panel away, and calls it", () => {
+		const root = document.createElement("div");
+		const onClose = vi.fn();
+		const show = (close?: () => void) =>
+			render(
+				<PropertiesPanel
+					elements={[rect]}
+					colors={COLORS}
+					onChange={() => {}}
+					onClose={close}
+				/>,
+				root,
+			);
+		show();
+		expect(root.querySelector('[aria-label="close panel"]')).toBeNull();
+		show(onClose);
+		(root.querySelector('[aria-label="close panel"]') as HTMLElement).click();
+		expect(onClose).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe("the colour windows of the panel", () => {
+	const show = (els: Stroke[], palette?: string[]) => {
+		const root = document.createElement("div");
+		render(
+			<PropertiesPanel
+				elements={els}
+				colors={COLORS}
+				palette={palette}
+				onChange={() => {}}
+			/>,
+			root,
+		);
+		return root;
+	};
+
+	test("show the current colour, and that a shape has no fill, without words on the buttons", () => {
+		const root = show([{ ...rect, color: "#d32f2f" }]);
+		const names = [...root.querySelectorAll(".color-name")].map(
+			(n) => n.textContent,
+		);
+		expect(names).toEqual(["#D32F2F", "brak"]);
+		expect(root.textContent).not.toContain("Bez wypełnienia");
+		expect(
+			root.querySelector('[aria-label="prop fill none"] svg'),
+		).not.toBeNull();
+	});
+
+	test("offer the whole palette, and a tile for any other colour", () => {
+		const palette = [...COLORS, "#6b7280", "#8d5a2b"];
+		const root = show([rect], palette);
+		expect(root.querySelectorAll('[aria-label^="prop color #"]')).toHaveLength(
+			palette.length,
+		);
+		expect(
+			root.querySelector('[aria-label="prop color custom"]'),
+		).not.toBeNull();
+		expect(
+			root.querySelector('[aria-label="prop fill custom"]'),
+		).not.toBeNull();
+	});
+
+	test("the sliders say what they are for with an icon", () => {
+		const root = show([rect]);
+		expect(root.querySelectorAll(".slider .slider-icon svg")).toHaveLength(2); // width, opacity
 	});
 });

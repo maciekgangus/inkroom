@@ -208,3 +208,40 @@ func TestBoardEndpointTellsTheOwner(t *testing.T) {
 		t.Errorf("guest: got %v", m)
 	}
 }
+
+func TestTheViewIsSavedPerUser(t *testing.T) {
+	srv, _, _ := testApp(t)
+	owner := register(t, srv, "a@example.com")
+	other := register(t, srv, "b@example.com")
+	id := createBoard(t, srv, owner, "Matma")
+	path := "/api/boards/" + id + "/view"
+	if got := status(call(t, srv, "GET", path, "", nil)); got != http.StatusUnauthorized {
+		t.Errorf("logged out: got %d", got)
+	}
+	if got := status(call(t, srv, "GET", path, "", &owner)); got != http.StatusNoContent {
+		t.Errorf("nothing saved: got %d", got)
+	}
+	if got := status(call(t, srv, "PUT", path, `{"x":120.5,"y":-40,"scale":2}`, &owner)); got != http.StatusNoContent {
+		t.Fatalf("save: got %d", got)
+	}
+	m := decode(t, call(t, srv, "GET", path, "", &owner))
+	if m["x"] != 120.5 || m["y"] != -40.0 || m["scale"] != 2.0 {
+		t.Errorf("got %v", m)
+	}
+	// A visitor keeps a view of their own, and the owner's is not theirs.
+	if got := status(call(t, srv, "GET", path, "", &other)); got != http.StatusNoContent {
+		t.Errorf("another user: got %d", got)
+	}
+	if got := status(call(t, srv, "PUT", path, `{"x":1,"y":2,"scale":0.5}`, &other)); got != http.StatusNoContent {
+		t.Errorf("visitor save: got %d", got)
+	}
+	// Nonsense is refused: a scale outside what the board allows, and NaN-like numbers.
+	for _, body := range []string{`{"x":1,"y":2,"scale":0}`, `{"x":1,"y":2,"scale":99}`, `{"x":1e300,"y":2,"scale":1}`, `{"x":"a"}`} {
+		if got := status(call(t, srv, "PUT", path, body, &owner)); got != http.StatusBadRequest {
+			t.Errorf("%s: got %d", body, got)
+		}
+	}
+	if got := status(call(t, srv, "PUT", "/api/boards/ghost/view", `{"x":1,"y":2,"scale":1}`, &owner)); got != http.StatusNotFound {
+		t.Errorf("no such board: got %d", got)
+	}
+}

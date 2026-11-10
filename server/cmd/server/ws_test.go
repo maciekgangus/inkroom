@@ -222,3 +222,67 @@ func TestDeletingABoardDisconnectsEveryone(t *testing.T) {
 		t.Fatalf("deleted board must 404 on websocket: err=%v resp=%v", err, resp)
 	}
 }
+
+// dialWith joins a board's socket with a query string, as the client does to say who it is.
+func dialWith(t *testing.T, srv *httptest.Server, id, query string) *websocket.Conn {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	c, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(srv.URL, "http")+"/ws/"+id+"?"+query, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { c.CloseNow() })
+	return c
+}
+
+func TestAClientThatSaysWhoItIsIsListedToEveryone(t *testing.T) {
+	srv, _, _ := testApp(t)
+	owner := register(t, srv, "a@example.com")
+	id := createBoard(t, srv, owner, "Matma")
+
+	ann := dialWith(t, srv, id, "id=a1&name=Ann")
+	read(t, ann) // snapshot
+	if m := read(t, ann); m["t"] != "peers" || len(m["peers"].([]any)) != 1 {
+		t.Fatalf("joiner: got %v", m)
+	}
+	bob := dialWith(t, srv, id, "id=b1&name=Bob")
+	read(t, bob) // snapshot
+	for _, c := range []*websocket.Conn{ann, bob} {
+		m := read(t, c)
+		if m["t"] != "peers" || len(m["peers"].([]any)) != 2 {
+			t.Fatalf("after Bob joined: got %v", m)
+		}
+	}
+	bob.CloseNow()
+	if m := read(t, ann); m["t"] != "peers" || len(m["peers"].([]any)) != 1 {
+		t.Fatalf("after Bob left: got %v", m)
+	}
+}
+
+func TestAnonymousSocketsAreNotListed(t *testing.T) {
+	srv, _, _ := testApp(t)
+	owner := register(t, srv, "a@example.com")
+	id := createBoard(t, srv, owner, "Matma")
+	ws := dial(t, srv, id)
+	if m := read(t, ws); m["t"] != "snapshot" {
+		t.Fatalf("got %v", m)
+	}
+}
+
+func TestRenamingTheBoardIsPushedToEveryoneOnIt(t *testing.T) {
+	srv, _, _ := testApp(t)
+	owner := register(t, srv, "a@example.com")
+	id := createBoard(t, srv, owner, "Matma")
+	ws := dial(t, srv, id)
+	read(t, ws) // snapshot
+	if got := status(call(t, srv, "PATCH", "/api/boards/"+id, `{"name":"Lekcja 5"}`, &owner)); got != http.StatusNoContent {
+		t.Fatalf("rename = %d", got)
+	}
+	if m := read(t, ws); m["t"] != "name" || m["value"] != "Lekcja 5" {
+		t.Fatalf("live rename: got %v", m)
+	}
+	if m := decode(t, call(t, srv, "GET", "/api/boards/"+id, "", nil)); m["name"] != "Lekcja 5" {
+		t.Fatalf("stored name: got %v", m)
+	}
+}

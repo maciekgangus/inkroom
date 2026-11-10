@@ -77,9 +77,9 @@ function BoardPage({
 	id: string;
 	createSocket: (url: string) => SocketLike;
 }) {
-	const [info, setInfo] = useState<{ owner: boolean } | null | undefined>(
-		undefined,
-	);
+	const [info, setInfo] = useState<
+		{ owner: boolean; name: string } | null | undefined
+	>(undefined);
 	const [account, setAccount] = useState<string | null | undefined>(undefined);
 	const [guestName, setGuestName] = useState(() =>
 		stored(localStorage, NAME_KEY),
@@ -101,9 +101,9 @@ function BoardPage({
 	const name = account ? account.split("@")[0] : guestName;
 	const connect = useMemo(() => {
 		const scheme = location.protocol === "https:" ? "wss" : "ws";
-		const url = `${scheme}://${location.host}/ws/${id}?name=${encodeURIComponent(name ?? "")}`;
+		const url = `${scheme}://${location.host}/ws/${id}?name=${encodeURIComponent(name ?? "")}&id=${encodeURIComponent(authorId)}`;
 		return () => createSocket(url);
-	}, [id, name, createSocket]);
+	}, [id, name, authorId, createSocket]);
 
 	if (info === undefined || account === undefined) return null;
 	if (!info) {
@@ -132,6 +132,8 @@ function BoardPage({
 			authorId={authorId}
 			name={name}
 			connect={connect}
+			boardName={info.name}
+			onRename={info.owner ? (n) => api.renameBoard(id, n) : undefined}
 			onSetBackground={info.owner ? (b) => api.setBackground(id, b) : undefined}
 		/>
 	);

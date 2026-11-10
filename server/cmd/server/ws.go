@@ -38,6 +38,8 @@ func (a *app) serveWS(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	client := room.NewClient(sendBuffer)
+	// Who is connecting, so the others can see who is on the board (R-046).
+	client.Identify(r.URL.Query().Get("id"), r.URL.Query().Get("name"))
 	rm, err := a.hub.Join(boardID, client)
 	if err != nil {
 		log.Printf("joining board %s: %v", boardID, err)

@@ -49,19 +49,112 @@
 	background: var(--accent-soft);
 	color: var(--accent);
 }
-.properties button.swatch {
-	min-width: 24px;
+/* A colour: the window with the current one, the palette under it. */
+.color-block {
+	width: 100%;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 4px 2px;
+}
+.color-current {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	color: var(--muted);
+	font-size: 12px;
+}
+.color-current .chip {
+	display: grid;
+	place-items: center;
+	width: 44px;
+	height: 28px;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	box-shadow: inset 0 0 0 2px var(--surface);
+}
+.color-current .chip.none {
+	background: var(--surface-hover);
+}
+.color-current .color-name {
+	font-family: var(--mono, ui-monospace, monospace);
+	letter-spacing: 0.04em;
+}
+.palette-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(24px, 1fr));
+	gap: 8px;
+	max-width: 232px;
+}
+.properties .swatch {
+	box-sizing: border-box;
+	display: grid;
+	place-items: center;
 	width: 24px;
 	height: 24px;
+	min-width: 24px;
 	min-height: 24px;
-	margin: 8px;
 	padding: 0;
-	border-radius: 50%;
+	border: 1px solid color-mix(in srgb, var(--text) 18%, transparent);
+	border-radius: 7px;
+	cursor: pointer;
+	transition: transform 0.08s;
 }
-.properties button.swatch.active {
+.properties .swatch:hover {
+	transform: scale(1.12);
+}
+.properties .swatch.active {
 	box-shadow:
-		0 0 0 3px var(--surface),
-		0 0 0 5px var(--accent);
+		0 0 0 2px var(--surface),
+		0 0 0 4px var(--accent);
+}
+.properties .swatch.none {
+	background: var(--surface);
+	color: var(--muted);
+}
+.properties .swatch.none svg {
+	width: 16px;
+	height: 16px;
+}
+.properties .swatch.custom {
+	position: relative;
+	overflow: hidden;
+	background: conic-gradient(
+		#f44336,
+		#ffeb3b,
+		#4caf50,
+		#03a9f4,
+		#9c27b0,
+		#f44336
+	);
+	color: #fff;
+}
+.properties .swatch.custom svg {
+	width: 14px;
+	height: 14px;
+	filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.6));
+	pointer-events: none;
+}
+.properties .swatch.custom input {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	opacity: 0;
+	cursor: pointer;
+}
+.slider-icon {
+	display: grid;
+	place-items: center;
+	flex: none;
+	color: var(--muted);
+}
+.slider-icon svg {
+	width: 18px;
+	height: 18px;
+}
+.properties button.swatch {
+	margin: 0;
 }
 .properties .dot {
 	background: currentColor;
@@ -71,7 +164,7 @@
 }
 
 /* A slider with its number: the track takes the accent colour like an active button. */
-.properties .slider {
+.slider {
 	display: flex;
 	align-items: center;
 	gap: 10px;
@@ -79,18 +172,84 @@
 	min-height: 40px;
 	padding: 0 6px;
 }
-.properties .slider input {
+/* The page styles text fields with padding and a border; a slider must have neither, or its
+   thumb travels over a narrower stretch than the fill that is drawn for it. */
+.slider input {
+	box-sizing: border-box;
 	flex: 1;
 	min-width: 120px;
 	height: 4px;
 	margin: 0;
-	accent-color: var(--accent);
+	padding: 0;
+	border: 0;
+	border-radius: 2px;
+	/* The fill ends in the middle of the thumb: it travels from 8px to 8px short of the end. */
+	background: linear-gradient(
+		to right,
+		var(--accent) calc(8px + (100% - 16px) * var(--p, 0)),
+		var(--border) calc(8px + (100% - 16px) * var(--p, 0))
+	);
+	-webkit-appearance: none;
+	appearance: none;
 	cursor: pointer;
 }
-.properties .slider .value {
+.slider input::-webkit-slider-thumb {
+	box-sizing: border-box;
+	width: 16px;
+	height: 16px;
+	border: 2px solid var(--surface);
+	border-radius: 50%;
+	background: var(--accent);
+	box-shadow: 0 1px 3px #0005;
+	-webkit-appearance: none;
+	appearance: none;
+}
+.slider input::-moz-range-thumb {
+	box-sizing: border-box;
+	width: 16px;
+	height: 16px;
+	border: 2px solid var(--surface);
+	border-radius: 50%;
+	background: var(--accent);
+	box-shadow: 0 1px 3px #0005;
+}
+.slider .value {
 	min-width: 48px;
 	text-align: right;
 	font-family: var(--mono);
 	font-size: 13px;
 	color: var(--muted);
+}
+
+/* Attached to the object it edits (R-042): placed from the script, hidden until measured. */
+.properties.floating {
+	right: auto;
+}
+.panel-title {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 2px 2px 6px 6px;
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--muted);
+}
+
+.panel-close {
+	width: 22px;
+	height: 22px;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	background: transparent;
+	color: var(--muted);
+	font-size: 16px;
+	line-height: 1;
+	cursor: pointer;
+}
+.panel-close:hover {
+	background: var(--hover, rgba(0, 0, 0, 0.07));
+	color: inherit;
 }

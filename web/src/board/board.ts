@@ -11,6 +11,33 @@ export type ElementKind =
 	| "trapezoid"
 	| "rhombus"
 	| "parallelogram"
+	| "triangle"
+	| "righttriangle"
+	| "righttrapezoid"
+	| "pentagon"
+	| "hexagon"
+	| "octagon"
+	| "star"
+	| "roundrect"
+	| "semicircle"
+	| "quadrant"
+	| "cube"
+	| "cuboid"
+	| "cylinder"
+	| "parallelepiped"
+	| "pyramid"
+	| "cone"
+	| "sphere"
+	| "tetrahedron"
+	| "hexprism"
+	| "octahedron"
+	| "pyramidfrustum"
+	| "conefrustum"
+	| "sine"
+	| "bell"
+	| "scurve"
+	| "parabola"
+	| "axes"
 	| "text"
 	| "image";
 
@@ -36,6 +63,18 @@ export interface Stroke {
 	opacity?: number;
 	/** Font size of a text in board units; missing means the size table value. */
 	fontSize?: number;
+	/**
+	 * Free vertices of a polygon shape (R-047): the outline as fractions of its box, which replace
+	 * the outline the kind would give. The box still scales, turns and moves it all as one.
+	 */
+	verts?: [number, number][];
+	/**
+	 * The parameter of an adjustable shape (R-041): the slant of a trapezoid or parallelogram,
+	 * the apex of a triangle, the radius of a rounded rectangle; missing means the usual look.
+	 */
+	adj?: number;
+	/** Width of a text area in board units: the text wraps to it (R-044); missing for a text at a point. */
+	width?: number;
 	id: string;
 	authorId: string;
 	color: string;

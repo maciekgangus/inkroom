@@ -26,3 +26,11 @@ Etap 2 (R-006, R-018): kilka osób rysuje na jednej tablicy na żywo. Wymagania:
 - Serwer nie weryfikuje, kto kasuje czyją kreskę (R-004: każdy może skasować każdą). Uprawnienia (R-016) w Etapie 5.
 - Restart serwera kasuje tablice do czasu Etapu 3.
 - Kursory innych osób (R-013) wejdą jako kolejny typ wiadomości, bez zmiany tego modelu.
+
+## Uzupełnienie (2026-11-10): obecni uczestnicy i nazwa tablicy
+
+Dwie wiadomości od serwera do klientów, obie bez zapisu w bazie, i dwa parametry adresu gniazda.
+
+- Adres `/ws/{id}` przyjmuje `?id=<identyfikator autora>&name=<imię>`. Serwer przycina imię do 40 znaków; klient bez imienia lub z identyfikatorem pustym albo dłuższym niż 64 znaki jest anonimowy i nie jest nigdzie wymieniany.
+- `{"t":"peers","peers":[{"id","name"}]}`: lista przedstawionych klientów (raz na identyfikator, posortowana po imieniu). Serwer rozsyła ją do wszystkich przy dołączeniu i wyjściu przedstawionego klienta, a nowy klient dostaje ją zaraz po migawce. Anonimowe połączenia nie wywołują wysyłki. Po zerwaniu połączenia klient czyści listę do czasu nowej wiadomości.
+- `{"t":"name","value":"..."}`: nowa nazwa tablicy po `PATCH /api/boards/{id}` (tylko właściciel); dostają ją wszyscy na tablicy, razem z właścicielem. Nazwę początkową klient bierze z `GET /api/boards/{id}`.

@@ -1,12 +1,16 @@
 import { useEffect, useState } from "preact/hooks";
 import type { Settings } from "./board/controller";
-import { SHAPES, saveShape } from "./board/shapes";
+import { SHAPE_GROUPS, SHAPES, saveShape } from "./board/shapes";
 import { Icon } from "./icon";
 import { ImageControls, type ImageControlsProps } from "./image-controls";
+import { ShapeIcon } from "./shape-icon";
 import { selectTool, TOOL_KEYS } from "./shortcuts";
+import { StrokeControls } from "./stroke-controls";
 import { displayColor, useTheme } from "./theme";
 
 export const COLORS = ["#111111", "#d32f2f", "#1976d2", "#388e3c", "#f57c00"];
+/** The colours at hand in the bar; the rest of COLORS and MORE_COLORS are behind the plus. */
+export const QUICK_COLORS = COLORS.slice(0, 3);
 /** Extra colours behind the palette button (R-025). */
 export const MORE_COLORS = [
 	"#6b7280",
@@ -22,7 +26,7 @@ export const MORE_COLORS = [
 	"#eab308",
 	"#ff7043",
 ];
-export const SIZES = [2, 5, 10];
+export { SIZES } from "./stroke-controls";
 
 interface Props {
 	settings: Settings;
@@ -85,7 +89,7 @@ export function Toolbar({
 	const theme = useTheme();
 	const on = (active: boolean) => (active ? "active" : "");
 	const drawing = colourTools.includes(settings.tool);
-	const custom = !COLORS.includes(settings.color);
+	const custom = !QUICK_COLORS.includes(settings.color);
 	// Picking a colour while erasing or panning goes back to the pen; shapes and text stay.
 	const pick = (color: string) =>
 		set({
@@ -138,7 +142,11 @@ export function Toolbar({
 								onToolChange?.();
 							}}
 						>
-							<Icon name={isShapeTool ? current.icon : tool} />
+							{isShapeTool ? (
+								<ShapeIcon kind={current.kind} />
+							) : (
+								<Icon name={tool} />
+							)}
 						</button>
 					);
 					if (!isShapeTool) return button;
@@ -147,25 +155,32 @@ export function Toolbar({
 							{button}
 							{listOpen && (
 								<div class="shape-list" role="menu">
-									{SHAPES.map((s) => (
-										<button
-											type="button"
-											role="menuitem"
-											key={s.kind}
-											aria-label={`shape ${s.kind}`}
-											class={on(s.kind === current.kind)}
-											onClick={() => {
-												settings.shape = s.kind;
-												saveShape(s.kind);
-												selectTool(settings, "shape");
-												setShapesOpen(false);
-												rerender((n) => n + 1);
-												onToolChange?.();
-											}}
-										>
-											<Icon name={s.icon} />
-											{s.label}
-										</button>
+									{SHAPE_GROUPS.map((group) => (
+										<div class="shape-group" key={group.title}>
+											<div class="shape-group-title">{group.title}</div>
+											<div class="shape-grid">
+												{group.shapes.map((s) => (
+													<button
+														type="button"
+														role="menuitem"
+														key={s.kind}
+														aria-label={`shape ${s.kind}`}
+														title={s.label}
+														class={on(s.kind === current.kind)}
+														onClick={() => {
+															settings.shape = s.kind;
+															saveShape(s.kind);
+															selectTool(settings, "shape");
+															setShapesOpen(false);
+															rerender((n) => n + 1);
+															onToolChange?.();
+														}}
+													>
+														<ShapeIcon kind={s.kind} />
+													</button>
+												))}
+											</div>
+										</div>
 									))}
 								</div>
 							)}
@@ -173,9 +188,9 @@ export function Toolbar({
 					);
 				})}
 			</div>
-			{!hasSelection && (
-				<div class="group">
-					{COLORS.map((c) => swatch(c))}
+			{
+				<div class={`group${hasSelection ? " dimmed" : ""}`}>
+					{QUICK_COLORS.map((c) => swatch(c))}
 					<button
 						type="button"
 						aria-label="more colors"
@@ -194,7 +209,9 @@ export function Toolbar({
 					</button>
 					{paletteOpen && (
 						<div class="palette">
-							{MORE_COLORS.map((c) => swatch(c, () => setPaletteOpen(false)))}
+							{[...COLORS.slice(3), ...MORE_COLORS].map((c) =>
+								swatch(c, () => setPaletteOpen(false)),
+							)}
 							<label class="custom">
 								Własny kolor
 								<input
@@ -209,36 +226,10 @@ export function Toolbar({
 						</div>
 					)}
 				</div>
-			)}
-			{!hasSelection && (
-				<div class="group">
-					{SIZES.map((s) => (
-						<button
-							type="button"
-							key={s}
-							aria-label={`size ${s}`}
-							aria-pressed={settings.size === s}
-							class={on(settings.size === s)}
-							onClick={() => set({ size: s })}
-						>
-							<span
-								class="dot"
-								style={{ width: `${s + 2}px`, height: `${s + 2}px` }}
-							/>
-						</button>
-					))}
-					<button
-						type="button"
-						aria-label="natural pen"
-						aria-pressed={!!settings.natural}
-						title="Naturalne pióro"
-						class={on(!!settings.natural)}
-						onClick={() => set({ natural: !settings.natural })}
-					>
-						<Icon name="wave" />
-					</button>
-				</div>
-			)}
+			}
+			<div class={`group${hasSelection ? " dimmed" : ""}`}>
+				<StrokeControls settings={settings} onChange={set} />
+			</div>
 			{images && <ImageControls {...images} />}
 			<div class="group">
 				<button type="button" aria-label="undo" title="Cofnij" onClick={onUndo}>

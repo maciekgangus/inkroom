@@ -412,3 +412,129 @@ func TestInvalidUpdatesAreRejected(t *testing.T) {
 		}
 	}
 }
+
+func joinAs(r *Room, id, name string) *Client {
+	c := NewClient(16)
+	c.Identify(id, name)
+	r.Join(c)
+	return c
+}
+
+func peerNames(m map[string]any) []string {
+	var names []string
+	for _, p := range m["peers"].([]any) {
+		names = append(names, p.(map[string]any)["name"].(string))
+	}
+	return names
+}
+
+func TestIdentifiedJoinTellsEveryoneWhoIsHere(t *testing.T) {
+	r := New()
+	ann := joinAs(r, "a1", "Ann")
+	if m := recv(t, ann); m["t"] != "snapshot" {
+		t.Fatalf("first message = %v, want the snapshot", m["t"])
+	}
+	if m := recv(t, ann); m["t"] != "peers" || len(peerNames(m)) != 1 {
+		t.Fatalf("joiner's peers = %v", m)
+	}
+	bob := joinAs(r, "b1", "Bob")
+	recv(t, bob) // snapshot
+	for _, c := range []*Client{ann, bob} {
+		m := recv(t, c)
+		if m["t"] != "peers" {
+			t.Fatalf("message = %v, want peers", m)
+		}
+		if names := peerNames(m); len(names) != 2 || names[0] != "Ann" || names[1] != "Bob" {
+			t.Fatalf("peers = %v, want [Ann Bob]", names)
+		}
+	}
+}
+
+func TestPeersCarryTheirIDs(t *testing.T) {
+	r := New()
+	c := joinAs(r, "a1", "Ann")
+	recv(t, c)
+	m := recv(t, c)
+	p := m["peers"].([]any)[0].(map[string]any)
+	if p["id"] != "a1" || p["name"] != "Ann" {
+		t.Fatalf("peer = %v", p)
+	}
+}
+
+func TestAnonymousClientsAreNotListedAndSendNothing(t *testing.T) {
+	r := New()
+	ann := joinAs(r, "a1", "Ann")
+	recv(t, ann)
+	recv(t, ann)
+	anon := join(r)
+	recv(t, anon) // its snapshot, and nothing more
+	none(t, anon)
+	none(t, ann)
+	r.Leave(anon)
+	none(t, ann)
+}
+
+func TestLeavingTellsTheOthers(t *testing.T) {
+	r := New()
+	ann := joinAs(r, "a1", "Ann")
+	bob := joinAs(r, "b1", "Bob")
+	for _, c := range []*Client{ann, ann, ann, bob, bob} {
+		recv(t, c)
+	}
+	r.Leave(bob)
+	m := recv(t, ann)
+	if m["t"] != "peers" {
+		t.Fatalf("message = %v, want peers", m)
+	}
+	if names := peerNames(m); len(names) != 1 || names[0] != "Ann" {
+		t.Fatalf("peers = %v, want [Ann]", names)
+	}
+}
+
+func TestTheSameIDIsListedOnce(t *testing.T) {
+	r := New()
+	first := joinAs(r, "a1", "Ann")
+	second := joinAs(r, "a1", "Ann") // the same person with a second socket
+	for _, c := range []*Client{first, first, first, second, second} {
+		recv(t, c)
+	}
+	r.Leave(first)
+	// Ann is still here through the second socket
+	m := recv(t, second)
+	if names := peerNames(m); len(names) != 1 || names[0] != "Ann" {
+		t.Fatalf("peers = %v, want [Ann]", names)
+	}
+}
+
+func TestIdentitiesAreCleaned(t *testing.T) {
+	c := NewClient(1)
+	c.Identify("  id-1  ", "  "+strings.Repeat("x", 100)+"  ")
+	if c.ID != "id-1" {
+		t.Fatalf("ID = %q", c.ID)
+	}
+	if len([]rune(c.Name)) != 40 {
+		t.Fatalf("name length = %d, want 40", len([]rune(c.Name)))
+	}
+	c.Identify(strings.Repeat("i", 100), "Ann")
+	if c.ID != "" {
+		t.Fatalf("an id that is too long is dropped, got %q", c.ID)
+	}
+	c.Identify("a1", "   ")
+	if c.ID != "" {
+		t.Fatalf("a client without a name is anonymous, got %q", c.ID)
+	}
+}
+
+func TestRenamingIsBroadcastToEveryone(t *testing.T) {
+	r := New()
+	a, b := join(r), join(r)
+	recv(t, a)
+	recv(t, b)
+	r.SetName("Lekcja 5")
+	for _, c := range []*Client{a, b} {
+		m := recv(t, c)
+		if m["t"] != "name" || m["value"] != "Lekcja 5" {
+			t.Fatalf("message = %v", m)
+		}
+	}
+}

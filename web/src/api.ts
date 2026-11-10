@@ -84,12 +84,46 @@ export const setBackground = (id: string, background: string) =>
  */
 export async function boardInfo(
 	id: string,
-): Promise<{ owner: boolean } | null> {
+): Promise<{ owner: boolean; name: string } | null> {
 	try {
-		const b = await request<{ owner?: boolean }>("GET", `/api/boards/${id}`);
-		return { owner: b.owner === true };
+		const b = await request<{ owner?: boolean; name?: string }>(
+			"GET",
+			`/api/boards/${id}`,
+		);
+		return { owner: b.owner === true, name: b.name ?? "" };
 	} catch (e) {
 		if (e instanceof ApiError && e.status === 404) return null;
-		return { owner: false };
+		return { owner: false, name: "" };
+	}
+}
+
+/** Where the user last looked on a board (null when never saved, or when logged out). */
+export async function loadView(
+	id: string,
+): Promise<{ x: number; y: number; scale: number } | null> {
+	try {
+		const v = await request<
+			{ x: number; y: number; scale: number } | undefined
+		>("GET", `/api/boards/${id}/view`);
+		return v ?? null;
+	} catch {
+		return null;
+	}
+}
+
+/** Remembers where the user is looking; it survives the page being closed (`keepalive`). */
+export async function saveView(
+	id: string,
+	view: { x: number; y: number; scale: number },
+): Promise<void> {
+	try {
+		await fetch(`/api/boards/${id}/view`, {
+			method: "PUT",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(view),
+			keepalive: true,
+		});
+	} catch {
+		// Not being able to save a position is not worth an error.
 	}
 }

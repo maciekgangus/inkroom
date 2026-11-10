@@ -55,6 +55,10 @@ describe("Controller selection look (R-034)", () => {
 			setSelection: vi.fn(),
 			setMarquee: vi.fn(),
 			setHighlight: vi.fn(),
+			setEndpoints: vi.fn(),
+			setDrag: vi.fn(),
+			setAdjust: vi.fn(),
+			setVertices: vi.fn(),
 		};
 		const settings: Settings = { tool: "select", color: "#111", size: 4 };
 		c = new Controller(
@@ -68,14 +72,16 @@ describe("Controller selection look (R-034)", () => {
 		for (const s of [line("l"), pen("p"), rect("r")]) board.addStroke(s);
 	});
 
-	test("a lone line or stroke glows and keeps its handles, so it is controlled as before", () => {
+	test("a lone line glows, keeps its frame and has dots at its ends too", () => {
 		c.select("l");
 		expect(renderer.setSelection.mock.lastCall?.[0]).not.toBeNull();
+		expect(renderer.setEndpoints.mock.lastCall?.[0]).not.toBeNull();
 		expect(
 			renderer.setHighlight.mock.lastCall?.[0].map((s: Stroke) => s.id),
 		).toEqual(["l"]);
 		c.select("p");
 		expect(renderer.setSelection.mock.lastCall?.[0]).not.toBeNull();
+		expect(renderer.setEndpoints.mock.lastCall?.[0]).toBeNull();
 		expect(
 			renderer.setHighlight.mock.lastCall?.[0].map((s: Stroke) => s.id),
 		).toEqual(["p"]);

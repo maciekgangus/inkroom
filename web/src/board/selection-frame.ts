@@ -18,11 +18,13 @@ export interface Frame {
 }
 
 export type Corner = "nw" | "ne" | "se" | "sw";
-export type Handle = Corner | "rot";
+export type Edge = "n" | "e" | "s" | "w";
+export type Handle = Corner | Edge | "rot";
 
 /**
  * Whether the selection frame is drawn as an outline box (R-034): images, shapes and several
- * elements get one; a lone stroke, line or text shows only its handles and glows, so no big
+ * elements get one, and so does a line (its end dots come in addition, R-041); a lone stroke or
+ * text shows only its handles and glows, so no big
  * box covers what was selected. The handles work the same either way.
  */
 export function showsBox(els: Stroke[]): boolean {
@@ -31,6 +33,8 @@ export function showsBox(els: Stroke[]): boolean {
 	const kind = els[0].kind;
 	return (
 		kind === "image" ||
+		kind === "line" ||
+		(kind === "text" && els[0].width !== undefined) ||
 		kind === "rect" ||
 		kind === "circle" ||
 		kind === "ellipse" ||
@@ -124,6 +128,30 @@ export function cornerPos(f: Frame, corner: Corner): Vec {
 	return frameCorners(f)[{ nw: 0, ne: 1, se: 2, sw: 3 }[corner]];
 }
 
+/** The middle of a side of the frame (R-041): n is the top one before any rotation. */
+export function edgePos(f: Frame, edge: Edge): Vec {
+	const hw = f.w / 2;
+	const hh = f.h / 2;
+	return {
+		n: at(f, 0, -hh),
+		e: at(f, hw, 0),
+		s: at(f, 0, hh),
+		w: at(f, -hw, 0),
+	}[edge];
+}
+export function oppositeEdge(e: Edge): Edge {
+	return { n: "s", e: "w", s: "n", w: "e" }[e] as Edge;
+}
+/** Whether a handle is the middle of a side rather than a corner or the rotation handle. */
+export const isEdge = (h: Handle): h is Edge =>
+	h === "n" || h === "e" || h === "s" || h === "w";
+/** Where a corner or side handle is, and the point opposite it that stays put when it is dragged. */
+export function handlePos(f: Frame, h: Corner | Edge): Vec {
+	return isEdge(h) ? edgePos(f, h) : cornerPos(f, h);
+}
+export function oppositeHandle(h: Corner | Edge): Corner | Edge {
+	return isEdge(h) ? oppositeEdge(h) : oppositeCorner(h);
+}
 export function oppositeCorner(c: Corner): Corner {
 	return { nw: "se", ne: "sw", se: "nw", sw: "ne" }[c] as Corner;
 }
@@ -147,6 +175,10 @@ export function hitFrameHandle(
 	for (const [i, name] of names.entries()) {
 		if (Math.hypot(p[0] - corners[i][0], p[1] - corners[i][1]) <= radius)
 			return name;
+	}
+	for (const edge of ["n", "e", "s", "w"] as Edge[]) {
+		const e = edgePos(f, edge);
+		if (Math.hypot(p[0] - e[0], p[1] - e[1]) <= radius) return edge;
 	}
 	return null;
 }

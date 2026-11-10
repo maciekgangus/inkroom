@@ -1,5 +1,5 @@
 import type { Stroke } from "./board";
-import { isPolygonKind } from "./shapes";
+import { hasInside, isPolygonKind } from "./shapes";
 import { fontSizeFor, fontSizeOf } from "./text";
 
 export type Dash = "solid" | "dashed" | "dotted" | "natural";
@@ -29,17 +29,17 @@ const isShape = (el: Stroke) =>
 const isFreehand = (el: Stroke) => !el.kind || el.kind === "stroke";
 const isDashable = (el: Stroke) => el.kind === "line" || isShape(el);
 
-/** Lines and shapes take solid, dashed and dotted; freehand strokes solid and natural (R-037). */
+/** Lines and shapes take solid, dashed and dotted; freehand strokes all four (R-037). */
 function dashFits(el: Stroke, dash: Dash): boolean {
 	if (isDashable(el)) return dash !== "natural";
-	if (isFreehand(el)) return dash === "solid" || dash === "natural";
-	return false;
+	return isFreehand(el);
 }
 
 /** The styles the line style row offers for a selection, solid first. */
 export function dashOptions(els: Stroke[]): Dash[] {
 	const options: Dash[] = ["solid"];
-	if (els.some(isDashable)) options.push("dashed", "dotted");
+	if (els.some((e) => isDashable(e) || isFreehand(e)))
+		options.push("dashed", "dotted");
 	if (els.some(isFreehand)) options.push("natural");
 	return options;
 }
@@ -58,7 +58,7 @@ export function applyStyle(el: Stroke, patch: StylePatch): Stroke {
 		if (patch.dash === "solid") delete out.dash;
 		else out.dash = patch.dash;
 	}
-	if (patch.fill !== undefined && isShape(el)) {
+	if (patch.fill !== undefined && isShape(el) && hasInside(el.kind)) {
 		if (patch.fill === null) delete out.fill;
 		else out.fill = patch.fill;
 	}
@@ -76,7 +76,7 @@ export function capabilities(els: Stroke[]) {
 		color: els.some((e) => e.kind !== "image"),
 		size: els.some((e) => e.kind !== "image"),
 		dash: dashOptions(els).length > 1,
-		fill: els.some(isShape),
+		fill: els.some((e) => isShape(e) && hasInside(e.kind)),
 		text: els.some((e) => e.kind === "text"),
 		/** Only texts are selected: the size slider is then a font size. */
 		textOnly: els.length > 0 && els.every((e) => e.kind === "text"),

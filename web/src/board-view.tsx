@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import {
+	useEffect,
+	useLayoutEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "preact/hooks";
+import { loadView, saveView } from "./api";
 import { BACKGROUNDS, type Background } from "./board/background";
 import type { Stroke } from "./board/board";
 import { Board } from "./board/board";
@@ -15,19 +22,25 @@ import { ImageCache } from "./board/image-cache";
 import { defaultSize, placeCentered } from "./board/image-geometry";
 import { prepareImage, uploadImage } from "./board/image-upload";
 import { loadShape } from "./board/shapes";
-import { fontSizeFor, fontSizeOf } from "./board/text";
-import { Viewport } from "./board/viewport";
+import { applyStyle, type StylePatch } from "./board/style";
+import { fontSizeFor, fontSizeOf, fontsChanged } from "./board/text";
+import { textFont } from "./board/text-wrap";
+import { createViewSaver } from "./board/view-saver";
+import { MAX_SCALE, MIN_SCALE, type Rect, Viewport } from "./board/viewport";
+import { stepZoom, wheelZoomFactor } from "./board/zoom";
+import { BoardTitle } from "./board-title";
 import { ContextMenu, type MenuItem } from "./context-menu";
 import { Cursors } from "./cursors";
 import { Icon } from "./icon";
+import { Participants } from "./participants";
 import { hasFinePointer } from "./pointer";
 import { PropertiesPanel } from "./properties-panel";
 import { applyToolShortcut, dropsSelection } from "./shortcuts";
-import { type SocketLike, SyncClient } from "./sync/sync";
+import { type Peer, type SocketLike, SyncClient } from "./sync/sync";
 import { TextEditor } from "./text-editor";
 import { currentTheme, displayColor, useTheme } from "./theme";
 import { toolCursor } from "./tool-cursor";
-import { COLORS, SIZES, Toolbar } from "./toolbar";
+import { COLORS, MORE_COLORS, SIZES, Toolbar } from "./toolbar";
 import { ZoomControls } from "./zoom-controls";
 
 /** Not crypto.randomUUID: it is missing on http:// pages (LAN testing on an iPad). */
@@ -35,7 +48,6 @@ export const newId = () =>
 	`${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
 const ZOOM_STEP = 1.25;
-const WHEEL_ZOOM_SPEED = 0.01;
 const LINE_HEIGHT_PX = 16;
 
 interface Props {
@@ -46,6 +58,10 @@ interface Props {
 	name: string;
 	/** Opens the board's websocket. */
 	connect: () => SocketLike;
+	/** The board's name, shown at the top left (R-045). */
+	boardName: string;
+	/** Saves a new name; given only to the board's owner (R-045). */
+	onRename?: (name: string) => Promise<void>;
 	/** Saves a new shared background; given only to the board's owner (R-027). */
 	onSetBackground?: (background: Background) => Promise<void>;
 }
@@ -62,6 +78,8 @@ export function BoardView({
 	boardId,
 	authorId,
 	name,
+	boardName,
+	onRename,
 	connect,
 	onSetBackground,
 }: Props) {
@@ -82,7 +100,41 @@ export function BoardView({
 	/** Board position of the text being typed, if any. */
 	/** An existing text being edited (double-click), if any. */
 	const [editingText, setEditingText] = useState<Stroke | null>(null);
-	const [textAt, setTextAt] = useState<{ x: number; y: number } | null>(null);
+	const [textAt, setTextAt] = useState<{
+		x: number;
+		y: number;
+		/** The area that was dragged, in board units (R-044); none for a click. */
+		area?: { w: number; h: number };
+	} | null>(null);
+	/**
+	 * The look of a text being typed that is not on the board yet: the panel edits this stand-in,
+	 * and the text takes it when it is committed (R-042).
+	 */
+	const [draft, setDraft] = useState<Stroke | null>(null);
+	/**
+	 * Where the field of the text being edited really is on screen: it grows with the text, so
+	 * the panel of tools is attached to what is measured, not to what was estimated (R-042).
+	 */
+	const [editorRect, setEditorRect] = useState<Rect | null>(null);
+	useLayoutEffect(() => {
+		const el = document.querySelector<HTMLTextAreaElement>(
+			"textarea.text-editor",
+		);
+		if (!el) {
+			if (editorRect) setEditorRect(null);
+			return;
+		}
+		const r = el.getBoundingClientRect();
+		const next = { minX: r.left, minY: r.top, maxX: r.right, maxY: r.bottom };
+		const moved =
+			!editorRect ||
+			(Object.keys(next) as (keyof Rect)[]).some(
+				(k) => Math.abs(next[k] - editorRect[k]) > 0.5,
+			);
+		if (moved) setEditorRect(next);
+	});
+	/** The selection whose panel was put away with the cross; another selection brings it back. */
+	const [closedFor, setClosedFor] = useState<string | null>(null);
 	const [, setTick] = useState(0); // bumped when the view changes, so the text field follows it
 	const ctl = useRef<Controller | null>(null);
 	const syncRef = useRef<SyncClient | null>(null);
@@ -93,6 +145,15 @@ export function BoardView({
 	/** Adds a picked, pasted or dropped image to the board (set up by the effect below). */
 	const insertImage = useRef<(file: Blob) => void>(() => {});
 	const [imageError, setImageError] = useState("");
+	/** The board's name, kept up to date when the owner renames it (R-045). */
+	const [title, setTitle] = useState(boardName);
+	/** Who is on the board (R-046). */
+	const [peers, setPeers] = useState<Peer[]>([]);
+	/** Smooth zoom: eases the view towards a target scale around a screen point (set up below). */
+	const zoomAnim = useRef<{
+		to: (scale: number, sx: number, sy: number) => void;
+		target: () => number;
+	}>({ to: () => {}, target: () => 1 });
 	/** Pastes elements read from the system clipboard (set up by the effect below). */
 	const pasteClip = useRef<(clip: ParsedClip, at?: [number, number]) => void>(
 		() => {},
@@ -117,12 +178,22 @@ export function BoardView({
 		const canvas = new CanvasRenderer(committed, live, viewport, images);
 		canvas.ink = (c) => displayColor(c, currentTheme());
 		rendererRef.current = canvas;
+		// The text font is bundled; once it has loaded the texts are measured and drawn again.
+		void Promise.all(
+			["a", "ł"].map((sample) => document.fonts?.load(textFont(16), sample)),
+		).then(() => {
+			fontsChanged();
+			canvas.fontsChanged();
+		});
 		const sync = new SyncClient(board, {
 			createSocket: connect,
 			self: { authorId, name },
 			onCursors: () => setTick((t) => t + 1),
 			onBackground: setBackground,
+			onPeers: setPeers,
+			onName: setTitle,
 			onUpdate: () => {
+				ctl.current?.refreshSelection();
 				canvas.redraw(board.strokes);
 				canvas.setRemoteLive(sync.liveStrokes());
 			},
@@ -137,6 +208,10 @@ export function BoardView({
 			redraw: (strokes) => canvas.redraw(strokes),
 			setSelection: (frame) => canvas.setSelection(frame),
 			setHighlight: (els) => canvas.setHighlight(els),
+			setEndpoints: (ends) => canvas.setEndpoints(ends),
+			setAdjust: (at) => canvas.setAdjust(at),
+			setVertices: (at) => canvas.setVertices(at),
+			setDrag: (drag) => canvas.setDrag(drag),
 			setMarquee: (rect) => canvas.setMarquee(rect),
 		};
 		const controller = new Controller(
@@ -156,9 +231,30 @@ export function BoardView({
 			live.style.cursor = want;
 		};
 		applyCursor.current();
-		controller.onTextRequest = ([x, y]) => setTextAt({ x, y });
-		controller.onTextEdit = (el) => setEditingText(el);
-		controller.onSelectionChange = () => setTick((t) => t + 1);
+		controller.onTextRequest = ([x, y], area) => {
+			setTextAt({ x, y, area });
+			setDraft({
+				id: "draft",
+				authorId,
+				color: settings.color,
+				size: settings.size,
+				z: 0,
+				kind: "text",
+				text: "Tekst",
+				...(settings.opacity !== undefined && settings.opacity < 1
+					? { opacity: settings.opacity }
+					: {}),
+				points: [[x, y, 0.5]],
+			});
+		};
+		controller.onTextEdit = (el) => {
+			controller.select(el.id); // its panel of tools is then next to it
+			setEditingText(el);
+		};
+		controller.onSelectionChange = () => {
+			setClosedFor(null); // a click on the object brings the panel back after its cross
+			setTick((t) => t + 1);
+		};
 		// A right click (R-029): the menu, but only with a mouse; tablets have none (R-028).
 		controller.onRightClick = (e) => {
 			if (!hasFinePointer()) return;
@@ -167,12 +263,60 @@ export function BoardView({
 			setMenu({ x: e.clientX, y: e.clientY, onObject, at });
 		};
 
+		// Where the user looks is kept on the server, so a reload puts them back there (R-048).
+		let cancelled = false;
+		const viewSaver = createViewSaver((view) => void saveView(boardId, view));
+		let viewReady = false;
 		const changed = () => {
 			canvas.redraw(board.strokes);
 			setScale(viewport.scale);
 			setTick((t) => t + 1);
+			if (viewReady)
+				viewSaver.schedule({
+					x: viewport.x,
+					y: viewport.y,
+					scale: viewport.scale,
+				});
 		};
+		void loadView(boardId).then((saved) => {
+			if (cancelled) return;
+			if (saved) {
+				viewport.x = saved.x;
+				viewport.y = saved.y;
+				viewport.scale = saved.scale;
+				viewSaver.known(saved);
+			}
+			viewReady = true;
+			canvas.redraw(board.strokes);
+			setScale(viewport.scale);
+			setTick((t) => t + 1);
+		});
+		const leaving = () => viewSaver.flush();
+		addEventListener("pagehide", leaving);
 		viewChanged.current = changed;
+		// Zoom eases towards its target one frame at a time, so the percent runs on smoothly.
+		const anim = { target: viewport.scale, sx: 0, sy: 0, raf: 0, last: 0 };
+		const frame = (now: number) => {
+			const dt = Math.min(now - anim.last, 100);
+			anim.last = now;
+			const next = stepZoom(viewport.scale, anim.target, dt);
+			viewport.setScaleAt(anim.sx, anim.sy, next);
+			changed();
+			anim.raf = next === anim.target ? 0 : requestAnimationFrame(frame);
+		};
+		zoomAnim.current = {
+			to: (scale, sx, sy) => {
+				anim.target = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale));
+				anim.sx = sx;
+				anim.sy = sy;
+				if (!anim.raf) {
+					anim.last = performance.now();
+					anim.raf = requestAnimationFrame(frame);
+				}
+			},
+			// While it runs, the next zoom builds on where it is going, not where it is.
+			target: () => (anim.raf ? anim.target : viewport.scale),
+		};
 		const gestures = new TouchGestures(
 			viewport,
 			() => controller.busy,
@@ -269,16 +413,17 @@ export function BoardView({
 		const wheel = (e: WheelEvent) => {
 			e.preventDefault(); // otherwise Ctrl + wheel (and trackpad pinch) zooms the whole page
 			const k = e.deltaMode === 1 ? LINE_HEIGHT_PX : 1;
-			if (e.ctrlKey || e.metaKey) {
-				viewport.zoomAt(
-					e.clientX,
-					e.clientY,
-					Math.exp(-e.deltaY * k * WHEEL_ZOOM_SPEED),
-				);
-			} else {
+			if (e.shiftKey && !e.ctrlKey && !e.metaKey) {
+				// Shift moves the board, like the hand tool; the plain wheel zooms.
 				viewport.panBy(-e.deltaX * k, -e.deltaY * k);
+				changed();
+				return;
 			}
-			changed();
+			zoomAnim.current.to(
+				zoomAnim.current.target() * wheelZoomFactor(e.deltaY, e.deltaMode),
+				e.clientX,
+				e.clientY,
+			);
 		};
 		const prevent = (e: Event) => e.preventDefault();
 		// A middle-button press would start the browser's autoscroll instead of panning the board.
@@ -397,8 +542,12 @@ export function BoardView({
 		document.addEventListener("touchmove", prevent, { passive: false });
 
 		return () => {
+			cancelAnimationFrame(anim.raf);
 			sync.close();
 			removeEventListener("resize", resize);
+			cancelled = true;
+			viewSaver.flush();
+			removeEventListener("pagehide", leaving);
 			removeEventListener("keydown", key);
 			removeEventListener("paste", paste);
 			removeEventListener("copy", copy);
@@ -445,10 +594,12 @@ export function BoardView({
 	}, []);
 
 	// The buttons zoom around the centre of the screen.
-	const zoomTo = (next: (current: number) => number) => {
-		viewport.setScaleAt(innerWidth / 2, innerHeight / 2, next(viewport.scale));
-		viewChanged.current();
-	};
+	const zoomTo = (next: (current: number) => number) =>
+		zoomAnim.current.to(
+			next(zoomAnim.current.target()),
+			innerWidth / 2,
+			innerHeight / 2,
+		);
 
 	const canReadClipboard =
 		typeof navigator !== "undefined" &&
@@ -543,6 +694,63 @@ export function BoardView({
 		];
 	};
 
+	/** A rectangle of board units as one of screen pixels. */
+	const onScreen = (b: Rect): Rect => {
+		const [minX, minY] = viewport.toScreen(b.minX, b.minY);
+		const [maxX, maxY] = viewport.toScreen(b.maxX, b.maxY);
+		return { minX, minY, maxX, maxY };
+	};
+	// The panel of tools is attached to what is being edited: the text being typed (its look is
+	// the draft), or else the selection; it steps aside while the pointer is down (R-042).
+	const typing = textAt !== null && draft !== null;
+	const draftBox: Rect | null =
+		textAt && draft
+			? (() => {
+					const [x, y] = viewport.toScreen(textAt.x, textAt.y);
+					const w = textAt.area ? textAt.area.w * viewport.scale : 240;
+					const h = Math.max(
+						textAt.area ? textAt.area.h * viewport.scale : 0,
+						fontSizeOf(draft) * viewport.scale * 1.6,
+					);
+					return { minX: x, minY: y, maxX: x + w, maxY: y + h };
+				})()
+			: null;
+	const selectionBox = ctl.current?.selectionBounds();
+	/** The text being edited as it is on the board now, so the panel's changes show in the field. */
+	const liveText = editingText
+		? ctl.current?.selection.find((s) => s.id === editingText.id)
+		: undefined;
+	const selectionKey = (ctl.current?.selection ?? [])
+		.map((s) => s.id)
+		.join(",");
+	const panelElements = typing
+		? [draft as Stroke]
+		: ctl.current?.busy || (closedFor !== null && closedFor === selectionKey)
+			? []
+			: (ctl.current?.selection ?? []);
+	const panelAnchor =
+		typing || editingText
+			? (editorRect ?? draftBox)
+			: selectionBox
+				? onScreen(selectionBox)
+				: null;
+	/** A change in the panel: to the text being typed, or to the selection. */
+	const changeStyle = (patch: StylePatch, preview: boolean) => {
+		if (typing) {
+			setDraft(applyStyle(draft as Stroke, patch));
+		} else if (preview) {
+			ctl.current?.previewStyle(patch);
+		} else {
+			ctl.current?.setProps(patch);
+		}
+		setTick((t) => t + 1);
+		// The text keeps being edited while the panel is used.
+		if (typing || editingText)
+			document
+				.querySelector<HTMLTextAreaElement>("textarea.text-editor")
+				?.focus();
+	};
+
 	return (
 		<>
 			<div class="board-bg" data-background={background} />
@@ -563,8 +771,14 @@ export function BoardView({
 							editingText.points[0][1],
 						)[1]
 					}
-					fontSize={fontSizeOf(editingText) * viewport.scale}
-					color={displayColor(editingText.color, currentTheme())}
+					fontSize={fontSizeOf(liveText ?? editingText) * viewport.scale}
+					color={displayColor((liveText ?? editingText).color, currentTheme())}
+					onResize={() => setTick((t) => t + 1)}
+					width={
+						(liveText ?? editingText).width === undefined
+							? undefined
+							: ((liveText ?? editingText).width as number) * viewport.scale
+					}
 					initialText={editingText.text ?? ""}
 					onCommit={(text) => {
 						ctl.current?.commitText(editingText.id, text);
@@ -574,52 +788,75 @@ export function BoardView({
 				/>
 			)}
 			<PropertiesPanel
-				elements={ctl.current?.selection ?? []}
+				elements={panelElements}
 				colors={COLORS}
+				palette={[...COLORS, ...MORE_COLORS]}
+				anchor={panelAnchor}
+				onClose={typing ? undefined : () => setClosedFor(selectionKey)}
 				display={(c) => displayColor(c, currentTheme())}
-				onPreview={(patch) => {
-					ctl.current?.previewStyle(patch);
-					setTick((t) => t + 1);
-				}}
-				onChange={(patch) => {
-					ctl.current?.setProps(patch);
-					setTick((t) => t + 1);
-				}}
+				onPreview={(patch) => changeStyle(patch, true)}
+				onChange={(patch) => changeStyle(patch, false)}
 			/>
 			{textAt && (
 				<TextEditor
 					key={`${textAt.x},${textAt.y}`}
 					x={viewport.toScreen(textAt.x, textAt.y)[0]}
 					y={viewport.toScreen(textAt.x, textAt.y)[1]}
-					fontSize={fontSizeFor(settings.size) * viewport.scale}
-					color={displayColor(settings.color, theme)}
+					fontSize={
+						(draft ? fontSizeOf(draft) : fontSizeFor(settings.size)) *
+						viewport.scale
+					}
+					color={displayColor(draft?.color ?? settings.color, theme)}
+					onResize={() => setTick((t) => t + 1)}
+					width={textAt.area ? textAt.area.w * viewport.scale : undefined}
+					minHeight={textAt.area ? textAt.area.h * viewport.scale : undefined}
 					onCommit={(text) => {
-						ctl.current?.addText(text, textAt.x, textAt.y);
+						ctl.current?.addText(text, textAt.x, textAt.y, textAt.area?.w, {
+							color: draft?.color,
+							size: draft?.size,
+							fontSize: draft?.fontSize,
+							opacity: draft?.opacity,
+						});
 						setTextAt(null);
+						setDraft(null);
 					}}
-					onCancel={() => setTextAt(null)}
+					onCancel={() => {
+						setTextAt(null);
+						setDraft(null);
+					}}
 				/>
 			)}
 			<Cursors cursors={syncRef.current?.cursors() ?? []} viewport={viewport} />
-			<Toolbar
-				settings={settings}
-				onToolChange={() => {
-					// Choosing a drawing tool lets go of the selection, so colour and width are back.
-					if (dropsSelection(settings.tool)) ctl.current?.select(null);
-					applyCursor.current();
-				}}
-				hasSelection={(ctl.current?.selection.length ?? 0) > 0}
-				images={{
-					fine: hasFinePointer(),
-					hasSelection: (ctl.current?.selection.length ?? 0) > 0,
-					canPaste: canReadClipboard,
-					onFile: (file) => insertImage.current(file),
-					onPaste: () => pasteFromClipboard(),
-					onDelete: () => ctl.current?.deleteSelected(),
-				}}
-				onUndo={() => ctl.current?.undo()}
-				onRedo={() => ctl.current?.redo()}
-			/>
+			<div class="topbar">
+				<BoardTitle
+					name={title}
+					editable={!!onRename}
+					onRename={async (n) => {
+						await onRename?.(n);
+						setTitle(n);
+					}}
+				/>
+				<Toolbar
+					settings={settings}
+					onToolChange={() => {
+						// Choosing a drawing tool lets go of the selection, so colour and width are back.
+						if (dropsSelection(settings.tool)) ctl.current?.select(null);
+						applyCursor.current();
+					}}
+					hasSelection={(ctl.current?.selection.length ?? 0) > 0}
+					images={{
+						fine: hasFinePointer(),
+						hasSelection: (ctl.current?.selection.length ?? 0) > 0,
+						canPaste: canReadClipboard,
+						onFile: (file) => insertImage.current(file),
+						onPaste: () => pasteFromClipboard(),
+						onDelete: () => ctl.current?.deleteSelected(),
+					}}
+					onUndo={() => ctl.current?.undo()}
+					onRedo={() => ctl.current?.redo()}
+				/>
+				<Participants peers={peers} selfId={authorId} />
+			</div>
 			{menu && (
 				<ContextMenu
 					x={menu.x}

@@ -24,6 +24,33 @@ const KINDS: ElementKind[] = [
 	"trapezoid",
 	"rhombus",
 	"parallelogram",
+	"triangle",
+	"righttriangle",
+	"righttrapezoid",
+	"pentagon",
+	"hexagon",
+	"octagon",
+	"star",
+	"roundrect",
+	"semicircle",
+	"quadrant",
+	"cube",
+	"cuboid",
+	"cylinder",
+	"parallelepiped",
+	"pyramid",
+	"cone",
+	"sphere",
+	"tetrahedron",
+	"hexprism",
+	"octahedron",
+	"pyramidfrustum",
+	"conefrustum",
+	"sine",
+	"bell",
+	"scurve",
+	"parabola",
+	"axes",
 	"text",
 	"image",
 ];
@@ -84,6 +111,27 @@ function cleanElement(raw: unknown): ClipElement | null {
 	if (raw.dash !== undefined) {
 		if (typeof raw.dash !== "string" || !DASHES.includes(raw.dash)) return null;
 		out.dash = raw.dash as ClipElement["dash"];
+	}
+	if (raw.adj !== undefined) {
+		if (!isNum(raw.adj)) return null;
+		out.adj = raw.adj;
+	}
+	if (raw.verts !== undefined) {
+		const v = raw.verts;
+		if (
+			!Array.isArray(v) ||
+			v.length < 3 ||
+			v.length > 64 ||
+			!v.every(
+				(p) => Array.isArray(p) && p.length === 2 && isNum(p[0]) && isNum(p[1]),
+			)
+		)
+			return null;
+		out.verts = v.map((p) => [p[0], p[1]] as [number, number]);
+	}
+	if (raw.width !== undefined) {
+		if (!isNum(raw.width) || raw.width <= 0) return null;
+		out.width = raw.width;
 	}
 	for (const key of ["rot", "fontSize"] as const) {
 		if (raw[key] !== undefined) {

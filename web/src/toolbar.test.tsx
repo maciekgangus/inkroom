@@ -124,9 +124,9 @@ describe("Toolbar", () => {
 
 	test("picking a colour keeps a shape or text tool, but leaves the eraser and the hand", () => {
 		click("shape");
-		click(`color ${COLORS[3]}`);
+		click(`color ${COLORS[2]}`);
 		expect(settings.tool).toBe("shape");
-		expect(settings.color).toBe(COLORS[3]);
+		expect(settings.color).toBe(COLORS[2]);
 		click("text");
 		click(`color ${COLORS[1]}`);
 		expect(settings.tool).toBe("text");
@@ -154,7 +154,7 @@ describe("Toolbar", () => {
 		expect(onRedo).toHaveBeenCalledOnce();
 	});
 
-	test("hides colour and size while something is selected, the properties panel owns them", () => {
+	test("keeps colour and size in place, dimmed, while something is selected (the panel owns them then)", () => {
 		expect(root.querySelector('[aria-label="size 5"]')).not.toBeNull();
 		act(() =>
 			render(
@@ -167,9 +167,9 @@ describe("Toolbar", () => {
 				root,
 			),
 		);
-		expect(root.querySelector('[aria-label^="color "]')).toBeNull();
-		expect(root.querySelector('[aria-label="more colors"]')).toBeNull();
-		expect(root.querySelector('[aria-label="size 5"]')).toBeNull();
+		expect(root.querySelector('[aria-label^="color "]')).not.toBeNull();
+		expect(root.querySelector('[aria-label="size 5"]')).not.toBeNull();
+		expect(root.querySelectorAll(".group.dimmed").length).toBe(2);
 		expect(root.querySelector('[aria-label="select"]')).not.toBeNull();
 		expect(root.querySelector('[aria-label="undo"]')).not.toBeNull();
 	});
@@ -227,7 +227,7 @@ describe("Toolbar", () => {
 			expect(list()).toBeNull();
 		});
 
-		test("clicking the button again opens the list of all five shapes", () => {
+		test("clicking the button again opens the list of all shapes, by category", () => {
 			pressTool("shape");
 			pressTool("shape");
 			expect(list()).not.toBeNull();
@@ -282,6 +282,34 @@ describe("Toolbar", () => {
 		});
 	});
 
+	test("the quick widths, the slider window and the line style list are in the toolbar (R-038)", () => {
+		for (const label of [
+			"size 2",
+			"size 5",
+			"size 10",
+			"stroke settings",
+			"line style",
+		])
+			expect(root.querySelector(`[aria-label="${label}"]`)).not.toBeNull();
+		expect(root.querySelector('[aria-label="natural pen"]')).toBeNull();
+	});
+
+	test("they stay, dimmed, while something is selected", () => {
+		act(() =>
+			render(
+				<Toolbar
+					settings={settings}
+					hasSelection
+					onUndo={onUndo}
+					onRedo={onRedo}
+				/>,
+				root,
+			),
+		);
+		expect(root.querySelector('[aria-label="size 5"]')).not.toBeNull();
+		expect(root.querySelector(".group.dimmed")).not.toBeNull();
+	});
+
 	test("tells its parent when the tool changes, so the board can update the cursor", () => {
 		const onToolChange = vi.fn();
 		act(() =>
@@ -299,35 +327,36 @@ describe("Toolbar", () => {
 		expect(onToolChange).toHaveBeenCalledOnce();
 		expect(settings.tool).toBe("eraser");
 	});
+});
 
-	describe("the natural pen toggle (R-037)", () => {
-		test("is next to the widths, shows its state and switches the style of new strokes", () => {
-			const toggle = root.querySelector(
-				'[aria-label="natural pen"]',
-			) as HTMLElement;
-			expect(toggle).not.toBeNull();
-			expect(toggle.querySelector("svg")).not.toBeNull();
-			expect(toggle.title).toBe("Naturalne pióro");
-			expect(toggle.getAttribute("aria-pressed")).toBe("false");
-			click("natural pen");
-			expect(settings.natural).toBe(true);
-			click("natural pen");
-			expect(settings.natural).toBe(false);
-		});
-
-		test("is hidden while something is selected, like the widths", () => {
-			act(() =>
-				render(
-					<Toolbar
-						settings={settings}
-						hasSelection
-						onUndo={onUndo}
-						onRedo={onRedo}
-					/>,
-					root,
-				),
-			);
-			expect(root.querySelector('[aria-label="natural pen"]')).toBeNull();
-		});
+describe("the colours in the bar", () => {
+	test("three are at hand, the rest are behind the plus", () => {
+		const root = document.createElement("div");
+		const settings: Settings = { tool: "pen", color: "#111111", size: 5 };
+		act(() =>
+			render(
+				<Toolbar settings={settings} onUndo={() => {}} onRedo={() => {}} />,
+				root,
+			),
+		);
+		expect(
+			root.querySelectorAll(
+				".toolbar > .group:nth-child(2) .swatch:not(.more)",
+			),
+		).toHaveLength(3);
+		expect(root.querySelector('[aria-label="color #388e3c"]')).toBeNull();
+		act(() =>
+			(root.querySelector('[aria-label="more colors"]') as HTMLElement).click(),
+		);
+		expect(root.querySelector('[aria-label="color #388e3c"]')).not.toBeNull();
+		expect(root.querySelector('[aria-label="color #f57c00"]')).not.toBeNull();
+		act(() =>
+			(
+				root.querySelector('[aria-label="color #388e3c"]') as HTMLElement
+			).click(),
+		);
+		expect(settings.color).toBe("#388e3c");
+		// the plus now shows the colour that was picked from the palette
+		expect(root.querySelector(".swatch.more.active")).not.toBeNull();
 	});
 });

@@ -89,6 +89,15 @@ func (h *Hub) SetBackground(boardID, value string) {
 	}
 }
 
+// SetName passes a saved rename to the board's room, if anyone is in it.
+func (h *Hub) SetName(boardID, value string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if r := h.rooms[boardID]; r != nil {
+		r.SetName(value)
+	}
+}
+
 // Delete disconnects everyone from the board and discards unsaved changes.
 func (h *Hub) Delete(boardID string) {
 	h.mu.Lock()
