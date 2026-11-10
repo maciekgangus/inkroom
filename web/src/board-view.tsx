@@ -1,9 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
-import {
-	BACKGROUNDS,
-	type Background,
-	backgroundStyle,
-} from "./board/background";
+import { BACKGROUNDS, type Background } from "./board/background";
 import type { Stroke } from "./board/board";
 import { Board } from "./board/board";
 import { CanvasRenderer } from "./board/canvas-renderer";
@@ -353,6 +349,18 @@ export function BoardView({
 		};
 	}, [settings, viewport, boardId, authorId, name, connect]);
 
+	// The grid is drawn on the board canvas (R-032): tell it the kind and the theme's colour.
+	useEffect(() => {
+		const canvas = rendererRef.current;
+		if (!canvas) return;
+		canvas.background = background;
+		canvas.gridColor =
+			getComputedStyle(document.documentElement)
+				.getPropertyValue("--grid")
+				.trim() || canvas.gridColor;
+		canvas.refresh();
+	}, [background, theme]);
+
 	// Whatever changed the tool (a key, the toolbar, adding an image), the cursor follows.
 	useEffect(() => applyCursor.current());
 
@@ -442,11 +450,7 @@ export function BoardView({
 
 	return (
 		<>
-			<div
-				class="board-bg"
-				data-background={background}
-				style={backgroundStyle(background, viewport)}
-			/>
+			<div class="board-bg" data-background={background} />
 			<canvas id="board" ref={committedRef} />
 			<canvas id="live" ref={liveRef} />
 			{editingText && (

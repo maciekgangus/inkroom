@@ -1,4 +1,5 @@
 import { getStroke } from "perfect-freehand";
+import { type Background, drawBackground } from "./background";
 import type { Stroke } from "./board";
 import { intersects, strokeBounds } from "./bounds";
 import type { Renderer } from "./controller";
@@ -146,6 +147,9 @@ export class CanvasRenderer implements Renderer {
 	private marquee: Rect | null = null;
 	/** Maps a stored ink colour to the colour painted (dark mode swaps black and white). */
 	ink: (color: string) => string = (c) => c;
+	/** Which grid to draw under the elements (R-027, R-032) and in which colour. */
+	background: Background = "plain";
+	gridColor = "#dcdee8";
 
 	constructor(
 		private committedCanvas: HTMLCanvasElement,
@@ -192,6 +196,11 @@ export class CanvasRenderer implements Renderer {
 		this.paintLive();
 	}
 
+	/** Repaints with what is already known (after the background or its colour changed). */
+	refresh(): void {
+		this.paint();
+	}
+
 	/** Repaints everything from `strokes` with the current view. */
 	redraw(strokes: Stroke[]): void {
 		this.strokes = strokes;
@@ -223,6 +232,15 @@ export class CanvasRenderer implements Renderer {
 		const ctx = this.committed;
 		if (!ctx) return;
 		this.begin(ctx);
+		drawBackground(
+			ctx,
+			this.background,
+			this.viewport,
+			innerWidth,
+			innerHeight,
+			window.devicePixelRatio || 1,
+			this.gridColor,
+		);
 		const view = this.viewport.worldRect(innerWidth, innerHeight);
 		for (const s of this.strokes) {
 			let c = this.cache.get(s);
