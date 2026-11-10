@@ -204,6 +204,7 @@ export function BoardView({
 			setSelection: (frame) => canvas.setSelection(frame),
 			setHighlight: (els) => canvas.setHighlight(els),
 			setEndpoints: (ends) => canvas.setEndpoints(ends),
+			setAdjust: (at) => canvas.setAdjust(at),
 			setDrag: (drag) => canvas.setDrag(drag),
 			setMarquee: (rect) => canvas.setMarquee(rect),
 		};

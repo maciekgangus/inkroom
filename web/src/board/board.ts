@@ -63,6 +63,11 @@ export interface Stroke {
 	opacity?: number;
 	/** Font size of a text in board units; missing means the size table value. */
 	fontSize?: number;
+	/**
+	 * The parameter of an adjustable shape (R-041): the slant of a trapezoid or parallelogram,
+	 * the apex of a triangle, the radius of a rounded rectangle; missing means the usual look.
+	 */
+	adj?: number;
 	/** Width of a text area in board units: the text wraps to it (R-044); missing for a text at a point. */
 	width?: number;
 	id: string;

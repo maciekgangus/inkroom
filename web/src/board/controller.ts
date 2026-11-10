@@ -13,16 +13,19 @@ import {
 	pointInFrame,
 	ROT_OFFSET_PX,
 } from "./selection-frame";
+import { adjustFromPoint, adjustHandle } from "./shape-parts";
 import type { ShapeChoice } from "./shapes";
 import { applyStyle, type Dash, type StylePatch } from "./style";
 import {
 	bakeRotation,
+	centerOf,
 	lineEnds,
 	rotateEl,
 	rotatePoint,
 	scaleElBy,
 	snapAngle,
 	softSnapAngle,
+	toLocal,
 	translateEl,
 	worldBounds,
 } from "./transform";
@@ -60,6 +63,8 @@ export interface Renderer {
 			offset?: [number, number];
 		} | null,
 	): void;
+	/** Shows the handle of a selected adjustable shape, a board point (null hides it, R-041). */
+	setAdjust?(at: [number, number] | null): void;
 	/** Shows dots at the ends of a selected line, to drag them (null hides them, R-041). */
 	setEndpoints?(ends: [number, number][] | null): void;
 	/** Makes the selected elements glow (an empty list clears it). */
@@ -104,6 +109,11 @@ type Edit =
 			frame: Frame;
 			anchor: Vec;
 			handle: Vec;
+	  }
+	| {
+			mode: "adjust";
+			originals: Stroke[];
+			drafts: Stroke[];
 	  }
 	| {
 			mode: "endpoint";
@@ -653,6 +663,24 @@ export class Controller {
 		this.showSelection(this.selection);
 	}
 
+	/**
+	 * Where the handle of the lone selected adjustable shape is on the board (its turn applied),
+	 * or null when the selection has none (R-041).
+	 */
+	private adjustAt(els: Stroke[]): [number, number] | null {
+		if (els.length !== 1) return null;
+		const [el] = els;
+		const [a, b] = el.points;
+		if (!a || !b) return null;
+		const h = adjustHandle(
+			el.kind ?? "stroke",
+			[a[0], a[1]],
+			[b[0], b[1]],
+			el.adj,
+		);
+		return h ? rotatePoint(h, centerOf(el), el.rot ?? 0) : null;
+	}
+
 	/** The frame of a selection; a lone line, which has no height, gets one a little wider. */
 	private frameFor(els: Stroke[], rot: number): Frame | null {
 		const f = frameOf(els, rot);
@@ -667,6 +695,7 @@ export class Controller {
 		// A lone line has dots at its ends instead of a frame (R-041).
 		const lone = els.length === 1 && els[0].kind === "line";
 		this.renderer.setEndpoints?.(lone ? lineEnds(els[0]) : null);
+		this.renderer.setAdjust?.(this.adjustAt(els));
 		this.renderer.setSelection?.(this.frameFor(els, rot));
 	}
 
@@ -674,6 +703,14 @@ export class Controller {
 		const p = this.viewport.toWorld(e.clientX, e.clientY);
 		const px = 1 / this.viewport.scale;
 		const sel = this.selection;
+		const adjustPoint = this.adjustAt(sel);
+		if (
+			adjustPoint &&
+			Math.hypot(p[0] - adjustPoint[0], p[1] - adjustPoint[1]) <= HANDLE_PX * px
+		) {
+			this.edit = { mode: "adjust", originals: sel, drafts: sel };
+			return;
+		}
 		if (sel.length === 1 && sel[0].kind === "line") {
 			const ends = lineEnds(sel[0]);
 			for (const i of [0, 1] as const) {
@@ -772,6 +809,22 @@ export class Controller {
 			const dy = p[1] - edit.start[1];
 			offset = [dx, dy];
 			edit.drafts = edit.originals.map((el) => translateEl(el, dx, dy));
+		} else if (edit.mode === "adjust") {
+			const [orig] = edit.originals;
+			const kind = orig.kind ?? "stroke";
+			const [a, b] = orig.points;
+			const A: Vec = [a[0], a[1]];
+			const B: Vec = [b[0], b[1]];
+			const next = adjustFromPoint(kind, A, B, toLocal(orig, [p[0], p[1]]));
+			const now = adjustFromPoint(
+				kind,
+				A,
+				B,
+				adjustHandle(kind, A, B, orig.adj) ?? A,
+			);
+			// Not moved off where it already is: leave the shape (and its default) alone.
+			edit.drafts =
+				Math.abs(next - now) < 1e-9 ? [orig] : [{ ...orig, adj: next }];
 		} else if (edit.mode === "endpoint") {
 			const [orig] = edit.originals;
 			const fixed = orig.points[edit.index === 0 ? 1 : 0];

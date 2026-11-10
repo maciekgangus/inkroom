@@ -259,4 +259,30 @@ describe("rehomeImages", () => {
 		expect(bad(-5)).toBeNull();
 		expect(bad(0)).toBeNull();
 	});
+
+	test("the parameter of an adjustable shape travels, only a number", () => {
+		const trapezoid: Stroke = { ...rect, kind: "trapezoid", adj: 0.4 };
+		expect(
+			parseClipboard(serializeSelection([trapezoid], "b"))?.elements[0].adj,
+		).toBe(0.4);
+		const bad = parseClipboard(
+			JSON.stringify({
+				inkroom: 1,
+				board: "b",
+				elements: [
+					{
+						color: "#000",
+						size: 2,
+						kind: "trapezoid",
+						adj: "wide",
+						points: [
+							[0, 0, 0.5],
+							[9, 9, 0.5],
+						],
+					},
+				],
+			}),
+		);
+		expect(bad).toBeNull();
+	});
 });

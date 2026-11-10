@@ -57,6 +57,7 @@ describe("Controller selection look (R-034)", () => {
 			setHighlight: vi.fn(),
 			setEndpoints: vi.fn(),
 			setDrag: vi.fn(),
+			setAdjust: vi.fn(),
 		};
 		const settings: Settings = { tool: "select", color: "#111", size: 4 };
 		c = new Controller(

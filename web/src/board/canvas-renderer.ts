@@ -225,6 +225,8 @@ export class CanvasRenderer implements Renderer {
 	private raf = 0;
 	/** The ends of a selected line, drawn as dots to drag (R-041). */
 	private endpoints: [number, number][] | null = null;
+	/** The handle of a selected adjustable shape, drawn as a diamond (R-041). */
+	private adjust: [number, number] | null = null;
 	/** Maps a stored ink colour to the colour painted (dark mode swaps black and white). */
 	ink: (color: string) => string = (c) => c;
 	/** Which grid to draw under the elements (R-027, R-032) and in which colour. */
@@ -261,6 +263,12 @@ export class CanvasRenderer implements Renderer {
 	/** Shows the selection frame, corner handles and rotation handle (null hides them). */
 	setSelection(frame: Frame | null): void {
 		this.selection = frame;
+		this.schedule(false, true);
+	}
+
+	/** Shows the handle of a selected adjustable shape (null hides it). */
+	setAdjust(at: [number, number] | null): void {
+		this.adjust = at;
 		this.schedule(false, true);
 	}
 
@@ -515,6 +523,28 @@ export class CanvasRenderer implements Renderer {
 		ctx.restore();
 	}
 
+	/** A yellow diamond on the vertex a shape's parameter moves: drag it to change the shape. */
+	private drawAdjust(
+		ctx: CanvasRenderingContext2D,
+		[x, y]: [number, number],
+	): void {
+		const px = 1 / this.viewport.scale;
+		const r = (HANDLE_PX / 2 + 1) * px;
+		ctx.save();
+		ctx.lineWidth = 2 * px;
+		ctx.strokeStyle = "#fff";
+		ctx.fillStyle = "#ffb300";
+		ctx.beginPath();
+		ctx.moveTo(x, y - r);
+		ctx.lineTo(x + r, y);
+		ctx.lineTo(x, y + r);
+		ctx.lineTo(x - r, y);
+		ctx.closePath();
+		ctx.fill();
+		ctx.stroke();
+		ctx.restore();
+	}
+
 	/** Dots at the two ends of a line, a constant size on screen: grab one to lengthen or shorten it. */
 	private drawEndpoints(
 		ctx: CanvasRenderingContext2D,
@@ -568,6 +598,7 @@ export class CanvasRenderer implements Renderer {
 		if (!this.drag && this.highlight.length <= GLOW_MAX)
 			for (const s of this.highlight) this.drawGlow(ctx, s);
 		if (this.endpoints) this.drawEndpoints(ctx, this.endpoints);
+		if (this.adjust) this.drawAdjust(ctx, this.adjust);
 		if (this.selection) this.drawFrame(ctx, this.selection);
 		if (this.marquee) this.drawMarquee(ctx, this.marquee);
 	}

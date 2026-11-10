@@ -139,7 +139,12 @@ const SLANT = 0.25;
  * dragging upward turns a trapezoid upside down, dragging to the left mirrors a parallelogram
  * (a rhombus looks the same either way). The element stores only the two corners, in drag order.
  */
-export function polygonPoints(kind: ElementKind, a: Vec, b: Vec): Vec[] {
+export function polygonPoints(
+	kind: ElementKind,
+	a: Vec,
+	b: Vec,
+	slant: number = SLANT,
+): Vec[] {
 	const minX = Math.min(a[0], b[0]);
 	const maxX = Math.max(a[0], b[0]);
 	const minY = Math.min(a[1], b[1]);
@@ -159,17 +164,17 @@ export function polygonPoints(kind: ElementKind, a: Vec, b: Vec): Vec[] {
 			break;
 		case "trapezoid":
 			points = [
-				[minX + SLANT * w, minY],
-				[maxX - SLANT * w, minY],
+				[minX + slant * w, minY],
+				[maxX - slant * w, minY],
 				[maxX, maxY],
 				[minX, maxY],
 			];
 			break;
 		case "parallelogram":
 			points = [
-				[minX + SLANT * w, minY],
+				[minX + slant * w, minY],
 				[maxX, minY],
-				[maxX - SLANT * w, maxY],
+				[maxX - slant * w, maxY],
 				[minX, maxY],
 			];
 			break;

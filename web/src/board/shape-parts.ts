@@ -147,10 +147,10 @@ function obliqueBox(
 }
 
 /** The generators, each in coordinates of its own that `fitted` then stretches over the box. */
-const FIT: Partial<Record<ElementKind, () => ShapeParts>> = {
-	triangle: () => {
+const FIT: Partial<Record<ElementKind, (adj: number) => ShapeParts>> = {
+	triangle: (adj) => {
 		const p: Vec[] = [
-			[50, 0],
+			[adj * 100, 0],
 			[100, 100],
 			[0, 100],
 		];
@@ -164,10 +164,10 @@ const FIT: Partial<Record<ElementKind, () => ShapeParts>> = {
 		];
 		return { lines: [closed(p)], hidden: [], fill: p };
 	},
-	righttrapezoid: () => {
+	righttrapezoid: (adj) => {
 		const p: Vec[] = [
 			[0, 0],
-			[75, 0],
+			[(1 - adj) * 100, 0],
 			[100, 100],
 			[0, 100],
 		];
@@ -413,7 +413,7 @@ const FLIPPABLE: ElementKind[] = [
 ];
 
 /** The shapes that are made in the real coordinates of the box (their curves depend on its size). */
-function direct(kind: ElementKind, b: Box): ShapeParts | null {
+function direct(kind: ElementKind, b: Box, adj: number): ShapeParts | null {
 	const n = 96; // the peaks of the sine (at 1/6, 1/2, 5/6) fall on samples
 	const along = (f: (u: number) => number): Vec[] =>
 		Array.from({ length: n + 1 }, (_, i) => {
@@ -422,7 +422,7 @@ function direct(kind: ElementKind, b: Box): ShapeParts | null {
 		});
 	switch (kind) {
 		case "roundrect": {
-			const r = Math.min(b.w, b.h) * 0.25;
+			const r = Math.min(b.w, b.h) * adj;
 			const corner = (cx: number, cy: number, t0: number) =>
 				arc(cx, cy, r, r, t0, t0 + Math.PI / 2, 8);
 			const p = [
@@ -516,10 +516,11 @@ export function shapeParts(
 	kind: ElementKind | undefined,
 	a: Vec,
 	b: Vec,
+	adj?: number,
 ): ShapeParts | null {
 	if (!kind || !isPolygonKind(kind)) return null;
 	if (kind === "trapezoid" || kind === "rhombus" || kind === "parallelogram") {
-		const poly = polygonPoints(kind, a, b);
+		const poly = polygonPoints(kind, a, b, parameter(kind, adj));
 		return { lines: [closed(poly)], hidden: [], fill: poly };
 	}
 	const x0 = Math.min(a[0], b[0]);
@@ -537,7 +538,8 @@ export function shapeParts(
 		cy: (y0 + y1) / 2,
 	};
 	const make = FIT[kind];
-	let parts = make ? fitted(make(), box) : direct(kind, box);
+	const k = parameter(kind, adj);
+	let parts = make ? fitted(make(k), box) : direct(kind, box, k);
 	if (!parts) return null;
 	if (FLIPPABLE.includes(kind)) {
 		const flipX = b[0] < a[0];
@@ -558,7 +560,95 @@ const cache = new WeakMap<Stroke, ShapeParts | null>();
 export function partsOf(s: Stroke): ShapeParts | null {
 	if (cache.has(s)) return cache.get(s) ?? null;
 	const [a, b] = s.points;
-	const parts = a && b ? shapeParts(s.kind, [a[0], a[1]], [b[0], b[1]]) : null;
+	const parts =
+		a && b ? shapeParts(s.kind, [a[0], a[1]], [b[0], b[1]], s.adj) : null;
 	cache.set(s, parts);
 	return parts;
+}
+
+/** The shapes that have a parameter and so a handle on one of their vertices (R-041). */
+export const ADJUSTABLE: ElementKind[] = [
+	"trapezoid",
+	"parallelogram",
+	"righttrapezoid",
+	"triangle",
+	"roundrect",
+];
+
+/** The usual value of a shape's parameter and the range that looks right. */
+const RANGE: Partial<
+	Record<ElementKind, { def: number; min: number; max: number }>
+> = {
+	trapezoid: { def: 0.25, min: 0, max: 0.5 },
+	parallelogram: { def: 0.25, min: 0, max: 0.9 },
+	righttrapezoid: { def: 0.25, min: 0, max: 0.9 },
+	triangle: { def: 0.5, min: 0, max: 1 },
+	roundrect: { def: 0.25, min: 0, max: 0.5 },
+};
+
+/** The parameter of a shape: the given one kept in range, the usual one if none was given. */
+function parameter(kind: ElementKind, adj: number | undefined): number {
+	const r = RANGE[kind];
+	if (!r) return adj ?? 0;
+	const value = adj === undefined || !Number.isFinite(adj) ? r.def : adj;
+	return Math.min(r.max, Math.max(r.min, value));
+}
+
+/** The box of two corners and which way the shape was dragged (it is turned over or mirrored). */
+function boxOf(a: Vec, b: Vec) {
+	const x0 = Math.min(a[0], b[0]);
+	const x1 = Math.max(a[0], b[0]);
+	const y0 = Math.min(a[1], b[1]);
+	const y1 = Math.max(a[1], b[1]);
+	return {
+		x0,
+		x1,
+		y0,
+		y1,
+		w: x1 - x0,
+		h: y1 - y0,
+		flipX: b[0] < a[0],
+		flipY: b[1] < a[1],
+	};
+}
+
+/**
+ * Where the handle of an adjustable shape sits, on the vertex its parameter moves, before the
+ * element's own turn (null for a shape without one): the top vertex of a trapezoid, a
+ * parallelogram, a right trapezoid or a triangle, and the end of the top arc of a rounded
+ * rectangle. It follows the orientation the shape was drawn in.
+ */
+export function adjustHandle(
+	kind: ElementKind,
+	a: Vec,
+	b: Vec,
+	adj?: number,
+): Vec | null {
+	if (!ADJUSTABLE.includes(kind)) return null;
+	const { x0, x1, y0, y1, w, h, flipX, flipY } = boxOf(a, b);
+	const k = parameter(kind, adj);
+	const x =
+		kind === "righttrapezoid"
+			? x1 - k * w
+			: kind === "roundrect"
+				? x0 + k * Math.min(w, h)
+				: x0 + k * w;
+	return [flipX ? x0 + x1 - x : x, flipY ? y1 : y0];
+}
+
+/** The parameter that puts the handle where the pointer is (the inverse of `adjustHandle`), in range. */
+export function adjustFromPoint(
+	kind: ElementKind,
+	a: Vec,
+	b: Vec,
+	at: Vec,
+): number {
+	const r = RANGE[kind];
+	if (!r) return 0;
+	const { x0, x1, w, h, flipX } = boxOf(a, b);
+	const x = flipX ? x0 + x1 - at[0] : at[0];
+	const size = kind === "roundrect" ? Math.min(w, h) : w;
+	if (size <= 0) return r.def;
+	const k = kind === "righttrapezoid" ? (x1 - x) / size : (x - x0) / size;
+	return Math.min(r.max, Math.max(r.min, k));
 }

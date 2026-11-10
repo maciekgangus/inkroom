@@ -1,6 +1,13 @@
 import { describe, expect, test } from "vitest";
 import type { ElementKind, Stroke } from "./board";
-import { AXES_STEP, partsOf, shapeParts } from "./shape-parts";
+import {
+	ADJUSTABLE,
+	AXES_STEP,
+	adjustFromPoint,
+	adjustHandle,
+	partsOf,
+	shapeParts,
+} from "./shape-parts";
 import { polygonPoints } from "./shapes";
 
 type Vec = [number, number];
@@ -352,5 +359,135 @@ describe("partsOf", () => {
 		expect(partsOf(stroke)).toBe(partsOf(stroke));
 		expect(partsOf({ ...stroke, kind: "rect" })).toBeNull();
 		expect(partsOf({ ...stroke, points: [[0, 0, 0.5]] })).toBeNull();
+	});
+});
+
+describe("adjustable shapes (R-041, phase 2)", () => {
+	const top = (kind: ElementKind, adj?: number, a: Vec = A, b: Vec = B) => {
+		const fill = shapeParts(kind, a, b, adj)?.fill ?? [];
+		return fill
+			.filter((p) => Math.abs(p[1] - Math.min(a[1], b[1])) < 1e-6)
+			.map((p) => p[0])
+			.sort((x, y) => x - y);
+	};
+
+	test("only these shapes have a parameter", () => {
+		for (const kind of [
+			"trapezoid",
+			"parallelogram",
+			"righttrapezoid",
+			"triangle",
+			"roundrect",
+		] as const)
+			expect(ADJUSTABLE.includes(kind)).toBe(true);
+		for (const kind of [
+			"rect",
+			"ellipse",
+			"star",
+			"cube",
+			"sine",
+			"axes",
+			"rhombus",
+		] as const)
+			expect(ADJUSTABLE.includes(kind)).toBe(false);
+	});
+
+	test("without a parameter the shapes are as they were", () => {
+		expect(shapeParts("trapezoid", A, B, undefined)?.fill).toEqual(
+			shapeParts("trapezoid", A, B)?.fill,
+		);
+		expect(top("trapezoid")).toEqual([160, 280]); // 25 % in from each side of the 240 wide box
+	});
+
+	test("the slant of a trapezoid and of a parallelogram", () => {
+		expect(top("trapezoid", 0.1)).toEqual([124, 316]);
+		expect(top("trapezoid", 0)).toEqual([100, 340]); // a rectangle
+		expect(top("parallelogram", 0.5)).toEqual([220, 340]);
+	});
+
+	test("the right trapezoid's slanted side", () => {
+		expect(top("righttrapezoid", 0.5)).toEqual([100, 220]);
+		expect(top("righttrapezoid")).toEqual([100, 280]);
+	});
+
+	test("the apex of a triangle", () => {
+		expect(top("triangle", 0)).toEqual([100]);
+		expect(top("triangle", 1)).toEqual([340]);
+		expect(top("triangle")).toEqual([220]);
+	});
+
+	test("the radius of a rounded rectangle, a share of the shorter side", () => {
+		const small = shapeParts("roundrect", A, B, 0.1)?.fill ?? [];
+		const big = shapeParts("roundrect", A, B, 0.5)?.fill ?? [];
+		// the first point of the outline is where the top left arc ends: 180 * adj in from the corner
+		expect(
+			Math.min(...small.filter((p) => p[1] === 100).map((p) => p[0])),
+		).toBeCloseTo(118);
+		expect(
+			Math.min(
+				...big.filter((p) => Math.abs(p[1] - 100) < 1e-6).map((p) => p[0]),
+			),
+		).toBeCloseTo(190);
+	});
+
+	test("the parameter is kept between what looks right", () => {
+		expect(top("trapezoid", 5)).toEqual(top("trapezoid", 0.5));
+		expect(top("trapezoid", -1)).toEqual(top("trapezoid", 0));
+	});
+});
+
+describe("the handle of an adjustable shape", () => {
+	test("sits on the vertex the parameter moves", () => {
+		expect(adjustHandle("trapezoid", A, B)).toEqual([160, 100]);
+		expect(adjustHandle("trapezoid", A, B, 0.1)).toEqual([124, 100]);
+		expect(adjustHandle("parallelogram", A, B)).toEqual([160, 100]);
+		expect(adjustHandle("righttrapezoid", A, B)).toEqual([280, 100]);
+		expect(adjustHandle("triangle", A, B)).toEqual([220, 100]);
+		expect(adjustHandle("roundrect", A, B)).toEqual([145, 100]); // radius 0.25 of the shorter side, 180
+	});
+
+	test("follows the orientation of the shape", () => {
+		expect(adjustHandle("trapezoid", B, A)).toEqual([280, 280]); // dragged up and left: turned over
+		expect(adjustHandle("triangle", [340, 100], [100, 280], 0.25)).toEqual([
+			280, 100,
+		]); // mirrored
+	});
+
+	test("has nothing to offer for the others", () => {
+		expect(adjustHandle("rect", A, B)).toBeNull();
+		expect(adjustHandle("cube", A, B)).toBeNull();
+	});
+
+	test("moving the handle gives the parameter back, whatever the orientation", () => {
+		for (const [a, b] of [
+			[A, B],
+			[B, A],
+			[
+				[340, 100],
+				[100, 280],
+			],
+			[
+				[100, 280],
+				[340, 100],
+			],
+		] as [Vec, Vec][]) {
+			for (const kind of [
+				"trapezoid",
+				"parallelogram",
+				"righttrapezoid",
+				"triangle",
+				"roundrect",
+			] as const) {
+				const h = adjustHandle(kind, a, b, 0.3) as Vec;
+				expect(adjustFromPoint(kind, a, b, h)).toBeCloseTo(0.3, 6);
+			}
+		}
+	});
+
+	test("is clamped to the range of the shape", () => {
+		expect(adjustFromPoint("trapezoid", A, B, [900, 100])).toBe(0.5);
+		expect(adjustFromPoint("trapezoid", A, B, [-900, 100])).toBe(0);
+		expect(adjustFromPoint("triangle", A, B, [900, 100])).toBe(1);
+		expect(adjustFromPoint("roundrect", A, B, [900, 100])).toBe(0.5);
 	});
 });

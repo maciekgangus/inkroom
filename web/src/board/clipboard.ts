@@ -112,6 +112,10 @@ function cleanElement(raw: unknown): ClipElement | null {
 		if (typeof raw.dash !== "string" || !DASHES.includes(raw.dash)) return null;
 		out.dash = raw.dash as ClipElement["dash"];
 	}
+	if (raw.adj !== undefined) {
+		if (!isNum(raw.adj)) return null;
+		out.adj = raw.adj;
+	}
 	if (raw.width !== undefined) {
 		if (!isNum(raw.width) || raw.width <= 0) return null;
 		out.width = raw.width;
