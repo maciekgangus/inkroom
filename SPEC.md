@@ -32,7 +32,7 @@ Priorytety: P1 do pierwszej lekcji, P2 zaraz po niej, P3 później. Statusy: pro
 | R-009 | Panel twórcy z listą jego tablic (nazwa, data ostatniej zmiany, kopiowanie linku, otwarcie, usunięcie) | P1 | done |
 | R-010 | Nieskończone lub przewijane płótno, przesuwanie i powiększanie | P2 | done |
 | R-011 | Kilka stron (kart) w jednej tablicy | P2 | proposed |
-| R-012 | Narzędzia: linia, prostokąt, okrąg, tekst | P2 | done |
+| R-012 | Narzędzia: linia, prostokąt, elipsa (z Shift okrąg), tekst | P2 | done |
 | R-013 | Wskaźniki kursorów pozostałych osób na tablicy | P2 | done |
 | R-014 | Eksport tablicy do PNG lub PDF | P2 | proposed |
 | R-015 | Wstawianie obrazu (np. zadanie ze zdjęcia) | P3 | done |
@@ -44,6 +44,7 @@ Priorytety: P1 do pierwszej lekcji, P2 zaraz po niej, P3 później. Statusy: pro
 | R-021 | Każdy rysowany element (kreska, linia, prostokąt, okrąg, tekst, obraz) jest obiektem: kreska odręczna to jeden obiekt (zbiór punktów) zaznaczany, przesuwany i kasowany w całości. Narzędzie "Zaznacz" łapie obiekt (klik) lub kilka (ramka, Shift) i pozwala je przesuwać, skalować i obracać; każdy uczestnik z prawem rysowania może edytować cudze obiekty (jak R-004) | P2 | done |
 | R-022 | Edycja właściwości zaznaczonych obiektów: kolor, grubość linii (rozmiar czcionki dla tekstu), styl linii (ciągła, kreskowana, kropkowana), wypełnienie kształtów, przezroczystość, treść tekstu (dwuklik); zmiana jest cofalna (R-008) i widoczna dla wszystkich (R-006) | P2 | done |
 | R-023 | Operacje na zaznaczeniu: usuń, duplikuj, kopiuj i wklej, na wierzch i na spód (kolejność warstw), grupowanie obiektów w stałą grupę | P3 | proposed |
+| R-024 | Ułatwienia rysowania z klawiszem Shift na komputerze: linia przyciąga się do kątów co 15° (0°, 15°, 30°, 45°, 60°, 75°, 90° itd.), prostokąt staje się kwadratem, elipsa (narzędzie owalu rysuje domyślnie elipsę) staje się kołem; na tabletach bez klawiatury (iPad) ułatwień nie ma | P2 | accepted |
 
 ## 4. Wymagania niefunkcjonalne
 Miary to propozycje startowe, do potwierdzenia po pierwszych testach na prawdziwej lekcji.
@@ -91,3 +92,4 @@ Miary to propozycje startowe, do potwierdzenia po pierwszych testach na prawdziw
 - 2026-11-10: R-015 (obrazy) `done` po teście ręcznym: wklejanie, wybór pliku, upuszczanie, zmiana rozmiaru i przesuwanie (operacja `update`), zdjęcia w SQLite; ADR 0007, plan w `docs/plan-images.md`.
 - 2026-11-10: model obiektów: dodano R-021 (zaznaczanie, przesuwanie, skalowanie i obracanie wszystkich elementów), R-022 (edycja właściwości: kolor, grubość, styl, wypełnienie, przezroczystość, tekst), R-023 (usuń, duplikuj, kopiuj, kolejność, grupy); R-004 bez zmian (gumka dalej kasuje cały obiekt, nie obraz).
 - 2026-11-10: R-021 i R-022 `done` po teście ręcznym: zaznaczanie, przesuwanie, skalowanie i obracanie wszystkich elementów, panel właściwości (kolor, grubość, styl, wypełnienie, przezroczystość), edycja tekstu dwuklikiem; ADR 0008, plan w `docs/plan-object-model.md`. R-023 zostaje `proposed`.
+- 2026-11-10: ułatwienia rysowania: dodano R-024 (Shift: kąty co 15°, kwadrat, koło) na prośbę użytkownika; R-012: narzędzie okręgu rysuje elipsę (z Shift okrąg), nowy rodzaj elementu `ellipse` (ADR 0009), stare okręgi (`circle`) nadal działają.
