@@ -30,7 +30,7 @@ export function PropertiesPanel({ elements, colors, onChange }: Props) {
 	const on = (active: boolean) => (active ? "active" : "");
 
 	return (
-		<div class="properties" role="group" aria-label="properties">
+		<div class="properties">
 			{can.color && (
 				<div class="row">
 					{colors.map((c) => (
