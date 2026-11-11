@@ -16,7 +16,11 @@ Testy: `cd server && go test ./...`, `cd web && npm test`, testy iPada w przegl�
 
 ## Na serwerze (homelab)
 
-Nie ten `docker-compose.yml`, tylko [deploy/](deploy/README.md): gotowy obraz z GitHub Container Registry i Cloudflare Tunnel. Obraz powstaje w GitHub Actions z tagu `vX.Y.Z`.
+Nie ten `docker-compose.yml`, tylko [deploy/](deploy/README.md): gotowy obraz z GitHub Container Registry i Cloudflare Tunnel. Obraz powstaje w GitHub Actions z tagu `vX.Y.Z` ([jak wydać](docs/wydawanie-wersji.md)).
+
+## Nowa wersja na serwerze
+
+Merge do `main` niczego nie wdraża. Wydanie to tag: `git tag -a v0.1.1 -m "opis" && git push origin v0.1.1`, a serwer pobierze obraz nocą. Tagi, cofanie wersji i aktualizacja folderu `deploy/`: [docs/wydawanie-wersji.md](docs/wydawanie-wersji.md).
 
 ## Struktura
 

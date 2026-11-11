@@ -4,7 +4,7 @@ Własna, tania tablica interaktywna do prowadzenia korepetycji online, zamiennik
 Źródło prawdy o wymaganiach: @SPEC.md. Decyzje architektoniczne: `docs/decisions/`.
 
 ## Stan projektu
-Wszystkie wymagania z `SPEC.md` są zrobione poza R-005 (Android z rysikiem i tablet graficzny do sprawdzenia na sprzęcie) i R-043 (wydajność dużych tablic, po pomiarach). Stos: własny canvas + Go + SQLite, klient TypeScript + Preact (ADR 0001), synchronizacja ADR 0004. Wdrożenie na homelab: obraz z GHCR i Cloudflare Tunnel (ADR 0003 i 0014, folder `deploy/`). Kopie bazy: Litestream do Cloudflare R2 (ADR 0016, `scripts/test-backup.sh`). Do zrobienia: pierwsze uruchomienie na homelabie i pierwsza lekcja (Etap 4).
+Wszystkie wymagania z `SPEC.md` są zrobione poza R-005 (Android z rysikiem i tablet graficzny do sprawdzenia na sprzęcie) i R-043 (wydajność dużych tablic, po pomiarach). Stos: własny canvas + Go + SQLite, klient TypeScript + Preact (ADR 0001), synchronizacja ADR 0004. **Aplikacja działa na homelabie** pod https://inkroom.lesniakmaciek.dev (obraz z GHCR, tunel Cloudflare, kopie bazy Litestream do R2; ADR 0003, 0014, 0016, folder `deploy/`, wydanie `v0.1.0`). Do zrobienia: sprawdzenie iPadem na danych komórkowych (N-001) i pierwsza lekcja (Etap 4).
 
 ## Priorytety (w tej kolejności)
 1. Responsywność: kreska pojawia się natychmiast lokalnie, u drugiej osoby bez zauważalnego opóźnienia. Wygoda użytkownika ponad wszystko.
@@ -34,7 +34,7 @@ Stos: serwer w Go (`server/`), klient w TypeScript + Vite + Preact (`web/`). Kom
 - Nie czytaj ani nie ruszaj plików `.env`.
 - Lokalnie `docker compose up` ładuje `docker-compose.override.yml`, który tworzy publiczne konto testowe (`test@example.test`, hasło w tym pliku). Na serwerze uruchamiać z jawnym `-f docker-compose.yml`, żeby tego konta tam nie było.
 - Rejestracja wymaga captchy Cloudflare Turnstile (ADR 0013): lokalnie `docker-compose.override.yml` ma opublikowane klucze testowe, na serwerze trzeba ustawić `TURNSTILE_SITE_KEY` i `TURNSTILE_SECRET` w `.env` (bez sekretu rejestracja jest zamknięta). Logowanie: e-mail lub nazwa użytkownika; konto testowe `test@example.test` loguje się też jako `test`.
-- Obraz i wydania (ADR 0014): GitHub Actions testuje i publikuje `ghcr.io/maciekgangus/inkroom` (`:main` i `:sha-<commit>` z `main`, `:latest` i `:X.Y.Z` z tagu `vX.Y.Z`); VPS (homelab) śledzi `:latest` przez timer z `deploy/`; tunel Cloudflare i instrukcja: `deploy/README.md`, ADR 0003. Wydanie: `git tag vX.Y.Z && git push --tags` po zmergowaniu do `main`. Skrypty VPS testuje `sh deploy/test-update.sh`.
+- Obraz i wydania (ADR 0014): GitHub Actions testuje i publikuje `ghcr.io/maciekgangus/inkroom` (`:main` i `:sha-<commit>` z `main`, `:latest` i `:X.Y.Z` z tagu `vX.Y.Z`); serwer śledzi `:latest`. **Merge do `main` niczego nie wdraża**: wydanie to `git tag -a vX.Y.Z -m "opis" && git push origin vX.Y.Z` (dokładny opis, cofanie i kopiowanie folderu `deploy/`: `docs/wydawanie-wersji.md`). Homelab: `deploy/README.md`, ADR 0003 i 0016; skrypty testują `sh deploy/test-update.sh` i `sh scripts/test-backup.sh`.
 - Wdrożenie: docker compose, najpierw lokalnie, później na domowym VPS (ADR 0002). Sekrety w `.env`, nigdy w obrazach ani w repo.
 - Plugin lub serwer MCP dodawaj dopiero pod konkretny problem, a po dodaniu sprawdź `/context`.
 

@@ -21,15 +21,14 @@ Pakiet jest **prywatny**: pobranie wymaga zalogowania Dockera do `ghcr.io` (krok
 | `:main` | najnowszy stan gałęzi `main` (każdy merge); **jest już dostępny** |
 | `:sha-1a2b3c4` | konkretny commit z `main` |
 | `:0.1.0`, `:0.1` | wydanie (powstaje z tagu git `v0.1.0`) |
-| `:latest` | ostatnie wydanie; **pojawi się dopiero po pierwszym tagu `v...`** |
+| `:latest` | ostatnie wydanie (**to śledzi serwer**) |
 
-Sprawdzenie (po zalogowaniu): `docker pull ghcr.io/maciekgangus/inkroom:main`. Do czasu pierwszego wydania ustaw w
-`.env` `INKROOM_TAG=main`; po wydaniu usuń tę linię, a serwer będzie śledził `:latest`.
+Sprawdzenie (po zalogowaniu): `docker pull ghcr.io/maciekgangus/inkroom:main`. Wydanie `v0.1.0` już istnieje, więc `:latest` jest dostępny i `INKROOM_TAG` w `.env` nie jest potrzebny (serwer śledzi `:latest`).
 
-Wydanie (na swoim komputerze, po zmergowaniu do `main`):
+**Nowe wersje** (tagi, kiedy serwer je dostaje, cofanie) opisuje [docs/wydawanie-wersji.md](../docs/wydawanie-wersji.md). W skrócie, na swoim komputerze po zmergowaniu do `main`:
 
 ```sh
-git tag v0.1.0 && git push --tags
+git tag -a v0.1.1 -m "krótki opis" && git push origin v0.1.1
 ```
 
 ### Ustawienie pakietu jako prywatnego (raz, w przeglądarce)
@@ -86,7 +85,7 @@ sudo mkdir -p /opt/inkroom && sudo chown "$USER" /opt/inkroom
 scp -r deploy/* uzytkownik@homelab:/opt/inkroom/
 cd /opt/inkroom
 cp env.template .env
-nano .env          # TUNNEL_TOKEN, TURNSTILE_*, R2_* (klucze kopii, punkt 5); INKROOM_TAG=main tylko przed pierwszym wydaniem
+nano .env          # TUNNEL_TOKEN, TURNSTILE_*, R2_* (klucze kopii, punkt 5); INKROOM_TAG tylko do przypięcia wersji
 chmod 600 .env
 docker compose up -d
 ```
@@ -105,20 +104,33 @@ urządzeniach (WebSocket przez tunel).
 
 ## 4. Automatyczne aktualizacje (raz)
 
+Z poziomu folderu `deploy/` na serwerze. Plik usługi trzeba dopasować: ścieżkę folderu (w pliku jest
+`/opt/inkroom`) i **użytkownika** (w pliku `CHANGE_ME`), który ma grupę `docker` i jest zalogowany do
+`ghcr.io`, bo inaczej `update.sh` nie pobierze prywatnego obrazu. Dwie podmiany robi `sed`:
+
 ```sh
 sudo cp inkroom-update.service inkroom-update.timer /etc/systemd/system/
+sudo sed -i "s|/opt/inkroom|$PWD|g; s|CHANGE_ME|$USER|" /etc/systemd/system/inkroom-update.service
+systemctl cat inkroom-update.service       # sprawdź User= i ścieżki
 sudo systemctl daemon-reload
 sudo systemctl enable --now inkroom-update.timer
 systemctl list-timers inkroom-update.timer
 ```
 
-Jeśli folder jest gdzie indziej niż `/opt/inkroom`, popraw ścieżki w `inkroom-update.service`.
-Timer co noc o 4:00 uruchamia `update.sh`: pobiera nowsze obrazy (aplikacji i `cloudflared`),
-podnosi kontener, sprawdza `/healthz` i **sam wraca do poprzedniego obrazu**, gdy nowy nie wstanie
-w 30 s. Od razu: `sudo systemctl start inkroom-update.service`.
+Sprawdzenie od razu, bez czekania do nocy:
 
-Przypięcie albo wycofanie wersji: `INKROOM_TAG=0.0.9 ./update.sh` (lub wpis w `.env`).
-Migracje bazy idą tylko do przodu, więc przed wydaniem zmieniającym schemat upewnij się, że kopie R2 działają (punkt 5).
+```sh
+sudo systemctl start inkroom-update.service
+journalctl -u inkroom-update.service -n 30 --no-pager   # "already up to date (…:latest)"
+```
+
+Timer co noc o 4:00 (czas serwera, z losowym opóźnieniem do 10 minut) uruchamia `update.sh`: pobiera
+nowsze obrazy (aplikacji i `cloudflared`), podnosi kontener, sprawdza `/healthz` i **sam wraca do
+poprzedniego obrazu**, gdy nowy nie wstanie w 30 s. Przypięcie albo cofnięcie wersji:
+`INKROOM_TAG=0.1.0 ./update.sh` (lub wpis w `.env`), opis w
+[docs/wydawanie-wersji.md](../docs/wydawanie-wersji.md).
+Migracje bazy idą tylko do przodu, więc przed wydaniem zmieniającym schemat upewnij się, że kopie R2
+działają (punkt 5).
 
 ## 5. Kopie zapasowe bazy (Litestream i Cloudflare R2)
 
