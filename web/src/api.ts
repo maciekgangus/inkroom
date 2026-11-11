@@ -12,6 +12,8 @@ export interface BoardSummary {
 	id: string;
 	name: string;
 	updatedAt: string;
+	/** The owner's username; given for other people's boards only (R-051). */
+	owner?: string;
 }
 
 export interface BoardList {
@@ -95,6 +97,10 @@ export const deleteBoard = (id: string) =>
 
 export const copyBoard = (id: string) =>
 	request<{ id: string; name: string }>("POST", `/api/boards/${id}/copy`, {});
+
+/** Takes a board off my list of boards I was invited to; the board itself stays (R-051). */
+export const forgetBoard = (id: string) =>
+	request<void>("DELETE", `/api/boards/${id}/visit`, {});
 
 export const setBackground = (id: string, background: string) =>
 	request<void>("PUT", `/api/boards/${id}/background`, { background });

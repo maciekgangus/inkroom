@@ -135,7 +135,15 @@ export function Panel({ username, navigate, onLogout }: Props) {
 					<h2>Tablice, do których mam dostęp</h2>
 					<ul class="boards">
 						{visited.map((b) => (
-							<BoardRow key={b.id} board={b} mine={false} navigate={navigate} />
+							<BoardRow
+								key={b.id}
+								board={b}
+								mine={false}
+								navigate={navigate}
+								onForgotten={() =>
+									setVisited(visited.filter((x) => x.id !== b.id))
+								}
+							/>
 						))}
 					</ul>
 				</>
@@ -150,6 +158,8 @@ interface RowProps {
 	navigate: (to: string) => void;
 	onRenamed?: (name: string) => void;
 	onDeleted?: () => void;
+	/** Called after a joined board was dropped from the list (R-051). */
+	onForgotten?: () => void;
 	/** Called with the new board after the owner made a copy (R-020). */
 	onCopied?: (copy: { id: string; name: string }) => void;
 }
@@ -161,6 +171,7 @@ function BoardRow({
 	onRenamed,
 	onDeleted,
 	onCopied,
+	onForgotten,
 }: RowProps) {
 	const [renaming, setRenaming] = useState(false);
 	const [confirming, setConfirming] = useState(false);
@@ -182,6 +193,15 @@ function BoardRow({
 	const copy = async () => {
 		try {
 			onCopied?.(await api.copyBoard(board.id));
+		} catch (e) {
+			setError(e instanceof Error ? e.message : "Błąd");
+		}
+	};
+
+	const forget = async () => {
+		try {
+			await api.forgetBoard(board.id);
+			onForgotten?.();
 		} catch (e) {
 			setError(e instanceof Error ? e.message : "Błąd");
 		}
@@ -213,6 +233,9 @@ function BoardRow({
 			) : (
 				<span class="name">{board.name}</span>
 			)}
+			{!mine && board.owner && (
+				<span class="muted owner">Tablica: {board.owner}</span>
+			)}
 			<span class="muted">
 				{new Date(board.updatedAt).toLocaleString("pl-PL")}
 			</span>
@@ -234,6 +257,11 @@ function BoardRow({
 				{mine && !renaming && (
 					<button type="button" onClick={() => setRenaming(true)}>
 						Zmień nazwę
+					</button>
+				)}
+				{!mine && (
+					<button type="button" onClick={forget}>
+						Usuń z listy
 					</button>
 				)}
 				{mine &&
