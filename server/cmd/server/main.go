@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"mime"
 	"net/http"
 	"os"
 	"os/signal"
@@ -20,6 +21,11 @@ func getenv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func init() {
+	// Go does not know the web app manifest's type; without it the file is served as plain text.
+	_ = mime.AddExtensionType(".webmanifest", "application/manifest+json")
 }
 
 func main() {

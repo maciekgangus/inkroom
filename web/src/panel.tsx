@@ -3,6 +3,7 @@ import type { BoardSummary } from "./api";
 import * as api from "./api";
 import { BoardPreview } from "./board-preview";
 import { Icon, type IconName } from "./icon";
+import { Logo } from "./logo";
 
 const VIEW_KEY = "inkroom.boardView";
 type View = "list" | "tiles";
@@ -96,7 +97,9 @@ export function Panel({ username, navigate, onLogout }: Props) {
 	return (
 		<main class="panel">
 			<header class="row between">
-				<h1 class="brand">Inkroom</h1>
+				<h1 class="brand">
+					<Logo />
+				</h1>
 				<span class="row">
 					<span class="chip">{username}</span>
 					<button type="button" onClick={logout}>

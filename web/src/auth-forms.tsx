@@ -1,6 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import * as api from "./api";
 import { Captcha } from "./captcha";
+import { Logo } from "./logo";
 
 interface LoginProps {
 	onAuth: (account: api.Account) => void;
@@ -31,7 +32,9 @@ export function AuthForms({ onAuth, navigate }: LoginProps) {
 
 	return (
 		<main class="center">
-			<h1 class="brand">Inkroom</h1>
+			<h1 class="brand">
+				<Logo height={44} />
+			</h1>
 			<form
 				class="stack"
 				onSubmit={(e) => {
@@ -116,7 +119,9 @@ export function RegisterPage({ navigate }: RegisterProps) {
 	if (siteKey === "") {
 		return (
 			<main class="center">
-				<h1 class="brand">Inkroom</h1>
+				<h1 class="brand">
+					<Logo height={44} />
+				</h1>
 				<p class="muted">Rejestracja jest chwilowo niedostępna.</p>
 				<button type="button" onClick={() => navigate("/")}>
 					Mam już konto
@@ -126,7 +131,9 @@ export function RegisterPage({ navigate }: RegisterProps) {
 	}
 	return (
 		<main class="center">
-			<h1 class="brand">Inkroom</h1>
+			<h1 class="brand">
+				<Logo height={44} />
+			</h1>
 			<form
 				class="stack"
 				onSubmit={(e) => {
