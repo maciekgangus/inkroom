@@ -86,7 +86,7 @@ sudo mkdir -p /opt/inkroom && sudo chown "$USER" /opt/inkroom
 scp -r deploy/* uzytkownik@homelab:/opt/inkroom/
 cd /opt/inkroom
 cp env.template .env
-nano .env          # wpisz TUNNEL_TOKEN, TURNSTILE_SITE_KEY, TURNSTILE_SECRET (i INKROOM_TAG=main przed pierwszym wydaniem)
+nano .env          # TUNNEL_TOKEN, TURNSTILE_*, R2_* (klucze kopii, punkt 5); INKROOM_TAG=main tylko przed pierwszym wydaniem
 chmod 600 .env
 docker compose up -d
 ```
@@ -118,23 +118,45 @@ podnosi kontener, sprawdza `/healthz` i **sam wraca do poprzedniego obrazu**, gd
 w 30 s. Od razu: `sudo systemctl start inkroom-update.service`.
 
 Przypięcie albo wycofanie wersji: `INKROOM_TAG=0.0.9 ./update.sh` (lub wpis w `.env`).
-Migracje bazy idą tylko do przodu, więc przed wydaniem zmieniającym schemat zrób kopię (niżej).
+Migracje bazy idą tylko do przodu, więc przed wydaniem zmieniającym schemat upewnij się, że kopie R2 działają (punkt 5).
 
-## 5. Kopia zapasowa (na razie ręczna)
+## 5. Kopie zapasowe bazy (Litestream i Cloudflare R2)
 
-Dane (baza SQLite z tablicami i obrazami) są w wolumenie `data`. Do czasu automatycznych kopii
-(Litestream, osobne zadanie) rób co jakiś czas kopię przy zatrzymanej aplikacji (kopiowanie bazy,
-która pisze, może dać uszkodzony plik):
+ADR 0016. Kontener `litestream` na bieżąco (co sekundę po każdej zmianie) kopiuje bazę do Cloudflare R2
+i trzyma kopie z ostatniego tygodnia. **Bez kluczy R2 aplikacja się nie uruchomi** (celowo).
 
+**Jednorazowo w Cloudflare:**
+1. R2 (Storage), **Create bucket**, nazwa np. `inkroom-backups`. **Account ID** jest w panelu R2 po prawej.
+2. R2, **Manage API tokens**, "Create API token": uprawnienie **Object Read & Write**, zakres **tylko ten
+   bucket**. Skopiuj **Access Key ID** i **Secret Access Key** (secret widać tylko raz).
+3. Wpisz do `.env`: `R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`.
+
+**Sprawdzenie, że działa:**
 ```sh
-docker volume ls | grep data              # nazwa wolumenu, np. inkroom_data
-docker compose stop app
-docker run --rm -v inkroom_data:/data -v "$PWD":/backup alpine \
-  tar czf /backup/inkroom-data-$(date +%F).tgz -C /data .
-docker compose start app
+docker compose up -d
+docker compose logs litestream | tail     # "replicating to" i brak linii z ERROR
 ```
+Po chwili w bucketcie w panelu R2 pojawią się pliki w katalogu `inkroom/`.
 
-Skopiuj plik `.tgz` poza serwer. Przywrócenie to ten sam `tar` w drugą stronę do pustego wolumenu.
+**Serwer z SELinux (Fedora, RHEL; `getenforce` pokazuje Enforcing):** dopisz do `.env`
+`COMPOSE_FILE=docker-compose.yml:docker-compose.selinux.yml`, bo bez tego kontenery nie dzielą wolumenu.
+Plik `litestream.yml` musi być czytelny dla wszystkich (`chmod 644`, katalog `755`).
+
+**Po awarii serwera (nowa maszyna):** zainstaluj Dockera, skopiuj folder `deploy/` i `.env`, zaloguj Dockera do
+`ghcr.io` i `docker compose up -d`. Przed startem aplikacji kontener `litestream-restore` sam sprowadzi
+bazę z R2 (gdy na wolumenie jej nie ma).
+
+**Cofnięcie bazy do wybranej chwili** (np. skasowano tablicę z lekcji):
+```sh
+./restore.sh                         # najnowsza kopia
+./restore.sh 2026-11-12T09:30:00Z    # baza z tej chwili (czas UTC), do tygodnia wstecz
+```
+Skrypt zatrzymuje aplikację, **odkłada obecną bazę** do `/data/before-restore/<data>` (nic nie jest
+kasowane), odtwarza bazę i uruchamia wszystko. Wejście do odłożonej bazy: `docker compose run --rm shell ls /data/before-restore`.
+
+**Raz przećwicz odtworzenie na prawdziwym R2** (np. na tymczasowym katalogu z `.env` i innym wolumenem):
+kopia, której się nie sprawdziło, nie jest kopią. Lokalnie cały scenariusz sprawdza `sh scripts/test-backup.sh`
+(z lokalnym S3 zamiast R2, kilka minut). Plik `.env` (tokeny i klucze) nie jest kopiowany: trzymaj go osobno.
 
 ## 6. Sprawdzenie tunelu bez domeny
 

@@ -15,6 +15,44 @@ services:
     volumes:
       - data:/data
     restart: unless-stopped
+    # On a machine with no database yet (a new server after a disaster) the app waits for the
+    # copy to come back from R2 first; where a database exists this does nothing (ADR 0016).
+    depends_on:
+      litestream-restore:
+        condition: service_completed_successfully
+
+  # Copies the database to R2 all the time, a second after every change (ADR 0016). It works on
+  # the same volume as the app, as the same user (the app's files belong to it).
+  litestream:
+    image: litestream/litestream:0.5.18
+    user: "65532:65532"
+    command: replicate -config /etc/litestream.yml
+    volumes:
+      - data:/data
+      - ./litestream.yml:/etc/litestream.yml:ro,z
+    environment: &r2
+      R2_BUCKET: ${R2_BUCKET:?set R2_BUCKET in .env (the R2 bucket for the copies)}
+      R2_ENDPOINT: ${R2_ENDPOINT:-https://${R2_ACCOUNT_ID:?set R2_ACCOUNT_ID in .env}.r2.cloudflarestorage.com}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:?set R2_ACCESS_KEY_ID in .env}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:?set R2_SECRET_ACCESS_KEY in .env}
+    restart: unless-stopped
+
+  # Runs once before the app: brings the database back from R2 when there is none on the volume.
+  litestream-restore:
+    image: litestream/litestream:0.5.18
+    user: "65532:65532"
+    command: restore -config /etc/litestream.yml -if-db-not-exists -if-replica-exists /data/inkroom.db
+    volumes:
+      - data:/data
+      - ./litestream.yml:/etc/litestream.yml:ro,z
+    environment: *r2
+
+  # A shell on the volume for restore.sh; not started by `up` (profile tools).
+  shell:
+    image: busybox:1.37
+    profiles: ["tools"]
+    volumes:
+      - data:/data
 
   cloudflared:
     image: cloudflare/cloudflared:latest
