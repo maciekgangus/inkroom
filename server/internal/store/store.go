@@ -109,6 +109,12 @@ var migrations = []string{
 	scale REAL NOT NULL,
 	PRIMARY KEY (user_id, board_id)
 )`,
+	// People who may not draw on a board (R-016, ADR 0011).
+	`CREATE TABLE board_revoked (
+	board_id TEXT NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+	person TEXT NOT NULL,
+	PRIMARY KEY (board_id, person)
+)`,
 }
 
 // DefaultBackground is the background of a new board.
@@ -399,4 +405,32 @@ func (s *Store) View(userID int64, boardID string) (View, error) {
 		return View{}, ErrNotFound
 	}
 	return v, err
+}
+
+// SetRevoked records that person may not draw on boardID (or, with revoked false, may again).
+func (s *Store) SetRevoked(boardID, person string, revoked bool) error {
+	if revoked {
+		_, err := s.db.Exec(`INSERT OR IGNORE INTO board_revoked (board_id, person) VALUES (?, ?)`, boardID, person)
+		return err
+	}
+	_, err := s.db.Exec(`DELETE FROM board_revoked WHERE board_id = ? AND person = ?`, boardID, person)
+	return err
+}
+
+// LoadRevoked returns the people who may not draw on boardID.
+func (s *Store) LoadRevoked(boardID string) ([]string, error) {
+	rows, err := s.db.Query(`SELECT person FROM board_revoked WHERE board_id = ? ORDER BY person`, boardID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
 }

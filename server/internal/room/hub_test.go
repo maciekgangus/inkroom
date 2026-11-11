@@ -15,10 +15,11 @@ type fakeStore struct {
 	applied     map[string][]store.Op
 	loads       map[string]int
 	backgrounds map[string]string
+	revoked     map[string]map[string]bool
 }
 
 func newFake() *fakeStore {
-	return &fakeStore{strokes: map[string][][]byte{}, applied: map[string][]store.Op{}, loads: map[string]int{}, backgrounds: map[string]string{}}
+	return &fakeStore{strokes: map[string][][]byte{}, applied: map[string][]store.Op{}, loads: map[string]int{}, backgrounds: map[string]string{}, revoked: map[string]map[string]bool{}}
 }
 
 func (f *fakeStore) LoadStrokes(id string) ([][]byte, error) {
@@ -244,4 +245,66 @@ func TestHubSetNameReachesTheClientsOfThatBoard(t *testing.T) {
 		t.Fatalf("message = %v", m)
 	}
 	h.SetName("no-such-board", "x") // nobody there: nothing happens
+}
+
+func (f *fakeStore) LoadRevoked(id string) ([]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []string
+	for p := range f.revoked[id] {
+		out = append(out, p)
+	}
+	return out, nil
+}
+
+func (f *fakeStore) SetRevoked(id, person string, revoked bool) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.revoked[id] == nil {
+		f.revoked[id] = map[string]bool{}
+	}
+	if revoked {
+		f.revoked[id][person] = true
+	} else {
+		delete(f.revoked[id], person)
+	}
+	return nil
+}
+
+func TestHubSavesAndRestoresRevokedDrawing(t *testing.T) {
+	f := newFake()
+	h := hubFor(t, f)
+	owner := NewClient(32)
+	owner.Identify("own", "own")
+	owner.SetPerson("u:1", true)
+	r, err := h.Join("b1", owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ann := NewClient(32)
+	ann.Identify("ann", "ann")
+	ann.SetPerson("g:ann", false)
+	if _, err := h.Join("b1", ann); err != nil {
+		t.Fatal(err)
+	}
+	_ = r.Handle(owner, []byte(`{"t":"perm","id":"ann","draw":false}`))
+	if got, _ := f.LoadRevoked("b1"); len(got) != 1 || got[0] != "g:ann" {
+		t.Fatalf("saved = %v", got)
+	}
+	// Everyone leaves; the room is dropped and loaded again with the saved rights.
+	h.Leave("b1", r, owner)
+	h.Leave("b1", r, ann)
+	owner2, ann2 := NewClient(32), NewClient(32)
+	owner2.SetPerson("u:1", true)
+	ann2.Identify("ann", "ann")
+	ann2.SetPerson("g:ann", false)
+	r2, _ := h.Join("b1", owner2)
+	_, _ = h.Join("b1", ann2)
+	for len(owner2.Send) > 0 {
+		<-owner2.Send
+	}
+	_ = r2.Handle(ann2, []byte(`{"t":"add","stroke":{"id":"s1","authorId":"x","color":"#111","size":4,"points":[[1,1,0.5]]}}`))
+	if len(owner2.Send) != 0 {
+		t.Fatal("the saved revocation was not applied after a reload")
+	}
 }

@@ -56,6 +56,20 @@ describe("Cursors", () => {
 		expect(items()[0].style.color).toBe(probe.style.color);
 	});
 
+	test("uses the colour the board assigned to its owner, so it matches the chip", () => {
+		render(
+			<Cursors
+				viewport={viewport}
+				colors={new Map([["a", "#123456"]])}
+				cursors={[{ id: "a", name: "Ola", x: 0, y: 0 }]}
+			/>,
+			root,
+		);
+		const probe = document.createElement("span");
+		probe.style.color = "#123456";
+		expect(items()[0].style.color).toBe(probe.style.color);
+	});
+
 	test("never intercepts the pointer, so drawing under it still works", () => {
 		render(<Cursors viewport={viewport} cursors={[]} />, root);
 		expect(root.querySelector(".cursors")?.getAttribute("aria-hidden")).toBe(

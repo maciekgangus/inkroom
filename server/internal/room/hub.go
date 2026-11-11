@@ -13,6 +13,8 @@ type Persister interface {
 	LoadStrokes(boardID string) ([][]byte, error)
 	LoadBackground(boardID string) (string, error)
 	Apply(boardID string, ops []store.Op, at time.Time) error
+	LoadRevoked(boardID string) ([]string, error)
+	SetRevoked(boardID, person string, revoked bool) error
 }
 
 // Hub keeps the rooms that currently have people in them. A room is loaded from the
@@ -62,7 +64,17 @@ func (h *Hub) Join(boardID string, c *Client) (*Room, error) {
 		if err != nil {
 			return nil, err
 		}
+		revoked, err := h.p.LoadRevoked(boardID)
+		if err != nil {
+			return nil, err
+		}
 		r = newPersisted(saved, background)
+		r.setRevoked(revoked)
+		r.OnRevoke = func(person string, on bool) {
+			if err := h.p.SetRevoked(boardID, person, on); err != nil {
+				log.Printf("saving drawing rights of a board %s: %v", boardID, err)
+			}
+		}
 		h.rooms[boardID] = r
 	}
 	r.Join(c)

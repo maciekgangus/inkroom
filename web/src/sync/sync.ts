@@ -15,6 +15,8 @@ export interface SocketLike {
 export interface Peer {
 	id: string;
 	name: string;
+	/** The owner took away this person's right to draw (R-016). */
+	muted?: boolean;
 }
 
 export interface RemoteCursor {
@@ -126,6 +128,11 @@ export class SyncClient {
 		});
 	}
 
+	/** The owner gives (draw true) or takes away a person's right to draw; others are ignored by the server (R-016). */
+	setDrawing(id: string, draw: boolean): void {
+		this.send({ t: "perm", id, draw });
+	}
+
 	/** Who is on the board, as the server last told us. */
 	peers(): Peer[] {
 		return this.peersIn;
@@ -148,9 +155,13 @@ export class SyncClient {
 	private setPeers(raw: unknown[]): void {
 		this.peersIn = raw.flatMap((p) => {
 			if (typeof p !== "object" || p === null) return [];
-			const { id, name } = p as { id?: unknown; name?: unknown };
+			const { id, name, muted } = p as {
+				id?: unknown;
+				name?: unknown;
+				muted?: unknown;
+			};
 			return typeof id === "string" && typeof name === "string"
-				? [{ id, name }]
+				? [muted === true ? { id, name, muted } : { id, name }]
 				: [];
 		});
 		this.opts.onPeers?.(this.peersIn);

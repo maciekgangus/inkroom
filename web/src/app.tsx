@@ -134,6 +134,7 @@ function BoardPage({
 			connect={connect}
 			boardName={info.name}
 			onRename={info.owner ? (n) => api.renameBoard(id, n) : undefined}
+			owner={info.owner}
 			onSetBackground={info.owner ? (b) => api.setBackground(id, b) : undefined}
 		/>
 	);

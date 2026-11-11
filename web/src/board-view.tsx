@@ -33,6 +33,7 @@ import { stepZoom, wheelZoomFactor } from "./board/zoom";
 import { BoardMenuButton, boardMenuItems, type MenuAt } from "./board-menu";
 import { BoardTitle } from "./board-title";
 import { ContextMenu, type MenuItem } from "./context-menu";
+import { assignColors } from "./cursor-colors";
 import { Cursors } from "./cursors";
 import { Icon } from "./icon";
 import { Minimap } from "./minimap";
@@ -66,6 +67,8 @@ interface Props {
 	boardName: string;
 	/** Saves a new name; given only to the board's owner (R-045). */
 	onRename?: (name: string) => Promise<void>;
+	/** True for the board's owner, who may give and take away other people's drawing (R-016). */
+	owner?: boolean;
 	/** Saves a new shared background; given only to the board's owner (R-027). */
 	onSetBackground?: (background: Background) => Promise<void>;
 }
@@ -85,6 +88,7 @@ export function BoardView({
 	boardName,
 	onRename,
 	connect,
+	owner,
 	onSetBackground,
 }: Props) {
 	const [background, setBackground] = useState<Background>("plain");
@@ -172,6 +176,17 @@ export function BoardView({
 	const [title, setTitle] = useState(boardName);
 	/** Who is on the board (R-046). */
 	const [peers, setPeers] = useState<Peer[]>([]);
+	const [peerMenu, setPeerMenu] = useState<{
+		peer: Peer;
+		x: number;
+		y: number;
+	} | null>(null);
+	// The owner may take away our right to draw: then the board only looks and moves (R-016).
+	const colors = useMemo(
+		() => assignColors([authorId, ...peers.map((p) => p.id)]),
+		[authorId, peers],
+	);
+	const readOnly = peers.some((p) => p.id === authorId && p.muted);
 	/** Smooth zoom: eases the view towards a target scale around a screen point (set up below). */
 	const zoomAnim = useRef<{
 		to: (scale: number, sx: number, sy: number) => void;
@@ -350,6 +365,7 @@ export function BoardView({
 		);
 
 		insertImage.current = async (file) => {
+			if (ctl.current?.readOnly) return;
 			setImageError("");
 			try {
 				const { blob, w, h } = await prepareImage(file);
@@ -672,6 +688,24 @@ export function BoardView({
 		input.click();
 	};
 
+	// The tool we had before the right was taken away, put back when it is given again.
+	const toolBeforeReadOnly = useRef<Settings["tool"] | null>(null);
+	useEffect(() => {
+		const c = ctl.current;
+		if (!c) return;
+		c.readOnly = readOnly;
+		if (readOnly) {
+			c.select(null);
+			toolBeforeReadOnly.current ??= settings.tool;
+			settings.tool = "pan";
+			applyCursor.current();
+		} else if (toolBeforeReadOnly.current) {
+			settings.tool = toolBeforeReadOnly.current;
+			toolBeforeReadOnly.current = null;
+			applyCursor.current();
+		}
+	}, [readOnly, settings]);
+
 	const menuItems = (): MenuItem[] => {
 		const ctrl = ctl.current;
 		if (!menu || !ctrl) return [];
@@ -852,7 +886,11 @@ export function BoardView({
 					}}
 				/>
 			)}
-			<Cursors cursors={syncRef.current?.cursors() ?? []} viewport={viewport} />
+			<Cursors
+				cursors={syncRef.current?.cursors() ?? []}
+				viewport={viewport}
+				colors={colors}
+			/>
 			<div class="topbar">
 				<BoardTitle
 					name={title}
@@ -862,26 +900,41 @@ export function BoardView({
 						setTitle(n);
 					}}
 				/>
-				<Toolbar
-					settings={settings}
-					onToolChange={() => {
-						// Choosing a drawing tool lets go of the selection, so colour and width are back.
-						if (dropsSelection(settings.tool)) ctl.current?.select(null);
-						applyCursor.current();
-					}}
-					hasSelection={(ctl.current?.selection.length ?? 0) > 0}
-					images={{
-						fine: hasFinePointer(),
-						hasSelection: (ctl.current?.selection.length ?? 0) > 0,
-						canPaste: canReadClipboard,
-						onFile: (file) => insertImage.current(file),
-						onPaste: () => pasteFromClipboard(),
-						onDelete: () => ctl.current?.deleteSelected(),
-					}}
-					onUndo={() => ctl.current?.undo()}
-					onRedo={() => ctl.current?.redo()}
+				{readOnly ? (
+					<div class="toolbar-note" role="status">
+						Nie możesz rysować na tej tablicy
+					</div>
+				) : (
+					<Toolbar
+						settings={settings}
+						onToolChange={() => {
+							// Choosing a drawing tool lets go of the selection, so colour and width are back.
+							if (dropsSelection(settings.tool)) ctl.current?.select(null);
+							applyCursor.current();
+						}}
+						hasSelection={(ctl.current?.selection.length ?? 0) > 0}
+						images={{
+							fine: hasFinePointer(),
+							hasSelection: (ctl.current?.selection.length ?? 0) > 0,
+							canPaste: canReadClipboard,
+							onFile: (file) => insertImage.current(file),
+							onPaste: () => pasteFromClipboard(),
+							onDelete: () => ctl.current?.deleteSelected(),
+						}}
+						onUndo={() => ctl.current?.undo()}
+						onRedo={() => ctl.current?.redo()}
+					/>
+				)}
+				<Participants
+					peers={peers}
+					selfId={authorId}
+					colors={colors}
+					onSelect={
+						owner
+							? (peer, at) => setPeerMenu({ peer, x: at.x, y: at.y })
+							: undefined
+					}
 				/>
-				<Participants peers={peers} selfId={authorId} />
 				<BoardMenuButton onOpen={setBoardMenu} />
 			</div>
 			{menu && (
@@ -890,6 +943,28 @@ export function BoardView({
 					y={menu.y}
 					items={menuItems()}
 					onClose={() => setMenu(null)}
+				/>
+			)}
+			{peerMenu && (
+				<ContextMenu
+					x={peerMenu.x}
+					y={peerMenu.y}
+					items={[
+						peerMenu.peer.muted
+							? {
+									label: "Pozwól rysować",
+									icon: "pen",
+									onSelect: () =>
+										syncRef.current?.setDrawing(peerMenu.peer.id, true),
+								}
+							: {
+									label: "Zabierz możliwość rysowania",
+									icon: "pen",
+									onSelect: () =>
+										syncRef.current?.setDrawing(peerMenu.peer.id, false),
+								},
+					]}
+					onClose={() => setPeerMenu(null)}
 				/>
 			)}
 			{boardMenu && (

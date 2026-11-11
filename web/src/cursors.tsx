@@ -5,15 +5,17 @@ import type { RemoteCursor } from "./sync/sync";
 interface Props {
 	cursors: RemoteCursor[];
 	viewport: Viewport;
+	/** The colour of each person, chosen for the whole board so no two are alike. */
+	colors?: Map<string, string>;
 }
 
 /** Other people's cursors, drawn as HTML above the board so moving them never repaints the strokes. */
-export function Cursors({ cursors, viewport }: Props) {
+export function Cursors({ cursors, viewport, colors }: Props) {
 	return (
 		<div class="cursors" aria-hidden="true">
 			{cursors.map((c) => {
 				const [x, y] = viewport.toScreen(c.x, c.y);
-				const color = cursorColor(c.id);
+				const color = colors?.get(c.id) ?? cursorColor(c.id);
 				return (
 					<div
 						key={c.id}
