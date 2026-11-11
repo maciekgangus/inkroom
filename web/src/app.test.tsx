@@ -578,7 +578,7 @@ describe("App", () => {
 				expect(
 					tile?.querySelector('[aria-label="Usuń z listy"]'),
 				).not.toBeNull();
-				expect(tile?.querySelector("a.tile-link")).not.toBeNull();
+				expect(tile?.querySelector("a.open-link")).not.toBeNull();
 			});
 
 			test("the choice is remembered on the device", async () => {
@@ -623,7 +623,7 @@ describe("App", () => {
 				await click("Kafelki");
 				expect(button("Otwórz")).toBeUndefined();
 				const link = tileOf("Matma").querySelector(
-					"a.tile-link",
+					"a.open-link",
 				) as HTMLAnchorElement;
 				expect(link.getAttribute("href")).toBe(`/b/${ID}`);
 				expect(link.textContent).toContain("Matma"); // the picture and the name are the link
@@ -642,7 +642,7 @@ describe("App", () => {
 				await openPanel({}, navigate);
 				await click("Kafelki");
 				const link = tileOf("Matma").querySelector(
-					"a.tile-link",
+					"a.open-link",
 				) as HTMLAnchorElement;
 				const e = new MouseEvent("click", {
 					bubbles: true,
@@ -696,10 +696,41 @@ describe("App", () => {
 				expect(api.called(`DELETE /api/boards/${ID}`)).toHaveLength(1);
 			});
 
-			test("the list keeps its words and its Otwórz button", async () => {
+			test("the list too has icons, and the name opens the board", async () => {
+				const navigate = vi.fn();
+				await openPanel({}, navigate);
+				expect(button("Otwórz")).toBeUndefined();
+				const row = tileOf("Matma");
+				const buttons = [...row.querySelectorAll(".actions button")];
+				expect(buttons.map((b) => b.getAttribute("aria-label"))).toEqual([
+					"Kopiuj link",
+					"Utwórz kopię",
+					"Zmień nazwę",
+					"Usuń",
+				]);
+				for (const b of buttons) {
+					expect(b.textContent?.trim()).toBe("");
+					expect(b.querySelector("svg")).not.toBeNull();
+				}
+				const link = row.querySelector("a.open-link") as HTMLAnchorElement;
+				expect(link.getAttribute("href")).toBe(`/b/${ID}`);
+				expect(link.textContent).toContain("Matma");
+				await act(async () => {
+					link.dispatchEvent(
+						new MouseEvent("click", { bubbles: true, cancelable: true }),
+					);
+				});
+				expect(navigate).toHaveBeenCalledWith(`/b/${ID}`);
+			});
+
+			test("the switch between list and tiles is two icons with labels", async () => {
 				await openPanel();
-				expect(button("Otwórz")).toBeDefined();
-				expect(tileOf("Matma").textContent).toContain("Zmień nazwę");
+				for (const label of ["Lista", "Kafelki"]) {
+					const b = button(label);
+					expect(b.textContent?.trim()).toBe("");
+					expect(b.querySelector("svg")).not.toBeNull();
+					expect(b.getAttribute("title")).toBe(label);
+				}
 			});
 
 			test("a board whose preview cannot be loaded still has its tile", async () => {
@@ -752,9 +783,7 @@ describe("App", () => {
 			await mount({ path: "/" });
 			await waitText("Cudza");
 			expect(
-				[...root.querySelectorAll("button")].filter((b) =>
-					b.textContent?.includes("Utwórz kopię"),
-				),
+				root.querySelectorAll('button[aria-label="Utwórz kopię"]'),
 			).toHaveLength(1); // only the one under "Moje tablice"
 		});
 

@@ -287,6 +287,30 @@ input::placeholder {
 	height: 100%;
 	object-fit: cover;
 }
+/* The link that opens a board covers its whole row or tile; what must stay clickable is above it. */
+.board {
+	position: relative;
+}
+.open-link::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border-radius: var(--radius-lg);
+}
+.board .actions,
+.board form,
+.board .error {
+	position: relative;
+	z-index: 1;
+}
+.board .name a.open-link {
+	color: inherit;
+	text-decoration: none;
+}
+.open-link:focus-visible::after {
+	outline: 2px solid var(--accent);
+	outline-offset: -2px;
+}
 .tile-link {
 	display: flex;
 	flex-direction: column;
@@ -295,14 +319,10 @@ input::placeholder {
 	text-decoration: none;
 	border-radius: var(--radius);
 }
-.tile-link:focus-visible {
-	outline: 2px solid var(--accent);
-	outline-offset: 2px;
-}
-.boards.tiles .board {
+.board {
 	cursor: pointer;
 }
-.boards.tiles .board:hover {
+.board:hover {
 	box-shadow: var(--shadow);
 }
 /* The date and the hour apart: the date as it is, a dot, then the hour a little stronger. */
@@ -313,17 +333,20 @@ input::placeholder {
 	color: var(--text);
 	opacity: 0.75;
 }
-.boards.tiles .board button.icon-btn {
+.board button.icon-btn,
+.view-switch button.icon-btn {
 	width: 32px;
 	min-width: 32px;
 	height: 32px;
 	padding: 0;
 	color: var(--icon);
 }
-.boards.tiles .board button.icon-btn:hover {
+.board button.icon-btn:hover,
+.view-switch button.icon-btn:hover {
 	background: var(--surface-hover);
 }
-.boards.tiles .board button.icon-btn svg {
+.board button.icon-btn svg,
+.view-switch button.icon-btn svg {
 	width: 18px;
 	height: 18px;
 }

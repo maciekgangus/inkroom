@@ -127,17 +127,23 @@ export function Panel({ username, navigate, onLogout }: Props) {
 			<fieldset class="view-switch" aria-label="Widok tablic">
 				<button
 					type="button"
+					class="icon-btn"
+					aria-label="Lista"
+					title="Lista"
 					aria-pressed={view === "list"}
 					onClick={() => setView("list")}
 				>
-					Lista
+					<Icon name="lines" />
 				</button>
 				<button
 					type="button"
+					class="icon-btn"
+					aria-label="Kafelki"
+					title="Kafelki"
 					aria-pressed={view === "tiles"}
 					onClick={() => setView("tiles")}
 				>
-					Kafelki
+					<Icon name="tiles" />
 				</button>
 			</fieldset>
 			<h2>Moje tablice</h2>
@@ -260,28 +266,18 @@ function BoardRow({
 		}
 	};
 
-	// One action of the row: a word in a list, an icon with the word as its label in a tile.
-	const action = (
-		label: string,
-		icon: IconName,
-		onClick: () => void,
-		extra = "",
-	) =>
-		tiles ? (
-			<button
-				type="button"
-				class={`icon-btn ${extra}`.trim()}
-				aria-label={label}
-				title={label}
-				onClick={onClick}
-			>
-				<Icon name={icon} />
-			</button>
-		) : (
-			<button type="button" class={extra || undefined} onClick={onClick}>
-				{label}
-			</button>
-		);
+	// One action of the row: an icon with the word as its label and its tooltip.
+	const action = (label: string, icon: IconName, onClick: () => void) => (
+		<button
+			type="button"
+			class="icon-btn"
+			aria-label={label}
+			title={label}
+			onClick={onClick}
+		>
+			<Icon name={icon} />
+		</button>
+	);
 
 	const open = (e: MouseEvent) => {
 		// A click with a modifier (or another button) is the browser's: a new tab, a menu.
@@ -290,14 +286,26 @@ function BoardRow({
 		e.preventDefault();
 		navigate(`/b/${board.id}`);
 	};
-	const nameNode = <span class="name">{board.name}</span>;
+	// The link is stretched over the whole row or tile (see .open-link), so anywhere on it opens
+	// the board; the buttons and the rename field stay above it.
+	const nameNode = (
+		<span class="name">
+			{tiles ? (
+				board.name
+			) : (
+				<a class="open-link" href={`/b/${board.id}`} onClick={open}>
+					{board.name}
+				</a>
+			)}
+		</span>
+	);
 	const when = formatWhen(board.updatedAt);
 
 	return (
 		<li class="board">
 			{tiles && (
 				// The picture and the name are one link: the whole tile opens the board.
-				<a class="tile-link" href={`/b/${board.id}`} onClick={open}>
+				<a class="open-link" href={`/b/${board.id}`} onClick={open}>
 					<BoardPreview boardId={board.id} />
 					{!renaming && nameNode}
 				</a>
@@ -325,11 +333,6 @@ function BoardRow({
 				<span class="time">{when.time}</span>
 			</time>
 			<span class="row actions">
-				{!tiles && (
-					<button type="button" onClick={() => navigate(`/b/${board.id}`)}>
-						Otwórz
-					</button>
-				)}
 				{action("Kopiuj link", "link", () =>
 					navigator.clipboard?.writeText(link),
 				)}
