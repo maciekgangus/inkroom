@@ -305,9 +305,10 @@ export class CanvasRenderer implements Renderer {
 		private images: ImageCache | null = null,
 	) {
 		this.committed = committedCanvas.getContext("2d");
-		// Low latency for what is being drawn: the browser may present this layer without waiting for
-		// the compositor (a hint; where it is not honoured nothing changes).
-		this.live = liveCanvas.getContext("2d", { desynchronized: true });
+		// Not desynchronized (the low-latency hint): the unfinished stroke is cleared and drawn whole
+		// at every move, and a canvas shown without waiting for the compositor can be shown between
+		// the two, so the stroke blinks. The stroke still appears at once, on the next frame.
+		this.live = liveCanvas.getContext("2d");
 	}
 
 	/** Matches the canvas buffers to the window size and device pixel ratio. */
