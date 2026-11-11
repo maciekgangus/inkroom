@@ -26,6 +26,9 @@ async function request<T>(
 ): Promise<T> {
 	const res = await fetch(path, {
 		method,
+		// What the server knows now, never a copy kept by the browser (a board list shown again
+		// after "back" must not be an old one).
+		cache: method === "GET" ? "no-store" : undefined,
 		headers:
 			body === undefined ? undefined : { "Content-Type": "application/json" },
 		body: body === undefined ? undefined : JSON.stringify(body),

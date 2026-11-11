@@ -1,4 +1,4 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import type { BoardSummary } from "./api";
 import * as api from "./api";
 
@@ -14,14 +14,45 @@ export function Panel({ username, navigate, onLogout }: Props) {
 	const [visited, setVisited] = useState<BoardSummary[]>([]);
 	const [error, setError] = useState("");
 
-	useEffect(() => {
+	const loading = useRef(false);
+	// Reads both lists from the server. `quiet` (a refresh) keeps what is shown when it fails.
+	const load = (quiet: boolean) => {
+		if (loading.current) return; // a read is on its way: it will bring the latest
+		loading.current = true;
 		api
 			.listBoards()
 			.then((l) => {
 				setOwned(l.owned);
 				setVisited(l.visited);
 			})
-			.catch((e) => setError(e.message));
+			.catch((e) => {
+				if (!quiet) setError(e.message);
+			})
+			.finally(() => {
+				loading.current = false;
+			});
+	};
+
+	useEffect(() => {
+		load(false);
+		// The panel shows what the server had when it was opened, and people come back to it
+		// after drawing elsewhere: by "back" (the page may be restored from the browser's
+		// back-forward cache, scripts and all, without loading), from another tab or window.
+		const refresh = () => load(true);
+		const shown = (e: Event) => {
+			if ((e as PageTransitionEvent).persisted) refresh();
+		};
+		const visible = () => {
+			if (document.visibilityState === "visible") refresh();
+		};
+		window.addEventListener("pageshow", shown);
+		window.addEventListener("focus", refresh);
+		document.addEventListener("visibilitychange", visible);
+		return () => {
+			window.removeEventListener("pageshow", shown);
+			window.removeEventListener("focus", refresh);
+			document.removeEventListener("visibilitychange", visible);
+		};
 	}, []);
 
 	const create = async (form: HTMLFormElement) => {
