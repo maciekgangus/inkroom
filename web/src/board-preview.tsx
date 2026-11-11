@@ -33,12 +33,16 @@ export function BoardPreview({ boardId }: { boardId: string }) {
 				gone = true;
 			};
 		}
-		const seen = new IntersectionObserver((entries) => {
-			if (entries.some((e) => e.isIntersecting)) {
-				seen.disconnect();
-				load();
-			}
-		});
+		// A little before it is in view, so the picture is there when it scrolls in.
+		const seen = new IntersectionObserver(
+			(entries) => {
+				if (entries.some((e) => e.isIntersecting)) {
+					seen.disconnect();
+					load();
+				}
+			},
+			{ rootMargin: "300px 0px" },
+		);
 		seen.observe(el);
 		return () => {
 			gone = true;

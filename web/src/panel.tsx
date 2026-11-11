@@ -95,7 +95,7 @@ export function Panel({ username, navigate, onLogout }: Props) {
 	};
 
 	return (
-		<main class="panel">
+		<main class={`panel${view === "tiles" ? " wide" : ""}`}>
 			<header class="row between">
 				<h1 class="brand">
 					<Logo />
