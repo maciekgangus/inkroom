@@ -59,6 +59,21 @@ describe("exportSize", () => {
 	});
 });
 
+describe("exportSize for a small picture (R-052)", () => {
+	it("fits the longest side and does not double", () => {
+		const s = exportSize({ minX: 0, minY: 0, maxX: 1000, maxY: 500 }, 320, 1);
+		expect(s.width).toBe(320);
+		expect(s.height).toBe(160);
+		expect(s.scale).toBeCloseTo(0.32);
+	});
+
+	it("never enlarges a region that is already small", () => {
+		const s = exportSize({ minX: 0, minY: 0, maxX: 100, maxY: 50 }, 320, 1);
+		expect(s.scale).toBe(1);
+		expect(s.width).toBe(100);
+	});
+});
+
 describe("pdfFromJpeg", () => {
 	const jpeg = new Uint8Array([0xff, 0xd8, 1, 2, 3, 0xff, 0xd9]);
 	const text = (b: Uint8Array) => new TextDecoder("latin1").decode(b);

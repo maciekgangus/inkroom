@@ -4,6 +4,12 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { App } from "./app";
 import type { SocketLike } from "./sync/sync";
 
+// The preview is drawn on a canvas, which the test DOM does not have: only its use is checked.
+vi.mock("./board/preview", async (orig) => ({
+	...(await orig<typeof import("./board/preview")>()),
+	renderPreview: vi.fn(() => "data:image/png;base64,DRAWN"),
+}));
+
 const ID = "0123456789abcdef0123456789abcdef";
 
 function fakeSocket(): SocketLike {
@@ -19,6 +25,7 @@ function fakeSocket(): SocketLike {
 interface Reply {
 	status?: number;
 	body?: unknown;
+	headers?: Record<string, string>;
 }
 
 /** Stubs fetch with a table of "METHOD /path" -> reply (or a function of the request body). */
@@ -37,7 +44,12 @@ function mockApi(routes: Record<string, Reply | ((body: unknown) => Reply)>) {
 			};
 		const reply = typeof route === "function" ? route(body) : route;
 		const status = reply.status ?? 200;
-		return { ok: status < 400, status, json: async () => reply.body ?? {} };
+		return {
+			ok: status < 400,
+			status,
+			json: async () => reply.body ?? {},
+			headers: { get: (name: string) => reply.headers?.[name] ?? null },
+		};
 	});
 	vi.stubGlobal("fetch", fn);
 	return {
@@ -500,6 +512,115 @@ describe("App", () => {
 			await waitText("Matma");
 			expect(button("Usuń z listy")).toBeUndefined();
 			expect(button("Usuń")).toBeDefined();
+		});
+
+		describe("list or tiles with previews (R-052)", () => {
+			const FID = "f".repeat(32);
+			const preview = (id: string, etag = '"1-plain"') => ({
+				[`GET /api/boards/${id}/preview`]: {
+					headers: { ETag: etag },
+					body: { background: "plain", strokes: [] },
+				},
+			});
+			const openPanel = async (extra = {}) => {
+				const api = mockApi({
+					"GET /api/me": LOGGED_IN,
+					"GET /api/boards": { body: boards },
+					...preview(ID),
+					...preview(FID),
+					...extra,
+				});
+				await mount({ path: "/" });
+				await waitText("Matma");
+				return api;
+			};
+			const lists = () => [...root.querySelectorAll(".boards")];
+			const pressed = (label: string) =>
+				button(label)?.getAttribute("aria-pressed") === "true";
+
+			test("starts as a list, with no previews fetched", async () => {
+				const api = await openPanel();
+				expect(pressed("Lista")).toBe(true);
+				expect(pressed("Kafelki")).toBe(false);
+				expect(lists().every((l) => !l.classList.contains("tiles"))).toBe(true);
+				expect(root.querySelector("img.preview")).toBeNull();
+				expect(api.called(`GET /api/boards/${ID}/preview`)).toHaveLength(0);
+			});
+
+			test("tiles show a picture of each board, in both lists", async () => {
+				const api = await openPanel();
+				await click("Kafelki");
+				expect(lists().every((l) => l.classList.contains("tiles"))).toBe(true);
+				await vi.waitFor(() =>
+					expect(root.querySelectorAll("img.preview")).toHaveLength(2),
+				);
+				expect(root.querySelector("img.preview")?.getAttribute("src")).toBe(
+					"data:image/png;base64,DRAWN",
+				);
+				expect(api.called(`GET /api/boards/${ID}/preview`)).toHaveLength(1);
+				expect(api.called(`GET /api/boards/${FID}/preview`)).toHaveLength(1);
+			});
+
+			test("a tile keeps the name, the date, the owner and the buttons", async () => {
+				await openPanel();
+				await click("Kafelki");
+				const tile = [...root.querySelectorAll(".boards .board")].find((r) =>
+					r.textContent?.includes("Cudza"),
+				);
+				expect(tile?.textContent).toContain("Tablica: pani.anna");
+				expect(tile?.textContent).toContain("Otwórz");
+				expect(tile?.textContent).toContain("Usuń z listy");
+			});
+
+			test("the choice is remembered on the device", async () => {
+				await openPanel();
+				await click("Kafelki");
+				expect(localStorage.getItem("inkroom.boardView")).toBe("tiles");
+				render(null, root);
+				await openPanel();
+				expect(pressed("Kafelki")).toBe(true);
+				expect(lists().every((l) => l.classList.contains("tiles"))).toBe(true);
+				await click("Lista");
+				expect(localStorage.getItem("inkroom.boardView")).toBe("list");
+			});
+
+			test("a picture already drawn for this version is not drawn again", async () => {
+				const { renderPreview } = await import("./board/preview");
+				const drawn = vi.mocked(renderPreview);
+				drawn.mockClear();
+				localStorage.setItem(
+					`inkroom.preview.${ID}`,
+					JSON.stringify({
+						tag: '"1-plain"',
+						url: "data:image/png;base64,KEPT",
+						at: 1,
+					}),
+				);
+				await openPanel();
+				await click("Kafelki");
+				await vi.waitFor(() =>
+					expect(root.querySelectorAll("img.preview")).toHaveLength(2),
+				);
+				const mine = [...root.querySelectorAll(".boards .board")]
+					.find((r) => r.textContent?.includes("Matma"))
+					?.querySelector("img.preview");
+				expect(mine?.getAttribute("src")).toBe("data:image/png;base64,KEPT");
+				expect(drawn).toHaveBeenCalledTimes(1); // only the other board
+			});
+
+			test("a board whose preview cannot be loaded still has its tile", async () => {
+				await openPanel({
+					[`GET /api/boards/${ID}/preview`]: {
+						status: 500,
+						body: { error: "x" },
+					},
+				});
+				await click("Kafelki");
+				await vi.waitFor(
+					() => expect(root.querySelectorAll("img.preview")).toHaveLength(1), // the other one
+				);
+				expect(text()).toContain("Matma");
+			});
 		});
 
 		test("a board that is not mine cannot be copied", async () => {

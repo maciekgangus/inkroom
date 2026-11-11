@@ -1,6 +1,18 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { BoardSummary } from "./api";
 import * as api from "./api";
+import { BoardPreview } from "./board-preview";
+
+const VIEW_KEY = "inkroom.boardView";
+type View = "list" | "tiles";
+
+const storedView = (): View => {
+	try {
+		return localStorage.getItem(VIEW_KEY) === "tiles" ? "tiles" : "list";
+	} catch {
+		return "list";
+	}
+};
 
 interface Props {
 	username: string;
@@ -13,6 +25,15 @@ export function Panel({ username, navigate, onLogout }: Props) {
 	const [owned, setOwned] = useState<BoardSummary[] | null>(null);
 	const [visited, setVisited] = useState<BoardSummary[]>([]);
 	const [error, setError] = useState("");
+	const [view, setViewState] = useState<View>(storedView);
+	const setView = (v: View) => {
+		setViewState(v);
+		try {
+			localStorage.setItem(VIEW_KEY, v);
+		} catch {
+			// The choice is just not remembered.
+		}
+	};
 
 	const loading = useRef(false);
 	// Reads both lists from the server. `quiet` (a refresh) keeps what is shown when it fails.
@@ -102,18 +123,35 @@ export function Panel({ username, navigate, onLogout }: Props) {
 				</button>
 			</form>
 
+			<div class="view-switch" role="group" aria-label="Widok tablic">
+				<button
+					type="button"
+					aria-pressed={view === "list"}
+					onClick={() => setView("list")}
+				>
+					Lista
+				</button>
+				<button
+					type="button"
+					aria-pressed={view === "tiles"}
+					onClick={() => setView("tiles")}
+				>
+					Kafelki
+				</button>
+			</div>
 			<h2>Moje tablice</h2>
 			{owned === null ? (
 				<p>Wczytywanie…</p>
 			) : owned.length === 0 ? (
 				<p class="muted">Nie masz jeszcze tablic.</p>
 			) : (
-				<ul class="boards">
+				<ul class={`boards${view === "tiles" ? " tiles" : ""}`}>
 					{owned.map((b) => (
 						<BoardRow
 							key={b.id}
 							board={b}
 							mine
+							tiles={view === "tiles"}
 							navigate={navigate}
 							onRenamed={(name) =>
 								setOwned(owned.map((x) => (x.id === b.id ? { ...x, name } : x)))
@@ -133,12 +171,13 @@ export function Panel({ username, navigate, onLogout }: Props) {
 			{visited.length > 0 && (
 				<>
 					<h2>Tablice, do których mam dostęp</h2>
-					<ul class="boards">
+					<ul class={`boards${view === "tiles" ? " tiles" : ""}`}>
 						{visited.map((b) => (
 							<BoardRow
 								key={b.id}
 								board={b}
 								mine={false}
+								tiles={view === "tiles"}
 								navigate={navigate}
 								onForgotten={() =>
 									setVisited(visited.filter((x) => x.id !== b.id))
@@ -155,6 +194,8 @@ export function Panel({ username, navigate, onLogout }: Props) {
 interface RowProps {
 	board: BoardSummary;
 	mine: boolean;
+	/** Draw the row as a tile with a picture of the board (R-052). */
+	tiles?: boolean;
 	navigate: (to: string) => void;
 	onRenamed?: (name: string) => void;
 	onDeleted?: () => void;
@@ -167,6 +208,7 @@ interface RowProps {
 function BoardRow({
 	board,
 	mine,
+	tiles,
 	navigate,
 	onRenamed,
 	onDeleted,
@@ -219,6 +261,7 @@ function BoardRow({
 
 	return (
 		<li class="board">
+			{tiles && <BoardPreview boardId={board.id} />}
 			{renaming ? (
 				<form
 					class="row"

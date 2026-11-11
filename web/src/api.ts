@@ -1,3 +1,5 @@
+import type { PreviewData } from "./board/preview";
+
 /** Error from the server API; `status` is the HTTP status. */
 export class ApiError extends Error {
 	constructor(
@@ -97,6 +99,16 @@ export const deleteBoard = (id: string) =>
 
 export const copyBoard = (id: string) =>
 	request<{ id: string; name: string }>("POST", `/api/boards/${id}/copy`, {});
+
+/** What a client needs to draw a small picture of a board, and the tag of that version of it. */
+export async function boardPreview(
+	id: string,
+): Promise<{ etag: string; data: PreviewData }> {
+	// Not no-store: the server answers "not modified" cheaply and the browser keeps the body.
+	const res = await fetch(`/api/boards/${id}/preview`);
+	if (!res.ok) throw new ApiError(res.status, `Błąd ${res.status}`);
+	return { etag: res.headers.get("ETag") ?? "", data: await res.json() };
+}
 
 /** Takes a board off my list of boards I was invited to; the board itself stays (R-051). */
 export const forgetBoard = (id: string) =>
