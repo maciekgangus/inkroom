@@ -323,3 +323,40 @@ func TestViewIsRememberedPerUserAndBoard(t *testing.T) {
 		t.Fatalf("a deleted board takes its views: got %v", err)
 	}
 }
+
+func TestRevokedDrawingIsSavedPerBoardAndGoneWithIt(t *testing.T) {
+	s := open(t)
+	a := user(t, s, "a@example.com")
+	for _, id := range []string{"b1", "b2"} {
+		if _, err := s.CreateBoard(id, a.ID, "Matma"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got, err := s.LoadRevoked("b1"); err != nil || len(got) != 0 {
+		t.Fatalf("nothing revoked yet: %v %v", got, err)
+	}
+	for _, p := range []string{"g:ann", "g:bob"} {
+		if err := s.SetRevoked("b1", p, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.SetRevoked("b1", "g:ann", true); err != nil { // twice is fine
+		t.Fatal(err)
+	}
+	if err := s.SetRevoked("b1", "g:bob", false); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.LoadRevoked("b1")
+	if err != nil || len(got) != 1 || got[0] != "g:ann" {
+		t.Fatalf("b1 revoked = %v %v", got, err)
+	}
+	if got, _ := s.LoadRevoked("b2"); len(got) != 0 {
+		t.Fatalf("another board is not affected: %v", got)
+	}
+	if err := s.DeleteBoard("b1"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.LoadRevoked("b1"); len(got) != 0 {
+		t.Fatalf("a deleted board takes its list: %v", got)
+	}
+}

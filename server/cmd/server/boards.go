@@ -109,6 +109,7 @@ func (a *app) getBoard(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Błąd serwera")
 		return
 	}
+	a.ensureGuestCookie(w, r)
 	u, loggedIn := a.auth.User(r)
 	writeJSON(w, http.StatusOK, map[string]any{"id": b.ID, "name": b.Name, "owner": loggedIn && u.ID == b.OwnerID})
 }

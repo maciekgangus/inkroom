@@ -27,6 +27,11 @@ type Client struct {
 	ID   string
 	Name string
 
+	// Person is who the server knows the client as (an account or a guest cookie, ADR 0011),
+	// and Owner says it is the board's owner. Drawing rights belong to the person, not to ID.
+	Person string
+	Owner  bool
+
 	once    sync.Once
 	mu      sync.Mutex
 	dropped bool
@@ -45,6 +50,11 @@ func (c *Client) Identify(id, name string) {
 		return
 	}
 	c.ID, c.Name = id, name
+}
+
+// SetPerson says which person the connection belongs to and whether they own the board.
+func (c *Client) SetPerson(person string, owner bool) {
+	c.Person, c.Owner = person, owner
 }
 
 // NewClient returns a client whose outgoing queue holds up to buffer messages.
@@ -91,6 +101,10 @@ type Room struct {
 	clients map[*Client]*presence
 	// background is shared by everyone; only the server changes it (ADR 0010).
 	background string
+	// revoked holds the people who may not draw (R-016); OnRevoke, if set, is told about every
+	// change so it can be saved.
+	revoked  map[string]bool
+	OnRevoke func(person string, revoked bool)
 
 	// Persistence (only for rooms created by a Hub): changes wait in pending until flushed.
 	track   bool
@@ -111,7 +125,7 @@ func newPresence() *presence {
 
 // New returns an empty room that is not persisted.
 func New() *Room {
-	return &Room{strokes: map[string]entry{}, clients: map[*Client]*presence{}, background: store.DefaultBackground}
+	return &Room{strokes: map[string]entry{}, clients: map[*Client]*presence{}, background: store.DefaultBackground, revoked: map[string]bool{}}
 }
 
 // newPersisted returns a room holding the saved strokes and background, recording further
@@ -136,7 +150,22 @@ type message struct {
 	ID     string          `json:"id"`
 	Name   string          `json:"name"`
 	Hidden bool            `json:"hidden"`
+	Draw   bool            `json:"draw"`
 	Stroke json.RawMessage `json:"stroke"`
+}
+
+// setRevoked loads the people who were saved as not allowed to draw.
+func (r *Room) setRevoked(people []string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, p := range people {
+		r.revoked[p] = true
+	}
+}
+
+// canDraw says whether c may change the board; the owner always may.
+func (r *Room) canDraw(c *Client) bool {
+	return c.Owner || c.Person == "" || !r.revoked[c.Person]
 }
 
 // Join registers c and queues the current snapshot for it.
@@ -191,6 +220,45 @@ func (r *Room) Handle(c *Client, raw []byte) error {
 	defer r.mu.Unlock()
 
 	switch m.T {
+	case "add", "update", "remove", "live":
+		if !r.canDraw(c) {
+			// Its screen already shows the change: send the truth back (not for live strokes).
+			if m.T != "live" {
+				c.trySend(r.snapshotLocked())
+			}
+			return nil
+		}
+	}
+
+	switch m.T {
+	case "perm":
+		if !c.Owner {
+			return nil
+		}
+		if err := checkID(m.ID); err != nil {
+			return err
+		}
+		changed := false
+		for other := range r.clients {
+			if other.ID != m.ID || other.Person == "" || other.Owner {
+				continue
+			}
+			if r.revoked[other.Person] == !m.Draw {
+				continue
+			}
+			changed = true
+			if m.Draw {
+				delete(r.revoked, other.Person)
+			} else {
+				r.revoked[other.Person] = true
+			}
+			if r.OnRevoke != nil {
+				r.OnRevoke(other.Person, !m.Draw)
+			}
+		}
+		if changed {
+			r.broadcastLocked(r.peersLocked(), nil)
+		}
 	case "add":
 		id, err := strokeID(m.Stroke)
 		if err != nil {
@@ -266,8 +334,9 @@ func (r *Room) Handle(c *Client, raw []byte) error {
 // per id, ordered by name.
 func (r *Room) peersLocked() []byte {
 	type peer struct {
-		ID   string `json:"id"`
-		Name string `json:"name"`
+		ID    string `json:"id"`
+		Name  string `json:"name"`
+		Muted bool   `json:"muted,omitempty"`
 	}
 	seen := map[string]bool{}
 	peers := []peer{}
@@ -276,7 +345,7 @@ func (r *Room) peersLocked() []byte {
 			continue
 		}
 		seen[c.ID] = true
-		peers = append(peers, peer{ID: c.ID, Name: c.Name})
+		peers = append(peers, peer{ID: c.ID, Name: c.Name, Muted: !r.canDraw(c)})
 	}
 	sort.Slice(peers, func(i, j int) bool {
 		if peers[i].Name != peers[j].Name {

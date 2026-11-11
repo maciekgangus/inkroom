@@ -21,7 +21,8 @@ const (
 // serveWS joins the caller to the board's room and pumps messages both ways.
 func (a *app) serveWS(w http.ResponseWriter, r *http.Request) {
 	boardID := r.PathValue("id")
-	if _, err := a.st.Board(boardID); err != nil {
+	board, err := a.st.Board(boardID)
+	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			http.NotFound(w, r)
 		} else {
@@ -40,6 +41,9 @@ func (a *app) serveWS(w http.ResponseWriter, r *http.Request) {
 	client := room.NewClient(sendBuffer)
 	// Who is connecting, so the others can see who is on the board (R-046).
 	client.Identify(r.URL.Query().Get("id"), r.URL.Query().Get("name"))
+	// Drawing rights belong to the person the server recognises, not to the id the client states.
+	user, loggedIn := a.auth.User(r)
+	client.SetPerson(a.person(r, user, loggedIn, client.ID), loggedIn && user.ID == board.OwnerID)
 	rm, err := a.hub.Join(boardID, client)
 	if err != nil {
 		log.Printf("joining board %s: %v", boardID, err)
