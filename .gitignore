@@ -30,3 +30,7 @@ data/
 
 # graphify output: generated per checkout (copy it into worktrees, never commit it)
 graphify-out/
+
+# Playwright output
+test-results/
+playwright-report/

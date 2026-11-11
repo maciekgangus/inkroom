@@ -25,7 +25,7 @@ Stos: serwer w Go (`server/`), klient w TypeScript + Vite + Preact (`web/`). Kom
 - Uruchomienie całości: `docker compose up` (ADR 0002)
 - Build obrazu: `docker compose build`
 - Dev klienta: `cd web && npm run dev`; dev serwera: `cd server && go run ./cmd/server`
-- Testy: `cd server && go test ./...` oraz `cd web && npm test`
+- Testy: `cd server && go test ./...` oraz `cd web && npm test`; testy iPada (układ, rysik, dotyk) w Playwright: `cd web && npx playwright install chromium` (raz) i `npm run test:e2e` (ADR 0012)
 - Lint i format: `cd server && gofmt -l . && go vet ./...` oraz `cd web && npx biome check .`
 
 ## Konwencje
