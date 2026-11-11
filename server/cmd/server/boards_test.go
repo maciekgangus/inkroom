@@ -308,3 +308,89 @@ func TestACopyIncludesWhatWasNotYetSavedToTheDatabase(t *testing.T) {
 		t.Fatalf("the copy misses a fresh stroke: %v", m)
 	}
 }
+
+// listed returns the boards of one list ("owned" or "visited") of a user.
+func listed(t *testing.T, srv *httptest.Server, u user, which string) []map[string]any {
+	t.Helper()
+	m := decode(t, call(t, srv, "GET", "/api/boards", "", &u))
+	var out []map[string]any
+	for _, b := range m[which].([]any) {
+		out = append(out, b.(map[string]any))
+	}
+	return out
+}
+
+// visit joins a board over its WebSocket as the user, so the server records the visit.
+func visit(t *testing.T, srv *httptest.Server, id string, u user) {
+	t.Helper()
+	c := dialAs(t, srv, id, &u)
+	read(t, c)
+	deadline := time.Now().Add(2 * time.Second)
+	for len(listed(t, srv, u, "visited")) == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("the visit was never recorded")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestVisitedBoardsSayWhoseTheyAreAndOwnedOnesDoNot(t *testing.T) {
+	srv, _, _ := testApp(t)
+	owner := register(t, srv, "anna@example.com") // username "anna-user"
+	student := register(t, srv, "student@example.com")
+	id := createBoard(t, srv, owner, "Matma")
+	visit(t, srv, id, student)
+
+	v := listed(t, srv, student, "visited")
+	if len(v) != 1 || v[0]["owner"] != "anna-user" {
+		t.Fatalf("visited = %v", v)
+	}
+	if o := listed(t, srv, owner, "owned"); len(o) != 1 || o[0]["owner"] != nil {
+		t.Fatalf("an owned board should carry no owner: %v", o)
+	}
+	for _, b := range v {
+		for _, val := range b {
+			if s, _ := val.(string); strings.Contains(s, "@") {
+				t.Fatalf("an e-mail leaked into the list: %v", b)
+			}
+		}
+	}
+}
+
+func TestAGuestCanDropABoardFromTheirListAndOpeningItAgainBringsItBack(t *testing.T) {
+	srv, _, _ := testApp(t)
+	owner := register(t, srv, "anna@example.com")
+	student := register(t, srv, "student@example.com")
+	id := createBoard(t, srv, owner, "Matma")
+	visit(t, srv, id, student)
+
+	resp := call(t, srv, "DELETE", "/api/boards/"+id+"/visit", "", &student)
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("delete = %d", resp.StatusCode)
+	}
+	if v := listed(t, srv, student, "visited"); len(v) != 0 {
+		t.Fatalf("still listed: %v", v)
+	}
+	if o := listed(t, srv, owner, "owned"); len(o) != 1 {
+		t.Fatalf("the owner's board is gone: %v", o)
+	}
+	if r := call(t, srv, "GET", "/api/boards/"+id, "", nil); r.StatusCode != http.StatusOK {
+		t.Fatalf("the board's link stopped working: %d", r.StatusCode)
+	}
+	visit(t, srv, id, student) // back
+}
+
+func TestDroppingFromTheListNeedsAnAccountAndNeverDeletesAnOwnBoard(t *testing.T) {
+	srv, _, _ := testApp(t)
+	owner := register(t, srv, "anna@example.com")
+	id := createBoard(t, srv, owner, "Matma")
+	if r := call(t, srv, "DELETE", "/api/boards/"+id+"/visit", "", nil); r.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("logged out = %d, want 401", r.StatusCode)
+	}
+	if r := call(t, srv, "DELETE", "/api/boards/"+id+"/visit", "", &owner); r.StatusCode != http.StatusNoContent {
+		t.Fatalf("the owner = %d", r.StatusCode)
+	}
+	if o := listed(t, srv, owner, "owned"); len(o) != 1 {
+		t.Fatalf("the owner's own board vanished: %v", o)
+	}
+}

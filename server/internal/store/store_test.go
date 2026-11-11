@@ -496,3 +496,59 @@ func TestMigrationGivesExistingAccountsANameFromTheirEmail(t *testing.T) {
 		}
 	}
 }
+
+func TestVisitedBoardsCarryTheirOwnersUsername(t *testing.T) {
+	s := open(t)
+	owner, err := s.CreateAccount("owner@example.com", "Pani.Anna", "h")
+	if err != nil {
+		t.Fatal(err)
+	}
+	guest := user(t, s, "guest@example.com")
+	if _, err := s.CreateBoard("b1", owner.ID, "Matma"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RecordVisit(guest.ID, "b1", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	v, err := s.BoardsVisitedBy(guest.ID)
+	if err != nil || len(v) != 1 || v[0].OwnerName != "Pani.Anna" {
+		t.Fatalf("visited = %+v %v", v, err)
+	}
+}
+
+func TestRemovingAVisitLeavesTheBoardAndOtherPeoplesVisits(t *testing.T) {
+	s := open(t)
+	owner := user(t, s, "owner@example.com")
+	a := user(t, s, "a@example.com")
+	b := user(t, s, "b@example.com")
+	if _, err := s.CreateBoard("b1", owner.ID, "Matma"); err != nil {
+		t.Fatal(err)
+	}
+	for _, u := range []User{a, b} {
+		if err := s.RecordVisit(u.ID, "b1", time.Now()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.RemoveVisit(a.ID, "b1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RemoveVisit(a.ID, "b1"); err != nil { // removing twice is fine
+		t.Fatal(err)
+	}
+	if v, _ := s.BoardsVisitedBy(a.ID); len(v) != 0 {
+		t.Fatalf("a still sees it: %+v", v)
+	}
+	if v, _ := s.BoardsVisitedBy(b.ID); len(v) != 1 {
+		t.Fatalf("b lost it too: %+v", v)
+	}
+	if _, err := s.Board("b1"); err != nil {
+		t.Fatalf("the board itself was touched: %v", err)
+	}
+	// Opening the board again puts it back.
+	if err := s.RecordVisit(a.ID, "b1", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := s.BoardsVisitedBy(a.ID); len(v) != 1 {
+		t.Fatalf("a visit after the removal is not recorded: %+v", v)
+	}
+}

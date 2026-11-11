@@ -38,6 +38,8 @@ type Board struct {
 	Background string
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
+	// OwnerName is the owner's username, filled in only for boards listed as visited (R-051).
+	OwnerName string
 }
 
 // Op is one change to a board's strokes: add a stroke if it is not there yet, replace an
@@ -413,8 +415,31 @@ func (s *Store) BoardsOwnedBy(userID int64) ([]Board, error) {
 
 // BoardsVisitedBy lists other people's boards the user opened, most recently opened first.
 func (s *Store) BoardsVisitedBy(userID int64) ([]Board, error) {
-	return s.boards("SELECT "+boardCols+` FROM visits v JOIN boards b ON b.id = v.board_id
+	rows, err := s.db.Query("SELECT "+boardCols+`, o.username FROM visits v
+		JOIN boards b ON b.id = v.board_id JOIN users o ON o.id = b.owner_id
 		WHERE v.user_id = ? AND b.owner_id != ? ORDER BY v.last_opened DESC, b.id`, userID, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Board
+	for rows.Next() {
+		var b Board
+		var created, updated int64
+		if err := rows.Scan(&b.ID, &b.OwnerID, &b.Name, &b.Background, &created, &updated, &b.OwnerName); err != nil {
+			return nil, err
+		}
+		b.CreatedAt, b.UpdatedAt = time.Unix(created, 0), time.Unix(updated, 0)
+		out = append(out, b)
+	}
+	return out, rows.Err()
+}
+
+// RemoveVisit takes a board off userID's list of boards they were invited to. The board and
+// its link are untouched; opening it again lists it again. Removing a missing visit is fine.
+func (s *Store) RemoveVisit(userID int64, boardID string) error {
+	_, err := s.db.Exec("DELETE FROM visits WHERE user_id = ? AND board_id = ?", userID, boardID)
+	return err
 }
 
 func (s *Store) boards(query string, args ...any) ([]Board, error) {
