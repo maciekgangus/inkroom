@@ -3,6 +3,7 @@ package store
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"strconv"
 	"strings"
@@ -433,4 +434,99 @@ func (s *Store) LoadRevoked(boardID string) ([]string, error) {
 		out = append(out, p)
 	}
 	return out, rows.Err()
+}
+
+// CopyBoard makes a new board `id` owned by ownerID out of board `from`: the same strokes in the
+// same order, the same background and copies of its images (each under a fresh id from
+// newImageID, which the copied pictures are pointed at). All or nothing.
+func (s *Store) CopyBoard(from, id string, ownerID int64, name string, newImageID func() string) (Board, error) {
+	src, err := s.Board(from)
+	if err != nil {
+		return Board{}, err
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return Board{}, err
+	}
+	defer tx.Rollback()
+	now := time.Now().Truncate(time.Second)
+	if _, err := tx.Exec("INSERT INTO boards (id, owner_id, name, background, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+		id, ownerID, name, src.Background, unix(now), unix(now)); err != nil {
+		return Board{}, err
+	}
+
+	renamed := map[string]string{} // old image id -> id of its copy
+	imgs, err := tx.Query("SELECT id, mime, data FROM images WHERE board_id = ?", from)
+	if err != nil {
+		return Board{}, err
+	}
+	type image struct {
+		old, mime string
+		data      []byte
+	}
+	var images []image
+	for imgs.Next() {
+		var im image
+		if err := imgs.Scan(&im.old, &im.mime, &im.data); err != nil {
+			imgs.Close()
+			return Board{}, err
+		}
+		images = append(images, im)
+	}
+	imgs.Close()
+	for _, im := range images {
+		fresh := newImageID()
+		renamed[im.old] = fresh
+		if _, err := tx.Exec("INSERT INTO images (id, board_id, mime, data, created_at) VALUES (?, ?, ?, ?, ?)",
+			fresh, id, im.mime, im.data, unix(now)); err != nil {
+			return Board{}, err
+		}
+	}
+
+	rows, err := tx.Query("SELECT id, data FROM strokes WHERE board_id = ? ORDER BY rowid", from)
+	if err != nil {
+		return Board{}, err
+	}
+	type stroke struct {
+		id   string
+		data []byte
+	}
+	var strokes []stroke
+	for rows.Next() {
+		var st stroke
+		if err := rows.Scan(&st.id, &st.data); err != nil {
+			rows.Close()
+			return Board{}, err
+		}
+		strokes = append(strokes, st)
+	}
+	rows.Close()
+	for _, st := range strokes {
+		if _, err := tx.Exec("INSERT INTO strokes (board_id, id, data) VALUES (?, ?, ?)", id, st.id, repointImage(st.data, renamed)); err != nil {
+			return Board{}, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return Board{}, err
+	}
+	return Board{ID: id, OwnerID: ownerID, Name: name, Background: src.Background, CreatedAt: now, UpdatedAt: now}, nil
+}
+
+// repointImage returns a stroke's JSON with its picture's `src` replaced by the copy's id. A
+// stroke that is not a picture, or whose picture was not copied, is returned as it is.
+func repointImage(data []byte, renamed map[string]string) []byte {
+	var m map[string]json.RawMessage
+	if json.Unmarshal(data, &m) != nil {
+		return data
+	}
+	var src string
+	if json.Unmarshal(m["src"], &src) != nil || renamed[src] == "" {
+		return data
+	}
+	m["src"], _ = json.Marshal(renamed[src])
+	out, err := json.Marshal(m)
+	if err != nil {
+		return data
+	}
+	return out
 }

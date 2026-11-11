@@ -189,6 +189,31 @@ func (a *app) deleteBoard(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// copyBoard makes the owner a new board holding everything on this one (R-020): a manual backup
+// before a change, or a starting point for the next lesson. The copy has its own link.
+func (a *app) copyBoard(w http.ResponseWriter, r *http.Request) {
+	if !auth.RequireJSON(w, r) {
+		return
+	}
+	b, ok := a.ownedBoard(w, r)
+	if !ok {
+		return
+	}
+	a.hub.Flush() // what people drew a moment ago may not be in the database yet
+	const suffix = " (kopia)"
+	name := b.Name
+	if r := []rune(name); len(r) > maxBoardName-len([]rune(suffix)) {
+		name = string(r[:maxBoardName-len([]rune(suffix))])
+	}
+	u, _ := a.auth.User(r)
+	cp, err := a.st.CopyBoard(b.ID, newBoardID(), u.ID, name+suffix, newBoardID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Błąd serwera")
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]string{"id": cp.ID, "name": cp.Name})
+}
+
 // Limits of a saved view: the zoom the board allows and a generous reach for the position.
 const (
 	minViewScale = 0.1

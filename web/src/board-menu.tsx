@@ -10,8 +10,11 @@ export interface MenuAt {
 	y: number;
 }
 
-/** The entries of the board menu (export, R-014). */
-export function boardMenuItems(onPick: (a: BoardAction) => void): MenuItem[] {
+/** The entries of the board menu: export (R-014) and, for the owner, a copy of the board (R-020). */
+export function boardMenuItems(
+	onPick: (a: BoardAction) => void,
+	onCopy?: () => void,
+): MenuItem[] {
 	return [
 		{ label: "PNG: widok", icon: "image", onSelect: () => onPick("png-view") },
 		{
@@ -24,6 +27,9 @@ export function boardMenuItems(onPick: (a: BoardAction) => void): MenuItem[] {
 			icon: "download",
 			onSelect: () => onPick("pdf-board"),
 		},
+		...(onCopy
+			? [{ label: "Utwórz kopię", icon: "copy" as const, onSelect: onCopy }]
+			: []),
 	];
 }
 

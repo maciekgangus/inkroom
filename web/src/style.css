@@ -512,6 +512,26 @@ canvas {
 	box-shadow: var(--shadow);
 }
 
+/* A plain notice (not an error): a copy was made, with a link to it. */
+.toast.notice {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	border: 1px solid var(--border);
+	background: var(--surface);
+	color: var(--text);
+}
+.toast.notice a {
+	color: var(--accent);
+	font-weight: 600;
+}
+.toast.notice button {
+	min-width: 0;
+	height: 28px;
+	padding: 0 10px;
+	font-size: 13px;
+}
+
 /* The shape button has a list of shapes behind it (R-033): a small corner mark hints at it. */
 .shape-wrap,
 .flyout-wrap {

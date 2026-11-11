@@ -3,6 +3,7 @@ package store
 import (
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -358,5 +359,73 @@ func TestRevokedDrawingIsSavedPerBoardAndGoneWithIt(t *testing.T) {
 	}
 	if got, _ := s.LoadRevoked("b1"); len(got) != 0 {
 		t.Fatalf("a deleted board takes its list: %v", got)
+	}
+}
+
+func TestCopyBoardCopiesStrokesImagesAndBackground(t *testing.T) {
+	s := open(t)
+	a := user(t, s, "a@example.com")
+	b := user(t, s, "b@example.com")
+	if _, err := s.CreateBoard("src", a.ID, "Matma"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetBoardBackground("src", "grid"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveImage("img1", "src", "image/png", []byte("PNGDATA")); err != nil {
+		t.Fatal(err)
+	}
+	ops := []Op{
+		{Add: true, ID: "s1", Data: []byte(`{"id":"s1","points":[[1,2,0.5]]}`)},
+		{Add: true, ID: "s2", Data: []byte(`{"id":"s2","kind":"image","src":"img1","points":[[0,0,0.5],[9,9,0.5]]}`)},
+	}
+	if err := s.Apply("src", ops, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	cp, err := s.CopyBoard("src", "dst", b.ID, "Matma (kopia)", func() string { n++; return "newimg" })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cp.ID != "dst" || cp.OwnerID != b.ID || cp.Name != "Matma (kopia)" || cp.Background != "grid" {
+		t.Fatalf("copy = %+v", cp)
+	}
+	strokes, err := s.LoadStrokes("dst")
+	if err != nil || len(strokes) != 2 {
+		t.Fatalf("strokes = %q %v", strokes, err)
+	}
+	if string(strokes[0]) != `{"id":"s1","points":[[1,2,0.5]]}` {
+		t.Fatalf("a plain stroke is copied as it is: %s", strokes[0])
+	}
+	if !strings.Contains(string(strokes[1]), `"src":"newimg"`) || strings.Contains(string(strokes[1]), "img1") {
+		t.Fatalf("the copied picture must point at the copied image: %s", strokes[1])
+	}
+	mime, data, err := s.Image("dst", "newimg")
+	if err != nil || mime != "image/png" || string(data) != "PNGDATA" {
+		t.Fatalf("copied image = %q %q %v", mime, data, err)
+	}
+	// The original is untouched and the copy lives on its own.
+	if orig, _ := s.LoadStrokes("src"); len(orig) != 2 || !strings.Contains(string(orig[1]), "img1") {
+		t.Fatalf("original changed: %q", orig)
+	}
+	if err := s.DeleteBoard("src"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.LoadStrokes("dst"); len(got) != 2 {
+		t.Fatal("deleting the original took the copy's strokes")
+	}
+	if _, _, err := s.Image("dst", "newimg"); err != nil {
+		t.Fatal("deleting the original took the copy's image")
+	}
+}
+
+func TestCopyBoardOfAMissingBoardFails(t *testing.T) {
+	s := open(t)
+	a := user(t, s, "a@example.com")
+	if _, err := s.CopyBoard("nope", "dst", a.ID, "x", func() string { return "i" }); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("got %v", err)
+	}
+	if _, err := s.Board("dst"); !errors.Is(err, ErrNotFound) {
+		t.Fatal("a failed copy left a board behind")
 	}
 }

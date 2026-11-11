@@ -20,6 +20,19 @@ describe("board menu (R-014)", () => {
 		});
 	});
 
+	test("the owner also gets a copy of the board", () => {
+		const onCopy = vi.fn();
+		const items = boardMenuItems(vi.fn(), onCopy);
+		expect(items.map((i) => i.label)).toEqual([
+			"PNG: widok",
+			"PNG: cała tablica",
+			"PDF: cała tablica",
+			"Utwórz kopię",
+		]);
+		items[3].onSelect();
+		expect(onCopy).toHaveBeenCalledOnce();
+	});
+
 	test("offers the three exports and reports the chosen one", () => {
 		const onPick = vi.fn();
 		const items = boardMenuItems(onPick);

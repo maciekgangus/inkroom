@@ -7,6 +7,9 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/maciekgangus/inkroom/server/internal/store"
 )
 
 type user struct{ cookie *http.Cookie }
@@ -243,5 +246,65 @@ func TestTheViewIsSavedPerUser(t *testing.T) {
 	}
 	if got := status(call(t, srv, "PUT", "/api/boards/ghost/view", `{"x":1,"y":2,"scale":1}`, &owner)); got != http.StatusNotFound {
 		t.Errorf("no such board: got %d", got)
+	}
+}
+
+func TestOwnerCopiesABoardWithItsDrawingsAndPictures(t *testing.T) {
+	srv, a, _ := testApp(t)
+	st := a.st
+	owner := register(t, srv, "a@example.com")
+	id := createBoard(t, srv, owner, "Matma")
+	img := uploadOK(t, srv, id, tinyPNG)
+	if err := st.Apply(id, []store.Op{{Add: true, ID: "s1", Data: []byte(`{"id":"s1","kind":"image","src":"` + img + `","points":[[0,0,0.5],[5,5,0.5]]}`)}}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	resp := call(t, srv, "POST", "/api/boards/"+id+"/copy", "", &owner)
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("copy = %d", resp.StatusCode)
+	}
+	out := decode(t, resp)
+	newID, _ := out["id"].(string)
+	if len(newID) != 32 || newID == id || out["name"] != "Matma (kopia)" {
+		t.Fatalf("copy = %v", out)
+	}
+	strokes, _ := st.LoadStrokes(newID)
+	if len(strokes) != 1 || strings.Contains(string(strokes[0]), img) {
+		t.Fatalf("copied strokes = %q", strokes)
+	}
+	// It is the copier's board, with its own link, listed in their panel.
+	list := decode(t, call(t, srv, "GET", "/api/boards", "", &owner))
+	if len(list["owned"].([]any)) != 2 {
+		t.Fatalf("owned = %v", list["owned"])
+	}
+}
+
+func TestOnlyTheOwnerCanCopyABoard(t *testing.T) {
+	srv, _, _ := testApp(t)
+	owner := register(t, srv, "a@example.com")
+	other := register(t, srv, "b@example.com")
+	id := createBoard(t, srv, owner, "Matma")
+	if r := call(t, srv, "POST", "/api/boards/"+id+"/copy", "", &other); r.StatusCode != http.StatusForbidden {
+		t.Fatalf("another user = %d, want 403", r.StatusCode)
+	}
+	if r := call(t, srv, "POST", "/api/boards/"+id+"/copy", "", nil); r.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("a guest = %d, want 401", r.StatusCode)
+	}
+	if r := call(t, srv, "POST", "/api/boards/ffffffffffffffffffffffffffffffff/copy", "", &owner); r.StatusCode != http.StatusNotFound {
+		t.Fatalf("missing board = %d, want 404", r.StatusCode)
+	}
+}
+
+func TestACopyIncludesWhatWasNotYetSavedToTheDatabase(t *testing.T) {
+	srv, _, _ := testApp(t)
+	owner := register(t, srv, "a@example.com")
+	id := createBoard(t, srv, owner, "Matma")
+	ws := dial(t, srv, id)
+	read(t, ws) // snapshot
+	write(t, ws, `{"t":"add","stroke":{"id":"s9","authorId":"x","color":"#111","size":4,"z":1,"points":[[1,1,0.5]]}}`)
+	read(t, ws) // echo: the room has it, the database may not yet
+	newID, _ := decode(t, call(t, srv, "POST", "/api/boards/"+id+"/copy", "", &owner))["id"].(string)
+	cp := dial(t, srv, newID)
+	if m := read(t, cp); m["t"] != "snapshot" || len(m["strokes"].([]any)) != 1 {
+		t.Fatalf("the copy misses a fresh stroke: %v", m)
 	}
 }
