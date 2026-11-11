@@ -510,6 +510,36 @@ export class Controller {
 	}
 
 	/** Selects elements by id (null or an empty list clears the selection) and shows their frame. */
+	/**
+	 * Starts adding images one by one, as the pages of a PDF arrive (R-056): each appears at once
+	 * and none is selected, and `done` makes the whole run one undo step.
+	 */
+	addImageBatch(): { add(src: string, rect: Rect): void; done(): void } {
+		const batch = this.board.addBatch(this.authorId);
+		return {
+			add: (src, rect) => {
+				if (this.readOnly) return;
+				batch.add(
+					withRect(
+						{
+							id: this.newId(),
+							authorId: this.authorId,
+							color: "#000000",
+							size: 1,
+							z: this.nextZ(),
+							kind: "image",
+							src,
+							points: [],
+						},
+						rect,
+					),
+				);
+				this.renderer.redraw(this.board.strokes);
+			},
+			done: () => batch.done(),
+		};
+	}
+
 	select(ids: string | string[] | null): void {
 		this.dropStylePreview();
 		this.groupRot = 0; // a new selection starts with an upright frame

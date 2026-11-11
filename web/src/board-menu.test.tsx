@@ -33,6 +33,11 @@ describe("board menu (R-014)", () => {
 		expect(onCopy).toHaveBeenCalledOnce();
 	});
 
+	test("has no PDF entry: loading a PDF is a button of the toolbar, next to the image (R-056)", () => {
+		const labels = boardMenuItems(vi.fn(), vi.fn()).map((i) => i.label);
+		expect(labels).not.toContain("Wczytaj PDF");
+	});
+
 	test("offers the three exports and reports the chosen one", () => {
 		const onPick = vi.fn();
 		const items = boardMenuItems(onPick);
