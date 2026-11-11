@@ -31,19 +31,19 @@ Priorytety: P1 do pierwszej lekcji, P2 zaraz po niej, P3 później. Statusy: pro
 | R-008 | Cofnij i ponów działają per użytkownik: każdy cofa tylko własne ruchy (osobny stos w obrębie sesji) | P1 | done |
 | R-009 | Panel twórcy z listą jego tablic (nazwa, data ostatniej zmiany, kopiowanie linku, otwarcie, usunięcie) | P1 | done |
 | R-010 | Nieskończone lub przewijane płótno, przesuwanie i powiększanie | P2 | done |
-| R-011 | Kilka stron (kart) w jednej tablicy | P2 | proposed |
+| R-011 | Kilka stron (kart) w jednej tablicy | P2 | dropped |
 | R-012 | Narzędzia: linia, prostokąt, elipsa (z Shift okrąg), tekst | P2 | done |
 | R-013 | Wskaźniki kursorów pozostałych osób na tablicy | P2 | done |
-| R-014 | Eksport tablicy do PNG lub PDF | P2 | proposed |
+| R-014 | Eksport tablicy do PNG (cała tablica albo bieżący widok) lub do PDF (jedna strona o rozmiarze zawartości) | P2 | accepted |
 | R-015 | Wstawianie obrazu (np. zadanie ze zdjęcia) | P3 | done |
-| R-016 | Twórca może ustawić tablicę jako "uczestnicy tylko oglądają" albo "uczestnicy rysują" | P3 | proposed |
+| R-016 | Prawa uczestników do rysowania ustawia twórca z paska aktywnych osób (R-046): kliknięcie znaczka (awatara) uczestnika otwiera małe menu z opcją "Zabierz możliwość rysowania" albo "Pozwól rysować" (tylko dla twórcy). Uczestnik bez prawa rysowania może oglądać, przesuwać i przybliżać widok oraz widzi kursory, ale nie zmienia elementów; narzędzia rysowania są u niego wyłączone, a serwer odrzuca jego operacje. Zmiana działa od razu, na żywo, i zapisuje się przy tablicy (dla gościa po imieniu i sesji, dla konta po koncie). Domyślnie wszyscy rysują. Zastępuje pomysł jednego przełącznika dla całej tablicy | P3 | proposed |
 | R-017 | Uczestnik z kontem widzi w panelu osobną listę "tablice, do których mam dostęp" | P2 | done |
 | R-018 | Kilku uczestników jednocześnie na jednej tablicy | P2 | done |
 | R-019 | Usunięcie tablicy tylko przez twórcę, z potwierdzeniem; usunięcie jest trwałe, a link przestaje działać | P1 | done |
-| R-020 | Przywracanie wcześniejszej wersji tablicy (historia/snapshoty), np. po przypadkowym skasowaniu cudzej pracy | P3 | proposed |
+| R-020 | Kopiowanie tablicy: w menu tablicy (panel i górny pasek) opcja "Utwórz kopię", która tworzy nową tablicę z własnym linkiem i bieżącą zawartością (elementy, obrazy, tło), należącą do osoby kopiującej (twórcę). Służy jako ręczna kopia zapasowa przed zmianami; zastępuje automatyczną historię wersji i snapshoty | P3 | proposed |
 | R-021 | Każdy rysowany element (kreska, linia, prostokąt, okrąg, tekst, obraz) jest obiektem: kreska odręczna to jeden obiekt (zbiór punktów) zaznaczany, przesuwany i kasowany w całości. Narzędzie "Zaznacz" łapie obiekt (klik) lub kilka (ramka, Shift) i pozwala je przesuwać, skalować i obracać; każdy uczestnik z prawem rysowania może edytować cudze obiekty (jak R-004) | P2 | done |
 | R-022 | Edycja właściwości zaznaczonych obiektów: kolor, grubość linii (rozmiar czcionki dla tekstu), styl linii (ciągła, kreskowana, kropkowana), wypełnienie kształtów, przezroczystość, treść tekstu (dwuklik); zmiana jest cofalna (R-008) i widoczna dla wszystkich (R-006) | P2 | done |
-| R-023 | Operacje na zaznaczeniu: usuń, duplikuj, kopiuj i wklej, na wierzch i na spód (kolejność warstw), grupowanie obiektów w stałą grupę | P3 | proposed |
+| R-023 | Operacje na zaznaczeniu: usuń, duplikuj, kopiuj i wklej, na wierzch i na spód (kolejność warstw); zaznaczanie kilku obiektów naraz zastępuje stałe grupy | P3 | done |
 | R-024 | Ułatwienia rysowania z klawiszem Shift na komputerze: linia przyciąga się do kątów co 15° (0°, 15°, 30°, 45°, 60°, 75°, 90° itd.), prostokąt staje się kwadratem, elipsa (narzędzie owalu rysuje domyślnie elipsę) staje się kołem; na tabletach bez klawiatury (iPad) ułatwień nie ma | P2 | done |
 | R-025 | Rozszerzona paleta kolorów: 5 szybkich kolorów zostaje w pasku narzędzi, a obok wysuwany panel z ok. 12 dodatkowymi kolorami i dowolnym kolorem z próbnika; wybrany kolor działa dla pióra, kształtów i tekstu | P2 | done |
 | R-026 | Tryb ciemny całej aplikacji, łącznie z tablicą: domyślnie według ustawienia systemu, ręczny przełącznik zapamiętywany na urządzeniu; to ustawienie osobiste, niewspółdzielone. Domyślny czarny tusz jest w trybie ciemnym wyświetlany jako biały (a biały jako czarny), pozostałe kolory bez zmian, więc ta sama tablica jest czytelna w obu trybach | P2 | done |
@@ -142,3 +142,4 @@ Miary to propozycje startowe, do potwierdzenia po pierwszych testach na prawdziw
 - 2026-11-10: dodano R-043 (dalsza optymalizacja wydajności, dla mocniejszego modelu), R-044 (pole tekstowe jako obszar), R-045 (nazwa tablicy u góry, zmiana przez właściciela) i R-046 (aktywni uczestnicy w rogu).
 - 2026-11-10: po teście: suwaki wypełniają się równo z kciukiem; górny pasek łączy nazwę tablicy, narzędzia i uczestników; tekst ma wbudowaną czcionkę (Inter); panel narzędzi (R-042) pływa przy obiekcie i przy pisanym tekście.
 - 2026-11-10: uchwyty zaznaczenia są jednakowe dla wszystkich obiektów: różowe kropki (rogi, środki boków, obrót) stojące 16 px od obiektu, bez obramowania; uchwyty zaznaczonego, a usuniętego lub zmienionego zdalnie obiektu odświeżają się.
+- 2026-11-11: R-011 (strony) `dropped`; R-014 (eksport PNG/PDF) `accepted`; R-016 przepisane: twórca daje lub zabiera prawo rysowania per uczestnik z menu pod awatarem (R-046); R-020 zmienione na kopiowanie tablicy z menu zamiast historii wersji; R-023 `done`: usuń, duplikuj, kopiuj i kolejność warstw są gotowe, a stałe grupy odpadają (wystarcza zaznaczanie wielu obiektów).
