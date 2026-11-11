@@ -36,6 +36,8 @@ const ICONS = {
 	trapezoid: "M8 6h8l4 12H4Z",
 	rhombus: "M12 3l8 9-8 9-8-9Z",
 	parallelogram: "M8 6h12l-4 12H4Z",
+	link: "M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1",
+	close: "M6 6l12 12M18 6 6 18",
 	download: "M12 4v11M7 11l5 5 5-5M5 20h14",
 	image:
 		"M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1ZM8.5 10a1.5 1.5 0 1 0 0-3a1.5 1.5 0 0 0 0 3ZM20 15l-5-5L5 20",

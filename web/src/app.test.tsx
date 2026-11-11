@@ -74,9 +74,12 @@ describe("App", () => {
 	};
 	const text = () => root.textContent ?? "";
 	const waitText = (s: string) => vi.waitFor(() => expect(text()).toContain(s));
+	// A button is found by its text or, for an icon, by its label.
 	const button = (label: string) =>
-		[...root.querySelectorAll("button")].find((b) =>
-			b.textContent?.includes(label),
+		[...root.querySelectorAll("button")].find(
+			(b) =>
+				b.textContent?.includes(label) ||
+				b.getAttribute("aria-label")?.includes(label),
 		) as HTMLButtonElement;
 	const click = async (label: string) => {
 		await act(async () => {
@@ -522,7 +525,7 @@ describe("App", () => {
 					body: { background: "plain", strokes: [] },
 				},
 			});
-			const openPanel = async (extra = {}) => {
+			const openPanel = async (extra = {}, navigate = vi.fn()) => {
 				const api = mockApi({
 					"GET /api/me": LOGGED_IN,
 					"GET /api/boards": { body: boards },
@@ -530,10 +533,14 @@ describe("App", () => {
 					...preview(FID),
 					...extra,
 				});
-				await mount({ path: "/" });
+				await mount({ path: "/", navigate });
 				await waitText("Matma");
 				return api;
 			};
+			const tileOf = (name: string) =>
+				[...root.querySelectorAll(".boards .board")].find((r) =>
+					r.textContent?.includes(name),
+				) as HTMLElement;
 			const lists = () => [...root.querySelectorAll(".boards")];
 			const pressed = (label: string) =>
 				button(label)?.getAttribute("aria-pressed") === "true";
@@ -568,8 +575,10 @@ describe("App", () => {
 					r.textContent?.includes("Cudza"),
 				);
 				expect(tile?.textContent).toContain("Tablica: pani.anna");
-				expect(tile?.textContent).toContain("Otwórz");
-				expect(tile?.textContent).toContain("Usuń z listy");
+				expect(
+					tile?.querySelector('[aria-label="Usuń z listy"]'),
+				).not.toBeNull();
+				expect(tile?.querySelector("a.tile-link")).not.toBeNull();
 			});
 
 			test("the choice is remembered on the device", async () => {
@@ -608,6 +617,91 @@ describe("App", () => {
 				expect(drawn).toHaveBeenCalledTimes(1); // only the other board
 			});
 
+			test("the whole tile opens the board, and there is no 'Otwórz' button", async () => {
+				const navigate = vi.fn();
+				await openPanel({}, navigate);
+				await click("Kafelki");
+				expect(button("Otwórz")).toBeUndefined();
+				const link = tileOf("Matma").querySelector(
+					"a.tile-link",
+				) as HTMLAnchorElement;
+				expect(link.getAttribute("href")).toBe(`/b/${ID}`);
+				expect(link.textContent).toContain("Matma"); // the picture and the name are the link
+				await act(async () => {
+					link
+						.querySelector(".preview-box")
+						?.dispatchEvent(
+							new MouseEvent("click", { bubbles: true, cancelable: true }),
+						);
+				});
+				expect(navigate).toHaveBeenCalledWith(`/b/${ID}`);
+			});
+
+			test("a click with a modifier is left to the browser (a new tab)", async () => {
+				const navigate = vi.fn();
+				await openPanel({}, navigate);
+				await click("Kafelki");
+				const link = tileOf("Matma").querySelector(
+					"a.tile-link",
+				) as HTMLAnchorElement;
+				const e = new MouseEvent("click", {
+					bubbles: true,
+					cancelable: true,
+					ctrlKey: true,
+				});
+				await act(async () => {
+					link.dispatchEvent(e);
+				});
+				expect(navigate).not.toHaveBeenCalled();
+				expect(e.defaultPrevented).toBe(false);
+			});
+
+			test("the buttons of a tile are icons, each with a label", async () => {
+				await openPanel();
+				await click("Kafelki");
+				const buttons = [
+					...tileOf("Matma").querySelectorAll(".actions button"),
+				];
+				expect(buttons.map((b) => b.getAttribute("aria-label"))).toEqual([
+					"Kopiuj link",
+					"Utwórz kopię",
+					"Zmień nazwę",
+					"Usuń",
+				]);
+				for (const b of buttons) {
+					expect(b.textContent?.trim()).toBe("");
+					expect(b.querySelector("svg")).not.toBeNull();
+					expect(b.getAttribute("title")).toBe(b.getAttribute("aria-label"));
+				}
+				const theirs = [...tileOf("Cudza").querySelectorAll(".actions button")];
+				expect(theirs.map((b) => b.getAttribute("aria-label"))).toEqual([
+					"Kopiuj link",
+					"Usuń z listy",
+				]);
+			});
+
+			test("deleting from a tile still asks first", async () => {
+				const api = await openPanel({
+					[`DELETE /api/boards/${ID}`]: { status: 204 },
+				});
+				await click("Kafelki");
+				const del = tileOf("Matma").querySelector(
+					'.actions button[aria-label="Usuń"]',
+				) as HTMLButtonElement;
+				await act(async () => del.click());
+				expect(api.called(`DELETE /api/boards/${ID}`)).toHaveLength(0);
+				expect(tileOf("Matma").textContent).toContain("Na pewno");
+				await click("Na pewno");
+				await vi.waitFor(() => expect(text()).not.toContain("Matma"));
+				expect(api.called(`DELETE /api/boards/${ID}`)).toHaveLength(1);
+			});
+
+			test("the list keeps its words and its Otwórz button", async () => {
+				await openPanel();
+				expect(button("Otwórz")).toBeDefined();
+				expect(tileOf("Matma").textContent).toContain("Zmień nazwę");
+			});
+
 			test("a board whose preview cannot be loaded still has its tile", async () => {
 				await openPanel({
 					[`GET /api/boards/${ID}/preview`]: {
@@ -621,6 +715,33 @@ describe("App", () => {
 				);
 				expect(text()).toContain("Matma");
 			});
+		});
+
+		test("the time of the last change has a date and an hour, no seconds (both views)", async () => {
+			mockApi({
+				"GET /api/me": LOGGED_IN,
+				"GET /api/boards": { body: boards },
+				[`GET /api/boards/${ID}/preview`]: {
+					body: { background: "plain", strokes: [] },
+				},
+			});
+			await mount({ path: "/" });
+			await waitText("Matma");
+			for (const view of ["Lista", "Kafelki"]) {
+				await click(view);
+				const when = root.querySelector(".board .when") as HTMLElement;
+				expect(when.textContent).toMatch(
+					/^\d{2}\.\d{2}\.\d{4}\s·\s\d{2}:\d{2}$/,
+				);
+				expect(when.tagName).toBe("TIME");
+				expect(when.getAttribute("datetime")).toBe("2026-11-09T10:00:00Z");
+				expect(when.querySelector(".time")?.textContent).toMatch(
+					/^\d{2}:\d{2}$/,
+				);
+				expect(when.querySelector(".date")?.textContent).toMatch(
+					/^\d{2}\.\d{2}\.\d{4}$/,
+				);
+			}
 		});
 
 		test("a board that is not mine cannot be copied", async () => {

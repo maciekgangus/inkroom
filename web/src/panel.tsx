@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import type { BoardSummary } from "./api";
 import * as api from "./api";
 import { BoardPreview } from "./board-preview";
+import { Icon, type IconName } from "./icon";
 
 const VIEW_KEY = "inkroom.boardView";
 type View = "list" | "tiles";
@@ -259,9 +260,48 @@ function BoardRow({
 		}
 	};
 
+	// One action of the row: a word in a list, an icon with the word as its label in a tile.
+	const action = (
+		label: string,
+		icon: IconName,
+		onClick: () => void,
+		extra = "",
+	) =>
+		tiles ? (
+			<button
+				type="button"
+				class={`icon-btn ${extra}`.trim()}
+				aria-label={label}
+				title={label}
+				onClick={onClick}
+			>
+				<Icon name={icon} />
+			</button>
+		) : (
+			<button type="button" class={extra || undefined} onClick={onClick}>
+				{label}
+			</button>
+		);
+
+	const open = (e: MouseEvent) => {
+		// A click with a modifier (or another button) is the browser's: a new tab, a menu.
+		if (e.defaultPrevented || e.button !== 0) return;
+		if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+		e.preventDefault();
+		navigate(`/b/${board.id}`);
+	};
+	const nameNode = <span class="name">{board.name}</span>;
+	const when = formatWhen(board.updatedAt);
+
 	return (
 		<li class="board">
-			{tiles && <BoardPreview boardId={board.id} />}
+			{tiles && (
+				// The picture and the name are one link: the whole tile opens the board.
+				<a class="tile-link" href={`/b/${board.id}`} onClick={open}>
+					<BoardPreview boardId={board.id} />
+					{!renaming && nameNode}
+				</a>
+			)}
 			{renaming ? (
 				<form
 					class="row"
@@ -274,48 +314,37 @@ function BoardRow({
 					<button type="submit">Zapisz</button>
 				</form>
 			) : (
-				<span class="name">{board.name}</span>
+				!tiles && nameNode
 			)}
 			{!mine && board.owner && (
 				<span class="muted owner">Tablica: {board.owner}</span>
 			)}
-			<span class="muted">
-				{new Date(board.updatedAt).toLocaleString("pl-PL")}
-			</span>
-			<span class="row">
-				<button type="button" onClick={() => navigate(`/b/${board.id}`)}>
-					Otwórz
-				</button>
-				<button
-					type="button"
-					onClick={() => navigator.clipboard?.writeText(link)}
-				>
-					Kopiuj link
-				</button>
-				{mine && (
-					<button type="button" onClick={copy}>
-						Utwórz kopię
+			<time class="when muted" dateTime={board.updatedAt}>
+				<span class="date">{when.date}</span>
+				<span class="sep"> · </span>
+				<span class="time">{when.time}</span>
+			</time>
+			<span class="row actions">
+				{!tiles && (
+					<button type="button" onClick={() => navigate(`/b/${board.id}`)}>
+						Otwórz
 					</button>
 				)}
-				{mine && !renaming && (
-					<button type="button" onClick={() => setRenaming(true)}>
-						Zmień nazwę
-					</button>
+				{action("Kopiuj link", "link", () =>
+					navigator.clipboard?.writeText(link),
 				)}
-				{!mine && (
-					<button type="button" onClick={forget}>
-						Usuń z listy
-					</button>
-				)}
+				{mine && action("Utwórz kopię", "copy", copy)}
+				{mine &&
+					!renaming &&
+					action("Zmień nazwę", "pen", () => setRenaming(true))}
+				{!mine && action("Usuń z listy", "close", forget)}
 				{mine &&
 					(confirming ? (
 						<button type="button" class="danger" onClick={remove}>
 							Na pewno usunąć?
 						</button>
 					) : (
-						<button type="button" onClick={() => setConfirming(true)}>
-							Usuń
-						</button>
+						action("Usuń", "trash", () => setConfirming(true))
 					))}
 			</span>
 			{error && (
@@ -325,4 +354,17 @@ function BoardRow({
 			)}
 		</li>
 	);
+}
+
+/** The date and the hour of a change, apart and without seconds ("11.11.2026" and "14:18"). */
+function formatWhen(iso: string): { date: string; time: string } {
+	const d = new Date(iso);
+	return {
+		date: d.toLocaleDateString("pl-PL", {
+			day: "2-digit",
+			month: "2-digit",
+			year: "numeric",
+		}),
+		time: d.toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" }),
+	};
 }
