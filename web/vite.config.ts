@@ -9,5 +9,5 @@ export default defineConfig({
 			"/ws": { target: "ws://localhost:8080", ws: true },
 		},
 	},
-	test: { environment: "jsdom" },
+	test: { environment: "jsdom", exclude: ["e2e/**", "node_modules/**"] },
 });

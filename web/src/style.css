@@ -751,16 +751,38 @@ canvas {
 	display: flex;
 	align-items: center;
 	gap: 8px;
+	/* left: 50% leaves a fixed box only half the screen to size itself in, so it must size to its
+	   content (not shrink to that half), and drop to a second row when the screen is too narrow. */
+	width: max-content;
 	max-width: calc(100vw - 16px);
+	flex-wrap: wrap;
+	justify-content: center;
 	transform: translateX(-50%);
 }
 .topbar .toolbar {
 	position: relative;
 	top: auto;
 	left: auto;
-	flex: 0 1 auto;
-	max-width: none;
+	flex: none;
+	max-width: calc(100vw - 16px);
 	transform: none;
+}
+/* Too narrow for one row (an iPad upright): the name and people on top, the tools below. */
+@media (max-width: 860px) {
+	.topbar .toolbar {
+		order: 3;
+	}
+	/* A little tighter, so the whole tool bar still fits one row on an iPad held upright. */
+	.toolbar .group {
+		padding: 0 3px;
+	}
+	.toolbar button {
+		min-width: 36px;
+		width: 36px;
+	}
+	.toolbar .swatch {
+		margin: 6px;
+	}
 }
 .topbar .board-title,
 .topbar .participants,
