@@ -75,6 +75,9 @@ export const renameBoard = (id: string, name: string) =>
 export const deleteBoard = (id: string) =>
 	request<void>("DELETE", `/api/boards/${id}`);
 
+export const copyBoard = (id: string) =>
+	request<{ id: string; name: string }>("POST", `/api/boards/${id}/copy`, {});
+
 export const setBackground = (id: string, background: string) =>
 	request<void>("PUT", `/api/boards/${id}/background`, { background });
 

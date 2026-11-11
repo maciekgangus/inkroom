@@ -69,6 +69,8 @@ interface Props {
 	onRename?: (name: string) => Promise<void>;
 	/** True for the board's owner, who may give and take away other people's drawing (R-016). */
 	owner?: boolean;
+	/** Makes a copy of the board and returns it; given only to the board's owner (R-020). */
+	onCopy?: () => Promise<{ id: string; name: string }>;
 	/** Saves a new shared background; given only to the board's owner (R-027). */
 	onSetBackground?: (background: Background) => Promise<void>;
 }
@@ -89,6 +91,7 @@ export function BoardView({
 	onRename,
 	connect,
 	owner,
+	onCopy,
 	onSetBackground,
 }: Props) {
 	const [background, setBackground] = useState<Background>("plain");
@@ -153,6 +156,9 @@ export function BoardView({
 	const boardRef = useRef<Board | null>(null);
 	const imagesRef = useRef<ImageCache | null>(null);
 	const [boardMenu, setBoardMenu] = useState<MenuAt | null>(null);
+	const [copied, setCopied] = useState<{ id: string; name: string } | null>(
+		null,
+	);
 	/** The map of the board in a corner; whether it is shown is remembered on this device. */
 	const [mapOpen, setMapOpenState] = useState(() => {
 		try {
@@ -971,18 +977,37 @@ export function BoardView({
 				<ContextMenu
 					x={boardMenu.x}
 					y={boardMenu.y}
-					items={boardMenuItems((a) =>
-						exportBoard(
-							a,
-							boardRef.current?.strokes ?? [],
-							viewport.worldRect(innerWidth, innerHeight),
-							background,
-							imagesRef.current,
-							title,
-						).then((ok) => ok || setImageError("Tablica jest pusta.")),
+					items={boardMenuItems(
+						(a) =>
+							exportBoard(
+								a,
+								boardRef.current?.strokes ?? [],
+								viewport.worldRect(innerWidth, innerHeight),
+								background,
+								imagesRef.current,
+								title,
+							).then((ok) => ok || setImageError("Tablica jest pusta.")),
+						onCopy
+							? () =>
+									onCopy().then(
+										(copy) => setCopied(copy),
+										() => setImageError("Nie udało się utworzyć kopii."),
+									)
+							: undefined,
 					)}
 					onClose={() => setBoardMenu(null)}
 				/>
+			)}
+			{copied && (
+				<div class="toast notice" role="status">
+					Utworzono kopię „{copied.name}”.{" "}
+					<a href={`/b/${copied.id}`} target="_blank" rel="noreferrer">
+						Otwórz
+					</a>{" "}
+					<button type="button" onClick={() => setCopied(null)}>
+						Zamknij
+					</button>
+				</div>
 			)}
 			{imageError && (
 				<div class="toast" role="alert">

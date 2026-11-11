@@ -226,6 +226,40 @@ describe("App", () => {
 			});
 		});
 
+		test("copies a board and shows the copy at the top of my boards", async () => {
+			const api = mockApi({
+				"GET /api/me": LOGGED_IN,
+				"GET /api/boards": { body: boards },
+				[`POST /api/boards/${ID}/copy`]: {
+					status: 201,
+					body: { id: "c".repeat(32), name: "Matma (kopia)" },
+				},
+			});
+			await mount({ path: "/" });
+			await waitText("Matma");
+			await click("Utwórz kopię");
+			await waitText("Matma (kopia)");
+			expect(api.called(`POST /api/boards/${ID}/copy`)).toHaveLength(1);
+			const names = [...root.querySelectorAll(".boards .name")].map(
+				(n) => n.textContent,
+			);
+			expect(names.slice(0, 2)).toEqual(["Matma (kopia)", "Matma"]);
+		});
+
+		test("a board that is not mine cannot be copied", async () => {
+			mockApi({
+				"GET /api/me": LOGGED_IN,
+				"GET /api/boards": { body: boards },
+			});
+			await mount({ path: "/" });
+			await waitText("Cudza");
+			expect(
+				[...root.querySelectorAll("button")].filter((b) =>
+					b.textContent?.includes("Utwórz kopię"),
+				),
+			).toHaveLength(1); // only the one under "Moje tablice"
+		});
+
 		test("logging out returns to the login forms", async () => {
 			const api = mockApi({
 				"GET /api/me": LOGGED_IN,

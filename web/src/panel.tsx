@@ -88,6 +88,12 @@ export function Panel({ email, navigate, onLogout }: Props) {
 								setOwned(owned.map((x) => (x.id === b.id ? { ...x, name } : x)))
 							}
 							onDeleted={() => setOwned(owned.filter((x) => x.id !== b.id))}
+							onCopied={(copy) =>
+								setOwned([
+									{ ...copy, updatedAt: new Date().toISOString() },
+									...owned,
+								])
+							}
 						/>
 					))}
 				</ul>
@@ -113,9 +119,18 @@ interface RowProps {
 	navigate: (to: string) => void;
 	onRenamed?: (name: string) => void;
 	onDeleted?: () => void;
+	/** Called with the new board after the owner made a copy (R-020). */
+	onCopied?: (copy: { id: string; name: string }) => void;
 }
 
-function BoardRow({ board, mine, navigate, onRenamed, onDeleted }: RowProps) {
+function BoardRow({
+	board,
+	mine,
+	navigate,
+	onRenamed,
+	onDeleted,
+	onCopied,
+}: RowProps) {
 	const [renaming, setRenaming] = useState(false);
 	const [confirming, setConfirming] = useState(false);
 	const [error, setError] = useState("");
@@ -128,6 +143,14 @@ function BoardRow({ board, mine, navigate, onRenamed, onDeleted }: RowProps) {
 			await api.renameBoard(board.id, name);
 			onRenamed?.(name);
 			setRenaming(false);
+		} catch (e) {
+			setError(e instanceof Error ? e.message : "Błąd");
+		}
+	};
+
+	const copy = async () => {
+		try {
+			onCopied?.(await api.copyBoard(board.id));
 		} catch (e) {
 			setError(e instanceof Error ? e.message : "Błąd");
 		}
@@ -172,6 +195,11 @@ function BoardRow({ board, mine, navigate, onRenamed, onDeleted }: RowProps) {
 				>
 					Kopiuj link
 				</button>
+				{mine && (
+					<button type="button" onClick={copy}>
+						Utwórz kopię
+					</button>
+				)}
 				{mine && !renaming && (
 					<button type="button" onClick={() => setRenaming(true)}>
 						Zmień nazwę

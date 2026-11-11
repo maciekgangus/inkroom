@@ -135,6 +135,7 @@ function BoardPage({
 			boardName={info.name}
 			onRename={info.owner ? (n) => api.renameBoard(id, n) : undefined}
 			owner={info.owner}
+			onCopy={info.owner ? () => api.copyBoard(id) : undefined}
 			onSetBackground={info.owner ? (b) => api.setBackground(id, b) : undefined}
 		/>
 	);
