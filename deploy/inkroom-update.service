@@ -1,0 +1,10 @@
+[Unit]
+Description=Update Inkroom to the newest image
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Where this folder was copied to; edit the path to match.
+WorkingDirectory=/opt/inkroom
+ExecStart=/opt/inkroom/update.sh

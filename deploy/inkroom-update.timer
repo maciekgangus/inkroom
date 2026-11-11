@@ -1,0 +1,12 @@
+[Unit]
+Description=Update Inkroom every night
+
+[Timer]
+# After the lessons, with a few minutes of spread; Persistent runs a missed one when the
+# machine was off at 04:00.
+OnCalendar=*-*-* 04:00
+RandomizedDelaySec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
