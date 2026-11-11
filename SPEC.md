@@ -34,7 +34,7 @@ Priorytety: P1 do pierwszej lekcji, P2 zaraz po niej, P3 później. Statusy: pro
 | R-011 | Kilka stron (kart) w jednej tablicy | P2 | dropped |
 | R-012 | Narzędzia: linia, prostokąt, elipsa (z Shift okrąg), tekst | P2 | done |
 | R-013 | Wskaźniki kursorów pozostałych osób na tablicy | P2 | done |
-| R-014 | Eksport tablicy do PNG (cała tablica albo bieżący widok) lub do PDF (jedna strona o rozmiarze zawartości) | P2 | accepted |
+| R-014 | Eksport tablicy do PNG (cała tablica albo bieżący widok) lub do PDF (jedna strona o rozmiarze zawartości) | P2 | done |
 | R-015 | Wstawianie obrazu (np. zadanie ze zdjęcia) | P3 | done |
 | R-016 | Prawa uczestników do rysowania ustawia twórca z paska aktywnych osób (R-046): kliknięcie znaczka (awatara) uczestnika otwiera małe menu z opcją "Zabierz możliwość rysowania" albo "Pozwól rysować" (tylko dla twórcy). Uczestnik bez prawa rysowania może oglądać, przesuwać i przybliżać widok oraz widzi kursory, ale nie zmienia elementów; narzędzia rysowania są u niego wyłączone, a serwer odrzuca jego operacje. Zmiana działa od razu, na żywo, i zapisuje się przy tablicy (dla gościa po imieniu i sesji, dla konta po koncie). Domyślnie wszyscy rysują. Zastępuje pomysł jednego przełącznika dla całej tablicy | P3 | proposed |
 | R-017 | Uczestnik z kontem widzi w panelu osobną listę "tablice, do których mam dostęp" | P2 | done |
@@ -143,3 +143,4 @@ Miary to propozycje startowe, do potwierdzenia po pierwszych testach na prawdziw
 - 2026-11-10: po teście: suwaki wypełniają się równo z kciukiem; górny pasek łączy nazwę tablicy, narzędzia i uczestników; tekst ma wbudowaną czcionkę (Inter); panel narzędzi (R-042) pływa przy obiekcie i przy pisanym tekście.
 - 2026-11-10: uchwyty zaznaczenia są jednakowe dla wszystkich obiektów: różowe kropki (rogi, środki boków, obrót) stojące 16 px od obiektu, bez obramowania; uchwyty zaznaczonego, a usuniętego lub zmienionego zdalnie obiektu odświeżają się.
 - 2026-11-11: R-011 (strony) `dropped`; R-014 (eksport PNG/PDF) `accepted`; R-016 przepisane: twórca daje lub zabiera prawo rysowania per uczestnik z menu pod awatarem (R-046); R-020 zmienione na kopiowanie tablicy z menu zamiast historii wersji; R-023 `done`: usuń, duplikuj, kopiuj i kolejność warstw są gotowe, a stałe grupy odpadają (wystarcza zaznaczanie wielu obiektów).
+- 2026-11-11: R-014 (eksport PNG i PDF z menu tablicy w górnym pasku) `done` po teście ręcznym.

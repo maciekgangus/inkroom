@@ -711,6 +711,18 @@ canvas {
  * The top bar: the board's name on the left of the tools and the people on the board on the
  * right, one menu (R-045, R-046). The name has a fixed size, whatever it says.
  */
+.board-menu {
+	width: 40px;
+	height: 40px;
+	padding: 0;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: color-mix(in srgb, var(--surface) 85%, transparent);
+	-webkit-backdrop-filter: blur(12px);
+	backdrop-filter: blur(12px);
+	box-shadow: var(--shadow);
+	color: var(--icon);
+}
 .topbar {
 	position: fixed;
 	top: 12px;
@@ -731,7 +743,8 @@ canvas {
 	transform: none;
 }
 .topbar .board-title,
-.topbar .participants {
+.topbar .participants,
+.topbar .board-menu {
 	position: static;
 	flex: none;
 }
