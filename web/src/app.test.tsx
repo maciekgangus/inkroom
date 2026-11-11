@@ -266,6 +266,7 @@ describe("App", () => {
 					id: "f".repeat(32),
 					name: "Cudza",
 					updatedAt: "2026-11-08T10:00:00Z",
+					owner: "pani.anna",
 				},
 			],
 		};
@@ -458,6 +459,47 @@ describe("App", () => {
 				await new Promise((r) => setTimeout(r, 50));
 				expect(text()).toContain("Matma");
 			});
+		});
+
+		test("a board that is somebody else's says whose it is (R-051)", async () => {
+			mockApi({
+				"GET /api/me": LOGGED_IN,
+				"GET /api/boards": { body: boards },
+			});
+			await mount({ path: "/" });
+			await waitText("Cudza");
+			const rows = [...root.querySelectorAll(".boards .board")];
+			const theirs = rows.find((r) => r.textContent?.includes("Cudza"));
+			const mine = rows.find((r) => r.textContent?.includes("Matma"));
+			expect(theirs?.textContent).toContain("Tablica: pani.anna");
+			expect(mine?.textContent).not.toContain("Tablica:");
+		});
+
+		test("a joined board can be dropped from the list without a question", async () => {
+			const FID = "f".repeat(32);
+			const api = mockApi({
+				"GET /api/me": LOGGED_IN,
+				"GET /api/boards": { body: boards },
+				[`DELETE /api/boards/${FID}/visit`]: { status: 204 },
+			});
+			await mount({ path: "/", navigate: vi.fn() });
+			await waitText("Cudza");
+			await click("Usuń z listy");
+			await vi.waitFor(() => expect(text()).not.toContain("Cudza"));
+			expect(api.called(`DELETE /api/boards/${FID}/visit`)).toHaveLength(1);
+			expect(text()).toContain("Matma"); // my own board is still there
+			expect(api.called(`DELETE /api/boards/${ID}`)).toHaveLength(0);
+		});
+
+		test("my own board has no 'drop from the list', only a delete", async () => {
+			mockApi({
+				"GET /api/me": LOGGED_IN,
+				"GET /api/boards": { body: { owned: boards.owned, visited: [] } },
+			});
+			await mount({ path: "/" });
+			await waitText("Matma");
+			expect(button("Usuń z listy")).toBeUndefined();
+			expect(button("Usuń")).toBeDefined();
 		});
 
 		test("a board that is not mine cannot be copied", async () => {

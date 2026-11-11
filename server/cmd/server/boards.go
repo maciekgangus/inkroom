@@ -23,12 +23,14 @@ type boardJSON struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
 	UpdatedAt string `json:"updatedAt"`
+	// Owner is the owner's username, given for boards of other people only (R-051).
+	Owner string `json:"owner,omitempty"`
 }
 
 func toJSON(boards []store.Board) []boardJSON {
 	out := make([]boardJSON, 0, len(boards))
 	for _, b := range boards {
-		out = append(out, boardJSON{ID: b.ID, Name: b.Name, UpdatedAt: b.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z")})
+		out = append(out, boardJSON{ID: b.ID, Name: b.Name, UpdatedAt: b.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z"), Owner: b.OwnerName})
 	}
 	return out
 }
@@ -212,6 +214,24 @@ func (a *app) copyBoard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]string{"id": cp.ID, "name": cp.Name})
+}
+
+// forgetBoard takes a board off the caller's list of boards they were invited to (R-051). The
+// board stays as it is, and opening its link again lists it again.
+func (a *app) forgetBoard(w http.ResponseWriter, r *http.Request) {
+	if !auth.RequireJSON(w, r) {
+		return
+	}
+	u, ok := a.auth.User(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Nie jesteś zalogowany")
+		return
+	}
+	if err := a.st.RemoveVisit(u.ID, r.PathValue("id")); err != nil {
+		writeError(w, http.StatusInternalServerError, "Błąd serwera")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // Limits of a saved view: the zoom the board allows and a generous reach for the position.
