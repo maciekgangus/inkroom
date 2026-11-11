@@ -1,17 +1,30 @@
-# The app on the VPS: the image from the registry, no build (ADR 0014). Copy this folder to the
-# server; its .env (never in the repo) holds the secrets, e.g. TURNSTILE_SITE_KEY and
-# TURNSTILE_SECRET (ADR 0013). Tracks :latest, the last release; INKROOM_TAG pins another one.
+# The app and its tunnel on the VPS (ADR 0003, ADR 0014). Copy this folder to the server and put a
+# .env beside it (never in the repo; see env.template). Nothing here opens a port to the internet:
+# visitors reach the app through the tunnel, which `cloudflared` dials out from this machine.
 services:
   app:
+    # The image from the registry, no build. Tracks :latest (the last release); INKROOM_TAG in
+    # .env or the environment pins another one (a release such as 0.1.0, or main).
     image: ghcr.io/maciekgangus/inkroom:${INKROOM_TAG:-latest}
-    # Reachable from this machine only: the traffic comes in through the tunnel (ADR 0003).
+    # Reachable from this machine only: update.sh asks /healthz here. The tunnel does not use it.
     ports:
-      - "127.0.0.1:${PORT:-8080}:8080"
+      - "127.0.0.1:8080:8080"
     env_file:
       - path: .env
         required: false
     volumes:
       - data:/data
+    restart: unless-stopped
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    # The tunnel's own configuration (which hostname goes to which service) lives in Cloudflare;
+    # this container only needs the token, and reaches the app by its name on the compose network.
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?set TUNNEL_TOKEN in .env (Cloudflare Zero Trust, Networks, Tunnels)}
+    depends_on:
+      - app
     restart: unless-stopped
 
 volumes:

@@ -38,6 +38,11 @@ jobs:
 
       - name: Update script of the VPS
         run: sh deploy/test-update.sh
+      - name: Compose file of the VPS
+        # It must read with a token and refuse to start without one.
+        run: |
+          TUNNEL_TOKEN=dummy docker compose -f deploy/docker-compose.yml config --quiet
+          ! docker compose -f deploy/docker-compose.yml config --quiet
 
       - uses: actions/setup-node@v4
         with:

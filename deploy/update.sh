@@ -6,8 +6,9 @@ set -eu
 
 cd "$(dirname "$0")"
 PORT=${PORT:-8080}
-IMAGE=ghcr.io/maciekgangus/inkroom
-TAG=${INKROOM_TAG:-latest}
+# The image the compose file runs, with .env and the environment applied (INKROOM_TAG).
+REF=$(docker compose config --images | grep '/inkroom:' | head -n 1)
+IMAGE=${REF%:*}
 
 healthy() {
 	for _ in $(seq 1 30); do
@@ -17,12 +18,15 @@ healthy() {
 	return 1
 }
 
-before=$(docker image inspect --format '{{.Id}}' "$IMAGE:$TAG" 2>/dev/null || true)
+before=$(docker image inspect --format '{{.Id}}' "$REF" 2>/dev/null || true)
 docker compose pull --quiet
-after=$(docker image inspect --format '{{.Id}}' "$IMAGE:$TAG")
+after=$(docker image inspect --format '{{.Id}}' "$REF")
 
 if [ "$before" = "$after" ] && docker compose ps --status running --quiet | grep -q .; then
-	echo "already up to date ($TAG)"
+	# The app is current; the tunnel's image may not be, so bring the rest up too (a no-op for
+	# what has not changed).
+	docker compose up -d --remove-orphans
+	echo "already up to date ($REF)"
 	exit 0
 fi
 
@@ -31,7 +35,7 @@ fi
 
 docker compose up -d --remove-orphans
 if healthy; then
-	echo "updated to $TAG ($after)"
+	echo "updated to $REF ($after)"
 	docker image prune -f >/dev/null
 	exit 0
 fi

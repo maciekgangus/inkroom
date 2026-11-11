@@ -107,7 +107,7 @@ Miary to propozycje startowe, do potwierdzenia po pierwszych testach na prawdziw
 
 ## 6. Otwarte pytania
 - Gotowa biblioteka tablicy czy własny canvas (licencja, obsługa iPada, możliwość własnego serwera synchronizacji). Rozstrzyga ADR 0001.
-- Hosting rozstrzygnięty w ADR 0002: docker compose lokalnie, później domowy VPS. Wystawienie na internet: Cloudflare Tunnel (kontener `cloudflared` w tym samym `docker compose`), HTTPS terminowany u Cloudflare (do zapisania jako ADR 0003). Otwarte: zakup domeny i przeniesienie jej do Cloudflare.
+- Hosting rozstrzygnięty w ADR 0002: docker compose lokalnie, później domowy VPS. Wystawienie na internet: Cloudflare Tunnel (kontener `cloudflared` w tym samym `docker compose`), HTTPS terminowany u Cloudflare (ADR 0003). Otwarte: zakup domeny i przeniesienie jej do Cloudflare.
 
 ### Wczytywanie PDF (R-056): rozstrzygnięte
 Pytania o sposób wczytywania PDF rozstrzygnął użytkownik 2026-11-11; decyzje są w ADR 0015 (konwersja w przeglądarce, układ stron, limity, sposób wczytania, oryginał, uprawnienia, plik za duży).
@@ -162,3 +162,4 @@ Pytania o sposób wczytywania PDF rozstrzygnął użytkownik 2026-11-11; decyzje
 - 2026-11-11: dodano R-056 (wczytywanie PDF na tablicę) jako potrzebne, `proposed`; "import PDF" usunięty z listy poza zakresem MVP; sposób wczytywania do ustalenia (sekcja 6).
 - 2026-11-11: R-056 (wczytywanie PDF) `accepted`: konwersja w przeglądarce (pdf.js), strony jedna pod drugą i odblokowane, do 60 stron i 2000 px szerokości, przycisk w menu tablicy i upuszczenie pliku, oryginał nie jest przechowywany, każdy z prawem rysowania może wczytać; ADR 0015.
 - 2026-11-11: R-056 (wczytywanie PDF na tablicę) `done` po teście ręcznym: przycisk PDF obok przycisku obrazu w pasku narzędzi, znak Inkroom w rogu tablicy prowadzi do menu z tablicami.
+- 2026-11-11: Etap 3.5: opisane wystawienie przez Cloudflare Tunnel (ADR 0003) i konfiguracja VPS z `cloudflared` w `deploy/docker-compose.yml` wraz z instrukcją (`deploy/README.md`).

@@ -17,7 +17,7 @@ Aplikacja ma być tania w utrzymaniu (N-006) i uruchamiana jedną komendą (N-00
 - Etap 0 obejmuje działający `docker compose up` z pustą aplikacją. Test na iPadzie w Etapie 0 odbywa się przez sieć lokalną.
 - Etap 3.5 wdraża to samo na domowy VPS i sprawdza dostęp z iPada na danych komórkowych.
 
-## Otwarte do rozstrzygnięcia w Etapie 3.5
+## Otwarte do rozstrzygnięcia w Etapie 3.5 (wystawienie na internet rozstrzygnięte w ADR 0003)
 - Jak wystawić serwer domowy na internet: tunel (np. Cloudflare Tunnel, Tailscale Funnel) albo przekierowanie portów z dynamicznym DNS. Zależy m.in. od tego, czy dostawca łącza daje publiczny adres IP.
 - Domena i certyfikaty HTTPS (np. reverse proxy z automatycznymi certyfikatami).
 - Zachowanie przy awarii łącza w domu i sposób kopii zapasowych poza maszyną z aplikacją.
