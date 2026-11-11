@@ -68,6 +68,7 @@ func (a *app) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/boards/{id}/view", a.setView)
 	mux.HandleFunc("POST /api/boards/{id}/copy", a.copyBoard)
 	mux.HandleFunc("DELETE /api/boards/{id}/visit", a.forgetBoard)
+	mux.HandleFunc("GET /api/boards/{id}/preview", a.boardPreview)
 	mux.HandleFunc("DELETE /api/boards/{id}", a.deleteBoard)
 	mux.HandleFunc("POST /api/boards/{id}/images", a.uploadImage)
 	mux.HandleFunc("GET /api/boards/{id}/images/{image}", a.getImage)
