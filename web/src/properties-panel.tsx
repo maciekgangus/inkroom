@@ -71,6 +71,7 @@ export function PropertiesPanel({
 	const on = (active: boolean) => (active ? "active" : "");
 
 	return (
+		// biome-ignore lint/a11y/noStaticElementInteractions: the handler only keeps the focus where it is
 		<div
 			ref={ref}
 			class={`properties${at ? " floating" : ""}`}

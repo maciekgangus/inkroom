@@ -8,7 +8,13 @@
 	},
 	"files": {
 		"ignoreUnknown": false,
-		"includes": ["**", "!**/node_modules", "!**/dist"]
+		"includes": [
+			"**",
+			"!**/node_modules",
+			"!**/dist",
+			"!**/public",
+			"!**/test-results"
+		]
 	},
 	"formatter": {
 		"enabled": true,

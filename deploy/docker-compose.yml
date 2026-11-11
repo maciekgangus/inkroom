@@ -1,0 +1,18 @@
+# The app on the VPS: the image from the registry, no build (ADR 0014). Copy this folder to the
+# server; its .env (never in the repo) holds the secrets, e.g. TURNSTILE_SITE_KEY and
+# TURNSTILE_SECRET (ADR 0013). Tracks :latest, the last release; INKROOM_TAG pins another one.
+services:
+  app:
+    image: ghcr.io/maciekgangus/inkroom:${INKROOM_TAG:-latest}
+    # Reachable from this machine only: the traffic comes in through the tunnel (ADR 0003).
+    ports:
+      - "127.0.0.1:${PORT:-8080}:8080"
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - data:/data
+    restart: unless-stopped
+
+volumes:
+  data:

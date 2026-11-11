@@ -1,0 +1,95 @@
+# Tests every change and publishes the app's image to the GitHub Container Registry (ADR 0014).
+#   pull request     tests only, nothing is published
+#   push to main     tests, then the image :main and :sha-<commit>
+#   tag v1.2.3       tests, then the image :1.2.3, :1.2 and :latest (what the VPS follows)
+name: image
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+# A newer run of the same branch makes an older one pointless; a tag build is never cancelled.
+concurrency:
+  group: image-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - name: Server
+        working-directory: server
+        run: |
+          test -z "$(gofmt -l .)"
+          go vet ./...
+          go test ./...
+
+      - name: Update script of the VPS
+        run: sh deploy/test-update.sh
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Client
+        working-directory: web
+        run: |
+          npm ci
+          npx biome check .
+          npm test
+          npm run build
+
+  image:
+    needs: test
+    # Only what is on main or has a release tag is published, never a pull request.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          # latest is only ever a release: the branch builds are :main and :sha-<commit>.
+          flavor: latest=false
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix=sha-
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
