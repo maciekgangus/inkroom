@@ -5,7 +5,7 @@ import { contentBounds } from "./minimap";
 import type { Rect } from "./viewport";
 
 /** The shape of a tile's picture (width over height). */
-export const TILE_ASPECT = 4 / 3;
+const TILE_ASPECT = 4 / 3;
 /** The longest side of a preview, in pixels: sharp enough for a tile on a high-density screen. */
 const PREVIEW_SIDE = 480;
 /** Empty space round the content, in board units. */

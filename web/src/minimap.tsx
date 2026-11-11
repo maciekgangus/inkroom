@@ -12,8 +12,8 @@ import { worldBounds } from "./board/transform";
 import type { Viewport } from "./board/viewport";
 
 /** The size of the map in px. */
-export const MAP_W = 260;
-export const MAP_H = 170;
+const MAP_W = 260;
+const MAP_H = 170;
 
 /** More elements than this are drawn as a thinned-out sample, so a huge board stays cheap. */
 const MAX_DRAWN = 4000;

@@ -10,7 +10,7 @@ import { displayColor, useTheme } from "./theme";
 
 export const COLORS = ["#111111", "#d32f2f", "#1976d2", "#388e3c", "#f57c00"];
 /** The colours at hand in the bar; the rest of COLORS and MORE_COLORS are behind the plus. */
-export const QUICK_COLORS = COLORS.slice(0, 3);
+const QUICK_COLORS = COLORS.slice(0, 3);
 /** Extra colours behind the palette button (R-025). */
 export const MORE_COLORS = [
 	"#6b7280",

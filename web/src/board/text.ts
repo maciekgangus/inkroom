@@ -9,7 +9,7 @@ import {
 } from "./text-wrap";
 import type { Rect } from "./viewport";
 
-export { CHAR_WIDTH, LINE_HEIGHT };
+export { LINE_HEIGHT };
 
 const FONT_SIZES: Record<number, number> = { 2: 16, 5: 24, 10: 40 };
 
