@@ -1,0 +1,14 @@
+# Only for a server with SELinux enforcing (Fedora, RHEL, Rocky, Alma; `getenforce` says Enforcing).
+# SELinux gives every container its own label and then the app, the copying and the restore cannot
+# share the data volume. This file turns the label check off for those containers (it is ignored on
+# a host without SELinux). Use it by putting this line in .env next to docker-compose.yml:
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.selinux.yml
+services:
+  app:
+    security_opt: ["label=disable"]
+  litestream:
+    security_opt: ["label=disable"]
+  litestream-restore:
+    security_opt: ["label=disable"]
+  shell:
+    security_opt: ["label=disable"]

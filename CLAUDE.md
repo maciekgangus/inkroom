@@ -4,7 +4,7 @@ Własna, tania tablica interaktywna do prowadzenia korepetycji online, zamiennik
 Źródło prawdy o wymaganiach: @SPEC.md. Decyzje architektoniczne: `docs/decisions/`.
 
 ## Stan projektu
-Wszystkie wymagania z `SPEC.md` są zrobione poza R-005 (Android z rysikiem i tablet graficzny do sprawdzenia na sprzęcie) i R-043 (wydajność dużych tablic, po pomiarach). Stos: własny canvas + Go + SQLite, klient TypeScript + Preact (ADR 0001), synchronizacja ADR 0004. Wdrożenie na homelab: obraz z GHCR i Cloudflare Tunnel (ADR 0003 i 0014, folder `deploy/`). Do zrobienia: kopie zapasowe bazy (Litestream) i pierwsza lekcja (Etap 4).
+Wszystkie wymagania z `SPEC.md` są zrobione poza R-005 (Android z rysikiem i tablet graficzny do sprawdzenia na sprzęcie) i R-043 (wydajność dużych tablic, po pomiarach). Stos: własny canvas + Go + SQLite, klient TypeScript + Preact (ADR 0001), synchronizacja ADR 0004. Wdrożenie na homelab: obraz z GHCR i Cloudflare Tunnel (ADR 0003 i 0014, folder `deploy/`). Kopie bazy: Litestream do Cloudflare R2 (ADR 0016, `scripts/test-backup.sh`). Do zrobienia: pierwsze uruchomienie na homelabie i pierwsza lekcja (Etap 4).
 
 ## Priorytety (w tej kolejności)
 1. Responsywność: kreska pojawia się natychmiast lokalnie, u drugiej osoby bez zauważalnego opóźnienia. Wygoda użytkownika ponad wszystko.

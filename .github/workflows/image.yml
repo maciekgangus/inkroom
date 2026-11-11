@@ -39,10 +39,12 @@ jobs:
       - name: Update script of the VPS
         run: sh deploy/test-update.sh
       - name: Compose file of the VPS
-        # It must read with a token and refuse to start without one.
+        # It must read with its keys (also with the SELinux file) and refuse to start without them.
         run: |
-          TUNNEL_TOKEN=dummy docker compose -f deploy/docker-compose.yml config --quiet
-          ! docker compose -f deploy/docker-compose.yml config --quiet
+          export TUNNEL_TOKEN=dummy R2_ACCOUNT_ID=a R2_BUCKET=b R2_ACCESS_KEY_ID=k R2_SECRET_ACCESS_KEY=s
+          docker compose -f deploy/docker-compose.yml config --quiet
+          COMPOSE_FILE=deploy/docker-compose.yml:deploy/docker-compose.selinux.yml docker compose config --quiet
+          (unset TUNNEL_TOKEN R2_BUCKET; ! docker compose -f deploy/docker-compose.yml config --quiet)
 
       - uses: actions/setup-node@v4
         with:

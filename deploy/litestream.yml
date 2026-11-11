@@ -1,0 +1,18 @@
+# Litestream: copies the database to Cloudflare R2 all the time (ADR 0016). ${...} are filled from the
+# environment of the container (docker-compose.yml, which reads them from .env).
+snapshot:
+  interval: 24h
+  # A week back: a board deleted by mistake can be had back from before it happened.
+  retention: 168h
+
+dbs:
+  - path: /data/inkroom.db
+    replica:
+      type: s3
+      bucket: ${R2_BUCKET}
+      path: inkroom
+      # R2 is S3 with its own address and the region "auto".
+      endpoint: ${R2_ENDPOINT}
+      region: auto
+      access-key-id: ${R2_ACCESS_KEY_ID}
+      secret-access-key: ${R2_SECRET_ACCESS_KEY}
