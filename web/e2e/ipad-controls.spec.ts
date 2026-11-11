@@ -5,6 +5,15 @@ test.beforeEach(async ({ page }) => {
 	await openBoard(page);
 });
 
+/** Taps a tool and waits until it is the chosen one, so what follows does not outrun the app. */
+async function chooseTool(page: import("@playwright/test").Page, tool: string) {
+	await page.locator(`[aria-label='${tool}']`).tap();
+	await expect(page.locator(`[aria-label='${tool}']`)).toHaveAttribute(
+		"aria-pressed",
+		"true",
+	);
+}
+
 /** Asserts that an element is fully on the screen. */
 async function onScreen(page: import("@playwright/test").Page, sel: string) {
 	const { width: vw, height: vh } = page.viewportSize() ?? {
@@ -69,7 +78,7 @@ test.describe("everyday drawing", () => {
 		page,
 	}) => {
 		await pen(page, [200, 500], [500, 500]);
-		await page.locator("[aria-label='select']").tap();
+		await chooseTool(page, "select");
 		await pen(page, [350, 500], [350, 500]); // a tap of the pencil
 		await expect(page.locator(".properties")).toBeVisible();
 		await onScreen(page, ".properties");
@@ -79,7 +88,7 @@ test.describe("everyday drawing", () => {
 		const vh = page.viewportSize()?.height ?? 0;
 		const [from, to] = [Math.round(vh * 0.4), Math.round(vh * 0.7)];
 		await pen(page, [200, from], [500, from]);
-		await page.locator("[aria-label='select']").tap();
+		await chooseTool(page, "select");
 		await pen(page, [350, from], [350, from]);
 		await expect(page.locator(".properties")).toBeVisible();
 		await expect
@@ -97,7 +106,7 @@ test.describe("everyday drawing", () => {
 		const vh = page.viewportSize()?.height ?? 0;
 		const y = Math.round(vh * 0.4);
 		await pen(page, [200, y], [500, y]);
-		await page.locator("[aria-label='select']").tap();
+		await chooseTool(page, "select");
 		await pen(page, [350, y], [350, y]);
 		await expect(page.locator(".properties")).toBeVisible();
 		await pen(page, [100, Math.round(vh * 0.8)], [100, Math.round(vh * 0.8)]);
