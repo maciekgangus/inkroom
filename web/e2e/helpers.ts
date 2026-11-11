@@ -134,12 +134,16 @@ async function pointers(
 				from[id][0] + (to[id][0] - from[id][0]) * t,
 				from[id][1] + (to[id][1] - from[id][1]) * t,
 			];
-			from.forEach((_, id) => fire("pointerdown", id, ...at(id, 0), true));
+			from.forEach((_, id) => {
+				fire("pointerdown", id, ...at(id, 0), true);
+			});
 			for (let i = 1; i <= steps; i++)
-				from.forEach((_, id) =>
-					fire("pointermove", id, ...at(id, i / steps), true),
-				);
-			from.forEach((_, id) => fire("pointerup", id, ...at(id, 1), false));
+				from.forEach((_, id) => {
+					fire("pointermove", id, ...at(id, i / steps), true);
+				});
+			from.forEach((_, id) => {
+				fire("pointerup", id, ...at(id, 1), false);
+			});
 		},
 		{ pointerType, from, to, steps: STEPS },
 	);
