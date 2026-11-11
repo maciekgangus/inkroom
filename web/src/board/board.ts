@@ -138,6 +138,27 @@ export class Board {
 		for (const s of strokes) this.onOp?.({ t: "add", stroke: s });
 	}
 
+	/**
+	 * Starts a batch of elements that arrive one by one (the pages of a PDF): each `add` puts the
+	 * element on the board and sends it at once, and `done` makes all of them one undo step.
+	 */
+	addBatch(authorId: string): { add(stroke: Stroke): void; done(): void } {
+		const added: Stroke[] = [];
+		let finished = false;
+		return {
+			add: (stroke) => {
+				this.insert(stroke);
+				added.push(stroke);
+				this.onOp?.({ t: "add", stroke });
+			},
+			done: () => {
+				if (finished || added.length === 0) return;
+				finished = true;
+				this.record(authorId, { type: "add", stroke: added[0], group: added });
+			},
+		};
+	}
+
 	/** Erases any author's stroke; the action goes to `authorId`'s history. */
 	eraseStroke(authorId: string, strokeId: string): boolean {
 		const stroke = this.strokes.find((s) => s.id === strokeId);

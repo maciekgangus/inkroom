@@ -33,6 +33,17 @@ describe("board menu (R-014)", () => {
 		expect(onCopy).toHaveBeenCalledOnce();
 	});
 
+	test("offers loading a PDF only when it is allowed (R-056)", () => {
+		const labels = (items: ReturnType<typeof boardMenuItems>) =>
+			items.map((i) => i.label);
+		expect(labels(boardMenuItems(vi.fn()))).not.toContain("Wczytaj PDF");
+		const onPdf = vi.fn();
+		const items = boardMenuItems(vi.fn(), undefined, onPdf);
+		expect(labels(items)).toContain("Wczytaj PDF");
+		items.find((i) => i.label === "Wczytaj PDF")?.onSelect();
+		expect(onPdf).toHaveBeenCalledOnce();
+	});
+
 	test("offers the three exports and reports the chosen one", () => {
 		const onPick = vi.fn();
 		const items = boardMenuItems(onPick);

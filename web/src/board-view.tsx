@@ -38,6 +38,10 @@ import { Cursors } from "./cursors";
 import { Icon } from "./icon";
 import { Minimap } from "./minimap";
 import { Participants } from "./participants";
+import { startPoint } from "./pdf/layout";
+import { summarize } from "./pdf/limits";
+import { loadPdf } from "./pdf/loader";
+import { PdfProgress } from "./pdf-progress";
 import { hasFinePointer } from "./pointer";
 import { PropertiesPanel } from "./properties-panel";
 import { applyToolShortcut, dropsSelection } from "./shortcuts";
@@ -177,6 +181,15 @@ export function BoardView({
 	};
 	/** Adds a picked, pasted or dropped image to the board (set up by the effect below). */
 	const insertImage = useRef<(file: Blob) => void>(() => {});
+	/** Puts the pages of a picked or dropped PDF on the board (set up by the effect below). */
+	const startPdf = useRef<(file: File) => void>(() => {});
+	const pdfAbort = useRef<AbortController | null>(null);
+	const pdfInput = useRef<HTMLInputElement>(null);
+	/** Pages done and the total while a PDF is being loaded (total 0: still opening it). */
+	const [pdfJob, setPdfJob] = useState<{ done: number; total: number } | null>(
+		null,
+	);
+	const [pdfNote, setPdfNote] = useState("");
 	const [imageError, setImageError] = useState("");
 	/** The board's name, kept up to date when the owner renames it (R-045). */
 	const [title, setTitle] = useState(boardName);
@@ -370,6 +383,37 @@ export function BoardView({
 			changed,
 		);
 
+		startPdf.current = async (file) => {
+			if (controller.readOnly || pdfAbort.current) return; // one at a time
+			const abort = new AbortController();
+			pdfAbort.current = abort;
+			setImageError("");
+			setPdfNote("");
+			setPdfJob({ done: 0, total: 0 });
+			const batch = controller.addImageBatch();
+			try {
+				const { openPdf } = await import("./pdf/pdfjs");
+				const result = await loadPdf(file, {
+					open: openPdf,
+					upload: (blob) => uploadImage(boardId, blob),
+					place: batch.add,
+					finish: batch.done,
+					start: startPoint(viewport.worldRect(innerWidth, innerHeight)),
+					progress: (done, total) => setPdfJob({ done, total }),
+					signal: abort.signal,
+				});
+				setPdfNote(summarize(result));
+			} catch (e) {
+				setImageError(
+					e instanceof Error ? e.message : "Nie udało się wczytać pliku PDF",
+				);
+			} finally {
+				pdfAbort.current = null;
+				setPdfJob(null);
+				setTick((t) => t + 1);
+			}
+		};
+
 		insertImage.current = async (file) => {
 			if (ctl.current?.readOnly) return;
 			setImageError("");
@@ -526,12 +570,15 @@ export function BoardView({
 		};
 		const dragover = (e: DragEvent) => e.preventDefault(); // allow dropping files here
 		const drop = (e: DragEvent) => {
-			const files = Array.from(e.dataTransfer?.files ?? []).filter((f) =>
-				f.type.startsWith("image/"),
+			const dropped = Array.from(e.dataTransfer?.files ?? []);
+			const files = dropped.filter((f) => f.type.startsWith("image/"));
+			const pdf = dropped.find(
+				(f) => f.type === "application/pdf" || /\.pdf$/i.test(f.name),
 			);
-			if (files.length === 0) return;
+			if (files.length === 0 && !pdf) return;
 			e.preventDefault();
 			for (const f of files) insertImage.current(f);
+			if (pdf) startPdf.current(pdf);
 		};
 		const key = (e: KeyboardEvent) => {
 			if (typing(e)) return; // typing, not undoing the board
@@ -820,6 +867,19 @@ export function BoardView({
 	return (
 		<>
 			<div class="board-bg" data-background={background} />
+			<input
+				ref={pdfInput}
+				type="file"
+				accept="application/pdf,.pdf"
+				hidden
+				aria-label="PDF file"
+				onChange={(e) => {
+					const input = e.currentTarget;
+					const file = input.files?.[0];
+					input.value = ""; // so the same file can be picked again
+					if (file) startPdf.current(file);
+				}}
+			/>
 			<canvas id="board" ref={committedRef} />
 			<canvas id="live" ref={liveRef} />
 			{editingText && (
@@ -994,9 +1054,26 @@ export function BoardView({
 										() => setImageError("Nie udało się utworzyć kopii."),
 									)
 							: undefined,
+						// Whoever may not draw cannot put a PDF on the board (R-016, R-056).
+						readOnly ? undefined : () => pdfInput.current?.click(),
 					)}
 					onClose={() => setBoardMenu(null)}
 				/>
+			)}
+			{pdfJob && (
+				<PdfProgress
+					done={pdfJob.done}
+					total={pdfJob.total}
+					onCancel={() => pdfAbort.current?.abort()}
+				/>
+			)}
+			{pdfNote && (
+				<div class="toast notice" role="status">
+					{pdfNote}{" "}
+					<button type="button" onClick={() => setPdfNote("")}>
+						Zamknij
+					</button>
+				</div>
 			)}
 			{copied && (
 				<div class="toast notice" role="status">

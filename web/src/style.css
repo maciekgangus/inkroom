@@ -1095,3 +1095,23 @@ button.participant {
 	justify-content: center;
 	min-height: 65px;
 }
+
+/* The bar of a PDF being loaded: the text, a thin bar and the cancel button, in one line. It has
+   a fixed width, so the button does not move under the finger as the page number grows. */
+.pdf-progress {
+	box-sizing: border-box;
+	width: min(460px, calc(100vw - 24px));
+	justify-content: space-between;
+	font-variant-numeric: tabular-nums;
+}
+.pdf-progress progress {
+	width: 140px;
+	height: 8px;
+	accent-color: var(--accent);
+}
+.pdf-progress button {
+	min-width: 0;
+	height: 28px;
+	padding: 0 10px;
+	font-size: 13px;
+}
