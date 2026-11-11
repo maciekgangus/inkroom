@@ -8,6 +8,7 @@ describe("ImageControls", () => {
 	let onPaste: () => void;
 	let onDelete: () => void;
 
+	let onPdf: ((file: File) => void) | undefined;
 	const mount = (
 		props: { hasSelection?: boolean; canPaste?: boolean; fine?: boolean } = {},
 	) => {
@@ -17,6 +18,7 @@ describe("ImageControls", () => {
 				canPaste={props.canPaste ?? false}
 				fine={props.fine ?? false}
 				onFile={onFile}
+				onPdf={onPdf}
 				onPaste={onPaste}
 				onDelete={onDelete}
 			/>,
@@ -29,6 +31,7 @@ describe("ImageControls", () => {
 	beforeEach(() => {
 		root = document.createElement("div");
 		onFile = vi.fn();
+		onPdf = undefined;
 		onPaste = vi.fn();
 		onDelete = vi.fn();
 	});
@@ -84,5 +87,51 @@ describe("ImageControls", () => {
 		mount({ canPaste: true });
 		btn("paste image")?.click();
 		expect(onPaste).toHaveBeenCalledOnce();
+	});
+
+	describe("loading a PDF (R-056)", () => {
+		test("a PDF button sits right after the image button, an icon with the word as its tooltip", () => {
+			onPdf = vi.fn();
+			mount();
+			const all = [...root.querySelectorAll("button")];
+			const image = btn("add image") as HTMLButtonElement;
+			const pdf = btn("add pdf") as HTMLButtonElement;
+			expect(all.indexOf(pdf)).toBe(all.indexOf(image) + 1);
+			expect(pdf.title).toBe("Wczytaj PDF");
+			expect(pdf.textContent?.trim()).toBe("");
+			expect(pdf.querySelector("svg")).not.toBeNull();
+		});
+
+		test("there is no PDF button where loading one is not allowed", () => {
+			mount();
+			expect(btn("add pdf")).toBeNull();
+		});
+
+		test("the PDF button opens a picker for PDF files only", () => {
+			onPdf = vi.fn();
+			mount();
+			const input = root.querySelector(
+				'input[aria-label="PDF file"]',
+			) as HTMLInputElement;
+			expect(input.accept).toContain("application/pdf");
+			const click = vi.spyOn(input, "click");
+			btn("add pdf")?.click();
+			expect(click).toHaveBeenCalledOnce();
+		});
+
+		test("a chosen PDF is handed over and the input is cleared for the next time", () => {
+			onPdf = vi.fn();
+			mount();
+			const input = root.querySelector(
+				'input[aria-label="PDF file"]',
+			) as HTMLInputElement;
+			const file = new File(["%PDF"], "karta.pdf", { type: "application/pdf" });
+			Object.defineProperty(input, "files", {
+				value: [file],
+				configurable: true,
+			});
+			input.dispatchEvent(new Event("change", { bubbles: true }));
+			expect(onPdf).toHaveBeenCalledWith(file);
+		});
 	});
 });

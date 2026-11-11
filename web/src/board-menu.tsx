@@ -14,7 +14,6 @@ export interface MenuAt {
 export function boardMenuItems(
 	onPick: (a: BoardAction) => void,
 	onCopy?: () => void,
-	onPdf?: () => void,
 ): MenuItem[] {
 	return [
 		{ label: "PNG: widok", icon: "image", onSelect: () => onPick("png-view") },
@@ -30,10 +29,6 @@ export function boardMenuItems(
 		},
 		...(onCopy
 			? [{ label: "Utwórz kopię", icon: "copy" as const, onSelect: onCopy }]
-			: []),
-		// Given only to someone who may draw: the pages of a PDF are drawn on the board (R-056).
-		...(onPdf
-			? [{ label: "Wczytaj PDF", icon: "file" as const, onSelect: onPdf }]
 			: []),
 	];
 }

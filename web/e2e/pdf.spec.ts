@@ -78,13 +78,29 @@ test("a damaged PDF is refused in plain words", async ({ page }) => {
 	expect(await saved(page)).toHaveLength(0);
 });
 
-test("the menu has a Load PDF entry that opens the file chooser", async ({
+test("the PDF button is right next to the image button and opens the file chooser", async ({
+	page,
+}) => {
+	const image = await page.locator("[aria-label='add image']").boundingBox();
+	const pdf = await page.locator("[aria-label='add pdf']").boundingBox();
+	expect(pdf?.x).toBeGreaterThan((image?.x ?? 0) + (image?.width ?? 0) - 1);
+	expect((pdf?.x ?? 0) - ((image?.x ?? 0) + (image?.width ?? 0))).toBeLessThan(
+		16,
+	);
+	expect(Math.abs((pdf?.y ?? 0) - (image?.y ?? 0))).toBeLessThan(2);
+	const chooser = page.waitForEvent("filechooser");
+	await page.locator("[aria-label='add pdf']").tap();
+	expect((await chooser).isMultiple()).toBe(false);
+});
+
+test("the board menu does not carry the PDF entry any more", async ({
 	page,
 }) => {
 	await page.locator("[aria-label='board menu']").tap();
-	const chooser = page.waitForEvent("filechooser");
-	await page.getByRole("menuitem", { name: "Wczytaj PDF" }).tap();
-	expect((await chooser).isMultiple()).toBe(false);
+	await expect(page.locator(".context-menu")).toBeVisible();
+	await expect(page.getByRole("menuitem", { name: "Wczytaj PDF" })).toHaveCount(
+		0,
+	);
 });
 
 test("only the first 60 pages of a longer PDF are loaded, and it is said", async ({

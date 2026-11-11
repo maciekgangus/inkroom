@@ -33,15 +33,9 @@ describe("board menu (R-014)", () => {
 		expect(onCopy).toHaveBeenCalledOnce();
 	});
 
-	test("offers loading a PDF only when it is allowed (R-056)", () => {
-		const labels = (items: ReturnType<typeof boardMenuItems>) =>
-			items.map((i) => i.label);
-		expect(labels(boardMenuItems(vi.fn()))).not.toContain("Wczytaj PDF");
-		const onPdf = vi.fn();
-		const items = boardMenuItems(vi.fn(), undefined, onPdf);
-		expect(labels(items)).toContain("Wczytaj PDF");
-		items.find((i) => i.label === "Wczytaj PDF")?.onSelect();
-		expect(onPdf).toHaveBeenCalledOnce();
+	test("has no PDF entry: loading a PDF is a button of the toolbar, next to the image (R-056)", () => {
+		const labels = boardMenuItems(vi.fn(), vi.fn()).map((i) => i.label);
+		expect(labels).not.toContain("Wczytaj PDF");
 	});
 
 	test("offers the three exports and reports the chosen one", () => {

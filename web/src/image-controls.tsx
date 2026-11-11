@@ -8,6 +8,8 @@ export interface ImageControlsProps {
 	/** True where the browser lets us read the clipboard (HTTPS or localhost). */
 	canPaste: boolean;
 	onFile: (file: File) => void;
+	/** Given where a PDF may be put on the board: a button right after the image one (R-056). */
+	onPdf?: (file: File) => void;
 	onPaste: () => void;
 	onDelete: () => void;
 }
@@ -21,10 +23,12 @@ export function ImageControls({
 	hasSelection,
 	canPaste,
 	onFile,
+	onPdf,
 	onPaste,
 	onDelete,
 }: ImageControlsProps) {
 	const input = useRef<HTMLInputElement>(null);
+	const pdfInput = useRef<HTMLInputElement>(null);
 
 	return (
 		<div class="group">
@@ -47,6 +51,31 @@ export function ImageControls({
 			>
 				<Icon name="image" />
 			</button>
+			{onPdf && (
+				<>
+					<input
+						ref={pdfInput}
+						type="file"
+						accept="application/pdf,.pdf"
+						hidden
+						aria-label="PDF file"
+						onChange={(e) => {
+							const el = e.currentTarget as HTMLInputElement;
+							const file = el.files?.[0];
+							el.value = ""; // so the same file can be picked again
+							if (file) onPdf(file);
+						}}
+					/>
+					<button
+						type="button"
+						aria-label="add pdf"
+						title="Wczytaj PDF"
+						onClick={() => pdfInput.current?.click()}
+					>
+						<Icon name="file" />
+					</button>
+				</>
+			)}
 			{!fine && canPaste && (
 				<button
 					type="button"

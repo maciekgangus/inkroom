@@ -32,6 +32,7 @@ import { MAX_SCALE, MIN_SCALE, type Rect, Viewport } from "./board/viewport";
 import { stepZoom, wheelZoomFactor } from "./board/zoom";
 import { BoardMenuButton, boardMenuItems, type MenuAt } from "./board-menu";
 import { BoardTitle } from "./board-title";
+import { BrandLink } from "./brand-link";
 import { ContextMenu, type MenuItem } from "./context-menu";
 import { assignColors } from "./cursor-colors";
 import { Cursors } from "./cursors";
@@ -184,7 +185,6 @@ export function BoardView({
 	/** Puts the pages of a picked or dropped PDF on the board (set up by the effect below). */
 	const startPdf = useRef<(file: File) => void>(() => {});
 	const pdfAbort = useRef<AbortController | null>(null);
-	const pdfInput = useRef<HTMLInputElement>(null);
 	/** Pages done and the total while a PDF is being loaded (total 0: still opening it). */
 	const [pdfJob, setPdfJob] = useState<{ done: number; total: number } | null>(
 		null,
@@ -867,19 +867,7 @@ export function BoardView({
 	return (
 		<>
 			<div class="board-bg" data-background={background} />
-			<input
-				ref={pdfInput}
-				type="file"
-				accept="application/pdf,.pdf"
-				hidden
-				aria-label="PDF file"
-				onChange={(e) => {
-					const input = e.currentTarget;
-					const file = input.files?.[0];
-					input.value = ""; // so the same file can be picked again
-					if (file) startPdf.current(file);
-				}}
-			/>
+			<BrandLink />
 			<canvas id="board" ref={committedRef} />
 			<canvas id="live" ref={liveRef} />
 			{editingText && (
@@ -984,6 +972,7 @@ export function BoardView({
 							hasSelection: (ctl.current?.selection.length ?? 0) > 0,
 							canPaste: canReadClipboard,
 							onFile: (file) => insertImage.current(file),
+							onPdf: (file) => startPdf.current(file),
 							onPaste: () => pasteFromClipboard(),
 							onDelete: () => ctl.current?.deleteSelected(),
 						}}
@@ -1054,8 +1043,6 @@ export function BoardView({
 										() => setImageError("Nie udało się utworzyć kopii."),
 									)
 							: undefined,
-						// Whoever may not draw cannot put a PDF on the board (R-016, R-056).
-						readOnly ? undefined : () => pdfInput.current?.click(),
 					)}
 					onClose={() => setBoardMenu(null)}
 				/>
