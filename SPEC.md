@@ -8,7 +8,7 @@ Własna, tania tablica interaktywna do korepetycji online zamiast IDROO. Korepet
 - Użytkownicy: zalogowany użytkownik ma panel ze swoimi tablicami. Dwie role: twórca tablicy (jej właściciel) i uczestnik (wchodzi przez link). Typowo twórcą jest korepetytor (PC), a uczestnikami uczniowie (często iPady i inne tablety z rysikiem). Uczestnik wchodzi jako gość przez link albo po zalogowaniu na własne konto. Gość nie widzi panelu i nie ma historii tablic.
 - Model: tablice są stałe, każda ma jeden stały link. Nie ma tablic jednorazowych ani osobnych "spotkań". Tablicę można usunąć.
 - Skala: kilkunastu do kilkudziesięciu uczniów łącznie. W jednym pokoju zwykle jeden uczeń, czasem więcej osób naraz.
-- Poza zakresem MVP: wideo i audio (zostaje zewnętrzny komunikator), płatności, rozbudowane role, import PDF, aplikacje natywne, nagrywanie lekcji.
+- Poza zakresem MVP: wideo i audio (zostaje zewnętrzny komunikator), płatności, rozbudowane role, aplikacje natywne, nagrywanie lekcji.
 
 ## 2. Priorytety projektowe
 1. Responsywność i brak opóźnień, wygoda ponad wszystko.
@@ -76,6 +76,7 @@ Priorytety: P1 do pierwszej lekcji, P2 zaraz po niej, P3 później. Statusy: pro
 | R-053 | Nazwa użytkownika: przy rejestracji (obok e-maila i hasła) konto dostaje nazwę, która jest jego publiczną nazwą na tablicach (lista osób, kursor, adnotacja właściciela w R-051). Od 3 do 24 znaków: litery bez polskich znaków (a-z), cyfry, kropka, myślnik i podkreślnik; unikalna bez względu na wielkość liter, wyświetlana tak, jak ją wpisano. Istniejące konta dostają nazwę z początku swojego e-maila (małe litery, tylko dozwolone znaki, przy powtórzeniu z dopisaną liczbą); nikt nie traci dostępu. E-mail przestaje być pokazywany komukolwiek poza właścicielem konta | P2 | done |
 | R-054 | Osobna strona rejestracji pod własnym adresem (`/register`), poza stroną logowania: e-mail, nazwa użytkownika, hasło i captcha Cloudflare Turnstile. Serwer sprawdza token captchy w Cloudflare (siteverify) przed założeniem konta; bez skonfigurowanych kluczy rejestracja jest odrzucana (nie otwiera się po cichu), a lokalnie i w testach używamy opublikowanych kluczy testowych Turnstile. Klucze w `.env` (ADR 0013); logowanie nie wymaga captchy. Strona logowania ma odnośnik "Załóż konto", a strona rejestracji "Mam już konto" | P2 | done |
 | R-055 | Logowanie jednym polem: "e-mail lub nazwa użytkownika" i hasło. Serwer rozpoznaje, co wpisano (znak @ oznacza e-mail), a przy błędzie podaje tę samą ogólną wiadomość niezależnie od tego, czy konto istnieje (bez zdradzania, które nazwy i e-maile są zajęte przez logowanie); obecne limity prób zostają | P2 | done |
+| R-056 | Wczytywanie dokumentu PDF na tablicę (np. karta pracy, zadania ze skanu lub z podręcznika): osoba z prawem rysowania (R-016) wybiera plik PDF, a jego strony pojawiają się na tablicy jako obrazy, po których można pisać i rysować, tak jak po innych elementach (zaznaczanie, przesuwanie, skalowanie, kopiowanie). **Potrzebne, ale sposób wczytywania nie jest jeszcze ustalony:** do przemyślenia i rozstrzygnięcia w ADR, zanim powstanie kod (pytania w sekcji 6, "Wczytywanie PDF") | P2 | proposed |
 
 ## 4. Wymagania niefunkcjonalne
 Miary to propozycje startowe, do potwierdzenia po pierwszych testach na prawdziwej lekcji.
@@ -107,6 +108,16 @@ Miary to propozycje startowe, do potwierdzenia po pierwszych testach na prawdziw
 ## 6. Otwarte pytania
 - Gotowa biblioteka tablicy czy własny canvas (licencja, obsługa iPada, możliwość własnego serwera synchronizacji). Rozstrzyga ADR 0001.
 - Hosting rozstrzygnięty w ADR 0002: docker compose lokalnie, później domowy VPS. Wystawienie na internet: Cloudflare Tunnel (kontener `cloudflared` w tym samym `docker compose`), HTTPS terminowany u Cloudflare (do zapisania jako ADR 0003). Otwarte: zakup domeny i przeniesienie jej do Cloudflare.
+
+### Wczytywanie PDF (R-056): do rozstrzygnięcia
+Wymaganie jest potrzebne (dotąd "import PDF" był poza zakresem MVP), ale trzeba ustalić, jak PDF trafia na tablicę. Pytania:
+1. **Gdzie zamieniać PDF na obrazy.** (a) W przeglądarce, biblioteką pdf.js (Apache-2.0): strona jest rysowana na płótnie i wysyłana istniejącym torem obrazów (R-015, ADR 0007), więc serwer nie parsuje PDF i nie zużywa procesora (priorytet 3), a obraz serwera pozostaje mały. (b) Na serwerze (poppler lub mupdf w obrazie): szybciej na słabym tablecie, ale kosztuje CPU, powiększa obraz i otwiera serwer na złośliwe pliki. (c) Hybryda. Kierunek roboczy: (a), z biblioteką ładowaną dopiero przy pierwszym wczytaniu pliku (około 1 MB), żeby nie obciążać startu aplikacji.
+2. **Wiele stron na nieskończonym płótnie** (strony R-011 odrzucono): jedna strona pod drugą z odstępem w jednej kolumnie, jako osobne obrazy, czy jako jedna grupa obrazów. Czy strony mają być zablokowane, by nie dało się ich przypadkiem przesunąć podczas pisania.
+3. **Jakość i rozmiar:** rozdzielczość rastrowania (np. szerokość strony 1600 do 2000 px), format (JPEG dla skanów, PNG dla tekstu), limit liczby stron i rozmiaru pliku, i co się dzieje przy dużym PDF (np. 40 stron: wszystko naraz czy strony na żądanie). Obrazy są w SQLite (ADR 0007), więc dużo PDF-ów rośnie bazę i kopie zapasowe; potrzebny limit na tablicę.
+4. **Jak wczytać:** ikona w menu tablicy lub pasku narzędzi obok obrazu (R-028), przeciągnięcie pliku na tablicę, wybór z dysku; na iPadzie wybór z aplikacji Pliki. Postęp i możliwość przerwania dla większych plików; komunikat, gdy plik jest zaszyfrowany lub uszkodzony.
+5. **Oryginał:** czy zachować też sam plik PDF (pobranie przez uczestników, ostry zoom wektorowy), czy wystarczą obrazy. Przechowywanie oryginału podwaja ilość danych.
+6. **Uprawnienia i współpraca:** kto może wczytać (twórca, osoby z prawem rysowania z R-016), co widzą pozostali w trakcie wczytywania (strony pojawiają się kolejno, jak obrazy), i czy kopiowanie tablicy (R-020) oraz eksport (R-014) obejmują strony.
+7. **Bezpieczeństwo:** PDF otwiera się tylko w przeglądarce użytkownika (jej piaskownica), serwer przyjmuje wyłącznie gotowe obrazy; limit rozmiaru obrazów już działa.
 
 ## 7. Historia zmian
 - 2026-11-09: wersja startowa, uczeń jako gość lub z kontem, zapisane tablice jako rdzeń, dodane R-017 i R-018, N-008.
@@ -155,3 +166,4 @@ Miary to propozycje startowe, do potwierdzenia po pierwszych testach na prawdziw
 - 2026-11-11: R-051 i R-052 `accepted`; dodano R-053 (nazwa użytkownika), R-054 (osobna strona rejestracji z captchą Cloudflare Turnstile) i R-055 (logowanie e-mailem lub nazwą); R-051 używa nazwy użytkownika zamiast początku e-maila.
 - 2026-11-11: R-053 (nazwa użytkownika), R-054 (strona /register z captchą Turnstile) i R-055 (logowanie e-mailem lub nazwą) `done` po teście ręcznym; ADR 0013.
 - 2026-11-11: R-051 (cudze tablice z adnotacją właściciela i usuwaniem z listy) i R-052 (lista i kafelki z podglądem; ikony zamiast napisów, cały kafelek otwiera tablicę, szerszy panel w widoku kafelków) `done` po teście ręcznym; dodany branding Inkroom (logo, favicon, ikony aplikacji, manifest).
+- 2026-11-11: dodano R-056 (wczytywanie PDF na tablicę) jako potrzebne, `proposed`; "import PDF" usunięty z listy poza zakresem MVP; sposób wczytywania do ustalenia (sekcja 6).
