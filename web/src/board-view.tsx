@@ -33,6 +33,7 @@ import { stepZoom, wheelZoomFactor } from "./board/zoom";
 import { BoardMenuButton, boardMenuItems, type MenuAt } from "./board-menu";
 import { BoardTitle } from "./board-title";
 import { ContextMenu, type MenuItem } from "./context-menu";
+import { assignColors } from "./cursor-colors";
 import { Cursors } from "./cursors";
 import { Icon } from "./icon";
 import { Minimap } from "./minimap";
@@ -181,6 +182,10 @@ export function BoardView({
 		y: number;
 	} | null>(null);
 	// The owner may take away our right to draw: then the board only looks and moves (R-016).
+	const colors = useMemo(
+		() => assignColors([authorId, ...peers.map((p) => p.id)]),
+		[authorId, peers],
+	);
 	const readOnly = peers.some((p) => p.id === authorId && p.muted);
 	/** Smooth zoom: eases the view towards a target scale around a screen point (set up below). */
 	const zoomAnim = useRef<{
@@ -881,7 +886,11 @@ export function BoardView({
 					}}
 				/>
 			)}
-			<Cursors cursors={syncRef.current?.cursors() ?? []} viewport={viewport} />
+			<Cursors
+				cursors={syncRef.current?.cursors() ?? []}
+				viewport={viewport}
+				colors={colors}
+			/>
 			<div class="topbar">
 				<BoardTitle
 					name={title}
@@ -919,6 +928,7 @@ export function BoardView({
 				<Participants
 					peers={peers}
 					selfId={authorId}
+					colors={colors}
 					onSelect={
 						owner
 							? (peer, at) => setPeerMenu({ peer, x: at.x, y: at.y })

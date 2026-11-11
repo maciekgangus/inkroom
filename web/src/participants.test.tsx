@@ -131,3 +131,30 @@ describe("Participants: drawing rights (R-016)", () => {
 		expect(root.querySelector("button.participant")).toBeNull();
 	});
 });
+
+describe("Participants: colours and shape", () => {
+	test("two people never share a colour when the board assigns them", () => {
+		const root = document.createElement("div");
+		const colors = new Map([
+			["a1", "#111111"],
+			["b1", "#222222"],
+		]);
+		render(
+			<Participants
+				peers={[
+					{ id: "a1", name: "Ann" },
+					{ id: "b1", name: "Bob" },
+				]}
+				selfId="a1"
+				colors={colors}
+				onSelect={() => {}}
+			/>,
+			root,
+		);
+		expect(
+			[...root.querySelectorAll(".participant")].map(
+				(c) => (c as HTMLElement).dataset.color,
+			),
+		).toEqual(["#111111", "#222222"]);
+	});
+});

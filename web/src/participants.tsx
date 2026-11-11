@@ -12,12 +12,14 @@ interface Props {
 	peers: Peer[];
 	/** Our own id: we come first and are marked. */
 	selfId: string;
+	/** The colour of each person, chosen for the whole board so no two are alike. */
+	colors?: Map<string, string>;
 	/** Given to the board's owner: pressing another person's chip calls it (R-016). */
 	onSelect?: (peer: Peer, at: { x: number; y: number }) => void;
 }
 
 /** Who is on the board right now: a coloured chip per person in the top right corner (R-046). */
-export function Participants({ peers, selfId, onSelect }: Props) {
+export function Participants({ peers, selfId, colors, onSelect }: Props) {
 	if (peers.length === 0) return null;
 	const ordered = [
 		...peers.filter((p) => p.id === selfId),
@@ -29,7 +31,7 @@ export function Participants({ peers, selfId, onSelect }: Props) {
 		<ul class="participants" aria-label="Uczestnicy">
 			{shown.map((p) => {
 				const label = p.id === selfId ? `${p.name} (Ty)` : p.name;
-				const color = cursorColor(p.id);
+				const color = colors?.get(p.id) ?? cursorColor(p.id);
 				const common = {
 					class: `participant${p.id === selfId ? " self" : ""}${p.muted ? " muted" : ""}`,
 					title: p.muted ? `${label}: nie może rysować` : label,

@@ -17,3 +17,22 @@ export function cursorColor(authorId: string): string {
 		hash = (hash * 31 + authorId.charCodeAt(i)) >>> 0;
 	return CURSOR_COLORS[hash % CURSOR_COLORS.length];
 }
+
+/**
+ * Colours for everyone on the board at once, all different while the palette lasts. Each person
+ * starts from their own colour; the ids are taken in sorted order, and a person whose colour is
+ * already taken moves on to the next free one. Every client gets the same answer from the same
+ * list, and people who do not collide keep the colour they always had.
+ */
+export function assignColors(ids: string[]): Map<string, string> {
+	const out = new Map<string, string>();
+	const used = new Set<number>();
+	for (const id of [...new Set(ids)].sort()) {
+		let i = CURSOR_COLORS.indexOf(cursorColor(id));
+		for (let tries = 0; used.has(i) && tries < CURSOR_COLORS.length; tries++)
+			i = (i + 1) % CURSOR_COLORS.length;
+		used.add(i);
+		out.set(id, CURSOR_COLORS[i]);
+	}
+	return out;
+}
