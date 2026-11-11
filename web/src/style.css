@@ -243,6 +243,9 @@ input::placeholder {
 	flex: 1 1 160px;
 }
 .view-switch {
+	border: 0;
+	padding: 0;
+	min-width: 0;
 	display: flex;
 	gap: 4px;
 	justify-content: flex-end;

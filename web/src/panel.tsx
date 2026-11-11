@@ -123,7 +123,7 @@ export function Panel({ username, navigate, onLogout }: Props) {
 				</button>
 			</form>
 
-			<div class="view-switch" role="group" aria-label="Widok tablic">
+			<fieldset class="view-switch" aria-label="Widok tablic">
 				<button
 					type="button"
 					aria-pressed={view === "list"}
@@ -138,7 +138,7 @@ export function Panel({ username, navigate, onLogout }: Props) {
 				>
 					Kafelki
 				</button>
-			</div>
+			</fieldset>
 			<h2>Moje tablice</h2>
 			{owned === null ? (
 				<p>Wczytywanie…</p>
