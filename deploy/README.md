@@ -14,7 +14,7 @@ uczeń (iPad)  ->  https://lekcje.twojadomena.pl  ->  Cloudflare  ->  tunel  -> 
 ghcr.io/maciekgangus/inkroom
 ```
 
-Pakiet jest publiczny, więc `docker pull` działa bez logowania.
+Pakiet jest **prywatny**: pobranie wymaga zalogowania Dockera do `ghcr.io` (krok 3, "Logowanie do rejestru").
 
 | Tag | Co to jest |
 |---|---|
@@ -23,7 +23,7 @@ Pakiet jest publiczny, więc `docker pull` działa bez logowania.
 | `:0.1.0`, `:0.1` | wydanie (powstaje z tagu git `v0.1.0`) |
 | `:latest` | ostatnie wydanie; **pojawi się dopiero po pierwszym tagu `v...`** |
 
-Sprawdzenie: `docker pull ghcr.io/maciekgangus/inkroom:main`. Do czasu pierwszego wydania ustaw w
+Sprawdzenie (po zalogowaniu): `docker pull ghcr.io/maciekgangus/inkroom:main`. Do czasu pierwszego wydania ustaw w
 `.env` `INKROOM_TAG=main`; po wydaniu usuń tę linię, a serwer będzie śledził `:latest`.
 
 Wydanie (na swoim komputerze, po zmergowaniu do `main`):
@@ -31,6 +31,18 @@ Wydanie (na swoim komputerze, po zmergowaniu do `main`):
 ```sh
 git tag v0.1.0 && git push --tags
 ```
+
+### Ustawienie pakietu jako prywatnego (raz, w przeglądarce)
+
+Pierwsza publikacja z publicznego repozytorium daje pakiet publiczny, a widoczności nie zmienia się
+przez API ani z linii poleceń:
+
+1. GitHub, twój profil, zakładka **Packages**, pakiet **inkroom**.
+2. **Package settings** (po prawej), na dole **Danger Zone**, **Change visibility**, wybierz
+   **Private**, wpisz nazwę pakietu i potwierdź.
+3. Sprawdzenie: na komputerze bez logowania `docker manifest inspect ghcr.io/maciekgangus/inkroom:main`
+   powinno odpowiedzieć `unauthorized`. Publikowanie z GitHub Actions działa dalej bez zmian
+   (pakiet jest powiązany z repozytorium).
 
 ## 2. Jednorazowo w Cloudflare
 
@@ -48,6 +60,25 @@ nieco różnić; szukaj Zero Trust (czasem "Cloudflare One") i Turnstile.
 ## 3. Na homelabie
 
 Potrzebny jest Docker z wtyczką Compose (`docker compose version`) i `curl`.
+
+### Logowanie do rejestru (raz)
+
+Obraz jest prywatny, więc serwer musi mieć token z prawem odczytu:
+
+1. GitHub, Settings, Developer settings, **Personal access tokens, Tokens (classic)**,
+   "Generate new token (classic)", nazwa `inkroom-homelab`, zakres **tylko `read:packages`**,
+   ważność wg uznania (np. rok, i przypomnienie o odnowieniu). Skopiuj token raz.
+2. Na serwerze, **jako root** (timer aktualizacji działa jako root i czyta dane logowania z jego
+   katalogu domowego):
+   ```sh
+   echo 'TWOJ_TOKEN' | sudo docker login ghcr.io -u maciekgangus --password-stdin
+   ```
+   Komenda zapisze dane w `/root/.docker/config.json`. Jeśli uruchamiasz `docker compose` bez
+   `sudo` (użytkownik w grupie `docker`), zaloguj się też jako ten użytkownik.
+3. Sprawdzenie: `sudo docker pull ghcr.io/maciekgangus/inkroom:main` pobiera obraz.
+
+Token z `read:packages` daje odczyt wszystkich twoich pakietów; trzymaj go tylko na serwerze i
+unieważnij w GitHubie, gdyby wyciekł.
 
 ```sh
 sudo mkdir -p /opt/inkroom && sudo chown "$USER" /opt/inkroom
@@ -128,6 +159,7 @@ Na produkcji używaj własnych kluczy.
 | `cloudflared` w logach: "Unauthorized" albo "failed to connect" | zły lub unieważniony token; wygeneruj nowy w panelu tunelu |
 | Strona się otwiera, ale rejestracja nie działa | brak `TURNSTILE_SECRET` (rejestracja jest wtedy zamknięta) albo klucze dla innej domeny |
 | Rysowanie nie synchronizuje się | WebSocket: sprawdź w konsoli przeglądarki `/ws/...`; tunel wspiera WebSocket, więc zwykle to zła trasa |
+| `unauthorized` albo `denied` przy pobieraniu obrazu | Docker nie jest zalogowany do `ghcr.io` (dla użytkownika, który to uruchamia, a timer to root) albo token wygasł lub nie ma `read:packages`; powtórz "Logowanie do rejestru" |
 | `update.sh` kończy się błędem | `docker compose logs app`; skrypt sam wraca do poprzedniego obrazu, a log mówi, który nie wstał |
 
 ## Testy skryptów

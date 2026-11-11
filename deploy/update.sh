@@ -19,7 +19,12 @@ healthy() {
 }
 
 before=$(docker image inspect --format '{{.Id}}' "$REF" 2>/dev/null || true)
-docker compose pull --quiet
+if ! docker compose pull --quiet; then
+	# The image is private (ADR 0014): the usual reason is a missing or expired login.
+	echo "could not pull the images: is docker logged in to ghcr.io (docker login ghcr.io)," >&2
+	echo "for the user that runs this script, with a token that may read packages?" >&2
+	exit 1
+fi
 after=$(docker image inspect --format '{{.Id}}' "$REF")
 
 if [ "$before" = "$after" ] && docker compose ps --status running --quiet | grep -q .; then
