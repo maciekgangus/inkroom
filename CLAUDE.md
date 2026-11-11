@@ -34,7 +34,7 @@ Stos: serwer w Go (`server/`), klient w TypeScript + Vite + Preact (`web/`). Kom
 - Nie czytaj ani nie ruszaj plików `.env`.
 - Lokalnie `docker compose up` ładuje `docker-compose.override.yml`, który tworzy publiczne konto testowe (`test@example.test`, hasło w tym pliku). Na serwerze uruchamiać z jawnym `-f docker-compose.yml`, żeby tego konta tam nie było.
 - Rejestracja wymaga captchy Cloudflare Turnstile (ADR 0013): lokalnie `docker-compose.override.yml` ma opublikowane klucze testowe, na serwerze trzeba ustawić `TURNSTILE_SITE_KEY` i `TURNSTILE_SECRET` w `.env` (bez sekretu rejestracja jest zamknięta). Logowanie: e-mail lub nazwa użytkownika; konto testowe `test@example.test` loguje się też jako `test`.
-- Obraz i wydania (ADR 0014): GitHub Actions testuje i publikuje `ghcr.io/maciekgangus/inkroom` (`:main` i `:sha-<commit>` z `main`, `:latest` i `:X.Y.Z` z tagu `vX.Y.Z`); VPS śledzi `:latest` przez timer z `deploy/`. Wydanie: `git tag vX.Y.Z && git push --tags` po zmergowaniu do `main`. Skrypty VPS testuje `sh deploy/test-update.sh`.
+- Obraz i wydania (ADR 0014): GitHub Actions testuje i publikuje `ghcr.io/maciekgangus/inkroom` (`:main` i `:sha-<commit>` z `main`, `:latest` i `:X.Y.Z` z tagu `vX.Y.Z`); VPS (homelab) śledzi `:latest` przez timer z `deploy/`; tunel Cloudflare i instrukcja: `deploy/README.md`, ADR 0003. Wydanie: `git tag vX.Y.Z && git push --tags` po zmergowaniu do `main`. Skrypty VPS testuje `sh deploy/test-update.sh`.
 - Wdrożenie: docker compose, najpierw lokalnie, później na domowym VPS (ADR 0002). Sekrety w `.env`, nigdy w obrazach ani w repo.
 - Plugin lub serwer MCP dodawaj dopiero pod konkretny problem, a po dodaniu sprawdź `/context`.
 

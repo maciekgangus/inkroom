@@ -15,9 +15,12 @@ cat >"$T/bin/docker" <<'EOF'
 #!/bin/sh
 S=$STATE
 case "$*" in
-"image inspect --format {{.Id}} "*:latest) cat "$S/latest" 2>/dev/null || exit 1 ;;
+"compose config --images") printf 'ghcr.io/maciekgangus/inkroom:%s\ncloudflare/cloudflared:latest\n' "${INKROOM_TAG:-latest}" ;;
 "image inspect --format {{.Id}} "*:previous) cat "$S/previous" 2>/dev/null || exit 1 ;;
-"compose pull --quiet") [ -f "$S/next" ] && cp "$S/next" "$S/latest"; echo "pull" >>"$S/log" ;;
+"image inspect --format {{.Id}} "*) cat "$S/latest" 2>/dev/null || exit 1 ;;
+"compose pull --quiet")
+	[ -f "$S/pullfails" ] && exit 1
+	[ -f "$S/next" ] && cp "$S/next" "$S/latest"; echo "pull" >>"$S/log" ;;
 "compose ps --status running --quiet") [ -f "$S/running" ] && echo container ;;
 "tag "*) echo "$2" >"$S/previous"; echo "tag $2 previous" >>"$S/log" ;;
 "compose up -d --remove-orphans")
@@ -45,12 +48,12 @@ check() { # description condition (shell code, true when the case is as it shoul
 	if eval "$2"; then echo "ok   $1"; else echo "FAIL $1"; fails=$((fails + 1)); fi
 }
 update() { PATH="$T/bin:$PATH" sh "$HERE/update.sh" 2>&1; }
-has() { grep -q "$1" "$STATE/log"; }
+has() { grep -qs "$1" "$STATE/log"; }
 
 run unchanged
 echo A >"$STATE/latest"; echo A >"$STATE/next"; touch "$STATE/running"
 rc=0; out=$(update) || rc=$?
-check "an image that has not changed is left alone" '[ $rc -eq 0 ] && ! has "^up" && echo "$out" | grep -q "already up to date"'
+check "an image that has not changed is left alone (the rest of the stack is refreshed)" '[ $rc -eq 0 ] && ! has "^tag" && ! has "^prune" && has "^up latest" && echo "$out" | grep -q "already up to date"'
 
 run healthy
 echo A >"$STATE/latest"; echo B >"$STATE/next"; touch "$STATE/running"; echo ok >"$STATE/health_B"
@@ -72,5 +75,20 @@ run first
 echo B >"$STATE/next"; echo ok >"$STATE/health_B"
 rc=0; out=$(update) || rc=$?
 check "a first installation works, with no previous image to save" '[ $rc -eq 0 ] && ! has "^tag" && has "^up latest"'
+
+run unauthorized
+echo A >"$STATE/latest"; touch "$STATE/running" "$STATE/pullfails"
+rc=0; out=$(update) || rc=$?
+check "a pull that is refused says to log in to ghcr.io and changes nothing" '[ $rc -eq 1 ] && echo "$out" | grep -q "logged in to ghcr.io" && ! has "^up" && ! has "^prune"'
+
+run pinned
+echo A >"$STATE/latest"; echo B >"$STATE/next"; touch "$STATE/running"; echo ok >"$STATE/health_B"
+rc=0; out=$(INKROOM_TAG=main update) || rc=$?
+check "a tag named in .env or the environment is the one that is followed" '[ $rc -eq 0 ] && echo "$out" | grep -q "inkroom:main"'
+
+run tunnel
+echo A >"$STATE/latest"; echo A >"$STATE/next"; touch "$STATE/running"
+rc=0; out=$(update) || rc=$?
+check "the image of the tunnel is not mistaken for the app's" '[ $rc -eq 0 ] && echo "$out" | grep -q "inkroom:latest" && ! echo "$out" | grep -q cloudflared'
 
 if [ "$fails" -eq 0 ]; then echo "all passed"; else echo "$fails failed"; exit 1; fi
