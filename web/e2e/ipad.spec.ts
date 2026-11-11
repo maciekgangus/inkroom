@@ -47,25 +47,22 @@ test.describe("layout on an iPad screen", () => {
 
 test.describe("pen and finger", () => {
 	test("the pen draws", async ({ page }) => {
-		const cdp = await page.context().newCDPSession(page);
 		expect(await ink(page)).toBe(0);
-		await pen(cdp, [200, 500], [500, 650]);
+		await pen(page, [200, 500], [500, 650]);
 		await expect.poll(() => ink(page)).toBeGreaterThan(0);
 	});
 
 	test("one finger moves the board and leaves no ink", async ({ page }) => {
-		const cdp = await page.context().newCDPSession(page);
-		await fingers(cdp, [[300, 600]], [[200, 650]]);
+		await fingers(page, [[300, 600]], [[200, 650]]);
 		await page.waitForTimeout(200);
 		expect(await ink(page)).toBe(0);
 	});
 
 	test("two fingers pinching zoom the board", async ({ page }) => {
-		const cdp = await page.context().newCDPSession(page);
 		const label = () => page.locator("[aria-label='zoom reset']").textContent();
 		expect(await label()).toBe("100%");
 		await fingers(
-			cdp,
+			page,
 			[
 				[300, 600],
 				[400, 600],

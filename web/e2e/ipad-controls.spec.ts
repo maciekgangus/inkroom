@@ -43,8 +43,7 @@ test.describe("everyday drawing", () => {
 	test("undo takes a stroke back and redo brings it again", async ({
 		page,
 	}) => {
-		const cdp = await page.context().newCDPSession(page);
-		await pen(cdp, [200, 500], [500, 650]);
+		await pen(page, [200, 500], [500, 650]);
 		await expect.poll(() => ink(page)).toBeGreaterThan(0);
 		await page.locator("[aria-label='undo']").tap();
 		await expect.poll(() => ink(page)).toBe(0);
@@ -53,42 +52,38 @@ test.describe("everyday drawing", () => {
 	});
 
 	test("the eraser removes a stroke the pen drew", async ({ page }) => {
-		const cdp = await page.context().newCDPSession(page);
-		await pen(cdp, [200, 500], [500, 500]);
+		await pen(page, [200, 500], [500, 500]);
 		await expect.poll(() => ink(page)).toBeGreaterThan(0);
 		await page.locator("[aria-label='eraser']").tap();
-		await pen(cdp, [350, 450], [350, 550]);
+		await pen(page, [350, 450], [350, 550]);
 		await expect.poll(() => ink(page)).toBe(0);
 	});
 
 	test("a shape is drawn with the pen", async ({ page }) => {
-		const cdp = await page.context().newCDPSession(page);
 		await page.locator("[aria-label='shape']").tap();
-		await pen(cdp, [200, 500], [450, 700]);
+		await pen(page, [200, 500], [450, 700]);
 		await expect.poll(() => ink(page)).toBeGreaterThan(0);
 	});
 
 	test("a selected stroke gets a panel that stays on the screen", async ({
 		page,
 	}) => {
-		const cdp = await page.context().newCDPSession(page);
-		await pen(cdp, [200, 500], [500, 500]);
+		await pen(page, [200, 500], [500, 500]);
 		await page.locator("[aria-label='select']").tap();
-		await pen(cdp, [350, 500], [350, 500]); // a tap of the pencil
+		await pen(page, [350, 500], [350, 500]); // a tap of the pencil
 		await expect(page.locator(".properties")).toBeVisible();
 		await onScreen(page, ".properties");
 	});
 
 	test("a stroke can be moved with the pen once selected", async ({ page }) => {
-		const cdp = await page.context().newCDPSession(page);
 		const vh = page.viewportSize()?.height ?? 0;
 		const [from, to] = [Math.round(vh * 0.4), Math.round(vh * 0.7)];
-		await pen(cdp, [200, from], [500, from]);
+		await pen(page, [200, from], [500, from]);
 		await page.locator("[aria-label='select']").tap();
-		await pen(cdp, [350, from], [350, from]);
+		await pen(page, [350, from], [350, from]);
 		await expect(page.locator(".properties")).toBeVisible();
 		expect(await inkIn(page, 150, from - 30, 400, 60)).toBeGreaterThan(0);
-		await pen(cdp, [350, from], [350, to]);
+		await pen(page, [350, from], [350, to]);
 		// Gone from where it was, there at its new place.
 		await expect.poll(() => inkIn(page, 150, from - 30, 400, 60)).toBe(0);
 		await expect
@@ -97,14 +92,13 @@ test.describe("everyday drawing", () => {
 	});
 
 	test("a tap on an empty place lets go of the selection", async ({ page }) => {
-		const cdp = await page.context().newCDPSession(page);
 		const vh = page.viewportSize()?.height ?? 0;
 		const y = Math.round(vh * 0.4);
-		await pen(cdp, [200, y], [500, y]);
+		await pen(page, [200, y], [500, y]);
 		await page.locator("[aria-label='select']").tap();
-		await pen(cdp, [350, y], [350, y]);
+		await pen(page, [350, y], [350, y]);
 		await expect(page.locator(".properties")).toBeVisible();
-		await pen(cdp, [100, Math.round(vh * 0.8)], [100, Math.round(vh * 0.8)]);
+		await pen(page, [100, Math.round(vh * 0.8)], [100, Math.round(vh * 0.8)]);
 		await expect(page.locator(".properties")).toHaveCount(0);
 	});
 });
@@ -113,8 +107,7 @@ test.describe("palm and fingers", () => {
 	test("a finger resting while the pen draws does not add ink of its own", async ({
 		page,
 	}) => {
-		const cdp = await page.context().newCDPSession(page);
-		await fingers(cdp, [[700, 900]], [[700, 950]]);
+		await fingers(page, [[700, 900]], [[700, 950]]);
 		await page.waitForTimeout(100);
 		expect(await ink(page)).toBe(0);
 	});
