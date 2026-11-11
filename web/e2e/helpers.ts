@@ -15,6 +15,9 @@ export async function openBoard(page: Page): Promise<void> {
 	).json();
 	await page.goto(`/b/${board.id}`);
 	await page.waitForSelector(".topbar");
+	// The list of people comes right after the board's saved state: from then on what is drawn
+	// stays (a stroke drawn before it is replaced by the saved state when that arrives).
+	await page.waitForSelector(".participants");
 }
 
 /** How many pixels of the board canvas (the committed layer) are painted. */
@@ -108,7 +111,7 @@ async function pointers(
 		return;
 	}
 	await page.evaluate(
-		({ pointerType, from, to, steps }) => {
+		async ({ pointerType, from, to, steps }) => {
 			const live = document.querySelector("canvas#live") as HTMLCanvasElement;
 			live.setPointerCapture = () => {};
 			const fire = (
@@ -136,13 +139,18 @@ async function pointers(
 				from[id][0] + (to[id][0] - from[id][0]) * t,
 				from[id][1] + (to[id][1] - from[id][1]) * t,
 			];
+			// One frame between the events, as a real hand and a real screen have.
+			const frame = () => new Promise((r) => setTimeout(r, 16));
 			from.forEach((_, id) => {
 				fire("pointerdown", id, ...at(id, 0), true);
 			});
-			for (let i = 1; i <= steps; i++)
+			await frame();
+			for (let i = 1; i <= steps; i++) {
 				from.forEach((_, id) => {
 					fire("pointermove", id, ...at(id, i / steps), true);
 				});
+				await frame();
+			}
 			from.forEach((_, id) => {
 				fire("pointerup", id, ...at(id, 1), false);
 			});

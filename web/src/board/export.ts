@@ -32,20 +32,35 @@ export function exportRegion(
 	};
 }
 
-/** The picture size for a region: sharp when small, shrunk to fit when huge. */
-export function exportSize(region: Rect): {
+/**
+ * The picture size for a region: `sharp` pixels per board unit when small (twice, for a sharp
+ * export; one for a preview), shrunk so the longest side is at most `maxSide`.
+ */
+export function exportSize(
+	region: Rect,
+	maxSide = MAX_SIDE,
+	sharp = SHARP,
+): {
 	scale: number;
 	width: number;
 	height: number;
 } {
 	const w = Math.max(region.maxX - region.minX, 1);
 	const h = Math.max(region.maxY - region.minY, 1);
-	const scale = Math.min(SHARP, MAX_SIDE / Math.max(w, h));
+	const scale = Math.min(sharp, maxSide / Math.max(w, h));
 	return {
 		scale,
 		width: Math.max(1, Math.round(w * scale)),
 		height: Math.max(1, Math.round(h * scale)),
 	};
+}
+
+/** How big a picture to make, and what to do about photos (a preview needs no photos). */
+export interface RenderOptions {
+	maxSide?: number;
+	sharp?: number;
+	/** Draw a light rectangle where a photo is, instead of leaving it out. */
+	placeholders?: boolean;
 }
 
 /**
@@ -57,8 +72,13 @@ export function renderRegion(
 	region: Rect,
 	background: Background,
 	images: ImageCache | null,
+	options: RenderOptions = {},
 ): HTMLCanvasElement {
-	const { scale, width, height } = exportSize(region);
+	const { scale, width, height } = exportSize(
+		region,
+		options.maxSide,
+		options.sharp,
+	);
 	const canvas = document.createElement("canvas");
 	canvas.width = width;
 	canvas.height = height;
@@ -87,7 +107,7 @@ export function renderRegion(
 		-region.minX * scale,
 		-region.minY * scale,
 	);
-	paintElements(ctx, strokes, region, images);
+	paintElements(ctx, strokes, region, images, options.placeholders);
 	return canvas;
 }
 

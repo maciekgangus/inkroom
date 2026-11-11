@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -214,6 +215,39 @@ func (a *app) copyBoard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]string{"id": cp.ID, "name": cp.Name})
+}
+
+// boardPreview gives what a client needs to draw a small picture of a board (R-052): its
+// background and its strokes, as saved. Like the board itself it is open to whoever has the link.
+// The answer carries an ETag made of the board's last change, so a client that already has the
+// picture of this version is told "not modified" and nothing is sent again.
+func (a *app) boardPreview(w http.ResponseWriter, r *http.Request) {
+	b, err := a.st.Board(r.PathValue("id"))
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "Nie ma takiej tablicy")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Błąd serwera")
+		return
+	}
+	etag := `"` + strconv.FormatInt(b.UpdatedAt.Unix(), 10) + "-" + b.Background + `"`
+	w.Header().Set("ETag", etag)
+	w.Header().Set("Cache-Control", "private, no-cache")
+	if r.Header.Get("If-None-Match") == etag {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	raw, err := a.st.LoadStrokes(b.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Błąd serwera")
+		return
+	}
+	strokes := make([]json.RawMessage, 0, len(raw))
+	for _, s := range raw {
+		strokes = append(strokes, s)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"background": b.Background, "strokes": strokes})
 }
 
 // forgetBoard takes a board off the caller's list of boards they were invited to (R-051). The

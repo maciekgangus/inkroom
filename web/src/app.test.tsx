@@ -4,6 +4,12 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { App } from "./app";
 import type { SocketLike } from "./sync/sync";
 
+// The preview is drawn on a canvas, which the test DOM does not have: only its use is checked.
+vi.mock("./board/preview", async (orig) => ({
+	...(await orig<typeof import("./board/preview")>()),
+	renderPreview: vi.fn(() => "data:image/png;base64,DRAWN"),
+}));
+
 const ID = "0123456789abcdef0123456789abcdef";
 
 function fakeSocket(): SocketLike {
@@ -19,6 +25,7 @@ function fakeSocket(): SocketLike {
 interface Reply {
 	status?: number;
 	body?: unknown;
+	headers?: Record<string, string>;
 }
 
 /** Stubs fetch with a table of "METHOD /path" -> reply (or a function of the request body). */
@@ -37,7 +44,12 @@ function mockApi(routes: Record<string, Reply | ((body: unknown) => Reply)>) {
 			};
 		const reply = typeof route === "function" ? route(body) : route;
 		const status = reply.status ?? 200;
-		return { ok: status < 400, status, json: async () => reply.body ?? {} };
+		return {
+			ok: status < 400,
+			status,
+			json: async () => reply.body ?? {},
+			headers: { get: (name: string) => reply.headers?.[name] ?? null },
+		};
 	});
 	vi.stubGlobal("fetch", fn);
 	return {
@@ -62,9 +74,12 @@ describe("App", () => {
 	};
 	const text = () => root.textContent ?? "";
 	const waitText = (s: string) => vi.waitFor(() => expect(text()).toContain(s));
+	// A button is found by its text or, for an icon, by its label.
 	const button = (label: string) =>
-		[...root.querySelectorAll("button")].find((b) =>
-			b.textContent?.includes(label),
+		[...root.querySelectorAll("button")].find(
+			(b) =>
+				b.textContent?.includes(label) ||
+				b.getAttribute("aria-label")?.includes(label),
 		) as HTMLButtonElement;
 	const click = async (label: string) => {
 		await act(async () => {
@@ -502,6 +517,264 @@ describe("App", () => {
 			expect(button("Usuń")).toBeDefined();
 		});
 
+		describe("list or tiles with previews (R-052)", () => {
+			const FID = "f".repeat(32);
+			const preview = (id: string, etag = '"1-plain"') => ({
+				[`GET /api/boards/${id}/preview`]: {
+					headers: { ETag: etag },
+					body: { background: "plain", strokes: [] },
+				},
+			});
+			const openPanel = async (extra = {}, navigate = vi.fn()) => {
+				const api = mockApi({
+					"GET /api/me": LOGGED_IN,
+					"GET /api/boards": { body: boards },
+					...preview(ID),
+					...preview(FID),
+					...extra,
+				});
+				await mount({ path: "/", navigate });
+				await waitText("Matma");
+				return api;
+			};
+			const tileOf = (name: string) =>
+				[...root.querySelectorAll(".boards .board")].find((r) =>
+					r.textContent?.includes(name),
+				) as HTMLElement;
+			const lists = () => [...root.querySelectorAll(".boards")];
+			const pressed = (label: string) =>
+				button(label)?.getAttribute("aria-pressed") === "true";
+
+			test("starts as a list, with no previews fetched", async () => {
+				const api = await openPanel();
+				expect(pressed("Lista")).toBe(true);
+				expect(pressed("Kafelki")).toBe(false);
+				expect(lists().every((l) => !l.classList.contains("tiles"))).toBe(true);
+				expect(root.querySelector("img.preview")).toBeNull();
+				expect(api.called(`GET /api/boards/${ID}/preview`)).toHaveLength(0);
+			});
+
+			test("tiles show a picture of each board, in both lists", async () => {
+				const api = await openPanel();
+				await click("Kafelki");
+				expect(lists().every((l) => l.classList.contains("tiles"))).toBe(true);
+				await vi.waitFor(() =>
+					expect(root.querySelectorAll("img.preview")).toHaveLength(2),
+				);
+				expect(root.querySelector("img.preview")?.getAttribute("src")).toBe(
+					"data:image/png;base64,DRAWN",
+				);
+				expect(api.called(`GET /api/boards/${ID}/preview`)).toHaveLength(1);
+				expect(api.called(`GET /api/boards/${FID}/preview`)).toHaveLength(1);
+			});
+
+			test("a tile keeps the name, the date, the owner and the buttons", async () => {
+				await openPanel();
+				await click("Kafelki");
+				const tile = [...root.querySelectorAll(".boards .board")].find((r) =>
+					r.textContent?.includes("Cudza"),
+				);
+				expect(tile?.textContent).toContain("Tablica: pani.anna");
+				expect(
+					tile?.querySelector('[aria-label="Usuń z listy"]'),
+				).not.toBeNull();
+				expect(tile?.querySelector("a.open-link")).not.toBeNull();
+			});
+
+			test("the choice is remembered on the device", async () => {
+				await openPanel();
+				await click("Kafelki");
+				expect(localStorage.getItem("inkroom.boardView")).toBe("tiles");
+				render(null, root);
+				await openPanel();
+				expect(pressed("Kafelki")).toBe(true);
+				expect(lists().every((l) => l.classList.contains("tiles"))).toBe(true);
+				await click("Lista");
+				expect(localStorage.getItem("inkroom.boardView")).toBe("list");
+			});
+
+			test("a picture already drawn for this version is not drawn again", async () => {
+				const { renderPreview } = await import("./board/preview");
+				const drawn = vi.mocked(renderPreview);
+				drawn.mockClear();
+				localStorage.setItem(
+					`inkroom.preview.${ID}`,
+					JSON.stringify({
+						tag: '"1-plain"',
+						url: "data:image/png;base64,KEPT",
+						at: 1,
+					}),
+				);
+				await openPanel();
+				await click("Kafelki");
+				await vi.waitFor(() =>
+					expect(root.querySelectorAll("img.preview")).toHaveLength(2),
+				);
+				const mine = [...root.querySelectorAll(".boards .board")]
+					.find((r) => r.textContent?.includes("Matma"))
+					?.querySelector("img.preview");
+				expect(mine?.getAttribute("src")).toBe("data:image/png;base64,KEPT");
+				expect(drawn).toHaveBeenCalledTimes(1); // only the other board
+			});
+
+			test("the whole tile opens the board, and there is no 'Otwórz' button", async () => {
+				const navigate = vi.fn();
+				await openPanel({}, navigate);
+				await click("Kafelki");
+				expect(button("Otwórz")).toBeUndefined();
+				const link = tileOf("Matma").querySelector(
+					"a.open-link",
+				) as HTMLAnchorElement;
+				expect(link.getAttribute("href")).toBe(`/b/${ID}`);
+				expect(link.textContent).toContain("Matma"); // the picture and the name are the link
+				await act(async () => {
+					link
+						.querySelector(".preview-box")
+						?.dispatchEvent(
+							new MouseEvent("click", { bubbles: true, cancelable: true }),
+						);
+				});
+				expect(navigate).toHaveBeenCalledWith(`/b/${ID}`);
+			});
+
+			test("a click with a modifier is left to the browser (a new tab)", async () => {
+				const navigate = vi.fn();
+				await openPanel({}, navigate);
+				await click("Kafelki");
+				const link = tileOf("Matma").querySelector(
+					"a.open-link",
+				) as HTMLAnchorElement;
+				const e = new MouseEvent("click", {
+					bubbles: true,
+					cancelable: true,
+					ctrlKey: true,
+				});
+				await act(async () => {
+					link.dispatchEvent(e);
+				});
+				expect(navigate).not.toHaveBeenCalled();
+				expect(e.defaultPrevented).toBe(false);
+			});
+
+			test("the buttons of a tile are icons, each with a label", async () => {
+				await openPanel();
+				await click("Kafelki");
+				const buttons = [
+					...tileOf("Matma").querySelectorAll(".actions button"),
+				];
+				expect(buttons.map((b) => b.getAttribute("aria-label"))).toEqual([
+					"Kopiuj link",
+					"Utwórz kopię",
+					"Zmień nazwę",
+					"Usuń",
+				]);
+				for (const b of buttons) {
+					expect(b.textContent?.trim()).toBe("");
+					expect(b.querySelector("svg")).not.toBeNull();
+					expect(b.getAttribute("title")).toBe(b.getAttribute("aria-label"));
+				}
+				const theirs = [...tileOf("Cudza").querySelectorAll(".actions button")];
+				expect(theirs.map((b) => b.getAttribute("aria-label"))).toEqual([
+					"Kopiuj link",
+					"Usuń z listy",
+				]);
+			});
+
+			test("deleting from a tile still asks first", async () => {
+				const api = await openPanel({
+					[`DELETE /api/boards/${ID}`]: { status: 204 },
+				});
+				await click("Kafelki");
+				const del = tileOf("Matma").querySelector(
+					'.actions button[aria-label="Usuń"]',
+				) as HTMLButtonElement;
+				await act(async () => del.click());
+				expect(api.called(`DELETE /api/boards/${ID}`)).toHaveLength(0);
+				expect(tileOf("Matma").textContent).toContain("Na pewno");
+				await click("Na pewno");
+				await vi.waitFor(() => expect(text()).not.toContain("Matma"));
+				expect(api.called(`DELETE /api/boards/${ID}`)).toHaveLength(1);
+			});
+
+			test("the list too has icons, and the name opens the board", async () => {
+				const navigate = vi.fn();
+				await openPanel({}, navigate);
+				expect(button("Otwórz")).toBeUndefined();
+				const row = tileOf("Matma");
+				const buttons = [...row.querySelectorAll(".actions button")];
+				expect(buttons.map((b) => b.getAttribute("aria-label"))).toEqual([
+					"Kopiuj link",
+					"Utwórz kopię",
+					"Zmień nazwę",
+					"Usuń",
+				]);
+				for (const b of buttons) {
+					expect(b.textContent?.trim()).toBe("");
+					expect(b.querySelector("svg")).not.toBeNull();
+				}
+				const link = row.querySelector("a.open-link") as HTMLAnchorElement;
+				expect(link.getAttribute("href")).toBe(`/b/${ID}`);
+				expect(link.textContent).toContain("Matma");
+				await act(async () => {
+					link.dispatchEvent(
+						new MouseEvent("click", { bubbles: true, cancelable: true }),
+					);
+				});
+				expect(navigate).toHaveBeenCalledWith(`/b/${ID}`);
+			});
+
+			test("the switch between list and tiles is two icons with labels", async () => {
+				await openPanel();
+				for (const label of ["Lista", "Kafelki"]) {
+					const b = button(label);
+					expect(b.textContent?.trim()).toBe("");
+					expect(b.querySelector("svg")).not.toBeNull();
+					expect(b.getAttribute("title")).toBe(label);
+				}
+			});
+
+			test("a board whose preview cannot be loaded still has its tile", async () => {
+				await openPanel({
+					[`GET /api/boards/${ID}/preview`]: {
+						status: 500,
+						body: { error: "x" },
+					},
+				});
+				await click("Kafelki");
+				await vi.waitFor(
+					() => expect(root.querySelectorAll("img.preview")).toHaveLength(1), // the other one
+				);
+				expect(text()).toContain("Matma");
+			});
+		});
+
+		test("the time of the last change has a date and an hour, no seconds (both views)", async () => {
+			mockApi({
+				"GET /api/me": LOGGED_IN,
+				"GET /api/boards": { body: boards },
+				[`GET /api/boards/${ID}/preview`]: {
+					body: { background: "plain", strokes: [] },
+				},
+			});
+			await mount({ path: "/" });
+			await waitText("Matma");
+			for (const view of ["Lista", "Kafelki"]) {
+				await click(view);
+				const when = root.querySelector(".board .when") as HTMLElement;
+				expect(when.textContent).toMatch(
+					/^\d{2}\.\d{2}\.\d{4}\s·\s\d{2}:\d{2}$/,
+				);
+				expect(when.tagName).toBe("TIME");
+				expect(when.getAttribute("datetime")).toBe("2026-11-09T10:00:00Z");
+				expect(when.querySelector(".time")?.textContent).toMatch(
+					/^\d{2}:\d{2}$/,
+				);
+				expect(when.querySelector(".date")?.textContent).toMatch(
+					/^\d{2}\.\d{2}\.\d{4}$/,
+				);
+			}
+		});
+
 		test("a board that is not mine cannot be copied", async () => {
 			mockApi({
 				"GET /api/me": LOGGED_IN,
@@ -510,9 +783,7 @@ describe("App", () => {
 			await mount({ path: "/" });
 			await waitText("Cudza");
 			expect(
-				[...root.querySelectorAll("button")].filter((b) =>
-					b.textContent?.includes("Utwórz kopię"),
-				),
+				root.querySelectorAll('button[aria-label="Utwórz kopię"]'),
 			).toHaveLength(1); // only the one under "Moje tablice"
 		});
 

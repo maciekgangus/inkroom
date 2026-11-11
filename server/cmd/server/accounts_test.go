@@ -72,3 +72,19 @@ func TestConfiguredKeysTurnTheCaptchaOn(t *testing.T) {
 		t.Fatalf("captcha = %T, want a Turnstile verifier", a.auth.Captcha)
 	}
 }
+
+func TestTheWebManifestIsServedWithItsOwnContentType(t *testing.T) {
+	dir := t.TempDir()
+	if err := writeFile(dir+"/site.webmanifest", `{"name":"Inkroom"}`); err != nil {
+		t.Fatal(err)
+	}
+	srv, _, _ := startApp(t, filepath.Join(t.TempDir(), "x.db"), dir)
+	resp, err := http.Get(srv.URL + "/site.webmanifest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/manifest+json") {
+		t.Fatalf("Content-Type = %q", ct)
+	}
+}

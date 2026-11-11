@@ -394,3 +394,75 @@ func TestDroppingFromTheListNeedsAnAccountAndNeverDeletesAnOwnBoard(t *testing.T
 		t.Fatalf("the owner's own board vanished: %v", o)
 	}
 }
+
+func TestAPreviewHasTheBackgroundAndTheStrokesOfABoard(t *testing.T) {
+	srv, a, _ := testApp(t)
+	owner := register(t, srv, "anna@example.com")
+	id := createBoard(t, srv, owner, "Matma")
+	if err := a.st.SetBoardBackground(id, "grid"); err != nil {
+		t.Fatal(err)
+	}
+	ops := []store.Op{
+		{Add: true, ID: "s1", Data: []byte(`{"id":"s1","color":"#111","size":4,"points":[[1,2,0.5]]}`)},
+		{Add: true, ID: "s2", Data: []byte(`{"id":"s2","kind":"rect","points":[[0,0,0.5],[9,9,0.5]]}`)},
+	}
+	if err := a.st.Apply(id, ops, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	// The link is the key, as for the board itself: no account is needed.
+	resp := call(t, srv, "GET", "/api/boards/"+id+"/preview", "", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("preview = %d", resp.StatusCode)
+	}
+	if cc := resp.Header.Get("Cache-Control"); !strings.Contains(cc, "no-cache") {
+		t.Fatalf("a preview must be revalidated each time, Cache-Control = %q", cc)
+	}
+	m := decode(t, resp)
+	strokes, _ := m["strokes"].([]any)
+	if m["background"] != "grid" || len(strokes) != 2 || strokes[0].(map[string]any)["id"] != "s1" {
+		t.Fatalf("preview = %v", m)
+	}
+}
+
+func TestAPreviewIsNotSentAgainWhenNothingChanged(t *testing.T) {
+	srv, a, _ := testApp(t)
+	owner := register(t, srv, "anna@example.com")
+	id := createBoard(t, srv, owner, "Matma")
+	first := call(t, srv, "GET", "/api/boards/"+id+"/preview", "", nil)
+	etag := first.Header.Get("ETag")
+	if etag == "" {
+		t.Fatal("no ETag")
+	}
+	req, _ := http.NewRequest("GET", srv.URL+"/api/boards/"+id+"/preview", nil)
+	req.Header.Set("If-None-Match", etag)
+	again, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer again.Body.Close()
+	if again.StatusCode != http.StatusNotModified {
+		t.Fatalf("unchanged board = %d, want 304", again.StatusCode)
+	}
+	// A change gives a new tag, so the client draws the preview again.
+	time.Sleep(1100 * time.Millisecond) // updated_at has a resolution of a second
+	if err := a.st.Apply(id, []store.Op{{Add: true, ID: "s1", Data: []byte(`{"id":"s1","points":[[1,1,0.5]]}`)}}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	req2, _ := http.NewRequest("GET", srv.URL+"/api/boards/"+id+"/preview", nil)
+	req2.Header.Set("If-None-Match", etag)
+	changed, err := http.DefaultClient.Do(req2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer changed.Body.Close()
+	if changed.StatusCode != http.StatusOK || changed.Header.Get("ETag") == etag {
+		t.Fatalf("changed board = %d, ETag %q", changed.StatusCode, changed.Header.Get("ETag"))
+	}
+}
+
+func TestAPreviewOfAMissingBoardIs404(t *testing.T) {
+	srv, _, _ := testApp(t)
+	if r := call(t, srv, "GET", "/api/boards/ffffffffffffffffffffffffffffffff/preview", "", nil); r.StatusCode != http.StatusNotFound {
+		t.Fatalf("got %d", r.StatusCode)
+	}
+}
