@@ -5,6 +5,8 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-# Where this folder was copied to; edit the path to match.
+# Set these to match the server (deploy/README.md, step 4): the user must be in the docker group and
+# logged in to ghcr.io, and the folder is where deploy/ was copied to.
+User=CHANGE_ME
 WorkingDirectory=/opt/inkroom
 ExecStart=/opt/inkroom/update.sh
