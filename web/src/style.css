@@ -300,7 +300,8 @@ input::placeholder {
 	position: relative;
 	z-index: 1;
 }
-.board .name a.open-link {
+/* The link that opens a board does not look like one: the text round it, no underline. */
+a.open-link {
 	color: inherit;
 	text-decoration: none;
 }
@@ -308,12 +309,10 @@ input::placeholder {
 	outline: 2px solid var(--accent);
 	outline-offset: -2px;
 }
-.tile-link {
+.boards.tiles a.open-link {
 	display: flex;
 	flex-direction: column;
 	gap: 8px;
-	color: inherit;
-	text-decoration: none;
 	border-radius: var(--radius);
 }
 .board {
