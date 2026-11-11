@@ -16,7 +16,7 @@ type user struct{ cookie *http.Cookie }
 
 func register(t *testing.T, srv *httptest.Server, email string) user {
 	t.Helper()
-	resp := call(t, srv, "POST", "/api/register", `{"email":"`+email+`","password":"password1"}`, nil)
+	resp := call(t, srv, "POST", "/api/register", `{"email":"`+email+`","username":"`+strings.Split(email, "@")[0]+`-user","password":"password1","captcha":"ok"}`, nil)
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("register = %d", resp.StatusCode)

@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"net/mail"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -28,6 +29,8 @@ const (
 	minPassword   = 8
 	maxPassword   = 200
 	maxEmail      = 254
+	minUsername   = 3
+	maxUsername   = 24
 	maxBody       = 4 << 10
 	loginAttempts = 10
 	loginWindow   = 15 * time.Minute
@@ -83,6 +86,10 @@ type Service struct {
 	// Now is the clock; tests replace it.
 	Now func() time.Time
 
+	// Captcha checks the token sent with a registration. Without it registration is refused
+	// (503): a missing configuration must not open the door (R-054, ADR 0013).
+	Captcha Captcha
+
 	failMu sync.Mutex
 	fails  map[string][]time.Time
 
@@ -97,13 +104,25 @@ func New(st *store.Store) *Service {
 
 type credentials struct {
 	Email    string `json:"email"`
+	Username string `json:"username"`
+	Login    string `json:"login"` // an e-mail or a username, when logging in
 	Password string `json:"password"`
+	Captcha  string `json:"captcha"`
 }
 
-// Register creates an account and logs it in.
+// Register creates an account and logs it in. The captcha is checked first, so a bot gets no
+// answer about which e-mails and names are taken.
 func (s *Service) Register(w http.ResponseWriter, r *http.Request) {
 	c, ok := readCredentials(w, r)
 	if !ok {
+		return
+	}
+	if s.Captcha == nil {
+		fail(w, http.StatusServiceUnavailable, "Rejestracja jest chwilowo niedostępna")
+		return
+	}
+	if err := s.Captcha.Verify(r.Context(), c.Captcha, clientIP(r)); err != nil {
+		fail(w, http.StatusBadRequest, "Nie udało się potwierdzić, że nie jesteś robotem. Spróbuj jeszcze raz")
 		return
 	}
 	email, err := normalizeEmail(c.Email)
@@ -111,14 +130,22 @@ func (s *Service) Register(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadRequest, "Podaj poprawny e-mail i hasło (min. 8 znaków)")
 		return
 	}
+	if !validUsername(c.Username) {
+		fail(w, http.StatusBadRequest, "Nazwa użytkownika ma mieć od 3 do 24 znaków: litery a-z, cyfry, kropka, myślnik lub podkreślnik")
+		return
+	}
 	hash, err := HashPassword(c.Password)
 	if err != nil {
 		fail(w, http.StatusInternalServerError, "Błąd serwera")
 		return
 	}
-	u, err := s.store.CreateUser(email, hash)
+	u, err := s.store.CreateAccount(email, c.Username, hash)
 	if errors.Is(err, store.ErrEmailTaken) {
 		fail(w, http.StatusConflict, "Ten e-mail jest już zarejestrowany")
+		return
+	}
+	if errors.Is(err, store.ErrUsernameTaken) {
+		fail(w, http.StatusConflict, "Ta nazwa użytkownika jest zajęta")
 		return
 	}
 	if err != nil {
@@ -127,6 +154,20 @@ func (s *Service) Register(w http.ResponseWriter, r *http.Request) {
 	}
 	s.startSession(w, r, u)
 	respondUser(w, http.StatusCreated, u)
+}
+
+// validUsername reports whether name is 3 to 24 of the characters a username may have.
+func validUsername(name string) bool {
+	if len(name) < minUsername || len(name) > maxUsername {
+		return false
+	}
+	for _, r := range name {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '.' || r == '_' || r == '-' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 // Seed makes sure an account exists, for local development. An existing account is left
@@ -152,34 +193,41 @@ func (s *Service) Seed(email, password string) error {
 	return nil
 }
 
-// Login checks credentials and starts a session.
+// Login checks credentials and starts a session. The login is an e-mail (it has an @) or a
+// username; the answer to a failure is the same whether or not such an account exists.
 func (s *Service) Login(w http.ResponseWriter, r *http.Request) {
 	c, ok := readCredentials(w, r)
 	if !ok {
 		return
 	}
-	email, err := normalizeEmail(c.Email)
-	if err != nil {
-		fail(w, http.StatusUnauthorized, "Nieprawidłowy e-mail lub hasło")
+	login := strings.ToLower(strings.TrimSpace(c.Login))
+	if login == "" || len(login) > maxEmail {
+		fail(w, http.StatusUnauthorized, "Nieprawidłowy login lub hasło")
 		return
 	}
-	ipKey, emailKey := "ip:"+clientIP(r), "email:"+email
-	if s.blocked(ipKey) || s.blocked(emailKey) {
+	ipKey := "ip:" + clientIP(r)
+	u, err := s.store.UserByLogin(login)
+	// Failures are counted per account however it was named (its e-mail or its username), and
+	// per name for accounts that do not exist.
+	accountKey := "login:" + login
+	if err == nil {
+		accountKey = "account:" + strconv.FormatInt(u.ID, 10)
+	}
+	if s.blocked(ipKey) || s.blocked(accountKey) {
 		fail(w, http.StatusTooManyRequests, "Zbyt wiele prób, spróbuj ponownie za kilkanaście minut")
 		return
 	}
-	u, err := s.store.UserByEmail(email)
 	hash := u.Hash
 	if err != nil {
-		hash = s.dummy() // keep timing similar for unknown e-mails
+		hash = s.dummy() // keep timing similar for unknown accounts
 	}
 	if !VerifyPassword(hash, c.Password) || err != nil {
 		s.recordFail(ipKey)
-		s.recordFail(emailKey)
-		fail(w, http.StatusUnauthorized, "Nieprawidłowy e-mail lub hasło")
+		s.recordFail(accountKey)
+		fail(w, http.StatusUnauthorized, "Nieprawidłowy login lub hasło")
 		return
 	}
-	s.clearFails(emailKey)
+	s.clearFails(accountKey)
 	s.startSession(w, r, u)
 	respondUser(w, http.StatusOK, u)
 }
@@ -339,7 +387,7 @@ func readCredentials(w http.ResponseWriter, r *http.Request) (credentials, bool)
 func respondUser(w http.ResponseWriter, status int, u store.User) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]any{"email": u.Email})
+	_ = json.NewEncoder(w).Encode(map[string]any{"email": u.Email, "username": u.Username})
 }
 
 func fail(w http.ResponseWriter, status int, msg string) {

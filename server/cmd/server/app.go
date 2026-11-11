@@ -19,6 +19,8 @@ type app struct {
 	auth      *auth.Service
 	hub       *room.Hub
 	staticDir string
+	// turnstileSiteKey is the public key of the registration captcha, given to the client.
+	turnstileSiteKey string
 }
 
 // newApp wires the services together. Call Close before closing the store.
@@ -29,6 +31,17 @@ func newApp(staticDir string, st *store.Store) *app {
 		hub:       room.NewHub(st, flushEvery),
 		staticDir: staticDir,
 	}
+}
+
+// configureCaptcha turns on the Cloudflare Turnstile check for registration (R-054, ADR 0013).
+// Without a secret the check stays off and registration is refused.
+func (a *app) configureCaptcha(siteKey, secret string) {
+	a.turnstileSiteKey = siteKey
+	if secret == "" {
+		a.auth.Captcha = nil
+		return
+	}
+	a.auth.Captcha = auth.Turnstile{Secret: secret}
 }
 
 // Close saves pending board changes and disconnects everyone.
@@ -57,7 +70,13 @@ func (a *app) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/boards/{id}", a.deleteBoard)
 	mux.HandleFunc("POST /api/boards/{id}/images", a.uploadImage)
 	mux.HandleFunc("GET /api/boards/{id}/images/{image}", a.getImage)
+	mux.HandleFunc("GET /api/config", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]string{"turnstileSiteKey": a.turnstileSiteKey})
+	})
 	mux.HandleFunc("GET /ws/{id}", a.serveWS)
+	mux.HandleFunc("GET /register", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join(a.staticDir, "index.html"))
+	})
 	mux.HandleFunc("GET /b/{id}", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, filepath.Join(a.staticDir, "index.html"))
 	})

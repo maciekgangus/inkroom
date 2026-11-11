@@ -34,6 +34,10 @@ func main() {
 	defer st.Close()
 
 	a := newApp(getenv("STATIC_DIR", "../web/dist"), st)
+	a.configureCaptcha(os.Getenv("TURNSTILE_SITE_KEY"), os.Getenv("TURNSTILE_SECRET"))
+	if os.Getenv("TURNSTILE_SECRET") == "" {
+		log.Print("TURNSTILE_SECRET is not set: registration is closed")
+	}
 	seedDevUser(a)
 	srv := &http.Server{Addr: ":" + getenv("PORT", "8080"), Handler: a.Handler()}
 
