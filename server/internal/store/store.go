@@ -17,13 +17,16 @@ var (
 	ErrNotFound = errors.New("not found")
 	// ErrEmailTaken is returned when registering an e-mail that already has an account.
 	ErrEmailTaken = errors.New("email already registered")
+	// ErrUsernameTaken is returned when a username is used (letter case does not matter).
+	ErrUsernameTaken = errors.New("username already taken")
 )
 
 // User is an account.
 type User struct {
-	ID    int64
-	Email string
-	Hash  string // argon2id hash
+	ID       int64
+	Email    string
+	Username string // the public name, as typed (R-053)
+	Hash     string // argon2id hash
 }
 
 // Board is a saved board.
@@ -97,25 +100,112 @@ CREATE INDEX images_board ON images(board_id);
 `
 
 // migrations run in order; the number applied is kept in PRAGMA user_version.
-var migrations = []string{
-	schema,
-	imagesSchema,
-	"ALTER TABLE boards ADD COLUMN background TEXT NOT NULL DEFAULT 'plain'",
+var migrations = []migration{
+	stmt(schema),
+	stmt(imagesSchema),
+	stmt("ALTER TABLE boards ADD COLUMN background TEXT NOT NULL DEFAULT 'plain'"),
 	// Where each user last looked on each board, so a reload puts them back there.
-	`CREATE TABLE views (
+	stmt(`CREATE TABLE views (
 	user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 	board_id TEXT NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
 	x REAL NOT NULL,
 	y REAL NOT NULL,
 	scale REAL NOT NULL,
 	PRIMARY KEY (user_id, board_id)
-)`,
+)`),
 	// People who may not draw on a board (R-016, ADR 0011).
-	`CREATE TABLE board_revoked (
+	stmt(`CREATE TABLE board_revoked (
 	board_id TEXT NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
 	person TEXT NOT NULL,
 	PRIMARY KEY (board_id, person)
-)`,
+)`),
+	// Usernames (R-053, ADR 0013): existing accounts are named after their e-mail.
+	addUsernames,
+}
+
+// migration changes the schema inside a transaction.
+type migration func(tx *sql.Tx) error
+
+// stmt is a migration that is a single SQL statement.
+func stmt(q string) migration {
+	return func(tx *sql.Tx) error {
+		_, err := tx.Exec(q)
+		return err
+	}
+}
+
+func addUsernames(tx *sql.Tx) error {
+	for _, q := range []string{
+		"ALTER TABLE users ADD COLUMN username TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE users ADD COLUMN username_key TEXT NOT NULL DEFAULT ''",
+	} {
+		if _, err := tx.Exec(q); err != nil {
+			return err
+		}
+	}
+	rows, err := tx.Query("SELECT id, email FROM users ORDER BY id")
+	if err != nil {
+		return err
+	}
+	type account struct {
+		id    int64
+		email string
+	}
+	var accounts []account
+	for rows.Next() {
+		var a account
+		if err := rows.Scan(&a.id, &a.email); err != nil {
+			rows.Close()
+			return err
+		}
+		accounts = append(accounts, a)
+	}
+	rows.Close()
+	taken := map[string]bool{}
+	for _, a := range accounts {
+		name := usernameFromEmail(a.email, func(key string) bool { return taken[key] })
+		taken[strings.ToLower(name)] = true
+		if _, err := tx.Exec("UPDATE users SET username = ?, username_key = ? WHERE id = ?", name, strings.ToLower(name), a.id); err != nil {
+			return err
+		}
+	}
+	_, err = tx.Exec("CREATE UNIQUE INDEX users_username_key ON users(username_key)")
+	return err
+}
+
+const (
+	minUsername = 3
+	maxUsername = 24
+)
+
+// usernameFromEmail makes a name out of the part of an e-mail before the @: lower case, only
+// the characters a username may have, at least three of them, and (when `taken` says the key is
+// used) a number on the end.
+func usernameFromEmail(email string, taken func(key string) bool) string {
+	local, _, _ := strings.Cut(email, "@")
+	var b strings.Builder
+	for _, r := range strings.ToLower(local) {
+		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '.' || r == '_' || r == '-' {
+			b.WriteRune(r)
+		}
+	}
+	base := b.String()
+	for len(base) < minUsername {
+		base += "0"
+	}
+	if len(base) > maxUsername {
+		base = base[:maxUsername]
+	}
+	name := base
+	for n := 2; taken(strings.ToLower(name)); n++ {
+		suffix := strconv.Itoa(n)
+		cut := base
+		if len(cut)+len(suffix) > maxUsername {
+			cut = cut[:maxUsername-len(suffix)]
+		}
+		name = cut + suffix
+	}
+	return name
 }
 
 // DefaultBackground is the background of a new board.
@@ -132,6 +222,11 @@ func ValidBackground(v string) bool {
 
 // Open opens (creating if needed) the database at path and applies migrations.
 func Open(path string) (*Store, error) {
+	return openMigrated(path, len(migrations))
+}
+
+// openMigrated opens the database and applies the first `upTo` migrations (tests open an old one).
+func openMigrated(path string, upTo int) (*Store, error) {
 	dsn := "file:" + path + "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)&_pragma=synchronous(NORMAL)"
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
@@ -139,7 +234,7 @@ func Open(path string) (*Store, error) {
 	}
 	db.SetMaxOpenConns(1) // one connection: no lock contention, plenty for this scale
 	s := &Store{db: db}
-	if err := s.migrate(); err != nil {
+	if err := s.migrate(upTo); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -149,17 +244,17 @@ func Open(path string) (*Store, error) {
 // Close closes the database.
 func (s *Store) Close() error { return s.db.Close() }
 
-func (s *Store) migrate() error {
+func (s *Store) migrate(upTo int) error {
 	var version int
 	if err := s.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
 		return err
 	}
-	for i := version; i < len(migrations); i++ {
+	for i := version; i < upTo; i++ {
 		tx, err := s.db.Begin()
 		if err != nil {
 			return err
 		}
-		if _, err := tx.Exec(migrations[i]); err != nil {
+		if err := migrations[i](tx); err != nil {
 			tx.Rollback()
 			return err
 		}
@@ -177,24 +272,64 @@ func (s *Store) migrate() error {
 
 func unix(t time.Time) int64 { return t.Unix() }
 
-// CreateUser adds an account. The e-mail must already be normalized.
+// CreateUser adds an account whose username is made from the e-mail (see usernameFromEmail).
+// The e-mail must already be normalized. Registration uses CreateAccount with a chosen name.
 func (s *Store) CreateUser(email, hash string) (User, error) {
-	res, err := s.db.Exec("INSERT INTO users (email, hash, created_at) VALUES (?, ?, ?)", email, hash, unix(time.Now()))
+	for attempt := 0; attempt < 5; attempt++ {
+		name := usernameFromEmail(email, func(key string) bool {
+			var one int
+			return s.db.QueryRow("SELECT 1 FROM users WHERE username_key = ?", key).Scan(&one) == nil
+		})
+		u, err := s.CreateAccount(email, name, hash)
+		if !errors.Is(err, ErrUsernameTaken) {
+			return u, err
+		}
+	}
+	return User{}, ErrUsernameTaken
+}
+
+// CreateAccount adds an account with the given username. The e-mail must already be normalized.
+func (s *Store) CreateAccount(email, username, hash string) (User, error) {
+	var one int
+	if s.db.QueryRow("SELECT 1 FROM users WHERE email = ?", email).Scan(&one) == nil {
+		return User{}, ErrEmailTaken // reported first when both are taken
+	}
+	res, err := s.db.Exec("INSERT INTO users (email, hash, created_at, username, username_key) VALUES (?, ?, ?, ?, ?)",
+		email, hash, unix(time.Now()), username, strings.ToLower(username))
 	if err != nil {
-		if strings.Contains(err.Error(), "UNIQUE") {
+		switch {
+		case strings.Contains(err.Error(), "users.username_key"):
+			return User{}, ErrUsernameTaken
+		case strings.Contains(err.Error(), "UNIQUE"):
 			return User{}, ErrEmailTaken
 		}
 		return User{}, err
 	}
 	id, _ := res.LastInsertId()
-	return User{ID: id, Email: email, Hash: hash}, nil
+	return User{ID: id, Email: email, Username: username, Hash: hash}, nil
+}
+
+const userCols = "id, email, username, hash"
+
+func scanUser(sc interface{ Scan(...any) error }) (User, error) {
+	var u User
+	err := sc.Scan(&u.ID, &u.Email, &u.Username, &u.Hash)
+	return u, notFound(err)
 }
 
 // UserByEmail finds an account by (normalized) e-mail.
 func (s *Store) UserByEmail(email string) (User, error) {
-	var u User
-	err := s.db.QueryRow("SELECT id, email, hash FROM users WHERE email = ?", email).Scan(&u.ID, &u.Email, &u.Hash)
-	return u, notFound(err)
+	return scanUser(s.db.QueryRow("SELECT "+userCols+" FROM users WHERE email = ?", email))
+}
+
+// UserByLogin finds an account by what a person types to log in: an e-mail (it has an @) or a
+// username, in any letter case.
+func (s *Store) UserByLogin(login string) (User, error) {
+	login = strings.ToLower(strings.TrimSpace(login))
+	if strings.Contains(login, "@") {
+		return s.UserByEmail(login)
+	}
+	return scanUser(s.db.QueryRow("SELECT "+userCols+" FROM users WHERE username_key = ?", login))
 }
 
 // CreateSession stores a session by the hash of its token.
@@ -205,10 +340,8 @@ func (s *Store) CreateSession(tokenHash string, userID int64, expires time.Time)
 
 // SessionUser returns the user of a live session, or ErrNotFound if missing or expired.
 func (s *Store) SessionUser(tokenHash string, now time.Time) (User, error) {
-	var u User
-	err := s.db.QueryRow(`SELECT u.id, u.email, u.hash FROM sessions s JOIN users u ON u.id = s.user_id
-		WHERE s.token_hash = ? AND s.expires_at > ?`, tokenHash, unix(now)).Scan(&u.ID, &u.Email, &u.Hash)
-	return u, notFound(err)
+	return scanUser(s.db.QueryRow(`SELECT u.id, u.email, u.username, u.hash FROM sessions s JOIN users u ON u.id = s.user_id
+		WHERE s.token_hash = ? AND s.expires_at > ?`, tokenHash, unix(now)))
 }
 
 // ExtendSession moves a session's expiry.

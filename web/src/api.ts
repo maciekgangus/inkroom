@@ -42,25 +42,40 @@ async function request<T>(
 	return data as T;
 }
 
-/** The logged-in user's e-mail, or null when logged out. */
-export async function me(): Promise<string | null> {
+/** A logged-in account: the e-mail (private to its owner) and the public username (R-053). */
+export interface Account {
+	email: string;
+	username: string;
+}
+
+/** The logged-in account, or null when logged out. */
+export async function me(): Promise<Account | null> {
 	try {
-		return (await request<{ email: string }>("GET", "/api/me")).email;
+		return await request<Account>("GET", "/api/me");
 	} catch (e) {
 		if (e instanceof ApiError && e.status === 401) return null;
 		throw e;
 	}
 }
 
-export const register = (email: string, password: string) =>
-	request<{ email: string }>("POST", "/api/register", { email, password }).then(
-		(u) => u.email,
-	);
+/** What a new account needs; `captcha` is the token of the Turnstile widget (R-054). */
+export interface Registration {
+	email: string;
+	username: string;
+	password: string;
+	captcha: string;
+}
 
-export const login = (email: string, password: string) =>
-	request<{ email: string }>("POST", "/api/login", { email, password }).then(
-		(u) => u.email,
-	);
+export const register = (r: Registration) =>
+	request<Account>("POST", "/api/register", r);
+
+/** `login` is an e-mail or a username (R-055). */
+export const login = (login: string, password: string) =>
+	request<Account>("POST", "/api/login", { login, password });
+
+/** Public settings of the server: the site key of the registration captcha ("" when closed). */
+export const config = () =>
+	request<{ turnstileSiteKey: string }>("GET", "/api/config");
 
 export const logout = () => request<void>("POST", "/api/logout", {});
 

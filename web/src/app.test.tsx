@@ -48,7 +48,9 @@ function mockApi(routes: Record<string, Reply | ((body: unknown) => Reply)>) {
 }
 
 const LOGGED_OUT: Reply = { status: 401, body: { error: "not logged in" } };
-const LOGGED_IN: Reply = { body: { email: "ola@example.com" } };
+const LOGGED_IN: Reply = {
+	body: { email: "ola@example.com", username: "ola.k" },
+};
 
 describe("App", () => {
 	let root: HTMLElement;
@@ -99,27 +101,25 @@ describe("App", () => {
 	});
 
 	describe("home page, logged out", () => {
-		test("registering shows the panel", async () => {
+		test("logging in with a username shows the panel with that name", async () => {
 			const api = mockApi({
 				"GET /api/me": LOGGED_OUT,
-				"POST /api/register": {
-					status: 201,
-					body: { email: "ola@example.com" },
+				"POST /api/login": {
+					body: { email: "ola@example.com", username: "ola.k" },
 				},
 				"GET /api/boards": { body: { owned: [], visited: [] } },
 			});
 			await mount({ path: "/" });
-			await waitText("Zarejestruj");
-
-			fill("email", "ola@example.com");
+			await waitText("Zaloguj");
+			fill("login", "Ola.K");
 			fill("password", "password1");
-			await click("Zarejestruj");
-
-			await waitText("ola@example.com");
-			expect(api.called("POST /api/register")[0].body).toEqual({
-				email: "ola@example.com",
+			await click("Zaloguj");
+			await waitText("ola.k");
+			expect(api.called("POST /api/login")[0].body).toEqual({
+				login: "Ola.K",
 				password: "password1",
 			});
+			expect(text()).not.toContain("ola@example.com"); // the e-mail is not shown
 		});
 
 		test("a failed login shows the server's message", async () => {
@@ -127,15 +127,134 @@ describe("App", () => {
 				"GET /api/me": LOGGED_OUT,
 				"POST /api/login": {
 					status: 401,
-					body: { error: "wrong e-mail or password" },
+					body: { error: "wrong login or password" },
 				},
 			});
 			await mount({ path: "/" });
 			await waitText("Zaloguj");
-			fill("email", "ola@example.com");
+			fill("login", "ola");
 			fill("password", "nope");
 			await click("Zaloguj");
-			await waitText("wrong e-mail or password");
+			await waitText("wrong login or password");
+		});
+
+		test("registering is not on this page: a link leads to /register", async () => {
+			mockApi({ "GET /api/me": LOGGED_OUT });
+			const navigate = vi.fn();
+			await mount({ path: "/", navigate });
+			await waitText("Zaloguj");
+			expect(button("Zarejestruj")).toBeUndefined();
+			await click("Załóż konto");
+			expect(navigate).toHaveBeenCalledWith("/register");
+		});
+	});
+
+	describe("register page (R-054)", () => {
+		/** A stand-in for Cloudflare's widget: `solve` plays the person solving it. */
+		const widget = () => {
+			let callback: ((token: string) => void) | undefined;
+			const turnstile = {
+				render: vi.fn(
+					(_el: HTMLElement, o: { callback: (t: string) => void }) => {
+						callback = o.callback;
+						return "w1";
+					},
+				),
+				reset: vi.fn(),
+				remove: vi.fn(),
+			};
+			vi.stubGlobal("turnstile", turnstile);
+			return {
+				turnstile,
+				solve: () => act(async () => callback?.("tok-123")),
+			};
+		};
+		const open = async (navigate = vi.fn()) => {
+			const api = mockApi({
+				"GET /api/me": LOGGED_OUT,
+				"GET /api/config": { body: { turnstileSiteKey: "site-key" } },
+				"POST /api/register": {
+					status: 201,
+					body: { email: "ola@example.com", username: "ola.k" },
+				},
+			});
+			const w = widget();
+			await mount({ path: "/register", navigate });
+			await vi.waitFor(() => expect(w.turnstile.render).toHaveBeenCalled());
+			return { api, navigate, ...w };
+		};
+		const fillAll = () => {
+			fill("email", "ola@example.com");
+			fill("username", "ola.k");
+			fill("password", "password1");
+		};
+
+		test("renders the widget with the site key the server gave", async () => {
+			const { turnstile } = await open();
+			expect(turnstile.render.mock.calls[0][1]).toMatchObject({
+				sitekey: "site-key",
+			});
+		});
+
+		test("the form cannot be sent before the captcha is solved", async () => {
+			const { api, solve } = await open();
+			fillAll();
+			expect(button("Załóż konto")?.disabled).toBe(true);
+			await submit("email");
+			expect(api.called("POST /api/register")).toHaveLength(0);
+			await solve();
+			expect(button("Załóż konto")?.disabled).toBe(false);
+		});
+
+		test("registering sends the name and the captcha token, then goes home", async () => {
+			const { api, solve, navigate } = await open();
+			fillAll();
+			await solve();
+			await click("Załóż konto");
+			await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith("/"));
+			expect(api.called("POST /api/register")[0].body).toEqual({
+				email: "ola@example.com",
+				username: "ola.k",
+				password: "password1",
+				captcha: "tok-123",
+			});
+		});
+
+		test("a refusal is shown and the widget starts over (a token works once)", async () => {
+			const api = mockApi({
+				"GET /api/me": LOGGED_OUT,
+				"GET /api/config": { body: { turnstileSiteKey: "site-key" } },
+				"POST /api/register": {
+					status: 409,
+					body: { error: "Ta nazwa użytkownika jest zajęta" },
+				},
+			});
+			const w = widget();
+			await mount({ path: "/register" });
+			await vi.waitFor(() => expect(w.turnstile.render).toHaveBeenCalled());
+			fillAll();
+			await w.solve();
+			await click("Załóż konto");
+			await waitText("Ta nazwa użytkownika jest zajęta");
+			expect(w.turnstile.reset).toHaveBeenCalled();
+			expect(button("Załóż konto")?.disabled).toBe(true); // needs a new token
+			expect(api.called("POST /api/register")).toHaveLength(1);
+		});
+
+		test("a link leads back to the login page", async () => {
+			const { navigate } = await open();
+			await click("Mam już konto");
+			expect(navigate).toHaveBeenCalledWith("/");
+		});
+
+		test("without a site key the page says registration is closed", async () => {
+			mockApi({
+				"GET /api/me": LOGGED_OUT,
+				"GET /api/config": { body: { turnstileSiteKey: "" } },
+			});
+			await mount({ path: "/register" });
+			await waitText("niedostępna");
+			expect(button("Załóż konto")).toBeUndefined();
 		});
 	});
 
@@ -324,6 +443,19 @@ describe("App", () => {
 			expect(createSocket).toHaveBeenCalledWith(
 				expect.stringContaining(`/ws/${ID}`),
 			);
+		});
+
+		test("a logged-in user is known by their username, not by their e-mail", async () => {
+			mockApi({
+				"GET /api/me": LOGGED_IN,
+				[`GET /api/boards/${ID}`]: { body: { id: ID, name: "Matma" } },
+			});
+			const createSocket = vi.fn((_url: string) => fakeSocket());
+			await mount({ path: `/b/${ID}`, createSocket });
+			await vi.waitFor(() => expect(createSocket).toHaveBeenCalledOnce());
+			const url = createSocket.mock.calls[0][0];
+			expect(url).toContain("name=ola.k");
+			expect(url).not.toContain("example.com");
 		});
 
 		test("a logged-in user is not asked for a name", async () => {

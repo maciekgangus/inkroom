@@ -948,3 +948,9 @@ button.participant {
 	background: #fff;
 	transform: translate(-50%, -50%) rotate(-45deg);
 }
+
+.captcha {
+	display: flex;
+	justify-content: center;
+	min-height: 65px;
+}

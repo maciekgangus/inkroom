@@ -23,6 +23,7 @@ func startApp(t *testing.T, dbPath, staticDir string) (*httptest.Server, *app, s
 		t.Fatal(err)
 	}
 	a := newApp(staticDir, st)
+	a.auth.Captcha = testCaptcha{}
 	srv := httptest.NewServer(a.Handler())
 	t.Cleanup(func() {
 		srv.Close()

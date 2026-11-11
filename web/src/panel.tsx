@@ -3,13 +3,13 @@ import type { BoardSummary } from "./api";
 import * as api from "./api";
 
 interface Props {
-	email: string;
+	username: string;
 	navigate: (to: string) => void;
 	onLogout: () => void;
 }
 
 /** The logged-in user's home: own boards, boards they were invited to, and creating new ones. */
-export function Panel({ email, navigate, onLogout }: Props) {
+export function Panel({ username, navigate, onLogout }: Props) {
 	const [owned, setOwned] = useState<BoardSummary[] | null>(null);
 	const [visited, setVisited] = useState<BoardSummary[]>([]);
 	const [error, setError] = useState("");
@@ -45,7 +45,7 @@ export function Panel({ email, navigate, onLogout }: Props) {
 			<header class="row between">
 				<h1 class="brand">Inkroom</h1>
 				<span class="row">
-					<span class="chip">{email}</span>
+					<span class="chip">{username}</span>
 					<button type="button" onClick={logout}>
 						Wyloguj
 					</button>

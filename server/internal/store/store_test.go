@@ -429,3 +429,70 @@ func TestCopyBoardOfAMissingBoardFails(t *testing.T) {
 		t.Fatal("a failed copy left a board behind")
 	}
 }
+
+func TestUsernamesAreUniqueIgnoringCaseAndFindableByLogin(t *testing.T) {
+	s := open(t)
+	u, err := s.CreateAccount("ola@example.com", "Ola.K", "hash")
+	if err != nil || u.Username != "Ola.K" {
+		t.Fatalf("created %+v %v", u, err)
+	}
+	if _, err := s.CreateAccount("inna@example.com", "ola.k", "hash"); !errors.Is(err, ErrUsernameTaken) {
+		t.Fatalf("a name differing in case must be taken: %v", err)
+	}
+	if _, err := s.CreateAccount("ola@example.com", "ktos", "hash"); !errors.Is(err, ErrEmailTaken) {
+		t.Fatalf("e-mail taken: %v", err)
+	}
+	for _, login := range []string{"ola@example.com", "OLA.K", "Ola.K"} {
+		got, err := s.UserByLogin(login)
+		if err != nil || got.ID != u.ID || got.Username != "Ola.K" {
+			t.Fatalf("login %q: %+v %v", login, got, err)
+		}
+	}
+	if _, err := s.UserByLogin("nikt"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("unknown: %v", err)
+	}
+}
+
+func TestCreateUserWithoutANameDerivesOneFromTheEmail(t *testing.T) {
+	s := open(t)
+	got := []string{}
+	for _, c := range []string{"jan.kowalski@example.com", "jan.kowalski@other.org", "a@example.com", "ab+cd@example.com"} {
+		u, err := s.CreateUser(c, "hash")
+		if err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, u.Username)
+	}
+	want := []string{"jan.kowalski", "jan.kowalski2", "a00", "abcd"}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("names = %v, want %v", got, want)
+		}
+	}
+}
+
+func TestMigrationGivesExistingAccountsANameFromTheirEmail(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "old.db")
+	// A database as it was before usernames: the first five migrations only.
+	old, err := openMigrated(path, 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, e := range []string{"jan@example.com", "jan@other.org", "zo.sia+x@example.com"} {
+		if _, err := old.db.Exec("INSERT INTO users (email, hash, created_at) VALUES (?, 'h', ?)", e, i); err != nil {
+			t.Fatal(err)
+		}
+	}
+	old.Close()
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	for email, want := range map[string]string{"jan@example.com": "jan", "jan@other.org": "jan2", "zo.sia+x@example.com": "zo.siax"} {
+		u, err := s.UserByLogin(email)
+		if err != nil || u.Username != want {
+			t.Fatalf("%s: %+v %v, want %s", email, u, err, want)
+		}
+	}
+}

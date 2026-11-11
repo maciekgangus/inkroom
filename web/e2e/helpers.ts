@@ -1,13 +1,15 @@
-import { randomUUID } from "node:crypto";
 import type { Page } from "@playwright/test";
 
-/** Registers a fresh account, makes a board and opens it; the page is then ready to draw on. */
+/** The account the e2e server is started with (SEED_USER_EMAIL and SEED_USER_PASSWORD). */
+export const E2E_LOGIN = {
+	login: "e2e@example.test",
+	password: "e2e-pass-12345",
+};
+
+/** Logs in the seeded account, makes a board and opens it; the page is then ready to draw on. */
 export async function openBoard(page: Page): Promise<void> {
-	const email = `ipad-${randomUUID()}@example.test`;
 	const req = page.context().request;
-	await req.post("/api/register", {
-		data: { email, password: "test-pass-12345" },
-	});
+	await req.post("/api/login", { data: E2E_LOGIN });
 	const board = await (
 		await req.post("/api/boards", { data: { name: "iPad" } })
 	).json();

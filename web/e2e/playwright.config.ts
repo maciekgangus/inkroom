@@ -32,7 +32,7 @@ export default defineConfig({
 	webServer: process.env.E2E_BASE_URL
 		? undefined
 		: {
-				command: `npm run build --silent && cd ../server && DATA_DIR=$(mktemp -d) PORT=${PORT} STATIC_DIR=../web/dist go run ./cmd/server`,
+				command: `npm run build --silent && cd ../server && DATA_DIR=$(mktemp -d) PORT=${PORT} STATIC_DIR=../web/dist SEED_USER_EMAIL=e2e@example.test SEED_USER_PASSWORD=e2e-pass-12345 go run ./cmd/server`,
 				cwd: "..",
 				url: `http://localhost:${PORT}/healthz`,
 				reuseExistingServer: false,
