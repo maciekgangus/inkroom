@@ -1,7 +1,7 @@
 import type { ElementKind, Point, Stroke } from "./board";
 
 /** The format of the system clipboard text: plain JSON, so other tools can read and write it. */
-export const CLIPBOARD_VERSION = 1;
+const CLIPBOARD_VERSION = 1;
 /** Refuses a clipboard with more elements than this (a mistake or an attack, not a drawing). */
 const MAX_ELEMENTS = 5000;
 const MAX_POINTS = 200_000;

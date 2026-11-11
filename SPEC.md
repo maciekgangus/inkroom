@@ -122,12 +122,12 @@ Pytania o sposób wczytywania PDF rozstrzygnął użytkownik 2026-11-11; decyzje
 - 2026-11-09: Etap 1 zakończony testem na iPadzie z Apple Pencil: R-004 i R-008 `done`; R-005 `accepted` (iPad zdany, Android i tablet graficzny w Etapie 4).
 - 2026-11-09: Etap 2 zakończony testem PC + iPad: R-006 i R-018 `done`; R-002 i R-003 `accepted` (link i wejście gościa działają, tworzenie w panelu i konta w Etapie 3); protokół w ADR 0004.
 - 2026-11-09: Etap 3 zakończony testem PC + iPad: R-001, R-002, R-003, R-007, R-009, R-017, R-019 `done`; konta, sesje i zapis w ADR 0005.
-- 2026-11-09: R-010 (nieskończone płótno) `done` po teście na iPadzie: widok lokalny (przesuwanie, zoom 10–500%), przyciski zoomu w rogu, dwa palce, Ctrl + kółko, narzędzie Ręka; plan w `docs/plan-infinite-canvas.md`.
-- 2026-11-09: R-012 (linia, prostokąt, okrąg, tekst) `done` po teście ręcznym; elementy z polem `kind` w ADR 0006, plan w `docs/plan-shapes-and-text.md`.
-- 2026-11-09: R-013 (kursory pozostałych osób) `done` po teście ręcznym; wiadomości `cursor` i `cursor_drop` bez zapisu, plan w `docs/plan-cursors.md`.
-- 2026-11-10: R-015 (obrazy) `done` po teście ręcznym: wklejanie, wybór pliku, upuszczanie, zmiana rozmiaru i przesuwanie (operacja `update`), zdjęcia w SQLite; ADR 0007, plan w `docs/plan-images.md`.
+- 2026-11-09: R-010 (nieskończone płótno) `done` po teście na iPadzie: widok lokalny (przesuwanie, zoom 10–500%), przyciski zoomu w rogu, dwa palce, Ctrl + kółko, narzędzie Ręka.
+- 2026-11-09: R-012 (linia, prostokąt, okrąg, tekst) `done` po teście ręcznym; elementy z polem `kind` w ADR 0006.
+- 2026-11-09: R-013 (kursory pozostałych osób) `done` po teście ręcznym; wiadomości `cursor` i `cursor_drop` bez zapisu.
+- 2026-11-10: R-015 (obrazy) `done` po teście ręcznym: wklejanie, wybór pliku, upuszczanie, zmiana rozmiaru i przesuwanie (operacja `update`), zdjęcia w SQLite; ADR 0007.
 - 2026-11-10: model obiektów: dodano R-021 (zaznaczanie, przesuwanie, skalowanie i obracanie wszystkich elementów), R-022 (edycja właściwości: kolor, grubość, styl, wypełnienie, przezroczystość, tekst), R-023 (usuń, duplikuj, kopiuj, kolejność, grupy); R-004 bez zmian (gumka dalej kasuje cały obiekt, nie obraz).
-- 2026-11-10: R-021 i R-022 `done` po teście ręcznym: zaznaczanie, przesuwanie, skalowanie i obracanie wszystkich elementów, panel właściwości (kolor, grubość, styl, wypełnienie, przezroczystość), edycja tekstu dwuklikiem; ADR 0008, plan w `docs/plan-object-model.md`. R-023 zostaje `proposed`.
+- 2026-11-10: R-021 i R-022 `done` po teście ręcznym: zaznaczanie, przesuwanie, skalowanie i obracanie wszystkich elementów, panel właściwości (kolor, grubość, styl, wypełnienie, przezroczystość), edycja tekstu dwuklikiem; ADR 0008. R-023 zostaje `proposed`.
 - 2026-11-10: ułatwienia rysowania: dodano R-024 (Shift: kąty co 15°, kwadrat, koło) na prośbę użytkownika; R-012: narzędzie okręgu rysuje elipsę (z Shift okrąg), nowy rodzaj elementu `ellipse` (ADR 0009), stare okręgi (`circle`) nadal działają.
 - 2026-11-09: dodano R-025 (rozszerzona paleta kolorów), R-026 (tryb ciemny z tablicą) i R-027 (wspólne tło tablicy ustawiane przez twórcę).
 - 2026-11-10: dodano R-028 (menu kontekstowe pod prawym przyciskiem i kontrolki obrazu zależne od urządzenia: ikona w głównym pasku zamiast pływających przycisków; bez menu na dotyk).

@@ -143,7 +143,7 @@ export function oppositeEdge(e: Edge): Edge {
 	return { n: "s", e: "w", s: "n", w: "e" }[e] as Edge;
 }
 /** Whether a handle is the middle of a side rather than a corner or the rotation handle. */
-export const isEdge = (h: Handle): h is Edge =>
+const isEdge = (h: Handle): h is Edge =>
 	h === "n" || h === "e" || h === "s" || h === "w";
 /** Where a corner or side handle is, and the point opposite it that stays put when it is dragged. */
 export function handlePos(f: Frame, h: Corner | Edge): Vec {

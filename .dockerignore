@@ -1,6 +1,15 @@
 .git
 **/node_modules
 **/dist
+**/test-results
 .env
 .env.*
 docs
+brand
+deploy
+scripts
+web/e2e
+.github
+.claude
+graphify-out
+*.md

@@ -1,14 +1,29 @@
-# IDROO
+# Inkroom
 
-Własna współdzielona tablica interaktywna do prowadzenia korepetycji online (MVP, zamiennik płatnego IDROO).
+Własna współdzielona tablica do korepetycji online (MVP, zamiennik płatnego IDROO): rysowanie na żywo, zapisane tablice pod stałym linkiem, konta, iPad i rysik.
 
-- Wymagania i etapy: [SPEC.md](SPEC.md)
-- Zasady pracy z Claude Code: [CLAUDE.md](CLAUDE.md)
-- Decyzje architektoniczne: [docs/decisions/](docs/decisions/)
+- Wymagania: [SPEC.md](SPEC.md). Decyzje: [docs/decisions/](docs/decisions/). Zasady pracy z Claude Code: [CLAUDE.md](CLAUDE.md).
 
-## Jak zacząć pracę
-1. W tym folderze uruchom `claude` (ustawienia w `.claude/settings.json` włączają model `opusplan`).
-2. Wpisz `/kickoff`, aby przeprowadzić wywiad uzupełniający wymagania i wybrać stos.
-3. Po wyborze stosu zacznij Etap 1 według SPEC.md, jedna funkcja na raz w plan mode.
+## Lokalnie
 
-Stan: Etap 0, stos nie jest wybrany.
+```sh
+docker compose up                       # http://localhost:8080, konto testowe z docker-compose.override.yml
+```
+
+Albo bez Dockera: serwer `cd server && go run ./cmd/server` (po `cd web && npm run build`) i klient `cd web && npm run dev`.
+
+Testy: `cd server && go test ./...`, `cd web && npm test`, testy iPada w przeglądarce `cd web && npm run test:e2e` (WebKit: `npm run test:e2e:webkit`).
+
+## Na serwerze (homelab)
+
+Nie ten `docker-compose.yml`, tylko [deploy/](deploy/README.md): gotowy obraz z GitHub Container Registry i Cloudflare Tunnel. Obraz powstaje w GitHub Actions z tagu `vX.Y.Z`.
+
+## Struktura
+
+| Folder | Zawartość |
+|---|---|
+| `server/` | serwer w Go (API, WebSocket, SQLite) |
+| `web/` | klient w TypeScript i Preact, testy e2e |
+| `deploy/` | konfiguracja homelabu (compose z tunelem, aktualizacje) |
+| `brand/` | logo i ikony (źródła; do aplikacji trafiają z `web/public/`) |
+| `docs/decisions/` | ADR-y |

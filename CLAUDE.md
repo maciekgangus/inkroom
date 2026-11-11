@@ -4,7 +4,7 @@ Własna, tania tablica interaktywna do prowadzenia korepetycji online, zamiennik
 Źródło prawdy o wymaganiach: @SPEC.md. Decyzje architektoniczne: `docs/decisions/`.
 
 ## Stan projektu
-Etapy 0 do 3 zakończone (szkielet, tablica lokalna, współpraca na żywo, konta i zapis): stos w `docs/decisions/0001-stack.md` (własny canvas + Go + SQLite), protokół w `docs/decisions/0004-sync-protocol.md`, konta i zapis w `docs/decisions/0005-accounts-and-persistence.md`, plany w `docs/plan-stage-*.md`. Zrobione też R-010 (nieskończone płótno, plan w `docs/plan-infinite-canvas.md`) R-012 (kształty i tekst, ADR 0006, plan w `docs/plan-shapes-and-text.md`), R-013 (kursory, plan w `docs/plan-cursors.md`) R-015 (obrazy, ADR 0007, plan w `docs/plan-images.md`) oraz R-021 i R-022 (model obiektów: zaznaczanie, przekształcenia i style, ADR 0008, plan w `docs/plan-object-model.md`). Przebudowa interfejsu (ikony, zaokrąglone powierzchnie) oraz R-025 (rozszerzona paleta), R-026 (tryb ciemny) i R-027 (wspólne tło tablicy), ADR 0010. Kolejne wymagania P2/P3 według `SPEC.md`; wdrożenie (Etap 3.5, ADR 0003) i pierwsza lekcja (Etap 4) na koniec.
+Wszystkie wymagania z `SPEC.md` są zrobione poza R-005 (Android z rysikiem i tablet graficzny do sprawdzenia na sprzęcie) i R-043 (wydajność dużych tablic, po pomiarach). Stos: własny canvas + Go + SQLite, klient TypeScript + Preact (ADR 0001), synchronizacja ADR 0004. Wdrożenie na homelab: obraz z GHCR i Cloudflare Tunnel (ADR 0003 i 0014, folder `deploy/`). Do zrobienia: kopie zapasowe bazy (Litestream) i pierwsza lekcja (Etap 4).
 
 ## Priorytety (w tej kolejności)
 1. Responsywność: kreska pojawia się natychmiast lokalnie, u drugiej osoby bez zauważalnego opóźnienia. Wygoda użytkownika ponad wszystko.

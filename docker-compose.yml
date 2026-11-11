@@ -1,3 +1,5 @@
+# LOKALNIE: buduje obraz ze źródeł (`docker compose up`). Na serwerze tego pliku się nie używa,
+# tylko deploy/docker-compose.yml (gotowy obraz z GHCR i tunel Cloudflare, ADR 0014).
 services:
   app:
     build: .

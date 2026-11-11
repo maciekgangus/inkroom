@@ -1,7 +1,7 @@
 import type { PreviewData } from "./board/preview";
 
 /** Error from the server API; `status` is the HTTP status. */
-export class ApiError extends Error {
+class ApiError extends Error {
 	constructor(
 		public status: number,
 		message: string,

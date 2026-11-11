@@ -20,7 +20,7 @@ const toBlob = (c: HTMLCanvasElement, type: string, quality?: number) =>
 	);
 
 /** A file name safe on every system, from the board's name. */
-export function fileName(title: string, ext: string): string {
+function fileName(title: string, ext: string): string {
 	const base = title.replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-+|-+$/g, "");
 	return `${base || "tablica"}.${ext}`;
 }
