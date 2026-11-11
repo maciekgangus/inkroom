@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "preact/hooks";
 import * as api from "./api";
-import { AuthForms } from "./auth-forms";
+import { AuthForms, RegisterPage } from "./auth-forms";
 import { BoardView, newId } from "./board-view";
 import { Panel } from "./panel";
 import type { SocketLike } from "./sync/sync";
 import { ThemeToggle } from "./theme";
 
 const BOARD_PATH = /^\/b\/([0-9a-f]{32})$/;
+const REGISTER_PATH = "/register";
 const NAME_KEY = "inkroom.name";
 const AUTHOR_KEY = "inkroom.authorId";
 
@@ -47,6 +48,8 @@ export function App({
 		<>
 			{match ? (
 				<BoardPage id={match[1]} createSocket={createSocket} />
+			) : path === REGISTER_PATH ? (
+				<RegisterPage navigate={navigate} />
 			) : (
 				<Home navigate={navigate} />
 			)}
@@ -58,15 +61,22 @@ export function App({
 }
 
 function Home({ navigate }: { navigate: (to: string) => void }) {
-	const [email, setEmail] = useState<string | null | undefined>(undefined); // undefined: still asking the server
+	const [account, setAccount] = useState<api.Account | null | undefined>(
+		undefined, // undefined: still asking the server
+	);
 	useEffect(() => {
-		api.me().then(setEmail, () => setEmail(null));
+		api.me().then(setAccount, () => setAccount(null));
 	}, []);
 
-	if (email === undefined) return null;
-	if (email === null) return <AuthForms onAuth={setEmail} />;
+	if (account === undefined) return null;
+	if (account === null)
+		return <AuthForms onAuth={setAccount} navigate={navigate} />;
 	return (
-		<Panel email={email} navigate={navigate} onLogout={() => setEmail(null)} />
+		<Panel
+			username={account.username}
+			navigate={navigate}
+			onLogout={() => setAccount(null)}
+		/>
 	);
 }
 
@@ -80,7 +90,9 @@ function BoardPage({
 	const [info, setInfo] = useState<
 		{ owner: boolean; name: string } | null | undefined
 	>(undefined);
-	const [account, setAccount] = useState<string | null | undefined>(undefined);
+	const [account, setAccount] = useState<api.Account | null | undefined>(
+		undefined,
+	);
 	const [guestName, setGuestName] = useState(() =>
 		stored(localStorage, NAME_KEY),
 	);
@@ -97,8 +109,8 @@ function BoardPage({
 		return fresh;
 	}, []);
 
-	// Logged-in users are known by their e-mail's local part; guests give a name.
-	const name = account ? account.split("@")[0] : guestName;
+	// Logged-in users are known by their username (R-053); guests give a name.
+	const name = account ? account.username : guestName;
 	const connect = useMemo(() => {
 		const scheme = location.protocol === "https:" ? "wss" : "ws";
 		const url = `${scheme}://${location.host}/ws/${id}?name=${encodeURIComponent(name ?? "")}&id=${encodeURIComponent(authorId)}`;

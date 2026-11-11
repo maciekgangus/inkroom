@@ -8,3 +8,7 @@ services:
     environment:
       SEED_USER_EMAIL: test@example.test
       SEED_USER_PASSWORD: test-user-1234
+      # Cloudflare's published Turnstile test keys: the widget always passes. A server needs its
+      # own keys in .env (ADR 0013); without a TURNSTILE_SECRET registration is closed.
+      TURNSTILE_SITE_KEY: 1x00000000000000000000AA
+      TURNSTILE_SECRET: 1x0000000000000000000000000000000AA
