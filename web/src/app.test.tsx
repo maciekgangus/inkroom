@@ -365,6 +365,101 @@ describe("App", () => {
 			expect(names.slice(0, 2)).toEqual(["Matma (kopia)", "Matma"]);
 		});
 
+		describe("the lists follow the server (they went stale after coming back)", () => {
+			const FRESH = {
+				owned: [
+					{
+						id: "a".repeat(32),
+						name: "Nowa z drugiej karty",
+						updatedAt: "2026-11-11T10:00:00Z",
+					},
+					...boards.owned,
+				],
+				visited: boards.visited,
+			};
+			/** A panel whose second answer from the server has one more board in it. */
+			const open = async () => {
+				let calls = 0;
+				const api = mockApi({
+					"GET /api/me": LOGGED_IN,
+					"GET /api/boards": () => ({ body: ++calls === 1 ? boards : FRESH }),
+				});
+				await mount({ path: "/" });
+				await waitText("Matma");
+				expect(text()).not.toContain("Nowa z drugiej karty");
+				return api;
+			};
+			const shows = () =>
+				vi.waitFor(() => expect(text()).toContain("Nowa z drugiej karty"));
+			const visibility = (state: string) =>
+				act(async () => {
+					Object.defineProperty(document, "visibilityState", {
+						value: state,
+						configurable: true,
+					});
+					document.dispatchEvent(new Event("visibilitychange"));
+				});
+
+			test("a page shown again from the back-forward cache is refreshed", async () => {
+				const api = await open();
+				await act(async () => {
+					const e = new Event("pageshow");
+					Object.defineProperty(e, "persisted", { value: true });
+					window.dispatchEvent(e);
+				});
+				await shows();
+				expect(api.called("GET /api/boards")).toHaveLength(2);
+			});
+
+			test("an ordinary page show (the first load) does not fetch twice", async () => {
+				const api = await open();
+				await act(async () => {
+					const e = new Event("pageshow");
+					Object.defineProperty(e, "persisted", { value: false });
+					window.dispatchEvent(e);
+				});
+				expect(api.called("GET /api/boards")).toHaveLength(1);
+			});
+
+			test("coming back to the tab refreshes the lists", async () => {
+				await open();
+				await visibility("visible");
+				await shows();
+			});
+
+			test("a hidden tab does not fetch", async () => {
+				const api = await open();
+				await visibility("hidden");
+				expect(api.called("GET /api/boards")).toHaveLength(1);
+			});
+
+			test("focusing the window refreshes the lists", async () => {
+				await open();
+				await act(async () => {
+					window.dispatchEvent(new Event("focus"));
+				});
+				await shows();
+			});
+
+			test("a failed refresh keeps what is shown", async () => {
+				let calls = 0;
+				mockApi({
+					"GET /api/me": LOGGED_IN,
+					"GET /api/boards": () =>
+						++calls === 1
+							? { body: boards }
+							: { status: 500, body: { error: "x" } },
+				});
+				await mount({ path: "/" });
+				await waitText("Matma");
+				await act(async () => {
+					window.dispatchEvent(new Event("focus"));
+				});
+				await new Promise((r) => setTimeout(r, 50));
+				expect(text()).toContain("Matma");
+			});
+		});
+
 		test("a board that is not mine cannot be copied", async () => {
 			mockApi({
 				"GET /api/me": LOGGED_IN,

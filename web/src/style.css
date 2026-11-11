@@ -842,6 +842,12 @@ canvas {
 	white-space: nowrap;
 }
 
+/* The name of somebody else's board is plain text, not a button that centres its label: a line as
+   high as the field puts it where the button's label sits (e2e/board-title.spec.ts checks it). */
+.board-title span.name {
+	line-height: 28px;
+}
+
 /* What the floating panel edits for the selection is not offered twice: the tools of the pen stay
    in place, only dimmed, so the bar does not jump about. */
 .toolbar .group.dimmed {

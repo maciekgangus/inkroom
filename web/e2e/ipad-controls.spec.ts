@@ -82,7 +82,9 @@ test.describe("everyday drawing", () => {
 		await page.locator("[aria-label='select']").tap();
 		await pen(page, [350, from], [350, from]);
 		await expect(page.locator(".properties")).toBeVisible();
-		expect(await inkIn(page, 150, from - 30, 400, 60)).toBeGreaterThan(0);
+		await expect
+			.poll(() => inkIn(page, 150, from - 30, 400, 60))
+			.toBeGreaterThan(0);
 		await pen(page, [350, from], [350, to]);
 		// Gone from where it was, there at its new place.
 		await expect.poll(() => inkIn(page, 150, from - 30, 400, 60)).toBe(0);
