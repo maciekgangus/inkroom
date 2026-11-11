@@ -17,6 +17,7 @@ import {
 	serializeSelection,
 } from "./board/clipboard";
 import { Controller, type Renderer, type Settings } from "./board/controller";
+import { exportBoard } from "./board/export-file";
 import { TouchGestures } from "./board/gestures";
 import { ImageCache } from "./board/image-cache";
 import { defaultSize, placeCentered } from "./board/image-geometry";
@@ -29,6 +30,7 @@ import { textFont } from "./board/text-wrap";
 import { createViewSaver } from "./board/view-saver";
 import { MAX_SCALE, MIN_SCALE, type Rect, Viewport } from "./board/viewport";
 import { stepZoom, wheelZoomFactor } from "./board/zoom";
+import { BoardMenuButton, boardMenuItems, type MenuAt } from "./board-menu";
 import { BoardTitle } from "./board-title";
 import { ContextMenu, type MenuItem } from "./context-menu";
 import { Cursors } from "./cursors";
@@ -145,6 +147,8 @@ export function BoardView({
 	/** Repaints after the view changed (set up by the effect below). */
 	const viewChanged = useRef<() => void>(() => {});
 	const boardRef = useRef<Board | null>(null);
+	const imagesRef = useRef<ImageCache | null>(null);
+	const [boardMenu, setBoardMenu] = useState<MenuAt | null>(null);
 	/** The map of the board in a corner; whether it is shown is remembered on this device. */
 	const [mapOpen, setMapOpenState] = useState(() => {
 		try {
@@ -195,6 +199,7 @@ export function BoardView({
 		const board = new Board();
 		boardRef.current = board;
 		const images = new ImageCache(boardId, () => canvas.redraw(board.strokes));
+		imagesRef.current = images;
 		const canvas = new CanvasRenderer(committed, live, viewport, images);
 		canvas.ink = (c) => displayColor(c, currentTheme());
 		rendererRef.current = canvas;
@@ -877,6 +882,7 @@ export function BoardView({
 					onRedo={() => ctl.current?.redo()}
 				/>
 				<Participants peers={peers} selfId={authorId} />
+				<BoardMenuButton onOpen={setBoardMenu} />
 			</div>
 			{menu && (
 				<ContextMenu
@@ -884,6 +890,23 @@ export function BoardView({
 					y={menu.y}
 					items={menuItems()}
 					onClose={() => setMenu(null)}
+				/>
+			)}
+			{boardMenu && (
+				<ContextMenu
+					x={boardMenu.x}
+					y={boardMenu.y}
+					items={boardMenuItems((a) =>
+						exportBoard(
+							a,
+							boardRef.current?.strokes ?? [],
+							viewport.worldRect(innerWidth, innerHeight),
+							background,
+							imagesRef.current,
+							title,
+						).then((ok) => ok || setImageError("Tablica jest pusta.")),
+					)}
+					onClose={() => setBoardMenu(null)}
 				/>
 			)}
 			{imageError && (

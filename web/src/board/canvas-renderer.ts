@@ -222,6 +222,37 @@ interface Cached {
 }
 
 /**
+ * Paints the elements that touch `view` onto a context whose transform is already set (used for
+ * exports): the same drawing as the screen, in the stored (light) colours.
+ */
+export function paintElements(
+	ctx: CanvasRenderingContext2D,
+	strokes: Stroke[],
+	view: Rect,
+	images: ImageCache | null,
+): void {
+	for (const s of strokes) {
+		if (!intersects(strokeBounds(s), view)) continue;
+		if (s.kind === "image") {
+			const r = imageRect(s);
+			const img = s.src ? images?.get(s.src) : null;
+			if (!img) continue; // a picture that did not load is left out of the export
+			withLook(ctx, s, () =>
+				ctx.drawImage(
+					img as unknown as CanvasImageSource,
+					r.minX,
+					r.minY,
+					r.maxX - r.minX,
+					r.maxY - r.minY,
+				),
+			);
+			continue;
+		}
+		drawElement(ctx, s, elementPath(s), s.color, s.fill);
+	}
+}
+
+/**
  * Renders strokes on two stacked canvases: committed strokes below, unfinished ones above.
  * Finished strokes are immutable, so their outline and bounds are computed once and reused
  * while panning and zooming; strokes outside the view are skipped.
