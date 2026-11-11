@@ -1,6 +1,6 @@
 # 0011. Prawo rysowania per uczestnik (R-016)
 
-- Status: proposed
+- Status: accepted
 - Data: 2026-11-11
 
 ## Kontekst
