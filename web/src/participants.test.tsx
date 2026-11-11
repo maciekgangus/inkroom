@@ -90,3 +90,44 @@ describe("Participants (R-046)", () => {
 		expect(more.dataset.name).toBe("Osoba 5, Osoba 6");
 	});
 });
+
+describe("Participants: drawing rights (R-016)", () => {
+	const people = [
+		{ id: "me", name: "Own" },
+		{ id: "a1", name: "Ann", muted: true },
+		{ id: "b1", name: "Bob" },
+	];
+	const open = (onSelect: (id: string) => void, canManage: boolean) => {
+		const root = document.createElement("div");
+		render(
+			<Participants
+				peers={people}
+				selfId="me"
+				onSelect={canManage ? (p) => onSelect(p.id) : undefined}
+			/>,
+			root,
+		);
+		return root;
+	};
+
+	test("a person who may not draw has a mark", () => {
+		const root = open(() => {}, true);
+		const marked = [...root.querySelectorAll(".participant.muted")];
+		expect(marked.map((c) => c.getAttribute("data-name"))).toEqual(["Ann"]);
+	});
+
+	test("the owner can press another person's chip, but not their own", () => {
+		const picked: string[] = [];
+		const root = open((id) => picked.push(id), true);
+		for (const c of chips(root)) (c as HTMLElement).click();
+		expect(picked).toEqual(["a1", "b1"]);
+	});
+
+	test("without the right to manage nothing can be pressed", () => {
+		const picked: string[] = [];
+		const root = open((id) => picked.push(id), false);
+		for (const c of chips(root)) (c as HTMLElement).click();
+		expect(picked).toEqual([]);
+		expect(root.querySelector("button.participant")).toBeNull();
+	});
+});

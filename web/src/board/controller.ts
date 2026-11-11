@@ -224,6 +224,9 @@ export class Controller {
 		return this.board.strokes.filter((s) => this.selectedIds.includes(s.id));
 	}
 
+	/** The owner took away our right to draw: a drag only moves the view and nothing changes (R-016). */
+	readOnly = false;
+
 	/** True while the board is being dragged (hand tool, middle or right button). */
 	get panning(): boolean {
 		return this.panFrom !== null;
@@ -245,7 +248,7 @@ export class Controller {
 			this.panFrom = { x: e.clientX, y: e.clientY };
 			return;
 		}
-		if (button === 1 || this.settings.tool === "pan") {
+		if (button === 1 || this.settings.tool === "pan" || this.readOnly) {
 			this.panFrom = { x: e.clientX, y: e.clientY };
 			return;
 		}
@@ -486,6 +489,7 @@ export class Controller {
 
 	/** Adds an image element covering `rect` and selects it. Returns its id. */
 	addImage(src: string, rect: Rect): string {
+		if (this.readOnly) return "";
 		const el = withRect(
 			{
 				id: this.newId(),
@@ -517,6 +521,7 @@ export class Controller {
 
 	/** Removes everything selected, as one undo step. Returns false if nothing is selected. */
 	deleteSelected(): boolean {
+		if (this.readOnly) return false;
 		if (!this.board.eraseMany(this.authorId, this.selectedIds)) return false;
 		this.select(null);
 		this.renderer.redraw(this.board.strokes);
@@ -542,6 +547,7 @@ export class Controller {
 	 * Returns the new ids (empty if the clipboard is empty).
 	 */
 	paste(at?: [number, number]): string[] {
+		if (this.readOnly) return [];
 		return this.addCopies(this.clipboard, at);
 	}
 
@@ -550,6 +556,7 @@ export class Controller {
 	 * of this author on top, selected, as one undo step. Same placement as `paste`.
 	 */
 	pasteSource(els: ClipElement[], at?: [number, number]): string[] {
+		if (this.readOnly) return [];
 		return this.addCopies(
 			els.map((el) => ({ ...el, id: "", authorId: this.authorId, z: 0 })),
 			at,
@@ -558,11 +565,13 @@ export class Controller {
 
 	/** Copies the selection a little below and right of it and selects the copies. */
 	duplicateSelected(): boolean {
+		if (this.readOnly) return false;
 		return this.addCopies(this.selection).length > 0;
 	}
 
 	/** Moves the selection above every other element, keeping its own order. */
 	bringToFront(): boolean {
+		if (this.readOnly) return false;
 		const sel = this.selection;
 		if (sel.length === 0) return false;
 		const moved = sel.map((el) => ({ ...el, z: this.nextZ() }));
@@ -571,6 +580,7 @@ export class Controller {
 
 	/** Moves the selection below every other element, keeping its own order. */
 	sendToBack(): boolean {
+		if (this.readOnly) return false;
 		const sel = this.selection;
 		if (sel.length === 0) return false;
 		const lowest = Math.min(...this.board.strokes.map((s) => s.z));
@@ -651,6 +661,7 @@ export class Controller {
 
 	/** Applies a style change to the selection as one undo step; false if nothing changed. */
 	setProps(patch: StylePatch): boolean {
+		if (this.readOnly) return false;
 		this.dropStylePreview(); // record from the original, not from the preview
 		const before = this.selection;
 		const changed = before
@@ -665,6 +676,7 @@ export class Controller {
 
 	/** Tells the UI which text sits under a (double-clicked) screen position, if any. */
 	editTextAt(clientX: number, clientY: number): void {
+		if (this.readOnly) return;
 		const [x, y] = this.viewport.toWorld(clientX, clientY);
 		const reach = HIT_PX / this.viewport.scale;
 		const hit = [...this.board.strokes]
@@ -675,6 +687,7 @@ export class Controller {
 
 	/** Sets a text element's content; blank content deletes it. */
 	commitText(id: string, text: string): void {
+		if (this.readOnly) return;
 		const el = this.board.strokes.find((s) => s.id === id);
 		if (!el) return;
 		if (text.trim()) {
@@ -1098,6 +1111,7 @@ export class Controller {
 	}
 
 	undo(): void {
+		if (this.readOnly) return;
 		if (this.board.undo(this.authorId)) {
 			this.renderer.redraw(this.board.strokes);
 			this.syncSelection();
@@ -1105,6 +1119,7 @@ export class Controller {
 	}
 
 	redo(): void {
+		if (this.readOnly) return;
 		if (this.board.redo(this.authorId)) {
 			this.renderer.redraw(this.board.strokes);
 			this.syncSelection();

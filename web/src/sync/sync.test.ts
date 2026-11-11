@@ -484,6 +484,34 @@ describe("SyncClient", () => {
 			c.close();
 		});
 
+		test("a person who may not draw is marked", () => {
+			const { socket, c } = connected();
+			socket.receive({
+				t: "peers",
+				peers: [
+					{ id: "a1", name: "Ann", muted: true },
+					{ id: "b1", name: "Bob" },
+				],
+			});
+			expect(c.peers()).toEqual([
+				{ id: "a1", name: "Ann", muted: true },
+				{ id: "b1", name: "Bob" },
+			]);
+			c.close();
+		});
+
+		test("the owner can take away and give back drawing by sending a perm", () => {
+			const { socket, c } = connected();
+			socket.open();
+			c.setDrawing("a1", false);
+			c.setDrawing("a1", true);
+			expect(socket.sent.slice(-2)).toEqual([
+				{ t: "perm", id: "a1", draw: false },
+				{ t: "perm", id: "a1", draw: true },
+			]);
+			c.close();
+		});
+
 		test("entries that are not a person are skipped", () => {
 			const onPeers = vi.fn();
 			const { socket, c } = connected({ onPeers });

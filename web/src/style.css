@@ -852,3 +852,56 @@ canvas {
 	background: var(--accent-soft);
 	color: var(--accent);
 }
+
+.toolbar-note {
+	display: flex;
+	align-items: center;
+	height: 40px;
+	padding: 0 16px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: color-mix(in srgb, var(--surface) 85%, transparent);
+	box-shadow: var(--shadow);
+	color: var(--muted, var(--icon));
+	font-size: 14px;
+	white-space: nowrap;
+}
+.participants {
+	list-style: none;
+	margin: 0;
+}
+.participant-slot {
+	display: contents;
+}
+button.participant {
+	cursor: pointer;
+	padding: 0;
+	border: 0;
+	font: inherit;
+}
+.participant {
+	position: relative;
+}
+.participant.muted {
+	opacity: 0.55;
+}
+.participant .muted-mark {
+	position: absolute;
+	right: -3px;
+	bottom: -3px;
+	width: 14px;
+	height: 14px;
+	border: 2px solid var(--surface);
+	border-radius: 50%;
+	background: #d32f2f;
+}
+.participant .muted-mark::after {
+	content: "";
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: 6px;
+	height: 2px;
+	background: #fff;
+	transform: translate(-50%, -50%) rotate(-45deg);
+}
