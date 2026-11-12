@@ -150,10 +150,8 @@ export function BoardView({
 		if (moved) setEditorRect(next);
 	});
 	/** The selection whose panel was put away with the cross; another selection brings it back. */
-	/** The state of each object's menu, kept by the selection it belongs to: shut or open, and moved by how much (R-060). */
-	const menus = useRef(
-		new Map<string, { closed: boolean; x: number; y: number }>(),
-	);
+	/** The selection whose menu is open: by default only the tile is there, the menu opens on it (R-060). */
+	const [menuOpenFor, setMenuOpenFor] = useState<string | null>(null);
 	const [, setTick] = useState(0); // bumped when the view changes, so the text field follows it
 	const ctl = useRef<Controller | null>(null);
 	const syncRef = useRef<SyncClient | null>(null);
@@ -220,6 +218,7 @@ export function BoardView({
 	);
 	/** Shows the cursor of the active tool on the board (set up by the effect below). */
 	const applyCursor = useRef<() => void>(() => {});
+	const setOverTurn = useRef<(over: boolean) => void>(() => {});
 	/** The open right-click menu: where, what is under it and the board position clicked. */
 	const [menu, setMenu] = useState<{
 		x: number;
@@ -287,8 +286,17 @@ export function BoardView({
 		);
 		ctl.current = controller;
 		let shownCursor = "";
+		/** Whether the pointer rests on the turning handle (set as it moves). */
+		let overTurn = false;
+		setOverTurn.current = (v) => {
+			overTurn = v;
+		};
 		applyCursor.current = () => {
-			const want = toolCursor(settings.tool, controller.panning);
+			const want = toolCursor(
+				settings.tool,
+				controller.panning,
+				controller.rotating || overTurn,
+			);
 			if (want === shownCursor) return;
 			shownCursor = want;
 			live.style.cursor = want;
@@ -489,6 +497,7 @@ export function BoardView({
 			lastPointer = [x, y];
 			sync.cursorMove(x, y);
 			controller.pointerMove(e);
+			setOverTurn.current(controller.overRotate(e.clientX, e.clientY));
 			applyCursor.current(); // a safety net: whichever way the tool changed, it shows
 		};
 		const leave = (e: PointerEvent) => {
@@ -843,15 +852,6 @@ export function BoardView({
 		: ctl.current?.busy
 			? []
 			: (ctl.current?.selection ?? []);
-	const objMenu = menus.current.get(selectionKey) ?? {
-		closed: false,
-		x: 0,
-		y: 0,
-	};
-	const setObjMenu = (patch: Partial<typeof objMenu>) => {
-		menus.current.set(selectionKey, { ...objMenu, ...patch });
-		setTick((t) => t + 1);
-	};
 	const panelAnchor =
 		typing || editingText
 			? (editorRect ?? draftBox)
@@ -916,11 +916,9 @@ export function BoardView({
 				elements={panelElements}
 				colors={COLORS}
 				anchor={panelAnchor}
-				onClose={typing ? undefined : () => setObjMenu({ closed: true })}
-				collapsed={!typing && objMenu.closed}
-				onExpand={() => setObjMenu({ closed: false })}
-				offset={objMenu}
-				onOffset={(o) => setObjMenu(o)}
+				onClose={typing ? undefined : () => setMenuOpenFor(null)}
+				collapsed={!typing && !editingText && menuOpenFor !== selectionKey}
+				onExpand={() => setMenuOpenFor(selectionKey)}
 				display={(c) => displayColor(c, currentTheme())}
 				onPreview={(patch) => changeStyle(patch, true)}
 				onChange={(patch) => changeStyle(patch, false)}

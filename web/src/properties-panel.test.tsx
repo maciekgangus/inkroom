@@ -1,4 +1,5 @@
 import { render } from "preact";
+import { act } from "preact/test-utils";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { Stroke } from "./board/board";
 import type { StylePatch } from "./board/style";
@@ -99,32 +100,43 @@ describe("PropertiesPanel", () => {
 			expect(onExpand).toHaveBeenCalledTimes(1);
 		});
 
-		test("the title is a handle: dragging it reports where the menu was put, from where it was", () => {
-			const onOffset = vi.fn();
-			mountWith({ offset: { x: 5, y: 7 }, onOffset });
+		const at = (sel: string) => {
+			const e = root.querySelector(sel) as HTMLElement;
+			return [e.style.left, e.style.top];
+		};
+
+		test("the title is a handle: dragging it moves the menu", async () => {
+			mountWith({});
+			const home = at(".properties");
 			const title = root.querySelector(".panel-title") as HTMLElement;
-			mouse(title, "pointerdown", 100, 100);
-			mouse(title, "pointermove", 130, 120);
-			expect(onOffset).toHaveBeenLastCalledWith({ x: 35, y: 27 });
-			mouse(title, "pointerup", 130, 120);
-			mouse(title, "pointermove", 200, 200);
-			expect(onOffset).toHaveBeenCalledTimes(1);
+			await act(async () => void mouse(title, "pointerdown", 100, 100));
+			await act(async () => void mouse(title, "pointermove", 130, 120));
+			const moved = at(".properties");
+			expect(parseFloat(moved[0]) - parseFloat(home[0])).toBe(30);
+			expect(parseFloat(moved[1]) - parseFloat(home[1])).toBe(20);
+			await act(async () => void mouse(title, "pointerup", 130, 120));
+			await act(async () => void mouse(title, "pointermove", 200, 200));
+			expect(at(".properties")).toEqual(moved);
 		});
 
-		test("the offset moves the menu, but the tile stays where it is by the object", () => {
-			const at = (sel: string) => {
-				const e = root.querySelector(sel) as HTMLElement;
-				return [e.style.left, e.style.top];
-			};
+		test("the move is only for the moment: shut and opened again, the menu is back by its object", async () => {
 			mountWith({});
-			const panel = at(".properties");
-			mountWith({ offset: { x: 30, y: -10 } });
-			const moved = at(".properties");
-			expect(parseFloat(moved[0]) - parseFloat(panel[0])).toBe(30);
-			expect(parseFloat(moved[1]) - parseFloat(panel[1])).toBe(-10);
+			const home = at(".properties");
+			const title = root.querySelector(".panel-title") as HTMLElement;
+			await act(async () => void mouse(title, "pointerdown", 100, 100));
+			await act(async () => void mouse(title, "pointermove", 160, 140));
+			await act(async () => void mouse(title, "pointerup", 160, 140));
+			expect(at(".properties")).not.toEqual(home);
+			await act(async () => mountWith({ collapsed: true }));
+			await act(async () => mountWith({ collapsed: false }));
+			expect(at(".properties")).toEqual(home);
+		});
+
+		test("the tile stays where it is by the object", async () => {
 			mountWith({ collapsed: true });
 			const tile = at(".panel-tile");
-			mountWith({ collapsed: true, offset: { x: 30, y: -10 } });
+			await act(async () => mountWith({ collapsed: false }));
+			await act(async () => mountWith({ collapsed: true }));
 			expect(at(".panel-tile")).toEqual(tile);
 		});
 	});

@@ -26,9 +26,22 @@ const ERASER = (() => {
 	return `<svg xmlns="http://www.w3.org/2000/svg" width="${d}" height="${d}" viewBox="0 0 ${d} ${d}"><circle cx="${c}" cy="${c}" r="${ERASER_RADIUS}" fill="none" stroke="#000" stroke-width="3"/><circle cx="${c}" cy="${c}" r="${ERASER_RADIUS}" fill="none" stroke="#fff" stroke-width="1.5"/></svg>`;
 })();
 
+// A circular arrow, for turning an object by its handle; the hotspot is its middle.
+const TURN = (() => {
+	const path = "M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5";
+	const stroke = (c: string, w: number) =>
+		`<path d="${path}" fill="none" stroke="${c}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>`;
+	return `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">${stroke("#000", 3.5)}${stroke("#fff", 1.75)}</svg>`;
+})();
+
 /** The mouse cursor for the active tool (R-030), so it is always clear what is switched on. */
-export function toolCursor(tool: Settings["tool"], panning = false): string {
+export function toolCursor(
+	tool: Settings["tool"],
+	panning = false,
+	turning = false,
+): string {
 	if (panning) return "grabbing";
+	if (turning) return svgCursor(TURN, 12, 12, "grabbing");
 	switch (tool) {
 		case "pan":
 			return "grab";

@@ -41,10 +41,6 @@ interface Props {
 	/** Shut: only a small tile is left by the object; pressing it calls `onExpand` (R-060). */
 	collapsed?: boolean;
 	onExpand?: () => void;
-	/** How far the person has dragged the menu from where it would stand, in px. */
-	offset?: { x: number; y: number };
-	/** Called while the menu is dragged by its title, with the new offset. */
-	onOffset?: (offset: { x: number; y: number }) => void;
 	/** A final change: a click, or a slider released. */
 	onChange: (patch: StylePatch) => void;
 }
@@ -60,18 +56,26 @@ export function PropertiesPanel({
 	onClose,
 	collapsed = false,
 	onExpand,
-	offset = { x: 0, y: 0 },
-	onOffset,
 	onChange,
 }: Props) {
 	const ref = useRef<HTMLDivElement>(null);
 	/** Where a drag of the title began: the pointer and the offset then. */
+	/** How far the menu has been dragged from its place by the object: for the moment only. */
+	const [moved, setMoved] = useState({ x: 0, y: 0, key: "" });
 	const drag = useRef<{
 		x: number;
 		y: number;
 		from: { x: number; y: number };
 	} | null>(null);
 	const [size, setSize] = useState({ w: 0, h: 0 });
+	// Shut and opened again, or on another object, the menu is back by its object (R-060): the move
+	// belongs to the object and to one opening of the menu (the key changes with each).
+	const turn = useRef({ collapsed, n: 0 });
+	if (turn.current.collapsed !== collapsed)
+		turn.current = { collapsed, n: turn.current.n + 1 };
+	const opening = turn.current.n;
+	const objectKey = `${elements.map((e) => e.id).join(",")}|${opening}`;
+	const offset = moved.key === objectKey ? moved : { x: 0, y: 0 };
 	// Measured after every render, as the panel grows and shrinks with what it offers.
 	useLayoutEffect(() => {
 		const el = ref.current;
@@ -141,9 +145,10 @@ export function PropertiesPanel({
 				onPointerMove={(e) => {
 					const d = drag.current;
 					if (d)
-						onOffset?.({
+						setMoved({
 							x: d.from.x + e.clientX - d.x,
 							y: d.from.y + e.clientY - d.y,
+							key: objectKey,
 						});
 				}}
 				onPointerUp={() => {
