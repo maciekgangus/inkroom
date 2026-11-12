@@ -60,7 +60,7 @@ start)
 	# The public dev account of the project (see CLAUDE.md) and Cloudflare's published Turnstile
 	# test keys, so nothing secret is involved.
 	DATA_DIR="$STATE/data" PORT="$PORT" STATIC_DIR="$ROOT/web/dist" \
-		SEED_USER_EMAIL=test@example.test SEED_USER_PASSWORD=test-user-1234 \
+		ADMIN_DEV_OPEN=1 SEED_USER_EMAIL=test@example.test SEED_USER_PASSWORD=test-user-1234 \
 		TURNSTILE_SITE_KEY=1x00000000000000000000AA TURNSTILE_SECRET=1x0000000000000000000000000000000AA \
 		nohup "$STATE/server" >"$LOG" 2>&1 &
 	echo $! >"$PIDFILE"

@@ -24,6 +24,8 @@ type app struct {
 	turnstileSiteKey string
 	// admin checks the Cloudflare Access token of the admin page (R-064); nil: the page is off.
 	admin *cfaccess.Verifier
+	// adminDevOpen opens the admin page without Cloudflare for direct requests (local development).
+	adminDevOpen bool
 }
 
 // newApp wires the services together. Call Close before closing the store.
