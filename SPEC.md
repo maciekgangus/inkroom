@@ -84,6 +84,7 @@ Priorytety: P1 do pierwszej lekcji, P2 zaraz po niej, P3 później. Statusy: pro
 | R-061 | Mapa tablicy (R-049) pokazuje zawartość wierniej: obrazy zostają prostokątami, a kreski, kształty i tekst są rysowane w niskiej rozdzielczości (mała bitmapa lub uproszczony obrys, tekst jako drobny tekst), zamiast jednolitych prostokątów. Koszt odświeżania musi zostać mały (N-012) | P2 | done |
 | R-062 | Przycisk opinii (ikona wykrzyknika) na tablicy i w panelu: otwiera małe okno z polem tekstu i wysyła uwagę razem z kontekstem (adres strony, przeglądarka, rozmiar ekranu, nazwa użytkownika lub gościa, jeśli podana). Działa też dla gości. Uwagi trafiają do tabeli `feedback` w bazie na serwerze (czytanie: `deploy/README.md`); do 2000 znaków, do 10 uwag na godzinę od jednej osoby. Przycisk jest w lewym dolnym rogu, nad przełącznikiem motywu | P2 | done |
 | R-063 | Logowanie i rejestracja przez konto Google (OAuth 2.0 / OpenID Connect, zakresy `openid email profile`), obok e-maila i hasła (R-001, R-055). Konto rozpoznawane po identyfikatorze Google (`sub`), e-mail musi być potwierdzony; captcha (R-054) nie dotyczy tej ścieżki. Szczegóły i ocena bezpieczeństwa w ADR | P3 | accepted |
+| R-064 | Strona administratora pod adresem `/admin` (na początek lista uwag z przycisku opinii, R-062: data, nazwa, strona, ekran, przeglądarka, treść, od najnowszych, z możliwością oznaczenia uwagi jako przeczytanej lub usunięcia). Dostęp ma tylko właściciel aplikacji, a samo istnienie strony jest ukryte, w kilku warstwach: (1) w aplikacji konto musi mieć uprawnienie administratora (nazwy kont administratorów w `.env`, np. `ADMIN_USERS`), a każdy inny (także niezalogowany) dostaje to samo co dla nieistniejącego adresu (404), nie 403; (2) przed samą aplikacją Cloudflare Access (Zero Trust, plan darmowy) z regułą na `/admin*` i `/api/admin*` wpuszczającą tylko adres e-mail właściciela (jednorazowy kod lub logowanie Google), a serwer dodatkowo sprawdza nagłówek `Cf-Access-Jwt-Assertion` (podpis, odbiorca, ważność), żeby ominięcie tunelu nic nie dawało; (3) strona nie jest nigdzie linkowana, ma nagłówek `X-Robots-Tag: noindex`, a próby logowania mają limit. Wybór warstw do potwierdzenia przed kodem (sekcja 6) | P2 | proposed |
 
 ## 4. Wymagania niefunkcjonalne
 Miary to propozycje startowe, do potwierdzenia po pierwszych testach na prawdziwej lekcji.
@@ -113,6 +114,7 @@ Miary to propozycje startowe, do potwierdzenia po pierwszych testach na prawdziw
 7. Etap 5: pozostałe P2 i P3 według tego, czego zabrakło na lekcji.
 
 ## 6. Otwarte pytania
+- R-064 (strona administratora): czy wystarczy warstwa (1) w aplikacji, czy dokładamy Cloudflare Access (2)? Access wymaga skonfigurowania aplikacji i reguły w panelu Zero Trust (raz) i daje twardą bramkę przed aplikacją, więc zalecane obie.
 - Gotowa biblioteka tablicy czy własny canvas (licencja, obsługa iPada, możliwość własnego serwera synchronizacji). Rozstrzyga ADR 0001.
 - Hosting rozstrzygnięty w ADR 0002: docker compose lokalnie, później domowy VPS. Wystawienie na internet: Cloudflare Tunnel (kontener `cloudflared` w tym samym `docker compose`), HTTPS terminowany u Cloudflare (ADR 0003). Otwarte: zakup domeny i przeniesienie jej do Cloudflare.
 
@@ -182,3 +184,4 @@ Pytania o sposób wczytywania PDF rozstrzygnął użytkownik 2026-11-11; decyzje
 - 2026-11-12: R-060: menu i kafel chowają się na czas przesuwania obiektu i przesuwania widoku.
 - 2026-11-12: R-060: menu chowa się też przy zmianie rozmiaru i obrotu oraz przy każdym przesuwaniu widoku (także ręką); R-047: kropki wierzchołków i końców linii w kolorze marki.
 - 2026-11-12: R-057 do R-062 `done` po teście ręcznym użytkownika; R-063 (logowanie Google) zostaje `accepted`.
+- 2026-11-12: dodano R-064 (strona administratora, zabezpieczona hasłem konta i Cloudflare Access, ukryta przed innymi), `proposed`.
