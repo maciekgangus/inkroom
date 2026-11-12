@@ -210,3 +210,55 @@ func TestAdminChangesNeedTheRequestHeader(t *testing.T) {
 		t.Fatal("the note was changed")
 	}
 }
+
+// A local development switch (ADMIN_DEV_OPEN): the admin page opens without Cloudflare, for a
+// request that comes straight from this machine or the local network, and never otherwise.
+func TestAdminDevOpenSkipsTheTokenForADirectRequest(t *testing.T) {
+	e := newAdminEnv(t, false)
+	e.app.configureAdminDev(true)
+	for _, r := range adminRoutes[:2] {
+		if resp, _ := e.do(t, r.method, r.path, "", false, ""); resp.StatusCode != http.StatusOK {
+			t.Errorf("%s %s = %d, want 200", r.method, r.path, resp.StatusCode)
+		}
+	}
+	// changes still need the request header
+	if resp, _ := e.do(t, "DELETE", "/api/admin/feedback/1", "", false, ""); resp.StatusCode != http.StatusForbidden {
+		t.Errorf("delete without the header = %d, want 403", resp.StatusCode)
+	}
+}
+
+func TestAdminDevOpenIsRefusedForRequestsThroughCloudflare(t *testing.T) {
+	e := newAdminEnv(t, false)
+	e.app.configureAdminDev(true)
+	// what the tunnel and the proxy add: a request with any of them did not come from here
+	for _, h := range []string{"Cf-Ray", "Cf-Connecting-Ip", "X-Forwarded-For", "Cf-Access-Jwt-Assertion"} {
+		req, _ := http.NewRequest("GET", e.srv.URL+"/admin", nil)
+		req.Header.Set(h, "1")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Errorf("with %s: %d, want 404", h, resp.StatusCode)
+		}
+	}
+}
+
+func TestAdminDevOpenIsIgnoredWhenCloudflareAccessIsConfigured(t *testing.T) {
+	e := newAdminEnv(t, true)
+	e.app.configureAdminDev(true)
+	if resp, _ := e.do(t, "GET", "/admin", "", false, ""); resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("without a token = %d, want 404", resp.StatusCode)
+	}
+	if resp, _ := e.do(t, "GET", "/admin", e.token(t, nil), false, ""); resp.StatusCode != http.StatusOK {
+		t.Fatalf("with a token = %d, want 200", resp.StatusCode)
+	}
+}
+
+func TestAdminDevOpenIsOffByDefault(t *testing.T) {
+	e := newAdminEnv(t, false)
+	if resp, _ := e.do(t, "GET", "/admin", "", false, ""); resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("= %d, want 404", resp.StatusCode)
+	}
+}

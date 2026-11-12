@@ -12,3 +12,6 @@ services:
       # own keys in .env (ADR 0013); without a TURNSTILE_SECRET registration is closed.
       TURNSTILE_SITE_KEY: 1x00000000000000000000AA
       TURNSTILE_SECRET: 1x0000000000000000000000000000000AA
+      # The admin page (R-064) opens without Cloudflare for direct requests only; never set it on a
+      # server (it is ignored there when Cloudflare Access is configured).
+      ADMIN_DEV_OPEN: "1"

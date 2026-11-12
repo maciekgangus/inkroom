@@ -28,18 +28,38 @@ func (a *app) configureAdmin(team, aud string) {
 	a.admin = cfaccess.New(team, aud)
 }
 
+// configureAdminDev turns on the local development switch (ADMIN_DEV_OPEN): the admin page then
+// opens without Cloudflare for a request that came straight to the server. It is ignored when
+// Cloudflare Access is configured, and refused for any request that went through Cloudflare or a
+// proxy, so a server that has it set by mistake still does not open the page to the world.
+func (a *app) configureAdminDev(on bool) { a.adminDevOpen = on }
+
+// cameDirect reports whether the request reached the server without Cloudflare or a proxy.
+func cameDirect(r *http.Request) bool {
+	for _, h := range []string{"Cf-Ray", "Cf-Connecting-Ip", "X-Forwarded-For", "X-Real-Ip", cfaccess.Header} {
+		if r.Header.Get(h) != "" {
+			return false
+		}
+	}
+	return true
+}
+
 // adminOnly lets a request through when it carries a valid Cloudflare Access token. Anything else,
 // and everything when the page is not configured, gets the answer of an address that does not
 // exist, so nothing tells that there is a page here.
 func (a *app) adminOnly(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if a.admin == nil {
+		switch {
+		case a.admin == nil && a.adminDevOpen && cameDirect(r):
+			// local development: no gate
+		case a.admin == nil:
 			http.NotFound(w, r)
 			return
-		}
-		if _, err := a.admin.Verify(r.Header.Get(cfaccess.Header)); err != nil {
-			http.NotFound(w, r)
-			return
+		default:
+			if _, err := a.admin.Verify(r.Header.Get(cfaccess.Header)); err != nil {
+				http.NotFound(w, r)
+				return
+			}
 		}
 		w.Header().Set("X-Robots-Tag", "noindex, nofollow")
 		w.Header().Set("Cache-Control", "no-store")

@@ -48,6 +48,14 @@ func main() {
 	if a.admin == nil {
 		log.Print("CF_ACCESS_TEAM_DOMAIN or CF_ACCESS_AUD is not set: the admin page is off")
 	}
+	if os.Getenv("ADMIN_DEV_OPEN") == "1" {
+		if a.admin != nil {
+			log.Print("ADMIN_DEV_OPEN is ignored: Cloudflare Access is configured")
+		} else {
+			a.configureAdminDev(true)
+			log.Print("ADMIN_DEV_OPEN: the admin page is open to direct requests (development only)")
+		}
+	}
 	seedDevUser(a)
 	srv := &http.Server{Addr: ":" + getenv("PORT", "8080"), Handler: a.Handler()}
 
