@@ -72,6 +72,7 @@ func (a *app) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/boards/{id}", a.deleteBoard)
 	mux.HandleFunc("POST /api/boards/{id}/images", a.uploadImage)
 	mux.HandleFunc("GET /api/boards/{id}/images/{image}", a.getImage)
+	mux.HandleFunc("POST /api/feedback", a.sendFeedback)
 	mux.HandleFunc("GET /api/config", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"turnstileSiteKey": a.turnstileSiteKey})
 	})

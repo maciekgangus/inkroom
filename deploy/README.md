@@ -170,6 +170,16 @@ kasowane), odtwarza bazę i uruchamia wszystko. Wejście do odłożonej bazy: `d
 kopia, której się nie sprawdziło, nie jest kopią. Lokalnie cały scenariusz sprawdza `sh scripts/test-backup.sh`
 (z lokalnym S3 zamiast R2, kilka minut). Plik `.env` (tokeny i klucze) nie jest kopiowany: trzymaj go osobno.
 
+### Uwagi z przycisku „!” (R-062)
+Uwagi użytkowników trafiają do tabeli `feedback` w bazie. Obraz aplikacji nie ma `sqlite3`, więc czytaj je
+tymczasowym kontenerem na tym samym wolumenie (tylko do odczytu; nazwę wolumenu wyszukuje `docker volume ls`, zwykle `<folder>_data`):
+
+```sh
+docker run --rm -v "$(docker volume ls -q | grep _data$ | head -1):/data:ro" alpine sh -c \
+  'apk add -q sqlite && sqlite3 -readonly -header -column /data/inkroom.db \
+   "SELECT datetime(created,\"unixepoch\") AS kiedy, name, page, screen, message FROM feedback ORDER BY created DESC LIMIT 30"'
+```
+
 ## 6. Sprawdzenie tunelu bez domeny
 
 Do szybkiego testu (adres znika po zamknięciu): aplikacja musi działać na hoście

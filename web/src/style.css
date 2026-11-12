@@ -519,6 +519,37 @@ canvas {
 	left: 12px;
 	bottom: 12px;
 }
+.feedback-corner {
+	bottom: 68px;
+}
+.feedback-form,
+.feedback-thanks {
+	position: fixed;
+	left: 12px;
+	bottom: 124px;
+	z-index: 3;
+	width: min(320px, calc(100vw - 24px));
+	padding: 12px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--surface);
+	box-shadow: var(--shadow);
+}
+.feedback-form {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+.feedback-form textarea {
+	resize: vertical;
+	font: inherit;
+}
+.feedback-form .row {
+	justify-content: flex-end;
+}
+.feedback-thanks {
+	width: auto;
+}
 .backgrounds {
 	left: 76px;
 	bottom: 12px;

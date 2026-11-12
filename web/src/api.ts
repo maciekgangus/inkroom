@@ -166,3 +166,12 @@ export async function saveView(
 		// Not being able to save a position is not worth an error.
 	}
 }
+
+/** Sends a note from the feedback button (R-062), with where the person was and on what screen. */
+export function sendFeedback(note: {
+	message: string;
+	page: string;
+	screen: string;
+}): Promise<void> {
+	return request("POST", "/api/feedback", note);
+}
