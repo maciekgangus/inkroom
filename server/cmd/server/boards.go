@@ -192,6 +192,15 @@ func (a *app) deleteBoard(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// copyName is the name of a copy of a board: the name with " (kopia)", cut to fit.
+func copyName(name string) string {
+	const suffix = " (kopia)"
+	if r := []rune(name); len(r) > maxBoardName-len([]rune(suffix)) {
+		name = string(r[:maxBoardName-len([]rune(suffix))])
+	}
+	return name + suffix
+}
+
 // copyBoard makes the owner a new board holding everything on this one (R-020): a manual backup
 // before a change, or a starting point for the next lesson. The copy has its own link.
 func (a *app) copyBoard(w http.ResponseWriter, r *http.Request) {
@@ -203,13 +212,8 @@ func (a *app) copyBoard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.hub.Flush() // what people drew a moment ago may not be in the database yet
-	const suffix = " (kopia)"
-	name := b.Name
-	if r := []rune(name); len(r) > maxBoardName-len([]rune(suffix)) {
-		name = string(r[:maxBoardName-len([]rune(suffix))])
-	}
 	u, _ := a.auth.User(r)
-	cp, err := a.st.CopyBoard(b.ID, newBoardID(), u.ID, name+suffix, newBoardID)
+	cp, err := a.st.CopyBoard(b.ID, newBoardID(), u.ID, copyName(b.Name), newBoardID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Błąd serwera")
 		return

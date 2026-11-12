@@ -26,15 +26,18 @@ type app struct {
 	admin *cfaccess.Verifier
 	// adminDevOpen opens the admin page without Cloudflare for direct requests (local development).
 	adminDevOpen bool
+	// adminSecret signs the tickets that let the admin enter a board as the Administrator (R-065).
+	adminSecret []byte
 }
 
 // newApp wires the services together. Call Close before closing the store.
 func newApp(staticDir string, st *store.Store) *app {
 	return &app{
-		st:        st,
-		auth:      auth.New(st),
-		hub:       room.NewHub(st, flushEvery),
-		staticDir: staticDir,
+		st:          st,
+		auth:        auth.New(st),
+		hub:         room.NewHub(st, flushEvery),
+		staticDir:   staticDir,
+		adminSecret: newAdminSecret(),
 	}
 }
 
@@ -82,6 +85,16 @@ func (a *app) Handler() http.Handler {
 	mux.HandleFunc("GET /api/admin/feedback", a.adminOnly(a.adminListFeedback))
 	mux.HandleFunc("POST /api/admin/feedback/{id}/read", a.adminChange(a.adminMarkFeedback))
 	mux.HandleFunc("DELETE /api/admin/feedback/{id}", a.adminChange(a.adminDeleteFeedback))
+	mux.HandleFunc("GET /api/admin/users", a.adminOnly(a.adminListUsers))
+	mux.HandleFunc("POST /api/admin/users/{id}/rename", a.adminChange(a.adminRenameUser))
+	mux.HandleFunc("POST /api/admin/users/{id}/logout", a.adminChange(a.adminLogoutUser))
+	mux.HandleFunc("DELETE /api/admin/users/{id}", a.adminChange(a.adminDeleteUser))
+	mux.HandleFunc("GET /api/admin/boards", a.adminOnly(a.adminListBoards))
+	mux.HandleFunc("POST /api/admin/boards/{id}/rename", a.adminChange(a.adminRenameBoard))
+	mux.HandleFunc("POST /api/admin/boards/{id}/owner", a.adminChange(a.adminSetOwner))
+	mux.HandleFunc("POST /api/admin/boards/{id}/copy", a.adminChange(a.adminCopyBoard))
+	mux.HandleFunc("POST /api/admin/boards/{id}/enter", a.adminChange(a.adminEnterBoard))
+	mux.HandleFunc("DELETE /api/admin/boards/{id}", a.adminChange(a.adminDeleteBoard))
 	mux.HandleFunc("GET /api/config", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"turnstileSiteKey": a.turnstileSiteKey})
 	})

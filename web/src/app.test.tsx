@@ -835,6 +835,70 @@ describe("App", () => {
 			expect(createSocket).toHaveBeenCalledOnce();
 		});
 
+		test("the name Administrator is not accepted from a guest", async () => {
+			mockApi({
+				"GET /api/me": LOGGED_OUT,
+				[`GET /api/boards/${ID}`]: { body: { id: ID, name: "Matma" } },
+			});
+			const createSocket = vi.fn(fakeSocket);
+			await mount({ path: `/b/${ID}`, createSocket });
+			await vi.waitFor(() =>
+				expect(root.querySelector('input[name="name"]')).not.toBeNull(),
+			);
+			for (const n of ["Administrator", "admin.istrator"]) {
+				fill("name", n);
+				await submit("name");
+				expect(root.querySelector('input[name="name"]')).not.toBeNull();
+				expect(text()).toContain("zarezerwowane");
+				expect(localStorage.getItem("inkroom.name")).toBeNull();
+			}
+			expect(createSocket).not.toHaveBeenCalled();
+		});
+
+		describe("entering as the Administrator with a ticket from the admin panel (R-065)", () => {
+			const ticket = "?admin=123.abcdef";
+
+			test("a guest is not asked for a name and joins as the Administrator with the ticket", async () => {
+				mockApi({
+					"GET /api/me": LOGGED_OUT,
+					[`GET /api/boards/${ID}`]: { body: { id: ID, name: "Matma" } },
+				});
+				const createSocket = vi.fn((_url: string) => fakeSocket());
+				await mount({ path: `/b/${ID}`, search: ticket, createSocket });
+				await vi.waitFor(() => expect(createSocket).toHaveBeenCalledOnce());
+				const url = createSocket.mock.calls[0][0];
+				expect(url).toContain("name=Administrator");
+				expect(url).toContain("admin=123.abcdef");
+				expect(root.querySelector('input[name="name"]')).toBeNull();
+			});
+
+			test("a logged-in person is the Administrator too, not their username", async () => {
+				mockApi({
+					"GET /api/me": LOGGED_IN,
+					[`GET /api/boards/${ID}`]: { body: { id: ID, name: "Matma" } },
+				});
+				const createSocket = vi.fn((_url: string) => fakeSocket());
+				await mount({ path: `/b/${ID}`, search: ticket, createSocket });
+				await vi.waitFor(() => expect(createSocket).toHaveBeenCalledOnce());
+				const url = createSocket.mock.calls[0][0];
+				expect(url).toContain("name=Administrator");
+				expect(url).not.toContain("ola.k");
+			});
+
+			test("without a ticket in the address nothing changes", async () => {
+				mockApi({
+					"GET /api/me": LOGGED_IN,
+					[`GET /api/boards/${ID}`]: { body: { id: ID, name: "Matma" } },
+				});
+				const createSocket = vi.fn((_url: string) => fakeSocket());
+				await mount({ path: `/b/${ID}`, search: "", createSocket });
+				await vi.waitFor(() => expect(createSocket).toHaveBeenCalledOnce());
+				const url = createSocket.mock.calls[0][0];
+				expect(url).toContain("name=ola.k");
+				expect(url).not.toContain("admin=");
+			});
+		});
+
 		test("a remembered guest name skips the prompt", async () => {
 			localStorage.setItem("inkroom.name", "Ola");
 			mockApi({

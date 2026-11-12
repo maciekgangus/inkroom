@@ -538,3 +538,29 @@ func TestRenamingIsBroadcastToEveryone(t *testing.T) {
 		}
 	}
 }
+
+func TestTheReservedNameIsRefusedToAClientThatSaysItIsCalledThat(t *testing.T) {
+	c := NewClient(1)
+	for _, name := range []string{"Administrator", "administrator", " Admin.istrator "} {
+		c.Identify("id1", name)
+		if c.ID != "" || c.Name != "" {
+			t.Errorf("%q was taken: %q", name, c.Name)
+		}
+	}
+	c.Identify("id1", "Ola")
+	if c.Name != "Ola" {
+		t.Fatalf("a plain name is refused: %q", c.Name)
+	}
+}
+
+func TestTheAdministratorIsIdentifiedByTheServerOnly(t *testing.T) {
+	c := NewClient(1)
+	c.IdentifyAdmin("id9")
+	if c.ID != "id9" || c.Name != "Administrator" {
+		t.Fatalf("got %q %q", c.ID, c.Name)
+	}
+	c.IdentifyAdmin("")
+	if c.ID != "" || c.Name != "" {
+		t.Fatalf("an empty id leaves the client anonymous, got %q %q", c.ID, c.Name)
+	}
+}

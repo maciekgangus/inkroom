@@ -10,7 +10,7 @@
 	@media (prefers-color-scheme: dark) { :root { --bg:#0e0f13; --card:#17181d; --border:#2b2d37; --text:#ececf1; --muted:#9093a3; --accent:#8f8fff; --soft:#272850; } }
 	* { box-sizing: border-box; }
 	body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 Inter, system-ui, sans-serif; }
-	main { max-width: 760px; margin: 0 auto; padding: 24px 16px 64px; }
+	main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 64px; }
 	header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
 	h1 { margin: 0; font-size: 20px; letter-spacing: -0.02em; }
 	.muted { color: var(--muted); font-size: 13px; }
@@ -26,52 +26,130 @@
 	.actions { display: flex; gap: 8px; }
 	.empty { text-align: center; padding: 48px 0; }
 	.error { color: var(--danger); }
+
+	nav { display: flex; gap: 6px; margin: 0 0 16px; flex-wrap: wrap; }
+	nav button[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+	.bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+	input, select { font: inherit; font-size: 14px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); color: inherit; }
+	input[type=search] { min-width: 240px; }
+	.wrap { overflow-x: auto; background: var(--card); border: 1px solid var(--border); border-radius: 14px; }
+	table { border-collapse: collapse; width: 100%; font-size: 14px; }
+	th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+	tbody tr:last-child td { border-bottom: 0; }
+	th { font-weight: 600; white-space: nowrap; color: var(--muted); }
+	th.sortable { cursor: pointer; user-select: none; }
+	th.sortable:hover { color: var(--text); }
+	th .arrow { color: var(--accent); margin-left: 4px; }
+	td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+	td.actions { white-space: nowrap; }
+	td.actions button, td button.link { margin: 0 4px 4px 0; padding: 3px 8px; font-size: 13px; }
+	button.link { border: 0; background: none; color: var(--accent); padding: 0; }
+	.edit { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+	.edit input { min-width: 140px; }
+	[hidden] { display: none !important; }
 	.tag { background: var(--soft); color: var(--accent); border-radius: 999px; padding: 0 8px; font-size: 12px; }
 </style>
 </head>
 <body>
 <main>
 	<header>
-		<h1>Uwagi z przycisku „!”</h1>
-		<span class="row">
+		<h1>Inkroom: panel administratora</h1>
+	</header>
+	<nav role="tablist">
+		<button type="button" role="tab" data-tab="feedback" aria-selected="true">Uwagi</button>
+		<button type="button" role="tab" data-tab="users" aria-selected="false">Użytkownicy</button>
+		<button type="button" role="tab" data-tab="boards" aria-selected="false">Tablice</button>
+	</nav>
+	<p id="error" class="error" role="alert" hidden></p>
+
+	<section id="view-feedback">
+		<div class="bar">
 			<span id="count" class="muted"></span>
 			<button id="filter" type="button">Tylko nieprzeczytane</button>
 			<button id="reload" type="button">Odśwież</button>
-		</span>
-	</header>
-	<p id="error" class="error" role="alert" hidden></p>
-	<div id="list"></div>
+		</div>
+		<div id="list"></div>
+	</section>
+
+	<section id="view-users" hidden>
+		<div class="bar">
+			<input type="search" placeholder="Szukaj po nazwie lub e-mailu" aria-label="Szukaj użytkownika">
+			<span class="muted count"></span>
+			<button type="button" class="reload">Odśwież</button>
+		</div>
+		<div class="wrap"><table><thead></thead><tbody></tbody></table></div>
+	</section>
+
+	<section id="view-boards" hidden>
+		<div class="bar">
+			<input type="search" placeholder="Szukaj po nazwie tablicy lub właścicielu" aria-label="Szukaj tablicy">
+			<span class="muted count"></span>
+			<button type="button" class="reload">Odśwież</button>
+		</div>
+		<div class="wrap"><table><thead></thead><tbody></tbody></table></div>
+	</section>
 </main>
 <script>
 (function () {
-	var list = document.getElementById("list");
+	"use strict";
 	var errorBox = document.getElementById("error");
-	var count = document.getElementById("count");
-	var filterBtn = document.getElementById("filter");
-	var onlyUnread = false;
-	var notes = [];
 
+	// ---- helpers ----
 	function api(method, path, body) {
 		return fetch(path, {
 			method: method,
 			headers: { "X-Admin-Request": "1", "Content-Type": "application/json" },
 			body: body === undefined ? undefined : JSON.stringify(body)
 		}).then(function (r) {
-			if (!r.ok) throw new Error("Błąd " + r.status);
-			return r.status === 204 ? null : r.json();
+			if (r.ok) return r.status === 204 ? null : r.json();
+			return r.json().catch(function () { return {}; }).then(function (d) {
+				throw new Error(d.error || "Błąd " + r.status);
+			});
 		});
 	}
 	function fail(e) { errorBox.hidden = false; errorBox.textContent = e.message; }
+	function clearError() { errorBox.hidden = true; errorBox.textContent = ""; }
 	function el(tag, cls, text) {
 		var n = document.createElement(tag);
 		if (cls) n.className = cls;
 		if (text !== undefined) n.textContent = text;
 		return n;
 	}
-	function when(iso) {
-		return new Date(iso).toLocaleString("pl-PL", { dateStyle: "medium", timeStyle: "short" });
+	function btn(text, onclick, cls) {
+		var b = el("button", cls || "", text);
+		b.type = "button";
+		b.onclick = onclick;
+		return b;
 	}
-	function render() {
+	function when(iso) {
+		return new Date(iso).toLocaleString("pl-PL", { dateStyle: "short", timeStyle: "short" });
+	}
+	function size(n) {
+		if (n < 1024) return n + " B";
+		var kb = n / 1024;
+		if (kb < 1024) return Math.round(kb * 10) / 10 + " KB";
+		return Math.round(kb / 1024 * 10) / 10 + " MB";
+	}
+
+	// ---- tabs ----
+	var tabs = Array.prototype.slice.call(document.querySelectorAll("[data-tab]"));
+	var views = {};
+	var loaded = {};
+	function show(name) {
+		clearError();
+		tabs.forEach(function (t) { t.setAttribute("aria-selected", String(t.dataset.tab === name)); });
+		["feedback", "users", "boards"].forEach(function (v) { document.getElementById("view-" + v).hidden = v !== name; });
+		if (!loaded[name]) { loaded[name] = true; views[name].load(); }
+	}
+	tabs.forEach(function (t) { t.onclick = function () { show(t.dataset.tab); }; });
+
+	// ---- the notes ----
+	var list = document.getElementById("list");
+	var count = document.getElementById("count");
+	var filterBtn = document.getElementById("filter");
+	var onlyUnread = false;
+	var notes = [];
+	function renderNotes() {
 		var shown = notes.filter(function (n) { return !onlyUnread || !n.read; });
 		var unread = notes.filter(function (n) { return !n.read; }).length;
 		count.textContent = unread + " nieprzeczytanych z " + notes.length;
@@ -93,36 +171,271 @@
 			card.appendChild(el("p", "msg", n.message));
 			if (n.userAgent) card.appendChild(el("p", "muted", n.userAgent));
 			var actions = el("div", "actions");
-			var read = el("button", "", n.read ? "Oznacz jako nieprzeczytaną" : "Oznacz jako przeczytaną");
-			read.type = "button";
-			read.onclick = function () {
+			actions.appendChild(btn(n.read ? "Oznacz jako nieprzeczytaną" : "Oznacz jako przeczytaną", function () {
 				api("POST", "/api/admin/feedback/" + n.id + "/read", { read: !n.read })
-					.then(function () { n.read = !n.read; render(); }, fail);
-			};
-			var del = el("button", "danger", "Usuń");
-			del.type = "button";
-			del.onclick = function () {
+					.then(function () { n.read = !n.read; renderNotes(); }, fail);
+			}));
+			var del = btn("Usuń", function () {
 				if (!del.classList.contains("sure")) {
 					del.classList.add("sure");
 					del.textContent = "Na pewno usunąć?";
 					return;
 				}
 				api("DELETE", "/api/admin/feedback/" + n.id)
-					.then(function () { notes = notes.filter(function (x) { return x !== n; }); render(); }, fail);
-			};
-			actions.appendChild(read);
+					.then(function () { notes = notes.filter(function (x) { return x !== n; }); renderNotes(); }, fail);
+			}, "danger");
 			actions.appendChild(del);
 			card.appendChild(actions);
 			list.appendChild(card);
 		});
 	}
-	function load() {
-		errorBox.hidden = true;
-		api("GET", "/api/admin/feedback").then(function (all) { notes = all; render(); }, fail);
+	views.feedback = {
+		load: function () {
+			clearError();
+			api("GET", "/api/admin/feedback").then(function (all) { notes = all; renderNotes(); }, fail);
+		}
+	};
+	filterBtn.onclick = function () { onlyUnread = !onlyUnread; renderNotes(); };
+	document.getElementById("reload").onclick = views.feedback.load;
+
+	// ---- a sortable, searchable table ----
+	// cols: { label, num, value(row), cell(row, td), search }  def: { cols, rows(), sort, desc, actions(row, td, refresh) }
+	function Table(section, def) {
+		var input = section.querySelector("input[type=search]");
+		var thead = section.querySelector("thead");
+		var tbody = section.querySelector("tbody");
+		var counter = section.querySelector(".count");
+		var t = { sortKey: def.sortKey, desc: !!def.desc, query: "", rows: [] };
+		function compare(a, b) {
+			var col = def.cols[t.sortKey];
+			var x = col.value(a), y = col.value(b);
+			var r = col.num ? x - y : String(x).localeCompare(String(y), "pl", { sensitivity: "base" });
+			return t.desc ? -r : r;
+		}
+		function matches(row) {
+			var q = t.query.trim().toLowerCase();
+			return !q || def.search(row).some(function (s) { return String(s).toLowerCase().indexOf(q) >= 0; });
+		}
+		t.render = function () {
+			thead.textContent = "";
+			var tr = el("tr");
+			def.cols.forEach(function (c, i) {
+				var th = el("th", "sortable" + (c.num ? " num" : ""), c.label);
+				th.setAttribute("aria-sort", t.sortKey === i ? (t.desc ? "descending" : "ascending") : "none");
+				if (t.sortKey === i) th.appendChild(el("span", "arrow", t.desc ? "▼" : "▲"));
+				th.onclick = function () {
+					if (t.sortKey === i) t.desc = !t.desc; else { t.sortKey = i; t.desc = false; }
+					t.render();
+				};
+				tr.appendChild(th);
+			});
+			tr.appendChild(el("th", "", ""));
+			thead.appendChild(tr);
+			var shown = t.rows.filter(matches);
+			if (t.sortKey !== undefined) shown.sort(compare);
+			tbody.textContent = "";
+			shown.forEach(function (row) {
+				var r = el("tr");
+				def.cols.forEach(function (c) {
+					var td = el("td", c.num ? "num" : "");
+					c.cell(row, td, t);
+					r.appendChild(td);
+				});
+				var actions = el("td", "actions");
+				def.actions(row, actions, r, t);
+				r.appendChild(actions);
+				tbody.appendChild(r);
+			});
+			counter.textContent = shown.length === t.rows.length ? t.rows.length + " pozycji" : shown.length + " z " + t.rows.length;
+		};
+		t.search = function (q) { input.value = q; t.query = q; t.render(); };
+		input.oninput = function () { t.query = input.value; t.render(); };
+		t.remove = function (row) { t.rows = t.rows.filter(function (x) { return x !== row; }); t.render(); };
+		return t;
 	}
-	filterBtn.onclick = function () { onlyUnread = !onlyUnread; render(); };
-	document.getElementById("reload").onclick = load;
-	load();
+
+	// an inline form in a row: a field, Zapisz, Anuluj; `save` returns a promise
+	function editor(host, cancelTo, field, save) {
+		host.textContent = "";
+		var box = el("span", "edit");
+		if (field) box.appendChild(field);
+		box.appendChild(btn("Zapisz", function () {
+			save().then(function () { clearError(); }, fail);
+		}));
+		box.appendChild(btn("Anuluj", cancelTo));
+		host.appendChild(box);
+		if (field && field.focus) field.focus();
+	}
+	// a button that wants a second click, then does `go`
+	function twice(label, sure, go, cls) {
+		var b = btn(label, function () {
+			if (b.textContent !== sure) { b.textContent = sure; b.classList.add("sure"); return; }
+			go();
+		}, cls);
+		return b;
+	}
+
+	// ---- users ----
+	var usersTable;
+	var usersLoaded = null;
+	function loadUsers() {
+		if (!usersLoaded) {
+			usersLoaded = api("GET", "/api/admin/users").then(function (u) { return u; });
+			usersLoaded.catch(function () { usersLoaded = null; });
+		}
+		return usersLoaded;
+	}
+	usersTable = Table(document.getElementById("view-users"), {
+		sortKey: undefined,
+		cols: [
+			{ label: "Nazwa", value: function (u) { return u.username; }, cell: function (u, td) { td.textContent = u.username; } },
+			{ label: "E-mail", value: function (u) { return u.email; }, cell: function (u, td) { td.textContent = u.email; } },
+			{ label: "Założone", num: true, value: function (u) { return Date.parse(u.createdAt); }, cell: function (u, td) { td.textContent = when(u.createdAt); } },
+			{ label: "Tablice", num: true, value: function (u) { return u.owned; }, cell: function (u, td) { td.textContent = String(u.owned); } },
+			{ label: "Odwiedzone", num: true, value: function (u) { return u.visited; }, cell: function (u, td) { td.textContent = String(u.visited); } },
+			{ label: "Ostatnia aktywność", num: true, value: function (u) { return Date.parse(u.lastActive); }, cell: function (u, td) { td.textContent = when(u.lastActive); } },
+			{ label: "Rozmiar", num: true, value: function (u) { return u.bytes; }, cell: function (u, td) { td.textContent = size(u.bytes); } }
+		],
+		search: function (u) { return [u.username, u.email]; },
+		actions: function (u, td, tr, t) {
+			function normal() {
+				td.textContent = "";
+				tr.children[0].textContent = u.username;
+				td.appendChild(btn("Tablice", function () { show("boards"); boardsTable.search(u.username); }));
+				td.appendChild(btn("Zmień nazwę", rename));
+				td.appendChild(twice("Wyloguj", "Na pewno?", function () {
+					api("POST", "/api/admin/users/" + u.id + "/logout", {}).then(clearError, fail);
+				}));
+				td.appendChild(btn("Usuń", remove, "danger"));
+			}
+			function rename() {
+				var input = el("input");
+				input.value = u.username;
+				input.setAttribute("aria-label", "Nowa nazwa użytkownika");
+				tr.children[0].textContent = "";
+				tr.children[0].appendChild(input);
+				editor(td, normal, null, function () {
+					return api("POST", "/api/admin/users/" + u.id + "/rename", { username: input.value.trim() })
+						.then(function () { u.username = input.value.trim(); t.render(); });
+				});
+				// the field is in the name cell, the buttons in the actions cell
+			}
+			function remove() {
+				td.textContent = "";
+				var box = el("span", "edit");
+				var input = el("input");
+				input.placeholder = "Wpisz: " + u.username;
+				input.setAttribute("aria-label", "Nazwa konta do usunięcia");
+				var go = btn("Usuń konto", function () {
+					api("DELETE", "/api/admin/users/" + u.id, { confirm: input.value })
+						.then(function () { clearError(); t.remove(u); }, fail);
+				}, "danger");
+				go.disabled = true;
+				input.oninput = function () { go.disabled = input.value !== u.username; };
+				box.appendChild(el("span", "muted", "Usunie też tablice tego konta."));
+				box.appendChild(input);
+				box.appendChild(go);
+				box.appendChild(btn("Anuluj", normal));
+				td.appendChild(box);
+				input.focus();
+			}
+			normal();
+		}
+	});
+	views.users = {
+		load: function () {
+			clearError();
+			usersLoaded = null;
+			loadUsers().then(function (u) { usersTable.rows = u; usersTable.render(); }, fail);
+		}
+	};
+	document.querySelector("#view-users .reload").onclick = views.users.load;
+
+	// ---- boards ----
+	var boardsTable = Table(document.getElementById("view-boards"), {
+		sortKey: 3, desc: true,
+		cols: [
+			{ label: "Nazwa", value: function (b) { return b.name; }, cell: function (b, td) { td.textContent = b.name; } },
+			{ label: "Właściciel", value: function (b) { return b.owner; }, cell: function (b, td) {
+				td.appendChild(btn(b.owner, function () { boardsTable.search(b.owner); }, "link"));
+			} },
+			{ label: "Utworzona", num: true, value: function (b) { return Date.parse(b.createdAt); }, cell: function (b, td) { td.textContent = when(b.createdAt); } },
+			{ label: "Zmieniona", num: true, value: function (b) { return Date.parse(b.updatedAt); }, cell: function (b, td) { td.textContent = when(b.updatedAt); } },
+			{ label: "Elementy", num: true, value: function (b) { return b.strokes; }, cell: function (b, td) { td.textContent = String(b.strokes); } },
+			{ label: "Obrazy", num: true, value: function (b) { return b.images; }, cell: function (b, td) { td.textContent = String(b.images); } },
+			{ label: "Rozmiar", num: true, value: function (b) { return b.bytes; }, cell: function (b, td) { td.textContent = size(b.bytes); } },
+			{ label: "Odwiedzający", num: true, value: function (b) { return b.visitors; }, cell: function (b, td) { td.textContent = String(b.visitors); } }
+		],
+		search: function (b) { return [b.name, b.owner]; },
+		actions: function (b, td, tr, t) {
+			function normal() {
+				td.textContent = "";
+				tr.children[0].textContent = b.name;
+				td.appendChild(btn("Otwórz", function () {
+					api("POST", "/api/admin/boards/" + b.id + "/enter", {}).then(function (r) {
+						clearError();
+						window.open(r.url, "_blank", "noopener");
+					}, fail);
+				}));
+				td.appendChild(btn("Kopiuj link", function () {
+					var link = location.origin + "/b/" + b.id;
+					var p = navigator.clipboard ? navigator.clipboard.writeText(link) : Promise.reject(new Error("Schowek niedostępny: " + link));
+					p.then(clearError, fail);
+				}));
+				td.appendChild(btn("Zmień nazwę", rename));
+				td.appendChild(btn("Zmień właściciela", owner));
+				td.appendChild(btn("Kopia", function () {
+					api("POST", "/api/admin/boards/" + b.id + "/copy", {}).then(function () { clearError(); views.boards.load(); }, fail);
+				}));
+				td.appendChild(twice("Usuń", "Na pewno usunąć?", function () {
+					api("DELETE", "/api/admin/boards/" + b.id).then(function () { clearError(); t.remove(b); }, fail);
+				}, "danger"));
+			}
+			function rename() {
+				var input = el("input");
+				input.value = b.name;
+				input.setAttribute("aria-label", "Nowa nazwa tablicy");
+				tr.children[0].textContent = "";
+				tr.children[0].appendChild(input);
+				editor(td, normal, null, function () {
+					return api("POST", "/api/admin/boards/" + b.id + "/rename", { name: input.value.trim() })
+						.then(function () { b.name = input.value.trim(); t.render(); });
+				});
+			}
+			function owner() {
+				loadUsers().then(function (users) {
+					var select = el("select");
+					select.setAttribute("aria-label", "Nowy właściciel");
+					users.forEach(function (u) {
+						var o = el("option", "", u.username);
+						o.value = String(u.id);
+						if (u.id === b.ownerId) o.selected = true;
+						select.appendChild(o);
+					});
+					editor(td, normal, select, function () {
+						var id = Number(select.value);
+						return api("POST", "/api/admin/boards/" + b.id + "/owner", { userId: id }).then(function () {
+							var u = users.filter(function (x) { return x.id === id; })[0];
+							b.ownerId = id;
+							b.owner = u ? u.username : b.owner;
+							t.render();
+						});
+					});
+				}, fail);
+			}
+			normal();
+		}
+	});
+	views.boards = {
+		load: function () {
+			clearError();
+			api("GET", "/api/admin/boards").then(function (b) { boardsTable.rows = b; boardsTable.render(); }, fail);
+		}
+	};
+	document.querySelector("#view-boards .reload").onclick = views.boards.load;
+
+	loaded.feedback = true;
+	views.feedback.load();
 })();
 </script>
 </body>

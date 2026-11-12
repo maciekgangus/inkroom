@@ -144,6 +144,10 @@ func (s *Service) Register(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusConflict, "Ten e-mail jest już zarejestrowany")
 		return
 	}
+	if errors.Is(err, store.ErrUsernameReserved) {
+		fail(w, http.StatusBadRequest, "Ta nazwa użytkownika jest zarezerwowana")
+		return
+	}
 	if errors.Is(err, store.ErrUsernameTaken) {
 		fail(w, http.StatusConflict, "Ta nazwa użytkownika jest zajęta")
 		return
@@ -155,6 +159,9 @@ func (s *Service) Register(w http.ResponseWriter, r *http.Request) {
 	s.startSession(w, r, u)
 	respondUser(w, http.StatusCreated, u)
 }
+
+// ValidUsername reports whether name is a username the site accepts (3 to 24 letters, digits and . _ -).
+func ValidUsername(name string) bool { return validUsername(name) }
 
 // validUsername reports whether name is 3 to 24 of the characters a username may have.
 func validUsername(name string) bool {

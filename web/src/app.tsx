@@ -3,6 +3,7 @@ import * as api from "./api";
 import { AuthForms, RegisterPage } from "./auth-forms";
 import { BoardView, newId } from "./board-view";
 import { FeedbackButton } from "./feedback-button";
+import { ADMIN_NAME, isReservedName } from "./names";
 import { Panel } from "./panel";
 import type { SocketLike } from "./sync/sync";
 import { ThemeToggle } from "./theme";
@@ -14,6 +15,8 @@ const AUTHOR_KEY = "inkroom.authorId";
 
 interface Props {
 	path?: string;
+	/** The query string of the address; a board opened from the admin panel carries `admin=<ticket>`. */
+	search?: string;
 	navigate?: (to: string) => void;
 	createSocket?: (url: string) => SocketLike;
 }
@@ -41,6 +44,7 @@ function store(storage: Storage, key: string, value: string): void {
 /** Root component: home page (login or panel), or a board page at /b/<id>. */
 export function App({
 	path = location.pathname,
+	search = location.search,
 	navigate = goTo,
 	createSocket = realSocket,
 }: Props) {
@@ -48,7 +52,11 @@ export function App({
 	return (
 		<>
 			{match ? (
-				<BoardPage id={match[1]} createSocket={createSocket} />
+				<BoardPage
+					id={match[1]}
+					ticket={new URLSearchParams(search).get("admin")}
+					createSocket={createSocket}
+				/>
 			) : path === REGISTER_PATH ? (
 				<RegisterPage navigate={navigate} />
 			) : (
@@ -84,9 +92,12 @@ function Home({ navigate }: { navigate: (to: string) => void }) {
 
 function BoardPage({
 	id,
+	ticket,
 	createSocket,
 }: {
 	id: string;
+	/** The ticket of the admin panel: the page is then the Administrator, whoever is logged in. */
+	ticket: string | null;
 	createSocket: (url: string) => SocketLike;
 }) {
 	const [info, setInfo] = useState<
@@ -112,12 +123,12 @@ function BoardPage({
 	}, []);
 
 	// Logged-in users are known by their username (R-053); guests give a name.
-	const name = account ? account.username : guestName;
+	const name = ticket ? ADMIN_NAME : account ? account.username : guestName;
 	const connect = useMemo(() => {
 		const scheme = location.protocol === "https:" ? "wss" : "ws";
-		const url = `${scheme}://${location.host}/ws/${id}?name=${encodeURIComponent(name ?? "")}&id=${encodeURIComponent(authorId)}`;
+		const url = `${scheme}://${location.host}/ws/${id}?name=${encodeURIComponent(name ?? "")}&id=${encodeURIComponent(authorId)}${ticket ? `&admin=${encodeURIComponent(ticket)}` : ""}`;
 		return () => createSocket(url);
-	}, [id, name, authorId, createSocket]);
+	}, [id, name, authorId, ticket, createSocket]);
 
 	if (info === undefined || account === undefined) return null;
 	if (!info) {
@@ -156,6 +167,7 @@ function BoardPage({
 }
 
 function NamePrompt({ onSubmit }: { onSubmit: (name: string) => void }) {
+	const [refused, setRefused] = useState(false);
 	return (
 		<main class="center">
 			<form
@@ -165,11 +177,21 @@ function NamePrompt({ onSubmit }: { onSubmit: (name: string) => void }) {
 					const name = String(
 						new FormData(e.currentTarget as HTMLFormElement).get("name") ?? "",
 					).trim();
+					if (isReservedName(name)) {
+						setRefused(true);
+						return;
+					}
+					setRefused(false);
 					if (name) onSubmit(name);
 				}}
 			>
 				<h1>Jak masz na imię?</h1>
 				<input name="name" placeholder="Imię" maxLength={40} />
+				{refused && (
+					<p class="error" role="alert">
+						To imię jest zarezerwowane, wybierz inne.
+					</p>
+				)}
 				<button type="submit" class="primary">
 					Wejdź
 				</button>
