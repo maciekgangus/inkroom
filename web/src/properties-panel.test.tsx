@@ -4,7 +4,7 @@ import type { Stroke } from "./board/board";
 import type { StylePatch } from "./board/style";
 import { PropertiesPanel } from "./properties-panel";
 
-const COLORS = ["#111111", "#d32f2f", "#1976d2"];
+const COLORS = ["#111111", "#d32f2f", "#1976d2", "#388e3c", "#f57c00"];
 const base = { id: "e", authorId: "a", color: "#111111", size: 5, z: 0 };
 const pts = (...p: [number, number][]) =>
 	p.map(([x, y]) => [x, y, 0.5] as [number, number, number]);
@@ -111,22 +111,56 @@ describe("PropertiesPanel", () => {
 			expect(onOffset).toHaveBeenCalledTimes(1);
 		});
 
-		test("the offset moves the menu and the tile alike", () => {
-			mountWith({});
+		test("the offset moves the menu, but the tile stays where it is by the object", () => {
 			const at = (sel: string) => {
 				const e = root.querySelector(sel) as HTMLElement;
 				return [e.style.left, e.style.top];
 			};
+			mountWith({});
 			const panel = at(".properties");
 			mountWith({ offset: { x: 30, y: -10 } });
 			const moved = at(".properties");
 			expect(parseFloat(moved[0]) - parseFloat(panel[0])).toBe(30);
 			expect(parseFloat(moved[1]) - parseFloat(panel[1])).toBe(-10);
+			mountWith({ collapsed: true });
+			const tile = at(".panel-tile");
 			mountWith({ collapsed: true, offset: { x: 30, y: -10 } });
-			expect(at(".panel-tile")).toEqual([
-				expect.stringMatching(/px$/),
-				expect.stringMatching(/px$/),
-			]);
+			expect(at(".panel-tile")).toEqual(tile);
+		});
+	});
+
+	describe("colour tiles (R-060)", () => {
+		const FIVE = ["#111111", "#d32f2f", "#1976d2", "#388e3c", "#f57c00"];
+		const counts = () =>
+			[...root.querySelectorAll(".palette-grid")].map((g) => g.children.length);
+
+		test("every row has the same number of tiles, the fill row too", () => {
+			render(
+				<PropertiesPanel
+					elements={[rect]}
+					colors={FIVE}
+					onChange={onChange}
+					onPreview={onPreview}
+				/>,
+				root,
+			);
+			const n = counts();
+			expect(n).toHaveLength(2);
+			expect(n[0]).toBe(n[1]);
+		});
+
+		test("a colour of the person's own shows on the last tile, which is then marked", () => {
+			render(
+				<PropertiesPanel
+					elements={[{ ...rect, color: "#abcdef" }]}
+					colors={FIVE}
+					onChange={onChange}
+				/>,
+				root,
+			);
+			const custom = root.querySelector(".swatch.custom") as HTMLElement;
+			expect(custom.classList.contains("active")).toBe(true);
+			expect(custom.style.background).not.toBe("");
 		});
 	});
 

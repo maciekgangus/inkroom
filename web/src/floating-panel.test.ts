@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import type { Stroke } from "./board/board";
-import { panelPosition, panelTitle } from "./floating-panel";
+import { panelPosition, panelTitle, tilePosition } from "./floating-panel";
 
 const view = { w: 1500, h: 800 };
 const size = { w: 280, h: 200 };
@@ -96,5 +96,32 @@ describe("panelTitle", () => {
 
 	test("nothing, nothing to name", () => {
 		expect(panelTitle([])).toBe("");
+	});
+});
+
+describe("tilePosition (R-060)", () => {
+	test("stands just right of the object, level with its top", () => {
+		const t = tilePosition(rect(400, 200, 600, 300), view);
+		expect(t.left).toBeGreaterThan(600);
+		expect(t.left).toBeLessThan(600 + 80);
+		expect(t.top).toBe(200);
+	});
+
+	test("does not move when the object does not", () => {
+		const a = tilePosition(rect(400, 200, 600, 300), view);
+		const b = tilePosition(rect(400, 200, 600, 300), view);
+		expect(a).toEqual(b);
+	});
+
+	test("goes to the left of the object when there is no room on the right", () => {
+		const t = tilePosition(rect(1300, 200, 1480, 300), view);
+		expect(t.left + 40).toBeLessThan(1300);
+	});
+
+	test("stays on the screen and under the top bar", () => {
+		const t = tilePosition(rect(400, -500, 600, -100), view);
+		expect(t.top).toBeGreaterThanOrEqual(64);
+		const u = tilePosition(rect(400, 700, 600, 2000), view);
+		expect(u.top + 40).toBeLessThanOrEqual(view.h);
 	});
 });

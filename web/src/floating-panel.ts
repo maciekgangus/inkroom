@@ -51,6 +51,26 @@ export function panelPosition(
 	};
 }
 
+/** The size of the tile a shut menu leaves, and how far it stands from the object's side. */
+const TILE = 40;
+const TILE_GAP = 32;
+
+/**
+ * Where the tile of a shut menu stands (R-060): always in the same place by the object, just right
+ * of it and level with its top (left of it when the right side has no room), kept on the screen.
+ * It does not depend on where the menu was dragged to.
+ */
+export function tilePosition(
+	anchor: Rect,
+	view: { w: number; h: number },
+): { left: number; top: number } {
+	let left = anchor.maxX + TILE_GAP;
+	if (left + TILE > view.w - MARGIN) left = anchor.minX - TILE_GAP - TILE;
+	left = Math.min(Math.max(left, MARGIN), view.w - TILE - MARGIN);
+	const top = Math.min(Math.max(anchor.minY, TOP_BAR), view.h - TILE - MARGIN);
+	return { left, top };
+}
+
 /** What the panel calls what it edits: the class of the object, with a count for several. */
 export function panelTitle(els: Stroke[]): string {
 	if (els.length === 0) return "";

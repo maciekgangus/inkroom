@@ -7,7 +7,7 @@ import {
 	styleOf,
 } from "./board/style";
 import type { Rect } from "./board/viewport";
-import { panelPosition, panelTitle } from "./floating-panel";
+import { panelPosition, panelTitle, tilePosition } from "./floating-panel";
 import { Icon, type IconName } from "./icon";
 import { Slider } from "./slider";
 import "./properties-panel.css";
@@ -20,9 +20,6 @@ const DASH_LABELS: Record<Dash, string> = {
 	dotted: "┈",
 	natural: "",
 };
-
-/** The size of the tile a shut menu leaves behind. */
-const TILE = { w: 40, h: 40 };
 
 interface Props {
 	/** The selected elements; the panel shows the values of the first. */
@@ -85,7 +82,7 @@ export function PropertiesPanel({
 	if (elements.length === 0) return null;
 	const view = { w: innerWidth, h: innerHeight };
 	if (collapsed) {
-		const spot = anchor ? panelPosition(anchor, TILE, view) : null;
+		const spot = anchor ? tilePosition(anchor, view) : null;
 		return (
 			<button
 				type="button"
@@ -95,8 +92,8 @@ export function PropertiesPanel({
 				style={
 					spot
 						? {
-								left: `${spot.left + offset.x}px`,
-								top: `${spot.top + offset.y}px`,
+								left: `${spot.left}px`,
+								top: `${spot.top}px`,
 							}
 						: undefined
 				}
@@ -273,6 +270,10 @@ function ColorBlock({
 	onPick: (color: string | null) => void;
 	allowNone?: boolean;
 }) {
+	// A colour that is not on the palette sits on the last tile, which then shows it.
+	// The fill row has the "none" tile too, so it shows one colour fewer and both rows have as many tiles.
+	const shown = allowNone ? colors.slice(0, -1) : colors;
+	const own = current !== null && !shown.includes(current);
 	return (
 		<div class="color-block">
 			<div class="color-current">
@@ -303,7 +304,7 @@ function ColorBlock({
 						<Icon name="no-fill" />
 					</button>
 				)}
-				{colors.map((c) => (
+				{shown.map((c) => (
 					<button
 						type="button"
 						key={c}
@@ -313,7 +314,11 @@ function ColorBlock({
 						onClick={() => onPick(c)}
 					/>
 				))}
-				<label class="swatch custom" title="Własny kolor">
+				<label
+					class={`swatch custom${own ? " active" : ""}`}
+					title="Własny kolor"
+					style={own && current ? { background: display(current) } : undefined}
+				>
 					<input
 						type="color"
 						aria-label={`${prefix} custom`}
@@ -322,7 +327,7 @@ function ColorBlock({
 						}
 						onInput={(e) => onPick((e.currentTarget as HTMLInputElement).value)}
 					/>
-					<Icon name="plus" />
+					{!own && <Icon name="plus" />}
 				</label>
 			</div>
 		</div>

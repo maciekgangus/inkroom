@@ -82,10 +82,12 @@
 }
 .palette-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(24px, 1fr));
+	grid-template-columns: repeat(6, 1fr);
+	justify-items: center;
 	gap: 8px;
-	max-width: 232px;
+	padding: 4px 0;
 }
+/* Round tiles with a ring on the chosen one, as in the bar at the top. */
 .properties .swatch {
 	box-sizing: border-box;
 	display: grid;
@@ -96,7 +98,7 @@
 	min-height: 24px;
 	padding: 0;
 	border: 1px solid color-mix(in srgb, var(--text) 18%, transparent);
-	border-radius: 7px;
+	border-radius: 50%;
 	cursor: pointer;
 	transition: transform 0.08s;
 }
@@ -105,8 +107,8 @@
 }
 .properties .swatch.active {
 	box-shadow:
-		0 0 0 2px var(--surface),
-		0 0 0 4px var(--accent);
+		0 0 0 3px var(--surface),
+		0 0 0 5px var(--accent);
 }
 .properties .swatch.none {
 	background: var(--surface);
@@ -118,21 +120,17 @@
 }
 .properties .swatch.custom {
 	position: relative;
-	overflow: hidden;
-	background: conic-gradient(
-		#f44336,
-		#ffeb3b,
-		#4caf50,
-		#03a9f4,
-		#9c27b0,
-		#f44336
-	);
-	color: #fff;
+	background: none;
+	border: 1px dashed var(--muted);
+	color: var(--muted);
+}
+.properties .swatch.custom[style] {
+	border-color: color-mix(in srgb, var(--text) 18%, transparent);
+	border-style: solid;
 }
 .properties .swatch.custom svg {
 	width: 14px;
 	height: 14px;
-	filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.6));
 	pointer-events: none;
 }
 .properties .swatch.custom input {

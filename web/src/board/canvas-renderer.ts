@@ -20,6 +20,8 @@ const GLOW_MAX = 25;
 const GLOW_COLOR = "hsl(252, 100%, 60%)";
 const GLOW_BLUR = 4;
 const GLOW_PASSES = 2;
+/** The ink colour of the Inkroom brand, for the handles that edit the selection. */
+const HANDLE_INK = "#5b5bf0";
 
 const isFreehand = (s: Stroke) => !s.kind || s.kind === "stroke";
 
@@ -556,7 +558,7 @@ export class CanvasRenderer implements Renderer {
 	}
 
 	/**
-	 * The handles that edit the selection, all alike: pink dots a little off the object (no outline
+	 * The handles that edit the selection: squares a little off the object (no outline
 	 * box), at the corners and the middles of the sides, and one above for turning. A constant size
 	 * on screen whatever the zoom.
 	 */
@@ -570,10 +572,11 @@ export class CanvasRenderer implements Renderer {
 		ctx.fillStyle = "#e91e63";
 		const stem = ROT_OFFSET_PX * px;
 		const half = (HANDLE_PX / 2) * px;
-		// The handles that scale: green rounded squares, at the corners and the middles of the sides.
-		ctx.fillStyle = "#7cc243";
-		ctx.strokeStyle = "#3d6b1c";
-		ctx.lineWidth = 1.5 * px;
+		// The handles that scale: white rounded squares with an ink-coloured edge, at the corners
+		// and the middles of the sides.
+		ctx.fillStyle = "#fff";
+		ctx.strokeStyle = HANDLE_INK;
+		ctx.lineWidth = 2 * px;
 		for (const [x, y] of [
 			[-f.w / 2, -f.h / 2],
 			[f.w / 2, -f.h / 2],
@@ -589,8 +592,8 @@ export class CanvasRenderer implements Renderer {
 			ctx.fill();
 			ctx.stroke();
 		}
-		// The handle that turns is a blue dot, apart from the others.
-		ctx.fillStyle = "#1976d2";
+		// The handle that turns is a dot filled with the ink colour, apart from the others.
+		ctx.fillStyle = HANDLE_INK;
 		ctx.strokeStyle = "#fff";
 		ctx.lineWidth = 2 * px;
 		ctx.beginPath();
