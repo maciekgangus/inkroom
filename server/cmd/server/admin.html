@@ -10,7 +10,7 @@
 	@media (prefers-color-scheme: dark) { :root { --bg:#0e0f13; --card:#17181d; --border:#2b2d37; --text:#ececf1; --muted:#9093a3; --accent:#8f8fff; --soft:#272850; } }
 	* { box-sizing: border-box; }
 	body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 Inter, system-ui, sans-serif; }
-	main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 64px; }
+	main { max-width: 1500px; margin: 0 auto; padding: 24px 16px 64px; }
 	header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
 	h1 { margin: 0; font-size: 20px; letter-spacing: -0.02em; }
 	.muted { color: var(--muted); font-size: 13px; }
@@ -41,7 +41,7 @@
 	th.sortable:hover { color: var(--text); }
 	th .arrow { color: var(--accent); margin-left: 4px; }
 	td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
-	td.actions { white-space: nowrap; }
+	td.actions { min-width: 250px; }
 	td.actions button, td button.link { margin: 0 4px 4px 0; padding: 3px 8px; font-size: 13px; }
 	button.link { border: 0; background: none; color: var(--accent); padding: 0; }
 	.edit { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
