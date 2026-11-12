@@ -44,6 +44,10 @@ func main() {
 	if os.Getenv("TURNSTILE_SECRET") == "" {
 		log.Print("TURNSTILE_SECRET is not set: registration is closed")
 	}
+	a.configureAdmin(os.Getenv("CF_ACCESS_TEAM_DOMAIN"), os.Getenv("CF_ACCESS_AUD"))
+	if a.admin == nil {
+		log.Print("CF_ACCESS_TEAM_DOMAIN or CF_ACCESS_AUD is not set: the admin page is off")
+	}
 	seedDevUser(a)
 	srv := &http.Server{Addr: ":" + getenv("PORT", "8080"), Handler: a.Handler()}
 

@@ -171,7 +171,7 @@ kopia, której się nie sprawdziło, nie jest kopią. Lokalnie cały scenariusz 
 (z lokalnym S3 zamiast R2, kilka minut). Plik `.env` (tokeny i klucze) nie jest kopiowany: trzymaj go osobno.
 
 ### Uwagi z przycisku „!” (R-062)
-Uwagi użytkowników trafiają do tabeli `feedback` w bazie. Obraz aplikacji nie ma `sqlite3`, więc czytaj je
+Najwygodniej na stronie administratora (sekcja 7). Uwagi użytkowników trafiają do tabeli `feedback` w bazie. Obraz aplikacji nie ma `sqlite3`, więc z konsoli czytaj je
 tymczasowym kontenerem na tym samym wolumenie (tylko do odczytu; nazwę wolumenu wyszukuje `docker volume ls`, zwykle `<folder>_data`):
 
 ```sh
@@ -193,6 +193,26 @@ wypisze adres `https://....trycloudflare.com`. Rejestracja wymaga kluczy Turnsti
 adresu, więc do takiego testu wpisz w `.env` opublikowane klucze testowe Cloudflare (zawsze
 przechodzą): site key `1x00000000000000000000AA`, secret `1x0000000000000000000000000000000AA`.
 Na produkcji używaj własnych kluczy.
+
+## 7. Strona administratora `/admin` (Cloudflare Access, R-064, ADR 0017)
+
+Strona z listą uwag jest ukryta za logowaniem Cloudflare. Bez poniższej konfiguracji jest wyłączona (adres daje 404).
+
+**Jednorazowo w Cloudflare** (Zero Trust, https://one.dash.cloudflare.com):
+1. *Settings, Authentication*: sprawdź metody logowania; wystarczy „One-time PIN” (kod na e-mail), opcjonalnie Google.
+2. *Access, Applications, Add an application, Self-hosted*. Nazwa np. „Inkroom admin”. Sesja np. 24 godziny.
+3. *Public hostname*: domena `inkroom.lesniakmaciek.dev` i **dwie ścieżki**: `admin` oraz `api/admin` (dodaj drugi hostname z drugą ścieżką; wpisy bez gwiazdki obejmują też to, co pod nimi).
+4. *Policy*: akcja **Allow**, reguła *Include, Emails* = Twój adres e-mail. Nic więcej.
+5. Zapisz. Na ekranie aplikacji skopiuj **Application Audience (AUD) Tag** (długi ciąg szesnastkowy). Nazwę zespołu znajdziesz w *Settings, Custom Pages* lub w adresie logowania: `<zespół>.cloudflareaccess.com`.
+
+**Na serwerze** dopisz do `.env` (obok `docker-compose.yml`) i uruchom ponownie aplikację (`docker compose up -d`):
+
+```
+CF_ACCESS_TEAM_DOMAIN=<zespół>.cloudflareaccess.com
+CF_ACCESS_AUD=<AUD Tag>
+```
+
+**Sprawdzenie:** wejdź na `https://inkroom.lesniakmaciek.dev/admin`: najpierw strona logowania Cloudflare, po kodzie z e-maila lista uwag. W oknie prywatnym bez logowania nie ma dostępu. Nie działa? W logu aplikacji (`docker compose logs app`) przy starcie powinno nie być wiersza „the admin page is off”; zły AUD albo zespół daje 404 mimo zalogowania.
 
 ## Gdy coś nie działa
 
