@@ -3,7 +3,6 @@ import { type Background, drawBackground } from "./background";
 import type { Stroke } from "./board";
 import { intersects, strokeBounds } from "./bounds";
 import type { Renderer } from "./controller";
-import { DEFAULT_GLOW, type Glow, glowColor } from "./glow";
 import type { ImageCache } from "./image-cache";
 import { imageRect } from "./image-geometry";
 import { type Frame, HANDLE_PX, ROT_OFFSET_PX } from "./selection-frame";
@@ -17,6 +16,10 @@ import type { Rect, Viewport } from "./viewport";
 
 /** The most selected elements that still get the neon glow; a bigger selection just has its frame. */
 const GLOW_MAX = 25;
+/** The selection glow (R-058), tuned by eye: a violet close to the nib of the logo. */
+const GLOW_COLOR = "hsl(252, 100%, 60%)";
+const GLOW_BLUR = 4;
+const GLOW_PASSES = 2;
 
 const isFreehand = (s: Stroke) => !s.kind || s.kind === "stroke";
 
@@ -292,8 +295,6 @@ export class CanvasRenderer implements Renderer {
 	private selection: Frame | null = null;
 	private marquee: Rect | null = null;
 	private highlight: Stroke[] = [];
-	/** How the selection glows (R-058). */
-	private glow: Glow = DEFAULT_GLOW;
 	/** Elements being dragged: drawn on the live layer, left out of the committed one (performance). */
 	private drag: {
 		ids: Set<string>;
@@ -373,12 +374,6 @@ export class CanvasRenderer implements Renderer {
 	setHighlight(els: Stroke[]): void {
 		this.highlight = els;
 		this.schedule(false, true);
-	}
-
-	/** Sets how the selection glows (for tuning it by eye). */
-	setGlow(glow: Glow): void {
-		this.glow = glow;
-		this.schedule(true, true);
 	}
 
 	/** Shows the rubber band of a selection being dragged (null hides it). */
@@ -611,10 +606,10 @@ export class CanvasRenderer implements Renderer {
 		const path = elementPath(s);
 		const color = s.kind === "image" ? "#fff" : this.ink(s.color);
 		ctx.save();
-		ctx.shadowColor = glowColor(this.glow);
+		ctx.shadowColor = GLOW_COLOR;
 		// The blur is in device pixels whatever the zoom; one small pass (R-058).
-		ctx.shadowBlur = this.glow.blur * dpr;
-		for (let i = 0; i < this.glow.passes; i++) {
+		ctx.shadowBlur = GLOW_BLUR * dpr;
+		for (let i = 0; i < GLOW_PASSES; i++) {
 			if (s.kind === "image") {
 				const r = imageRect(s);
 				withLook(ctx, s, () =>

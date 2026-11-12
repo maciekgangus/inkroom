@@ -1,5 +1,4 @@
 import type { Stroke } from "./board/board";
-import { GLOW_RANGE, type Glow } from "./board/glow";
 import {
 	capabilities,
 	type Dash,
@@ -22,15 +21,6 @@ const DASH_LABELS: Record<Dash, string> = {
 	natural: "",
 };
 
-/** The glow sliders (tuning, R-058): setting, name in the label, unit. */
-const GLOW_SLIDERS: [keyof Glow, string, string][] = [
-	["blur", "blur", " px"],
-	["passes", "passes", "x"],
-	["alpha", "opacity", "%"],
-	["hue", "hue", "°"],
-	["light", "light", "%"],
-];
-
 interface Props {
 	/** The selected elements; the panel shows the values of the first. */
 	elements: Stroke[];
@@ -48,8 +38,6 @@ interface Props {
 	onPreview?: (patch: StylePatch) => void;
 	/** Puts the panel away until something else is selected (the cross in its title). */
 	onClose?: () => void;
-	/** A slider for tuning the selection glow by eye; shown only when given. */
-	glow?: { value: Glow; onChange: (patch: Partial<Glow>) => void };
 	/** A final change: a click, or a slider released. */
 	onChange: (patch: StylePatch) => void;
 }
@@ -63,7 +51,6 @@ export function PropertiesPanel({
 	anchor = null,
 	onPreview = () => {},
 	onClose,
-	glow,
 	onChange,
 }: Props) {
 	const ref = useRef<HTMLDivElement>(null);
@@ -195,23 +182,6 @@ export function PropertiesPanel({
 					onChange={(v) => onChange({ opacity: v / 100 })}
 				/>
 			</div>
-			{glow && (
-				<>
-					{GLOW_SLIDERS.map(([key, name, unit]) => (
-						<div class="row" key={key}>
-							<Slider
-								label={`prop glow ${name}`}
-								min={GLOW_RANGE[key][0]}
-								max={GLOW_RANGE[key][1]}
-								value={glow.value[key]}
-								unit={unit}
-								onInput={(v) => glow.onChange({ [key]: v })}
-								onChange={(v) => glow.onChange({ [key]: v })}
-							/>
-						</div>
-					))}
-				</>
-			)}
 		</div>
 	);
 }

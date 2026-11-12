@@ -19,7 +19,6 @@ import {
 import { Controller, type Renderer, type Settings } from "./board/controller";
 import { exportBoard } from "./board/export-file";
 import { TouchGestures } from "./board/gestures";
-import { DEFAULT_GLOW, type Glow, parseGlow } from "./board/glow";
 import { ImageCache } from "./board/image-cache";
 import { defaultSize, placeCentered } from "./board/image-geometry";
 import { prepareImage, uploadImage } from "./board/image-upload";
@@ -181,24 +180,6 @@ export function BoardView({
 			// private mode: the choice is just not remembered
 		}
 	};
-	/** How the selection glows, set by eye with sliders and remembered on this device. */
-	const [glow, setGlowState] = useState<Glow>(() => {
-		try {
-			return parseGlow(localStorage.getItem("inkroom.glow"));
-		} catch {
-			return DEFAULT_GLOW;
-		}
-	});
-	const changeGlow = (patch: Partial<Glow>) => {
-		const next = { ...glow, ...patch };
-		setGlowState(next);
-		rendererRef.current?.setGlow(next);
-		try {
-			localStorage.setItem("inkroom.glow", JSON.stringify(next));
-		} catch {
-			// private mode: the choice is just not remembered
-		}
-	};
 	/** Adds a picked, pasted or dropped image to the board (set up by the effect below). */
 	const insertImage = useRef<(file: Blob) => void>(() => {});
 	/** Puts the pages of a picked or dropped PDF on the board (set up by the effect below). */
@@ -255,7 +236,6 @@ export function BoardView({
 		imagesRef.current = images;
 		const canvas = new CanvasRenderer(committed, live, viewport, images);
 		canvas.ink = (c) => displayColor(c, currentTheme());
-		canvas.setGlow(glow);
 		rendererRef.current = canvas;
 		// The text font is bundled; once it has loaded the texts are measured and drawn again.
 		void Promise.all(
@@ -927,7 +907,6 @@ export function BoardView({
 				palette={[...COLORS, ...MORE_COLORS]}
 				anchor={panelAnchor}
 				onClose={typing ? undefined : () => setClosedFor(selectionKey)}
-				glow={{ value: glow, onChange: changeGlow }}
 				display={(c) => displayColor(c, currentTheme())}
 				onPreview={(patch) => changeStyle(patch, true)}
 				onChange={(patch) => changeStyle(patch, false)}
