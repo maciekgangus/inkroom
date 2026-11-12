@@ -21,6 +21,9 @@ const DASH_LABELS: Record<Dash, string> = {
 	natural: "",
 };
 
+/** The size of the tile a shut menu leaves behind. */
+const TILE = { w: 40, h: 40 };
+
 interface Props {
 	/** The selected elements; the panel shows the values of the first. */
 	elements: Stroke[];
@@ -38,6 +41,13 @@ interface Props {
 	onPreview?: (patch: StylePatch) => void;
 	/** Puts the panel away until something else is selected (the cross in its title). */
 	onClose?: () => void;
+	/** Shut: only a small tile is left by the object; pressing it calls `onExpand` (R-060). */
+	collapsed?: boolean;
+	onExpand?: () => void;
+	/** How far the person has dragged the menu from where it would stand, in px. */
+	offset?: { x: number; y: number };
+	/** Called while the menu is dragged by its title, with the new offset. */
+	onOffset?: (offset: { x: number; y: number }) => void;
 	/** A final change: a click, or a slider released. */
 	onChange: (patch: StylePatch) => void;
 }
@@ -51,9 +61,19 @@ export function PropertiesPanel({
 	anchor = null,
 	onPreview = () => {},
 	onClose,
+	collapsed = false,
+	onExpand,
+	offset = { x: 0, y: 0 },
+	onOffset,
 	onChange,
 }: Props) {
 	const ref = useRef<HTMLDivElement>(null);
+	/** Where a drag of the title began: the pointer and the offset then. */
+	const drag = useRef<{
+		x: number;
+		y: number;
+		from: { x: number; y: number };
+	} | null>(null);
 	const [size, setSize] = useState({ w: 0, h: 0 });
 	// Measured after every render, as the panel grows and shrinks with what it offers.
 	useLayoutEffect(() => {
@@ -63,8 +83,33 @@ export function PropertiesPanel({
 		if (w !== size.w || h !== size.h) setSize({ w, h });
 	});
 	if (elements.length === 0) return null;
-	const at = anchor
-		? panelPosition(anchor, size, { w: innerWidth, h: innerHeight })
+	const view = { w: innerWidth, h: innerHeight };
+	if (collapsed) {
+		const spot = anchor ? panelPosition(anchor, TILE, view) : null;
+		return (
+			<button
+				type="button"
+				class="panel-tile"
+				aria-label="Pokaż menu obiektu"
+				title="Pokaż menu obiektu"
+				style={
+					spot
+						? {
+								left: `${spot.left + offset.x}px`,
+								top: `${spot.top + offset.y}px`,
+							}
+						: undefined
+				}
+				onMouseDown={(e) => e.preventDefault()}
+				onClick={onExpand}
+			>
+				<Icon name="sliders" />
+			</button>
+		);
+	}
+	const spot = anchor ? panelPosition(anchor, size, view) : null;
+	const at = spot
+		? { left: spot.left + offset.x, top: spot.top + offset.y }
 		: null;
 	const can = capabilities(elements);
 	const now = styleOf(elements);
@@ -89,7 +134,28 @@ export function PropertiesPanel({
 				if ((e.target as HTMLElement).tagName !== "INPUT") e.preventDefault();
 			}}
 		>
-			<div class="panel-title">
+			<div
+				class="panel-title"
+				onPointerDown={(e) => {
+					if ((e.target as HTMLElement).closest(".panel-close")) return;
+					drag.current = { x: e.clientX, y: e.clientY, from: offset };
+					(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+				}}
+				onPointerMove={(e) => {
+					const d = drag.current;
+					if (d)
+						onOffset?.({
+							x: d.from.x + e.clientX - d.x,
+							y: d.from.y + e.clientY - d.y,
+						});
+				}}
+				onPointerUp={() => {
+					drag.current = null;
+				}}
+				onPointerCancel={() => {
+					drag.current = null;
+				}}
+			>
 				<span>{panelTitle(elements)}</span>
 				{onClose && (
 					<button

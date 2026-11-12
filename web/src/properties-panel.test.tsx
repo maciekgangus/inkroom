@@ -70,6 +70,66 @@ describe("PropertiesPanel", () => {
 		expect(has("prop fill none")).toBe(false);
 	});
 
+	describe("the menu of an object (R-060)", () => {
+		const anchor = { minX: 300, minY: 200, maxX: 500, maxY: 300 };
+		const mountWith = (extra: Record<string, unknown>) =>
+			render(
+				<PropertiesPanel
+					elements={[rect]}
+					colors={COLORS}
+					anchor={anchor}
+					onChange={onChange}
+					{...extra}
+				/>,
+				root,
+			);
+		const mouse = (el: Element, type: string, x: number, y: number) =>
+			el.dispatchEvent(
+				new MouseEvent(type, { bubbles: true, clientX: x, clientY: y }),
+			);
+
+		test("closed, it leaves a small tile by the object that opens the menu again", () => {
+			const onExpand = vi.fn();
+			mountWith({ collapsed: true, onExpand });
+			expect(root.querySelector(".properties")).toBeNull();
+			const tile = root.querySelector(".panel-tile") as HTMLButtonElement;
+			expect(tile).not.toBeNull();
+			expect(tile.getAttribute("aria-label")).toBe("Pokaż menu obiektu");
+			tile.click();
+			expect(onExpand).toHaveBeenCalledTimes(1);
+		});
+
+		test("the title is a handle: dragging it reports where the menu was put, from where it was", () => {
+			const onOffset = vi.fn();
+			mountWith({ offset: { x: 5, y: 7 }, onOffset });
+			const title = root.querySelector(".panel-title") as HTMLElement;
+			mouse(title, "pointerdown", 100, 100);
+			mouse(title, "pointermove", 130, 120);
+			expect(onOffset).toHaveBeenLastCalledWith({ x: 35, y: 27 });
+			mouse(title, "pointerup", 130, 120);
+			mouse(title, "pointermove", 200, 200);
+			expect(onOffset).toHaveBeenCalledTimes(1);
+		});
+
+		test("the offset moves the menu and the tile alike", () => {
+			mountWith({});
+			const at = (sel: string) => {
+				const e = root.querySelector(sel) as HTMLElement;
+				return [e.style.left, e.style.top];
+			};
+			const panel = at(".properties");
+			mountWith({ offset: { x: 30, y: -10 } });
+			const moved = at(".properties");
+			expect(parseFloat(moved[0]) - parseFloat(panel[0])).toBe(30);
+			expect(parseFloat(moved[1]) - parseFloat(panel[1])).toBe(-10);
+			mountWith({ collapsed: true, offset: { x: 30, y: -10 } });
+			expect(at(".panel-tile")).toEqual([
+				expect.stringMatching(/px$/),
+				expect.stringMatching(/px$/),
+			]);
+		});
+	});
+
 	test("a freehand stroke can switch to the natural pen and back to solid", () => {
 		mount([freehand]);
 		expect(has("prop dash solid")).toBe(true);

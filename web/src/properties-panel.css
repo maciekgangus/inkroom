@@ -253,3 +253,29 @@
 	background: var(--hover, rgba(0, 0, 0, 0.07));
 	color: inherit;
 }
+
+/* The title is the handle for moving the menu. */
+.properties .panel-title {
+	cursor: grab;
+	touch-action: none;
+}
+.properties .panel-title:active {
+	cursor: grabbing;
+}
+/* What a shut menu leaves by its object: a small tile that opens it again. */
+.panel-tile {
+	position: fixed;
+	right: 12px;
+	top: 64px;
+	z-index: 1;
+	width: 40px;
+	height: 40px;
+	padding: 0;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: color-mix(in srgb, var(--surface) 85%, transparent);
+	-webkit-backdrop-filter: blur(12px);
+	backdrop-filter: blur(12px);
+	box-shadow: var(--shadow);
+	color: var(--icon);
+}

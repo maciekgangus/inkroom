@@ -50,7 +50,7 @@ import { type Peer, type SocketLike, SyncClient } from "./sync/sync";
 import { TextEditor } from "./text-editor";
 import { currentTheme, displayColor, useTheme } from "./theme";
 import { toolCursor } from "./tool-cursor";
-import { COLORS, MORE_COLORS, SIZES, Toolbar } from "./toolbar";
+import { COLORS, SIZES, Toolbar } from "./toolbar";
 import { ZoomControls } from "./zoom-controls";
 
 /** Not crypto.randomUUID: it is missing on http:// pages (LAN testing on an iPad). */
@@ -150,7 +150,10 @@ export function BoardView({
 		if (moved) setEditorRect(next);
 	});
 	/** The selection whose panel was put away with the cross; another selection brings it back. */
-	const [closedFor, setClosedFor] = useState<string | null>(null);
+	/** The state of each object's menu, kept by the selection it belongs to: shut or open, and moved by how much (R-060). */
+	const menus = useRef(
+		new Map<string, { closed: boolean; x: number; y: number }>(),
+	);
 	const [, setTick] = useState(0); // bumped when the view changes, so the text field follows it
 	const ctl = useRef<Controller | null>(null);
 	const syncRef = useRef<SyncClient | null>(null);
@@ -312,7 +315,6 @@ export function BoardView({
 			setEditingText(el);
 		};
 		controller.onSelectionChange = () => {
-			setClosedFor(null); // a click on the object brings the panel back after its cross
 			setTick((t) => t + 1);
 		};
 		// A right click (R-029): the menu, but only with a mouse; tablets have none (R-028).
@@ -838,9 +840,18 @@ export function BoardView({
 		.join(",");
 	const panelElements = typing
 		? [draft as Stroke]
-		: ctl.current?.busy || (closedFor !== null && closedFor === selectionKey)
+		: ctl.current?.busy
 			? []
 			: (ctl.current?.selection ?? []);
+	const objMenu = menus.current.get(selectionKey) ?? {
+		closed: false,
+		x: 0,
+		y: 0,
+	};
+	const setObjMenu = (patch: Partial<typeof objMenu>) => {
+		menus.current.set(selectionKey, { ...objMenu, ...patch });
+		setTick((t) => t + 1);
+	};
 	const panelAnchor =
 		typing || editingText
 			? (editorRect ?? draftBox)
@@ -904,9 +915,12 @@ export function BoardView({
 			<PropertiesPanel
 				elements={panelElements}
 				colors={COLORS}
-				palette={[...COLORS, ...MORE_COLORS]}
 				anchor={panelAnchor}
-				onClose={typing ? undefined : () => setClosedFor(selectionKey)}
+				onClose={typing ? undefined : () => setObjMenu({ closed: true })}
+				collapsed={!typing && objMenu.closed}
+				onExpand={() => setObjMenu({ closed: false })}
+				offset={objMenu}
+				onOffset={(o) => setObjMenu(o)}
 				display={(c) => displayColor(c, currentTheme())}
 				onPreview={(patch) => changeStyle(patch, true)}
 				onChange={(patch) => changeStyle(patch, false)}
