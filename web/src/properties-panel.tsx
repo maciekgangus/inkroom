@@ -38,6 +38,8 @@ interface Props {
 	onPreview?: (patch: StylePatch) => void;
 	/** Puts the panel away until something else is selected (the cross in its title). */
 	onClose?: () => void;
+	/** A slider for tuning the selection glow by eye; shown only when given. */
+	glow?: { value: number; onChange: (px: number) => void };
 	/** A final change: a click, or a slider released. */
 	onChange: (patch: StylePatch) => void;
 }
@@ -51,6 +53,7 @@ export function PropertiesPanel({
 	anchor = null,
 	onPreview = () => {},
 	onClose,
+	glow,
 	onChange,
 }: Props) {
 	const ref = useRef<HTMLDivElement>(null);
@@ -182,6 +185,20 @@ export function PropertiesPanel({
 					onChange={(v) => onChange({ opacity: v / 100 })}
 				/>
 			</div>
+			{glow && (
+				<div class="row">
+					<Slider
+						icon="width"
+						label="prop glow"
+						min={0}
+						max={40}
+						value={glow.value}
+						unit=" px"
+						onInput={glow.onChange}
+						onChange={glow.onChange}
+					/>
+				</div>
+			)}
 		</div>
 	);
 }

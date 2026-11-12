@@ -393,8 +393,7 @@ export class Controller {
 		this.current = null;
 		this.renderer.drawLive(null);
 		this.renderer.redraw(this.board.strokes);
-		// A shape or line leaves the tool on Select, but is not selected itself (R-059).
-		if (done.kind) this.settings.tool = "select";
+		// Nothing is selected and the tool stays as it was, so the next shape is drawn at once (R-059).
 	}
 
 	pointerCancel(e: PointerInput): void {

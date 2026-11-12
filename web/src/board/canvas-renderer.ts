@@ -293,6 +293,8 @@ export class CanvasRenderer implements Renderer {
 	private selection: Frame | null = null;
 	private marquee: Rect | null = null;
 	private highlight: Stroke[] = [];
+	/** The blur of the selection glow in px (R-058). */
+	private glowBlur = 14;
 	/** Elements being dragged: drawn on the live layer, left out of the committed one (performance). */
 	private drag: {
 		ids: Set<string>;
@@ -372,6 +374,12 @@ export class CanvasRenderer implements Renderer {
 	setHighlight(els: Stroke[]): void {
 		this.highlight = els;
 		this.schedule(false, true);
+	}
+
+	/** Sets how far the selection glow spreads, in px (for tuning it by eye). */
+	setGlowBlur(px: number): void {
+		this.glowBlur = px;
+		this.schedule(true, true);
 	}
 
 	/** Shows the rubber band of a selection being dragged (null hides it). */
@@ -606,7 +614,7 @@ export class CanvasRenderer implements Renderer {
 		ctx.save();
 		ctx.shadowColor = GLOW_COLOR;
 		// The blur is in device pixels whatever the zoom; one small pass (R-058).
-		ctx.shadowBlur = 10 * dpr;
+		ctx.shadowBlur = this.glowBlur * dpr;
 		if (s.kind === "image") {
 			const r = imageRect(s);
 			withLook(ctx, s, () =>

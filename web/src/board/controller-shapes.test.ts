@@ -63,11 +63,11 @@ describe("the shape tool (R-033)", () => {
 		]);
 	});
 
-	test("the new shape is not selected, the tool becomes Select (R-059)", () => {
+	test("the new shape is not selected and the tool stays as it was (R-059)", () => {
 		settings.shape = "rhombus";
 		draw([300, 200]);
 		expect(c.selection).toEqual([]);
-		expect(settings.tool).toBe("select");
+		expect(settings.tool).toBe("shape");
 		expect(settings.shape).toBe("rhombus"); // the choice is kept for the next one
 	});
 
@@ -75,11 +75,12 @@ describe("the shape tool (R-033)", () => {
 		settings.tool = "line";
 		draw([300, 200]);
 		expect(c.selection).toEqual([]);
-		expect(settings.tool).toBe("select");
+		expect(settings.tool).toBe("line");
 	});
 
 	test("the shape just drawn is picked up by a click and then dragged", () => {
 		draw([300, 200]);
+		settings.tool = "select";
 		c.select(board.strokes[0].id);
 		c.pointerDown(ev(100, 120)); // on the left side, away from its middle handle
 		c.pointerMove(ev(100, 220));

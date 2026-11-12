@@ -180,6 +180,23 @@ export function BoardView({
 			// private mode: the choice is just not remembered
 		}
 	};
+	/** The blur of the selection glow, set by eye with a slider and remembered on this device. */
+	const [glow, setGlowState] = useState(() => {
+		try {
+			return Number(localStorage.getItem("inkroom.glow")) || 14;
+		} catch {
+			return 14;
+		}
+	});
+	const setGlow = (px: number) => {
+		setGlowState(px);
+		rendererRef.current?.setGlowBlur(px);
+		try {
+			localStorage.setItem("inkroom.glow", String(px));
+		} catch {
+			// private mode: the choice is just not remembered
+		}
+	};
 	/** Adds a picked, pasted or dropped image to the board (set up by the effect below). */
 	const insertImage = useRef<(file: Blob) => void>(() => {});
 	/** Puts the pages of a picked or dropped PDF on the board (set up by the effect below). */
@@ -236,6 +253,7 @@ export function BoardView({
 		imagesRef.current = images;
 		const canvas = new CanvasRenderer(committed, live, viewport, images);
 		canvas.ink = (c) => displayColor(c, currentTheme());
+		canvas.setGlowBlur(glow);
 		rendererRef.current = canvas;
 		// The text font is bundled; once it has loaded the texts are measured and drawn again.
 		void Promise.all(
@@ -907,6 +925,7 @@ export function BoardView({
 				palette={[...COLORS, ...MORE_COLORS]}
 				anchor={panelAnchor}
 				onClose={typing ? undefined : () => setClosedFor(selectionKey)}
+				glow={{ value: glow, onChange: setGlow }}
 				display={(c) => displayColor(c, currentTheme())}
 				onPreview={(patch) => changeStyle(patch, true)}
 				onChange={(patch) => changeStyle(patch, false)}

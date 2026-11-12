@@ -70,6 +70,26 @@ describe("PropertiesPanel", () => {
 		expect(has("prop fill none")).toBe(false);
 	});
 
+	test("a glow slider for tuning is there only when asked for (R-058)", () => {
+		mount([rect]);
+		expect(slider("prop glow")).toBeNull();
+		const onGlow = vi.fn();
+		render(
+			<PropertiesPanel
+				elements={[rect]}
+				colors={COLORS}
+				onChange={onChange}
+				glow={{ value: 14, onChange: onGlow }}
+			/>,
+			root,
+		);
+		const el = slider("prop glow") as HTMLInputElement;
+		expect(el.value).toBe("14");
+		move(el, 20, "input");
+		expect(onGlow).toHaveBeenLastCalledWith(20);
+		expect(onChange).not.toHaveBeenCalled();
+	});
+
 	test("a freehand stroke can switch to the natural pen and back to solid", () => {
 		mount([freehand]);
 		expect(has("prop dash solid")).toBe(true);
