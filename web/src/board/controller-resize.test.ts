@@ -169,12 +169,13 @@ describe("Controller resizing and group rotation", () => {
 		expect(lastFrame().rot).not.toBe(0);
 	});
 
-	test("it stays visible while stretching", () => {
+	test("it is hidden while stretching and back on release (R-057)", () => {
 		c.select("r1");
 		c.pointerDown(ev(300, 200));
 		c.pointerMove(ev(400, 240));
-		expect(frames[frames.length - 1]).not.toBeNull();
+		expect(frames[frames.length - 1]).toBeNull();
 		c.pointerUp(ev(400, 240));
+		expect(frames[frames.length - 1]).not.toBeNull();
 	});
 
 	test("the frame comes back even if the turn ended where it started", () => {

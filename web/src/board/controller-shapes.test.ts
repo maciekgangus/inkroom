@@ -63,23 +63,24 @@ describe("the shape tool (R-033)", () => {
 		]);
 	});
 
-	test("the new shape is selected and the tool becomes Select, so it can be moved at once", () => {
+	test("the new shape is not selected, the tool becomes Select (R-059)", () => {
 		settings.shape = "rhombus";
 		draw([300, 200]);
-		expect(c.selection.map((s) => s.id)).toEqual([board.strokes[0].id]);
+		expect(c.selection).toEqual([]);
 		expect(settings.tool).toBe("select");
 		expect(settings.shape).toBe("rhombus"); // the choice is kept for the next one
 	});
 
-	test("a line is selected after drawing too", () => {
+	test("a line is not selected after drawing either (R-059)", () => {
 		settings.tool = "line";
 		draw([300, 200]);
-		expect(c.selection).toHaveLength(1);
+		expect(c.selection).toEqual([]);
 		expect(settings.tool).toBe("select");
 	});
 
-	test("the shape just drawn can be dragged right away", () => {
+	test("the shape just drawn is picked up by a click and then dragged", () => {
 		draw([300, 200]);
+		c.select(board.strokes[0].id);
 		c.pointerDown(ev(100, 120)); // on the left side, away from its middle handle
 		c.pointerMove(ev(100, 220));
 		c.pointerUp(ev(100, 220));
@@ -140,7 +141,8 @@ describe("the shape tool (R-033)", () => {
 	});
 
 	test("starting a new drawing drops the selection at once", () => {
-		draw([300, 200]); // selects the rectangle, the tool becomes Select
+		draw([300, 200]);
+		c.select(board.strokes[0].id);
 		expect(c.selection).toHaveLength(1);
 		settings.tool = "shape";
 		c.pointerDown(ev(500, 100));
@@ -152,6 +154,7 @@ describe("the shape tool (R-033)", () => {
 		"also with the %s tool",
 		(tool) => {
 			draw([300, 200]);
+			c.select(board.strokes[0].id);
 			settings.tool = tool;
 			c.pointerDown(ev(500, 100));
 			expect(c.selection).toEqual([]);
@@ -161,6 +164,7 @@ describe("the shape tool (R-033)", () => {
 
 	test("the eraser and the hand leave the selection alone", () => {
 		draw([300, 200]);
+		c.select(board.strokes[0].id);
 		for (const tool of ["eraser", "pan"] as const) {
 			settings.tool = tool;
 			c.pointerDown(ev(900, 900));

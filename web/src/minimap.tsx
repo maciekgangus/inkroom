@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "preact/hooks";
 import type { Stroke } from "./board/board";
+import { paintElements } from "./board/canvas-renderer";
 import {
 	centreOn,
 	contentBounds,
@@ -8,12 +9,14 @@ import {
 	mapFit,
 	toMap,
 } from "./board/minimap";
-import { worldBounds } from "./board/transform";
 import type { Viewport } from "./board/viewport";
 
 /** The size of the map in px. */
 const MAP_W = 260;
 const MAP_H = 170;
+
+/** Everything counts as in view: the map shows the whole board. */
+const ALL = { minX: -1e9, minY: -1e9, maxX: 1e9, maxY: 1e9 };
 
 /** More elements than this are drawn as a thinned-out sample, so a huge board stays cheap. */
 const MAX_DRAWN = 4000;
@@ -56,16 +59,19 @@ export function Minimap({ strokes, viewport, screen, ink, onNavigate }: Props) {
 		ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 		ctx.clearRect(0, 0, MAP_W, MAP_H);
 		const step = Math.max(1, Math.ceil(strokes.length / MAX_DRAWN));
-		ctx.globalAlpha = 0.7;
-		for (let i = 0; i < strokes.length; i += step) {
-			const s = strokes[i];
-			const b = worldBounds(s);
-			const [x0, y0] = toMap(fit, b.minX, b.minY);
-			const [x1, y1] = toMap(fit, b.maxX, b.maxY);
-			ctx.fillStyle = s.kind === "image" ? "#9aa3b2" : ink(s.color);
-			ctx.fillRect(x0, y0, Math.max(x1 - x0, 2), Math.max(y1 - y0, 2));
-		}
-		ctx.globalAlpha = 1;
+		// The board itself in miniature (R-061): the same drawing as the screen, drawn small; photos
+		// stay boxes and text is tiny text.
+		const sample =
+			step === 1 ? strokes : strokes.filter((_, i) => i % step === 0);
+		ctx.save();
+		ctx.translate(fit.offX, fit.offY);
+		ctx.scale(fit.scale, fit.scale);
+		ctx.translate(-fit.minX, -fit.minY);
+		paintElements(ctx, sample, ALL, null, true, {
+			ink,
+			minWidth: 1.2 / fit.scale,
+		});
+		ctx.restore();
 		const [vx0, vy0] = toMap(fit, view.minX, view.minY);
 		const [vx1, vy1] = toMap(fit, view.maxX, view.maxY);
 		const accent =

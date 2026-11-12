@@ -113,6 +113,38 @@ describe("Controller selection look (R-034)", () => {
 		expect(after).not.toEqual(before);
 	});
 
+	test("the frame and every handle are hidden while a handle or the object is dragged (R-057)", () => {
+		c.select("r");
+		const f = renderer.setSelection.mock.lastCall?.[0];
+		const se = [f.cx + f.w / 2, f.cy + f.h / 2] as const;
+		c.pointerDown(ev(se[0], se[1]));
+		c.pointerMove(ev(se[0] + 60, se[1] + 30));
+		expect(renderer.setSelection).toHaveBeenLastCalledWith(null);
+		expect(renderer.setAdjust).toHaveBeenLastCalledWith(null);
+		expect(renderer.setVertices).toHaveBeenLastCalledWith(null);
+		c.pointerUp(ev(se[0] + 60, se[1] + 30));
+		expect(renderer.setSelection.mock.lastCall?.[0]).not.toBeNull();
+	});
+
+	test("the frame is hidden while the object is moved and returns on release (R-057)", () => {
+		c.select("r");
+		c.pointerDown(ev(500, 150));
+		c.pointerMove(ev(560, 190));
+		expect(renderer.setSelection).toHaveBeenLastCalledWith(null);
+		c.pointerUp(ev(560, 190));
+		expect(renderer.setSelection.mock.lastCall?.[0]).not.toBeNull();
+	});
+
+	test("the frame is hidden while a line end is dragged (R-057)", () => {
+		c.select("l");
+		c.pointerDown(ev(300, 100));
+		c.pointerMove(ev(340, 160));
+		expect(renderer.setSelection).toHaveBeenLastCalledWith(null);
+		expect(renderer.setEndpoints).toHaveBeenLastCalledWith(null);
+		c.pointerUp(ev(340, 160));
+		expect(renderer.setEndpoints.mock.lastCall?.[0]).not.toBeNull();
+	});
+
 	test("clearing the selection clears both", () => {
 		c.select("l");
 		c.select(null);
