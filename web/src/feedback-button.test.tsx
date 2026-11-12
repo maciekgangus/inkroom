@@ -68,8 +68,32 @@ describe("FeedbackButton (R-062)", () => {
 		expect(body.message).toBe("the eraser is too big");
 		expect(body.page).toBe(location.pathname);
 		expect(body.screen).toMatch(/^\d+x\d+$/);
-		expect(root.textContent).toContain("Dziękuję");
+		expect(q('[role="status"]')?.textContent).toContain("Dziękujemy za uwagę");
+		expect(q('[role="status"]')?.textContent).toContain("Zajmiemy się tym");
 		expect(q("textarea")).toBeNull();
+	});
+
+	test("the thanks can be closed", async () => {
+		await open();
+		await type("hello");
+		await submit();
+		expect(q('[role="status"]')).not.toBeNull();
+		await act(async () =>
+			q<HTMLButtonElement>('[role="status"] button')?.click(),
+		);
+		expect(q('[role="status"]')).toBeNull();
+	});
+
+	test("the thanks goes away by itself", async () => {
+		await act(async () => render(<FeedbackButton thanksMs={30} />, root));
+		await act(async () => q<HTMLButtonElement>("button")?.click());
+		await type("hello");
+		await submit();
+		expect(q('[role="status"]')).not.toBeNull();
+		await act(async () => {
+			await new Promise((r) => setTimeout(r, 80));
+		});
+		expect(q('[role="status"]')).toBeNull();
 	});
 
 	test("keeps the text and says so when sending fails", async () => {
