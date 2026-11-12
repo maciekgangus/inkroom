@@ -55,10 +55,8 @@ export function App({
 				<Home navigate={navigate} />
 			)}
 			<div class="corner">
-				<ThemeToggle />
-			</div>
-			<div class="corner feedback-corner">
 				<FeedbackButton />
+				<ThemeToggle />
 			</div>
 		</>
 	);
