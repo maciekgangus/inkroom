@@ -135,6 +135,8 @@ var migrations = []migration{
 	user_agent TEXT NOT NULL DEFAULT '',
 	screen TEXT NOT NULL DEFAULT ''
 )`),
+	// Notes the owner has read (R-064).
+	stmt("ALTER TABLE feedback ADD COLUMN read INTEGER NOT NULL DEFAULT 0"),
 }
 
 // migration changes the schema inside a transaction.
@@ -712,6 +714,7 @@ type Feedback struct {
 	Page      string
 	UserAgent string
 	Screen    string
+	Read      bool // the owner has read it (R-064)
 }
 
 // AddFeedback saves a note.
@@ -724,7 +727,7 @@ func (s *Store) AddFeedback(f Feedback) error {
 
 // ListFeedback returns the newest notes first, at most limit of them.
 func (s *Store) ListFeedback(limit int) ([]Feedback, error) {
-	rows, err := s.db.Query(`SELECT id, created, person, user_id, name, message, page, user_agent, screen
+	rows, err := s.db.Query(`SELECT id, created, person, user_id, name, message, page, user_agent, screen, read
 		FROM feedback ORDER BY created DESC, id DESC LIMIT ?`, limit)
 	if err != nil {
 		return nil, err
@@ -734,7 +737,7 @@ func (s *Store) ListFeedback(limit int) ([]Feedback, error) {
 	for rows.Next() {
 		var f Feedback
 		var created int64
-		if err := rows.Scan(&f.ID, &created, &f.Person, &f.UserID, &f.Name, &f.Message, &f.Page, &f.UserAgent, &f.Screen); err != nil {
+		if err := rows.Scan(&f.ID, &created, &f.Person, &f.UserID, &f.Name, &f.Message, &f.Page, &f.UserAgent, &f.Screen, &f.Read); err != nil {
 			return nil, err
 		}
 		f.At = time.Unix(created, 0)
@@ -749,4 +752,25 @@ func (s *Store) CountFeedbackSince(person string, since time.Time) (int, error) 
 	err := s.db.QueryRow(`SELECT COUNT(*) FROM feedback WHERE person = ? AND created > ?`,
 		person, unix(since)).Scan(&n)
 	return n, err
+}
+
+// SetFeedbackRead marks a note read or unread; ErrNotFound if there is no such note.
+func (s *Store) SetFeedbackRead(id int64, read bool) error {
+	return s.oneRow(s.db.Exec(`UPDATE feedback SET read = ? WHERE id = ?`, read, id))
+}
+
+// DeleteFeedback removes a note; ErrNotFound if there is no such note.
+func (s *Store) DeleteFeedback(id int64) error {
+	return s.oneRow(s.db.Exec(`DELETE FROM feedback WHERE id = ?`, id))
+}
+
+// oneRow turns the result of a write into ErrNotFound when it changed nothing.
+func (s *Store) oneRow(res sql.Result, err error) error {
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }

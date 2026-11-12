@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Inkroom: uwagi</title>
+<style>
+	:root { color-scheme: light dark; --bg:#f7f7f9; --card:#fff; --border:#e4e4ea; --text:#0f1117; --muted:#6c7080; --accent:#5b5bf0; --soft:#ececff; --danger:#e5484d; }
+	@media (prefers-color-scheme: dark) { :root { --bg:#0e0f13; --card:#17181d; --border:#2b2d37; --text:#ececf1; --muted:#9093a3; --accent:#8f8fff; --soft:#272850; } }
+	* { box-sizing: border-box; }
+	body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 Inter, system-ui, sans-serif; }
+	main { max-width: 760px; margin: 0 auto; padding: 24px 16px 64px; }
+	header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+	h1 { margin: 0; font-size: 20px; letter-spacing: -0.02em; }
+	.muted { color: var(--muted); font-size: 13px; }
+	button { font: inherit; font-size: 14px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); color: inherit; cursor: pointer; }
+	button:hover { border-color: var(--accent); }
+	button.danger { color: var(--danger); }
+	button.danger.sure { background: var(--danger); border-color: var(--danger); color: #fff; }
+	article { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; margin-bottom: 12px; }
+	article.unread { border-left: 4px solid var(--accent); }
+	article.read { opacity: .65; }
+	.meta { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-bottom: 8px; }
+	.msg { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0 0 12px; }
+	.actions { display: flex; gap: 8px; }
+	.empty { text-align: center; padding: 48px 0; }
+	.error { color: var(--danger); }
+	.tag { background: var(--soft); color: var(--accent); border-radius: 999px; padding: 0 8px; font-size: 12px; }
+</style>
+</head>
+<body>
+<main>
+	<header>
+		<h1>Uwagi z przycisku „!”</h1>
+		<span class="row">
+			<span id="count" class="muted"></span>
+			<button id="filter" type="button">Tylko nieprzeczytane</button>
+			<button id="reload" type="button">Odśwież</button>
+		</span>
+	</header>
+	<p id="error" class="error" role="alert" hidden></p>
+	<div id="list"></div>
+</main>
+<script>
+(function () {
+	var list = document.getElementById("list");
+	var errorBox = document.getElementById("error");
+	var count = document.getElementById("count");
+	var filterBtn = document.getElementById("filter");
+	var onlyUnread = false;
+	var notes = [];
+
+	function api(method, path, body) {
+		return fetch(path, {
+			method: method,
+			headers: { "X-Admin-Request": "1", "Content-Type": "application/json" },
+			body: body === undefined ? undefined : JSON.stringify(body)
+		}).then(function (r) {
+			if (!r.ok) throw new Error("Błąd " + r.status);
+			return r.status === 204 ? null : r.json();
+		});
+	}
+	function fail(e) { errorBox.hidden = false; errorBox.textContent = e.message; }
+	function el(tag, cls, text) {
+		var n = document.createElement(tag);
+		if (cls) n.className = cls;
+		if (text !== undefined) n.textContent = text;
+		return n;
+	}
+	function when(iso) {
+		return new Date(iso).toLocaleString("pl-PL", { dateStyle: "medium", timeStyle: "short" });
+	}
+	function render() {
+		var shown = notes.filter(function (n) { return !onlyUnread || !n.read; });
+		var unread = notes.filter(function (n) { return !n.read; }).length;
+		count.textContent = unread + " nieprzeczytanych z " + notes.length;
+		filterBtn.textContent = onlyUnread ? "Wszystkie" : "Tylko nieprzeczytane";
+		list.textContent = "";
+		if (shown.length === 0) {
+			list.appendChild(el("p", "empty muted", notes.length ? "Brak nieprzeczytanych uwag." : "Brak uwag."));
+			return;
+		}
+		shown.forEach(function (n) {
+			var card = el("article", n.read ? "read" : "unread");
+			var meta = el("div", "meta muted");
+			meta.appendChild(el("span", "", when(n.at)));
+			meta.appendChild(el("strong", "", n.name || "gość"));
+			if (n.account) meta.appendChild(el("span", "tag", "konto"));
+			if (n.page) meta.appendChild(el("span", "", n.page));
+			if (n.screen) meta.appendChild(el("span", "", n.screen));
+			card.appendChild(meta);
+			card.appendChild(el("p", "msg", n.message));
+			if (n.userAgent) card.appendChild(el("p", "muted", n.userAgent));
+			var actions = el("div", "actions");
+			var read = el("button", "", n.read ? "Oznacz jako nieprzeczytaną" : "Oznacz jako przeczytaną");
+			read.type = "button";
+			read.onclick = function () {
+				api("POST", "/api/admin/feedback/" + n.id + "/read", { read: !n.read })
+					.then(function () { n.read = !n.read; render(); }, fail);
+			};
+			var del = el("button", "danger", "Usuń");
+			del.type = "button";
+			del.onclick = function () {
+				if (!del.classList.contains("sure")) {
+					del.classList.add("sure");
+					del.textContent = "Na pewno usunąć?";
+					return;
+				}
+				api("DELETE", "/api/admin/feedback/" + n.id)
+					.then(function () { notes = notes.filter(function (x) { return x !== n; }); render(); }, fail);
+			};
+			actions.appendChild(read);
+			actions.appendChild(del);
+			card.appendChild(actions);
+			list.appendChild(card);
+		});
+	}
+	function load() {
+		errorBox.hidden = true;
+		api("GET", "/api/admin/feedback").then(function (all) { notes = all; render(); }, fail);
+	}
+	filterBtn.onclick = function () { onlyUnread = !onlyUnread; render(); };
+	document.getElementById("reload").onclick = load;
+	load();
+})();
+</script>
+</body>
+</html>

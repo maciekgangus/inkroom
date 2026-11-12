@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/maciekgangus/inkroom/server/internal/auth"
+	"github.com/maciekgangus/inkroom/server/internal/cfaccess"
 	"github.com/maciekgangus/inkroom/server/internal/room"
 	"github.com/maciekgangus/inkroom/server/internal/store"
 )
@@ -21,6 +22,8 @@ type app struct {
 	staticDir string
 	// turnstileSiteKey is the public key of the registration captcha, given to the client.
 	turnstileSiteKey string
+	// admin checks the Cloudflare Access token of the admin page (R-064); nil: the page is off.
+	admin *cfaccess.Verifier
 }
 
 // newApp wires the services together. Call Close before closing the store.
@@ -73,6 +76,10 @@ func (a *app) Handler() http.Handler {
 	mux.HandleFunc("POST /api/boards/{id}/images", a.uploadImage)
 	mux.HandleFunc("GET /api/boards/{id}/images/{image}", a.getImage)
 	mux.HandleFunc("POST /api/feedback", a.sendFeedback)
+	mux.HandleFunc("GET /admin", a.adminOnly(a.adminPage))
+	mux.HandleFunc("GET /api/admin/feedback", a.adminOnly(a.adminListFeedback))
+	mux.HandleFunc("POST /api/admin/feedback/{id}/read", a.adminChange(a.adminMarkFeedback))
+	mux.HandleFunc("DELETE /api/admin/feedback/{id}", a.adminChange(a.adminDeleteFeedback))
 	mux.HandleFunc("GET /api/config", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"turnstileSiteKey": a.turnstileSiteKey})
 	})
