@@ -10,6 +10,13 @@ describe("toolCursor", () => {
 		expect(toolCursor("pan")).toBe("grab");
 	});
 
+	test("while turning, the cursor is a turning arrow whatever the tool", () => {
+		const turn = toolCursor("select", false, true);
+		expect(turn).toMatch(/^url\("data:image\/svg\+xml[^"]+"\) 12 12, /);
+		expect(toolCursor("pen", false, true)).toBe(turn);
+		expect(turn).not.toBe(toolCursor("select"));
+	});
+
 	test("the hand closes while the board is being dragged", () => {
 		expect(toolCursor("pan", true)).toBe("grabbing");
 		expect(toolCursor("pen", true)).toBe("grabbing"); // a right-button pan with any tool

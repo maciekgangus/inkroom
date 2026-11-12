@@ -7,7 +7,13 @@ import {
 	styleOf,
 } from "./board/style";
 import type { Rect } from "./board/viewport";
-import { panelPosition, panelTitle } from "./floating-panel";
+import {
+	isVisible,
+	panelTitle,
+	pickSide,
+	type Side,
+	sidePosition,
+} from "./floating-panel";
 import { Icon, type IconName } from "./icon";
 import { Slider } from "./slider";
 import "./properties-panel.css";
@@ -20,6 +26,10 @@ const DASH_LABELS: Record<Dash, string> = {
 	dotted: "┈",
 	natural: "",
 };
+
+/** The most the menu is wide, and the side of its tile, in px. */
+const MENU_WIDTH = 270;
+const TILE = 40;
 
 interface Props {
 	/** The selected elements; the panel shows the values of the first. */
@@ -38,6 +48,9 @@ interface Props {
 	onPreview?: (patch: StylePatch) => void;
 	/** Puts the panel away until something else is selected (the cross in its title). */
 	onClose?: () => void;
+	/** Shut: only a small tile is left by the object; pressing it calls `onExpand` (R-060). */
+	collapsed?: boolean;
+	onExpand?: () => void;
 	/** A final change: a click, or a slider released. */
 	onChange: (patch: StylePatch) => void;
 }
@@ -51,10 +64,28 @@ export function PropertiesPanel({
 	anchor = null,
 	onPreview = () => {},
 	onClose,
+	collapsed = false,
+	onExpand,
 	onChange,
 }: Props) {
 	const ref = useRef<HTMLDivElement>(null);
+	/** How far the menu has been dragged from its place by the object: for the moment only. */
+	const [moved, setMoved] = useState({ x: 0, y: 0, key: "" });
+	/** Where a drag of the title began: the pointer and the offset then. */
+	const drag = useRef<{
+		x: number;
+		y: number;
+		from: { x: number; y: number };
+	} | null>(null);
 	const [size, setSize] = useState({ w: 0, h: 0 });
+	// Shut and opened again, or on another object, the menu is back by its object (R-060): the move
+	// belongs to the object and to one opening of the menu (the key changes with each).
+	const turn = useRef({ collapsed, n: 0 });
+	if (turn.current.collapsed !== collapsed)
+		turn.current = { collapsed, n: turn.current.n + 1 };
+	const opening = turn.current.n;
+	const objectKey = `${elements.map((e) => e.id).join(",")}|${opening}`;
+	const offset = moved.key === objectKey ? moved : { x: 0, y: 0 };
 	// Measured after every render, as the panel grows and shrinks with what it offers.
 	useLayoutEffect(() => {
 		const el = ref.current;
@@ -62,9 +93,44 @@ export function PropertiesPanel({
 		const [w, h] = [el.offsetWidth, el.offsetHeight];
 		if (w !== size.w || h !== size.h) setSize({ w, h });
 	});
+	/** The side of the object the menu and its tile stand on: chosen once per object. */
+	const sideOf = useRef<{ key: string; side: Side } | null>(null);
 	if (elements.length === 0) return null;
-	const at = anchor
-		? panelPosition(anchor, size, { w: innerWidth, h: innerHeight })
+	const view = { w: innerWidth, h: innerHeight };
+	const ids = elements.map((e) => e.id).join(",");
+	if (anchor && sideOf.current?.key !== ids)
+		sideOf.current = { key: ids, side: pickSide(anchor, MENU_WIDTH, view) };
+	const side = sideOf.current?.side ?? "right";
+	// An object that is off the screen takes its menu and tile with it.
+	if (anchor && !isVisible(anchor, view)) return null;
+	if (collapsed) {
+		const spot = anchor
+			? sidePosition(anchor, { w: TILE, h: TILE }, view, side)
+			: null;
+		return (
+			<button
+				type="button"
+				class="panel-tile"
+				aria-label="Pokaż menu obiektu"
+				title="Pokaż menu obiektu"
+				style={
+					spot
+						? {
+								left: `${spot.left}px`,
+								top: `${spot.top}px`,
+							}
+						: undefined
+				}
+				onMouseDown={(e) => e.preventDefault()}
+				onClick={onExpand}
+			>
+				<Icon name="sliders" />
+			</button>
+		);
+	}
+	const spot = anchor ? sidePosition(anchor, size, view, side) : null;
+	const at = spot
+		? { left: spot.left + offset.x, top: spot.top + offset.y }
 		: null;
 	const can = capabilities(elements);
 	const now = styleOf(elements);
@@ -89,7 +155,29 @@ export function PropertiesPanel({
 				if ((e.target as HTMLElement).tagName !== "INPUT") e.preventDefault();
 			}}
 		>
-			<div class="panel-title">
+			<div
+				class="panel-title"
+				onPointerDown={(e) => {
+					if ((e.target as HTMLElement).closest(".panel-close")) return;
+					drag.current = { x: e.clientX, y: e.clientY, from: offset };
+					(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+				}}
+				onPointerMove={(e) => {
+					const d = drag.current;
+					if (d)
+						setMoved({
+							x: d.from.x + e.clientX - d.x,
+							y: d.from.y + e.clientY - d.y,
+							key: objectKey,
+						});
+				}}
+				onPointerUp={() => {
+					drag.current = null;
+				}}
+				onPointerCancel={() => {
+					drag.current = null;
+				}}
+			>
 				<span>{panelTitle(elements)}</span>
 				{onClose && (
 					<button
@@ -207,6 +295,10 @@ function ColorBlock({
 	onPick: (color: string | null) => void;
 	allowNone?: boolean;
 }) {
+	// A colour that is not on the palette sits on the last tile, which then shows it.
+	// The fill row has the "none" tile too, so it shows one colour fewer and both rows have as many tiles.
+	const shown = allowNone ? colors.slice(0, -1) : colors;
+	const own = current !== null && !shown.includes(current);
 	return (
 		<div class="color-block">
 			<div class="color-current">
@@ -237,7 +329,7 @@ function ColorBlock({
 						<Icon name="no-fill" />
 					</button>
 				)}
-				{colors.map((c) => (
+				{shown.map((c) => (
 					<button
 						type="button"
 						key={c}
@@ -247,7 +339,11 @@ function ColorBlock({
 						onClick={() => onPick(c)}
 					/>
 				))}
-				<label class="swatch custom" title="Własny kolor">
+				<label
+					class={`swatch custom${own ? " active" : ""}`}
+					title="Własny kolor"
+					style={own && current ? { background: display(current) } : undefined}
+				>
 					<input
 						type="color"
 						aria-label={`${prefix} custom`}
@@ -256,7 +352,7 @@ function ColorBlock({
 						}
 						onInput={(e) => onPick((e.currentTarget as HTMLInputElement).value)}
 					/>
-					<Icon name="plus" />
+					{!own && <Icon name="plus" />}
 				</label>
 			</div>
 		</div>

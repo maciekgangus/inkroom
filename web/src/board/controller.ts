@@ -232,6 +232,23 @@ export class Controller {
 		return this.panFrom !== null;
 	}
 
+	/** True while a selection is being turned by its handle. */
+	get rotating(): boolean {
+		return this.edit?.mode === "rotate";
+	}
+
+	/** True when the pointer (screen px) is on the turning handle of the selection. */
+	overRotate(clientX: number, clientY: number): boolean {
+		if (this.edit || this.settings.tool !== "select") return false;
+		const frame = this.frameFor(this.selection, this.groupRot);
+		if (!frame) return false;
+		const px = 1 / this.viewport.scale;
+		const p = this.viewport.toWorld(clientX, clientY);
+		return (
+			hitFrameHandle(frame, p, HANDLE_PX * px, ROT_OFFSET_PX * px) === "rot"
+		);
+	}
+
 	/** True while a pen or mouse pointer is down (touch gestures must then be ignored). */
 	get busy(): boolean {
 		return this.activeId !== null;

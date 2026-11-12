@@ -50,12 +50,15 @@ import { type Peer, type SocketLike, SyncClient } from "./sync/sync";
 import { TextEditor } from "./text-editor";
 import { currentTheme, displayColor, useTheme } from "./theme";
 import { toolCursor } from "./tool-cursor";
-import { COLORS, MORE_COLORS, SIZES, Toolbar } from "./toolbar";
+import { COLORS, SIZES, Toolbar } from "./toolbar";
 import { ZoomControls } from "./zoom-controls";
 
 /** Not crypto.randomUUID: it is missing on http:// pages (LAN testing on an iPad). */
 export const newId = () =>
 	`${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+
+/** How long after the last change of the view it still counts as moving. */
+const VIEW_SETTLE_MS = 200;
 
 const ZOOM_STEP = 1.25;
 const LINE_HEIGHT_PX = 16;
@@ -150,7 +153,8 @@ export function BoardView({
 		if (moved) setEditorRect(next);
 	});
 	/** The selection whose panel was put away with the cross; another selection brings it back. */
-	const [closedFor, setClosedFor] = useState<string | null>(null);
+	/** The selection whose menu is open: by default only the tile is there, the menu opens on it (R-060). */
+	const [menuOpenFor, setMenuOpenFor] = useState<string | null>(null);
 	const [, setTick] = useState(0); // bumped when the view changes, so the text field follows it
 	const ctl = useRef<Controller | null>(null);
 	const syncRef = useRef<SyncClient | null>(null);
@@ -158,6 +162,8 @@ export function BoardView({
 	const theme = useTheme();
 	/** Repaints after the view changed (set up by the effect below). */
 	const viewChanged = useRef<() => void>(() => {});
+	/** Until when the view counts as moving, so the menu stays away (R-060). */
+	const viewMovingUntil = useRef(0);
 	const boardRef = useRef<Board | null>(null);
 	const imagesRef = useRef<ImageCache | null>(null);
 	const [boardMenu, setBoardMenu] = useState<MenuAt | null>(null);
@@ -217,6 +223,7 @@ export function BoardView({
 	);
 	/** Shows the cursor of the active tool on the board (set up by the effect below). */
 	const applyCursor = useRef<() => void>(() => {});
+	const setOverTurn = useRef<(over: boolean) => void>(() => {});
 	/** The open right-click menu: where, what is under it and the board position clicked. */
 	const [menu, setMenu] = useState<{
 		x: number;
@@ -284,8 +291,17 @@ export function BoardView({
 		);
 		ctl.current = controller;
 		let shownCursor = "";
+		/** Whether the pointer rests on the turning handle (set as it moves). */
+		let overTurn = false;
+		setOverTurn.current = (v) => {
+			overTurn = v;
+		};
 		applyCursor.current = () => {
-			const want = toolCursor(settings.tool, controller.panning);
+			const want = toolCursor(
+				settings.tool,
+				controller.panning,
+				controller.rotating || overTurn,
+			);
 			if (want === shownCursor) return;
 			shownCursor = want;
 			live.style.cursor = want;
@@ -312,7 +328,6 @@ export function BoardView({
 			setEditingText(el);
 		};
 		controller.onSelectionChange = () => {
-			setClosedFor(null); // a click on the object brings the panel back after its cross
 			setTick((t) => t + 1);
 		};
 		// A right click (R-029): the menu, but only with a mouse; tablets have none (R-028).
@@ -327,7 +342,15 @@ export function BoardView({
 		let cancelled = false;
 		const viewSaver = createViewSaver((view) => void saveView(boardId, view));
 		let viewReady = false;
+		let viewSettle: ReturnType<typeof setTimeout> | undefined;
+		// What stands by the object is put away while the view moves, and comes back shortly after.
+		const viewMoving = () => {
+			viewMovingUntil.current = Date.now() + VIEW_SETTLE_MS;
+			clearTimeout(viewSettle);
+			viewSettle = setTimeout(() => setTick((t) => t + 1), VIEW_SETTLE_MS);
+		};
 		const changed = () => {
+			viewMoving();
 			canvas.redraw(board.strokes);
 			setScale(viewport.scale);
 			setTick((t) => t + 1);
@@ -487,6 +510,8 @@ export function BoardView({
 			lastPointer = [x, y];
 			sync.cursorMove(x, y);
 			controller.pointerMove(e);
+			if (controller.panning) viewMoving(); // the hand, the right and the middle button
+			setOverTurn.current(controller.overRotate(e.clientX, e.clientY));
 			applyCursor.current(); // a safety net: whichever way the tool changed, it shows
 		};
 		const leave = (e: PointerEvent) => {
@@ -838,7 +863,7 @@ export function BoardView({
 		.join(",");
 	const panelElements = typing
 		? [draft as Stroke]
-		: ctl.current?.busy || (closedFor !== null && closedFor === selectionKey)
+		: ctl.current?.busy || Date.now() < viewMovingUntil.current
 			? []
 			: (ctl.current?.selection ?? []);
 	const panelAnchor =
@@ -904,9 +929,10 @@ export function BoardView({
 			<PropertiesPanel
 				elements={panelElements}
 				colors={COLORS}
-				palette={[...COLORS, ...MORE_COLORS]}
 				anchor={panelAnchor}
-				onClose={typing ? undefined : () => setClosedFor(selectionKey)}
+				onClose={typing ? undefined : () => setMenuOpenFor(null)}
+				collapsed={!typing && !editingText && menuOpenFor !== selectionKey}
+				onExpand={() => setMenuOpenFor(selectionKey)}
 				display={(c) => displayColor(c, currentTheme())}
 				onPreview={(patch) => changeStyle(patch, true)}
 				onChange={(patch) => changeStyle(patch, false)}

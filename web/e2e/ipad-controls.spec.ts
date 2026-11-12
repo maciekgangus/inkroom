@@ -80,6 +80,9 @@ test.describe("everyday drawing", () => {
 		await pen(page, [200, 500], [500, 500]);
 		await chooseTool(page, "select");
 		await pen(page, [350, 500], [350, 500]); // a tap of the pencil
+		// Only the tile is there at first; the menu opens on a tap on it (R-060).
+		await expect(page.locator(".properties")).toHaveCount(0);
+		await page.locator(".panel-tile").tap();
 		await expect(page.locator(".properties")).toBeVisible();
 		await onScreen(page, ".properties");
 	});
@@ -90,7 +93,7 @@ test.describe("everyday drawing", () => {
 		await pen(page, [200, from], [500, from]);
 		await chooseTool(page, "select");
 		await pen(page, [350, from], [350, from]);
-		await expect(page.locator(".properties")).toBeVisible();
+		await expect(page.locator(".panel-tile")).toBeVisible();
 		await expect
 			.poll(() => inkIn(page, 150, from - 30, 400, 60))
 			.toBeGreaterThan(0);
@@ -108,8 +111,9 @@ test.describe("everyday drawing", () => {
 		await pen(page, [200, y], [500, y]);
 		await chooseTool(page, "select");
 		await pen(page, [350, y], [350, y]);
-		await expect(page.locator(".properties")).toBeVisible();
+		await expect(page.locator(".panel-tile")).toBeVisible();
 		await pen(page, [100, Math.round(vh * 0.8)], [100, Math.round(vh * 0.8)]);
+		await expect(page.locator(".panel-tile")).toHaveCount(0);
 		await expect(page.locator(".properties")).toHaveCount(0);
 	});
 });

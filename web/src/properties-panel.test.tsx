@@ -1,10 +1,11 @@
 import { render } from "preact";
+import { act } from "preact/test-utils";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { Stroke } from "./board/board";
 import type { StylePatch } from "./board/style";
 import { PropertiesPanel } from "./properties-panel";
 
-const COLORS = ["#111111", "#d32f2f", "#1976d2"];
+const COLORS = ["#111111", "#d32f2f", "#1976d2", "#388e3c", "#f57c00"];
 const base = { id: "e", authorId: "a", color: "#111111", size: 5, z: 0 };
 const pts = (...p: [number, number][]) =>
 	p.map(([x, y]) => [x, y, 0.5] as [number, number, number]);
@@ -68,6 +69,195 @@ describe("PropertiesPanel", () => {
 		expect(slider("prop opacity")).not.toBeNull();
 		expect(has("prop dash dashed")).toBe(true);
 		expect(has("prop fill none")).toBe(false);
+	});
+
+	describe("the menu of an object (R-060)", () => {
+		const anchor = { minX: 300, minY: 200, maxX: 500, maxY: 300 };
+		const mountWith = (extra: Record<string, unknown>) =>
+			render(
+				<PropertiesPanel
+					elements={[rect]}
+					colors={COLORS}
+					anchor={anchor}
+					onChange={onChange}
+					{...extra}
+				/>,
+				root,
+			);
+		const mouse = (el: Element, type: string, x: number, y: number) =>
+			el.dispatchEvent(
+				new MouseEvent(type, { bubbles: true, clientX: x, clientY: y }),
+			);
+
+		test("closed, it leaves a small tile by the object that opens the menu again", () => {
+			const onExpand = vi.fn();
+			mountWith({ collapsed: true, onExpand });
+			expect(root.querySelector(".properties")).toBeNull();
+			const tile = root.querySelector(".panel-tile") as HTMLButtonElement;
+			expect(tile).not.toBeNull();
+			expect(tile.getAttribute("aria-label")).toBe("Pokaż menu obiektu");
+			tile.click();
+			expect(onExpand).toHaveBeenCalledTimes(1);
+		});
+
+		const at = (sel: string) => {
+			const e = root.querySelector(sel) as HTMLElement;
+			return [e.style.left, e.style.top];
+		};
+
+		test("the title is a handle: dragging it moves the menu", async () => {
+			mountWith({});
+			const home = at(".properties");
+			const title = root.querySelector(".panel-title") as HTMLElement;
+			await act(async () => void mouse(title, "pointerdown", 100, 100));
+			await act(async () => void mouse(title, "pointermove", 130, 120));
+			const moved = at(".properties");
+			expect(parseFloat(moved[0]) - parseFloat(home[0])).toBe(30);
+			expect(parseFloat(moved[1]) - parseFloat(home[1])).toBe(20);
+			await act(async () => void mouse(title, "pointerup", 130, 120));
+			await act(async () => void mouse(title, "pointermove", 200, 200));
+			expect(at(".properties")).toEqual(moved);
+		});
+
+		test("the move is only for the moment: shut and opened again, the menu is back by its object", async () => {
+			mountWith({});
+			const home = at(".properties");
+			const title = root.querySelector(".panel-title") as HTMLElement;
+			await act(async () => void mouse(title, "pointerdown", 100, 100));
+			await act(async () => void mouse(title, "pointermove", 160, 140));
+			await act(async () => void mouse(title, "pointerup", 160, 140));
+			expect(at(".properties")).not.toEqual(home);
+			await act(async () => mountWith({ collapsed: true }));
+			await act(async () => mountWith({ collapsed: false }));
+			expect(at(".properties")).toEqual(home);
+		});
+
+		test("the tile stays where it is by the object", async () => {
+			mountWith({ collapsed: true });
+			const tile = at(".panel-tile");
+			await act(async () => mountWith({ collapsed: false }));
+			await act(async () => mountWith({ collapsed: true }));
+			expect(at(".panel-tile")).toEqual(tile);
+		});
+	});
+
+	describe("its place by the object (R-060)", () => {
+		const px = (v: string) => parseFloat(v);
+		const spot = (sel: string) => {
+			const e = root.querySelector(sel) as HTMLElement;
+			return { left: px(e.style.left), top: px(e.style.top) };
+		};
+		const mountAt = (anchor: object, collapsed = false) =>
+			render(
+				<PropertiesPanel
+					elements={[rect]}
+					colors={COLORS}
+					anchor={anchor as never}
+					collapsed={collapsed}
+					onChange={onChange}
+				/>,
+				root,
+			);
+
+		test("the menu and the tile stand on the right of the object, level with its top", () => {
+			mountAt({ minX: 300, minY: 200, maxX: 500, maxY: 300 });
+			expect(spot(".properties").left).toBeGreaterThan(500);
+			expect(spot(".properties").top).toBe(200);
+			mountAt({ minX: 300, minY: 200, maxX: 500, maxY: 300 }, true);
+			expect(spot(".panel-tile").left).toBeGreaterThan(500);
+			expect(spot(".panel-tile").top).toBe(200);
+		});
+
+		test("on the left when there is no room on the right", () => {
+			const a = {
+				minX: innerWidth - 220,
+				minY: 200,
+				maxX: innerWidth - 20,
+				maxY: 300,
+			};
+			mountAt(a);
+			expect(spot(".properties").left).toBeLessThan(a.minX);
+		});
+
+		test("it moves with the object and is gone when the object is off the screen", async () => {
+			mountAt({ minX: 300, minY: 200, maxX: 500, maxY: 300 });
+			const here = spot(".properties");
+			await act(async () =>
+				mountAt({ minX: 400, minY: 200, maxX: 600, maxY: 300 }),
+			);
+			expect(spot(".properties").left - here.left).toBe(100);
+			await act(async () =>
+				mountAt({
+					minX: innerWidth + 50,
+					minY: 200,
+					maxX: innerWidth + 250,
+					maxY: 300,
+				}),
+			);
+			expect(root.querySelector(".properties")).toBeNull();
+			await act(async () =>
+				mountAt(
+					{
+						minX: innerWidth + 50,
+						minY: 200,
+						maxX: innerWidth + 250,
+						maxY: 300,
+					},
+					true,
+				),
+			);
+			expect(root.querySelector(".panel-tile")).toBeNull();
+		});
+
+		test("the side does not change while the object stays selected", async () => {
+			mountAt({ minX: 300, minY: 200, maxX: 500, maxY: 300 });
+			expect(spot(".properties").left).toBeGreaterThan(500);
+			// pushed to the right edge: it is held on the screen, but does not jump to the left side
+			await act(async () =>
+				mountAt({
+					minX: innerWidth - 220,
+					minY: 200,
+					maxX: innerWidth - 20,
+					maxY: 300,
+				}),
+			);
+			expect(spot(".properties").left).toBeGreaterThan(innerWidth - 20 - 270);
+		});
+	});
+
+	describe("colour tiles (R-060)", () => {
+		const FIVE = ["#111111", "#d32f2f", "#1976d2", "#388e3c", "#f57c00"];
+		const counts = () =>
+			[...root.querySelectorAll(".palette-grid")].map((g) => g.children.length);
+
+		test("every row has the same number of tiles, the fill row too", () => {
+			render(
+				<PropertiesPanel
+					elements={[rect]}
+					colors={FIVE}
+					onChange={onChange}
+					onPreview={onPreview}
+				/>,
+				root,
+			);
+			const n = counts();
+			expect(n).toHaveLength(2);
+			expect(n[0]).toBe(n[1]);
+		});
+
+		test("a colour of the person's own shows on the last tile, which is then marked", () => {
+			render(
+				<PropertiesPanel
+					elements={[{ ...rect, color: "#abcdef" }]}
+					colors={FIVE}
+					onChange={onChange}
+				/>,
+				root,
+			);
+			const custom = root.querySelector(".swatch.custom") as HTMLElement;
+			expect(custom.classList.contains("active")).toBe(true);
+			expect(custom.style.background).not.toBe("");
+		});
 	});
 
 	test("a freehand stroke can switch to the natural pen and back to solid", () => {
@@ -203,7 +393,8 @@ describe("PropertiesPanel", () => {
 		test("is placed near the object it edits", () => {
 			const panel = mountAt([rect], box);
 			expect(panel.classList.contains("floating")).toBe(true);
-			expect(panel.style.top).toBe("312px");
+			expect(panel.style.top).toBe("200px"); // level with the top of the object
+			expect(parseFloat(panel.style.left)).toBeGreaterThan(600); // on its right
 		});
 
 		test("without an anchor it keeps the corner it always had", () => {

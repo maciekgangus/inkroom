@@ -178,6 +178,19 @@ describe("Controller resizing and group rotation", () => {
 		expect(frames[frames.length - 1]).not.toBeNull();
 	});
 
+	test("the pointer is known to be on the turning handle, and a turn is under way after pressing it (R-057)", () => {
+		c.select("r1");
+		const f = lastFrame();
+		const h = rotationHandlePos(f, 28);
+		expect(c.overRotate(h[0], h[1])).toBe(true);
+		expect(c.overRotate(f.cx, f.cy)).toBe(false);
+		expect(c.rotating).toBe(false);
+		c.pointerDown(ev(h[0], h[1]));
+		expect(c.rotating).toBe(true);
+		c.pointerUp(ev(h[0], h[1]));
+		expect(c.rotating).toBe(false);
+	});
+
 	test("the frame comes back even if the turn ended where it started", () => {
 		c.select("r1");
 		const f = lastFrame();
