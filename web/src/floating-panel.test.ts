@@ -1,6 +1,11 @@
 import { describe, expect, test } from "vitest";
 import type { Stroke } from "./board/board";
-import { panelPosition, panelTitle, tilePosition } from "./floating-panel";
+import {
+	isVisible,
+	panelTitle,
+	pickSide,
+	sidePosition,
+} from "./floating-panel";
 
 const view = { w: 1500, h: 800 };
 const size = { w: 280, h: 200 };
@@ -11,49 +16,48 @@ const rect = (minX: number, minY: number, maxX: number, maxY: number) => ({
 	maxY,
 });
 
-describe("panelPosition (R-042)", () => {
-	test("sits below the object, centred on it", () => {
-		const p = panelPosition(rect(400, 200, 600, 300), size, view);
-		expect(p).toMatchObject({ left: 360, top: 312, placement: "below" });
+describe("where the menu and its tile stand (R-060)", () => {
+	const o = rect(400, 200, 600, 300);
+
+	test("on the right of the object, level with its top, clear of the handles", () => {
+		const p = sidePosition(o, size, view, "right");
+		expect(p.left).toBeGreaterThan(600 + 16);
+		expect(p.left).toBeLessThan(600 + 60);
+		expect(p.top).toBe(200);
 	});
 
-	test("goes above when there is no room below", () => {
-		const p = panelPosition(rect(400, 560, 600, 700), size, view);
-		expect(p).toMatchObject({ top: 560 - 48 - 200, placement: "above" });
+	test("on the left, the right edge of the menu is as far from the object", () => {
+		const r = sidePosition(o, size, view, "right");
+		const l = sidePosition(o, size, view, "left");
+		expect(400 - (l.left + size.w)).toBeCloseTo(r.left - 600);
 	});
 
-	test("never leaves the screen sideways", () => {
-		expect(panelPosition(rect(0, 200, 40, 300), size, view).left).toBe(8);
-		expect(panelPosition(rect(1470, 200, 1500, 300), size, view).left).toBe(
-			1500 - 280 - 8,
-		);
+	test("the side is the right one unless there is no room for the menu there", () => {
+		expect(pickSide(o, size.w, view)).toBe("right");
+		expect(pickSide(rect(1200, 200, 1400, 300), size.w, view)).toBe("left");
 	});
 
-	test("does not cover the top bar when it goes above", () => {
-		// below does not fit and above would start at 20, over the bar: it falls back instead
-		const p = panelPosition(rect(400, 232, 600, 700), size, view);
-		expect(p.placement).toBe("fallback");
+	test("it follows the object sideways, but is kept on the screen so that it can be reached", () => {
+		const p = sidePosition(rect(430, 200, 630, 300), size, view, "right");
+		expect(p.left).toBe(670);
+		const q = sidePosition(rect(1400, 200, 1600, 300), size, view, "right");
+		expect(q.left + size.w).toBeLessThanOrEqual(view.w);
+		const r = sidePosition(rect(-300, 200, 100, 300), size, view, "left");
+		expect(r.left).toBeGreaterThanOrEqual(0);
 	});
 
-	test("an object as big as the screen gets the panel at the bottom middle", () => {
-		const p = panelPosition(rect(-500, -500, 2000, 2000), size, view);
-		expect(p).toEqual({
-			left: (1500 - 280) / 2,
-			top: 800 - 200 - 8,
-			placement: "fallback",
-		});
+	test("up and down it is kept on the screen and under the top bar", () => {
+		const high = sidePosition(rect(400, -500, 600, -100), size, view, "right");
+		expect(high.top).toBeGreaterThanOrEqual(64);
+		const low = sidePosition(rect(400, 700, 600, 2000), size, view, "right");
+		expect(low.top + size.h).toBeLessThanOrEqual(view.h);
 	});
 
-	test("an object that is only partly on screen is judged by the part that is", () => {
-		// the object ends far below the screen: its visible part reaches the bottom
-		const p = panelPosition(rect(400, 100, 600, 5000), size, view);
-		expect(p.placement).not.toBe("below");
-	});
-
-	test("an object off to one side still gets a panel on screen", () => {
-		const p = panelPosition(rect(-900, 200, -600, 300), size, view);
-		expect(p.left).toBe(8);
-		expect(p.top).toBe(312);
+	test("it is gone with an object that is no longer on the screen", () => {
+		expect(isVisible(o, view)).toBe(true);
+		expect(isVisible(rect(400, 700, 600, 2000), view)).toBe(true);
+		expect(isVisible(rect(1600, 200, 1800, 300), view)).toBe(false);
+		expect(isVisible(rect(400, -500, 600, -10), view)).toBe(false);
 	});
 });
 
@@ -96,32 +100,5 @@ describe("panelTitle", () => {
 
 	test("nothing, nothing to name", () => {
 		expect(panelTitle([])).toBe("");
-	});
-});
-
-describe("tilePosition (R-060)", () => {
-	test("stands just right of the object, level with its top", () => {
-		const t = tilePosition(rect(400, 200, 600, 300), view);
-		expect(t.left).toBeGreaterThan(600);
-		expect(t.left).toBeLessThan(600 + 80);
-		expect(t.top).toBe(200);
-	});
-
-	test("does not move when the object does not", () => {
-		const a = tilePosition(rect(400, 200, 600, 300), view);
-		const b = tilePosition(rect(400, 200, 600, 300), view);
-		expect(a).toEqual(b);
-	});
-
-	test("goes to the left of the object when there is no room on the right", () => {
-		const t = tilePosition(rect(1300, 200, 1480, 300), view);
-		expect(t.left + 40).toBeLessThan(1300);
-	});
-
-	test("stays on the screen and under the top bar", () => {
-		const t = tilePosition(rect(400, -500, 600, -100), view);
-		expect(t.top).toBeGreaterThanOrEqual(64);
-		const u = tilePosition(rect(400, 700, 600, 2000), view);
-		expect(u.top + 40).toBeLessThanOrEqual(view.h);
 	});
 });

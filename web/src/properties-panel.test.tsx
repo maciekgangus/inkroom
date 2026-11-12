@@ -141,6 +141,90 @@ describe("PropertiesPanel", () => {
 		});
 	});
 
+	describe("its place by the object (R-060)", () => {
+		const px = (v: string) => parseFloat(v);
+		const spot = (sel: string) => {
+			const e = root.querySelector(sel) as HTMLElement;
+			return { left: px(e.style.left), top: px(e.style.top) };
+		};
+		const mountAt = (anchor: object, collapsed = false) =>
+			render(
+				<PropertiesPanel
+					elements={[rect]}
+					colors={COLORS}
+					anchor={anchor as never}
+					collapsed={collapsed}
+					onChange={onChange}
+				/>,
+				root,
+			);
+
+		test("the menu and the tile stand on the right of the object, level with its top", () => {
+			mountAt({ minX: 300, minY: 200, maxX: 500, maxY: 300 });
+			expect(spot(".properties").left).toBeGreaterThan(500);
+			expect(spot(".properties").top).toBe(200);
+			mountAt({ minX: 300, minY: 200, maxX: 500, maxY: 300 }, true);
+			expect(spot(".panel-tile").left).toBeGreaterThan(500);
+			expect(spot(".panel-tile").top).toBe(200);
+		});
+
+		test("on the left when there is no room on the right", () => {
+			const a = {
+				minX: innerWidth - 220,
+				minY: 200,
+				maxX: innerWidth - 20,
+				maxY: 300,
+			};
+			mountAt(a);
+			expect(spot(".properties").left).toBeLessThan(a.minX);
+		});
+
+		test("it moves with the object and is gone when the object is off the screen", async () => {
+			mountAt({ minX: 300, minY: 200, maxX: 500, maxY: 300 });
+			const here = spot(".properties");
+			await act(async () =>
+				mountAt({ minX: 400, minY: 200, maxX: 600, maxY: 300 }),
+			);
+			expect(spot(".properties").left - here.left).toBe(100);
+			await act(async () =>
+				mountAt({
+					minX: innerWidth + 50,
+					minY: 200,
+					maxX: innerWidth + 250,
+					maxY: 300,
+				}),
+			);
+			expect(root.querySelector(".properties")).toBeNull();
+			await act(async () =>
+				mountAt(
+					{
+						minX: innerWidth + 50,
+						minY: 200,
+						maxX: innerWidth + 250,
+						maxY: 300,
+					},
+					true,
+				),
+			);
+			expect(root.querySelector(".panel-tile")).toBeNull();
+		});
+
+		test("the side does not change while the object stays selected", async () => {
+			mountAt({ minX: 300, minY: 200, maxX: 500, maxY: 300 });
+			expect(spot(".properties").left).toBeGreaterThan(500);
+			// pushed to the right edge: it is held on the screen, but does not jump to the left side
+			await act(async () =>
+				mountAt({
+					minX: innerWidth - 220,
+					minY: 200,
+					maxX: innerWidth - 20,
+					maxY: 300,
+				}),
+			);
+			expect(spot(".properties").left).toBeGreaterThan(innerWidth - 20 - 270);
+		});
+	});
+
 	describe("colour tiles (R-060)", () => {
 		const FIVE = ["#111111", "#d32f2f", "#1976d2", "#388e3c", "#f57c00"];
 		const counts = () =>
@@ -309,7 +393,8 @@ describe("PropertiesPanel", () => {
 		test("is placed near the object it edits", () => {
 			const panel = mountAt([rect], box);
 			expect(panel.classList.contains("floating")).toBe(true);
-			expect(panel.style.top).toBe("312px");
+			expect(panel.style.top).toBe("200px"); // level with the top of the object
+			expect(parseFloat(panel.style.left)).toBeGreaterThan(600); // on its right
 		});
 
 		test("without an anchor it keeps the corner it always had", () => {

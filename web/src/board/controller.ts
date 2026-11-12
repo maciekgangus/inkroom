@@ -232,6 +232,14 @@ export class Controller {
 		return this.panFrom !== null;
 	}
 
+	/** True while the selection is being moved, scaled, turned or reshaped (not a rubber band). */
+	get editing(): boolean {
+		return this.edit !== null && this.edit.mode !== "marquee";
+	}
+
+	/** Called after each step of such an edit, so what stands by the object can follow it. */
+	onEditMove?: () => void;
+
 	/** True while a selection is being turned by its handle. */
 	get rotating(): boolean {
 		return this.edit?.mode === "rotate";
@@ -489,7 +497,11 @@ export class Controller {
 
 	/** The box around the selection, in board units; null when nothing is selected. */
 	selectionBounds(): Rect | null {
-		const sel = this.selection;
+		// While it is being moved, scaled or turned, the bounds are those of the draft.
+		const sel =
+			this.edit && this.edit.mode !== "marquee"
+				? this.edit.drafts
+				: this.selection;
 		if (sel.length === 0) return null;
 		const boxes = sel.map(worldBounds);
 		return {
@@ -1073,6 +1085,7 @@ export class Controller {
 		this.renderer.setVertices?.(null);
 		this.renderer.setAdjust?.(null);
 		if (!this.renderer.setDrag) this.renderer.redraw(this.board.strokes);
+		this.onEditMove?.();
 	}
 
 	private finishEdit(): void {

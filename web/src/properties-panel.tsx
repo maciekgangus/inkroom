@@ -7,7 +7,13 @@ import {
 	styleOf,
 } from "./board/style";
 import type { Rect } from "./board/viewport";
-import { panelPosition, panelTitle, tilePosition } from "./floating-panel";
+import {
+	isVisible,
+	panelTitle,
+	pickSide,
+	type Side,
+	sidePosition,
+} from "./floating-panel";
 import { Icon, type IconName } from "./icon";
 import { Slider } from "./slider";
 import "./properties-panel.css";
@@ -20,6 +26,10 @@ const DASH_LABELS: Record<Dash, string> = {
 	dotted: "┈",
 	natural: "",
 };
+
+/** The most the menu is wide, and the side of its tile, in px. */
+const MENU_WIDTH = 270;
+const TILE = 40;
 
 interface Props {
 	/** The selected elements; the panel shows the values of the first. */
@@ -59,9 +69,9 @@ export function PropertiesPanel({
 	onChange,
 }: Props) {
 	const ref = useRef<HTMLDivElement>(null);
-	/** Where a drag of the title began: the pointer and the offset then. */
 	/** How far the menu has been dragged from its place by the object: for the moment only. */
 	const [moved, setMoved] = useState({ x: 0, y: 0, key: "" });
+	/** Where a drag of the title began: the pointer and the offset then. */
 	const drag = useRef<{
 		x: number;
 		y: number;
@@ -83,10 +93,20 @@ export function PropertiesPanel({
 		const [w, h] = [el.offsetWidth, el.offsetHeight];
 		if (w !== size.w || h !== size.h) setSize({ w, h });
 	});
+	/** The side of the object the menu and its tile stand on: chosen once per object. */
+	const sideOf = useRef<{ key: string; side: Side } | null>(null);
 	if (elements.length === 0) return null;
 	const view = { w: innerWidth, h: innerHeight };
+	const ids = elements.map((e) => e.id).join(",");
+	if (anchor && sideOf.current?.key !== ids)
+		sideOf.current = { key: ids, side: pickSide(anchor, MENU_WIDTH, view) };
+	const side = sideOf.current?.side ?? "right";
+	// An object that is off the screen takes its menu and tile with it.
+	if (anchor && !isVisible(anchor, view)) return null;
 	if (collapsed) {
-		const spot = anchor ? tilePosition(anchor, view) : null;
+		const spot = anchor
+			? sidePosition(anchor, { w: TILE, h: TILE }, view, side)
+			: null;
 		return (
 			<button
 				type="button"
@@ -108,7 +128,7 @@ export function PropertiesPanel({
 			</button>
 		);
 	}
-	const spot = anchor ? panelPosition(anchor, size, view) : null;
+	const spot = anchor ? sidePosition(anchor, size, view, side) : null;
 	const at = spot
 		? { left: spot.left + offset.x, top: spot.top + offset.y }
 		: null;

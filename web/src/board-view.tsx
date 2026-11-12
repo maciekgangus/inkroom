@@ -322,6 +322,15 @@ export function BoardView({
 			controller.select(el.id); // its panel of tools is then next to it
 			setEditingText(el);
 		};
+		// What stands by the object follows it while it is being resized, once per frame.
+		let followFrame = 0;
+		controller.onEditMove = () => {
+			if (followFrame) return;
+			followFrame = requestAnimationFrame(() => {
+				followFrame = 0;
+				setTick((t) => t + 1);
+			});
+		};
 		controller.onSelectionChange = () => {
 			setTick((t) => t + 1);
 		};
@@ -849,7 +858,7 @@ export function BoardView({
 		.join(",");
 	const panelElements = typing
 		? [draft as Stroke]
-		: ctl.current?.busy
+		: ctl.current?.busy && !ctl.current.editing
 			? []
 			: (ctl.current?.selection ?? []);
 	const panelAnchor =

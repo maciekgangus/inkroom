@@ -1,74 +1,61 @@
 import type { Stroke } from "./board/board";
 import type { Rect } from "./board/viewport";
 
-/** Space between an object and its panel, the margin kept to the screen edge, and the height of the top bar. */
-const GAP = 12;
-/** Above the object the panel clears the rotation handle that stands over its frame. */
-const GAP_ABOVE = 48;
+/** The margin kept to the screen edge, and the height of the top bar. */
 const MARGIN = 8;
 const TOP_BAR = 64;
+/** How far the menu and its tile stand from the object's side: clear of the handles on it. */
+const SIDE_GAP = 40;
 
-export interface PanelPosition {
-	left: number;
-	top: number;
-	placement: "below" | "above" | "fallback";
+/** Which side of the object the menu stands on. */
+export type Side = "right" | "left";
+
+/**
+ * The side for a menu `width` wide (R-060): on the right of the object, or on the left when the
+ * right has no room on the screen. Chosen once for an object, so the menu does not jump sides.
+ */
+export function pickSide(
+	anchor: Rect,
+	width: number,
+	view: { w: number; h: number },
+): Side {
+	return anchor.maxX + SIDE_GAP + width <= view.w - MARGIN ? "right" : "left";
 }
 
 /**
- * Where the panel of an object goes (R-042), in screen px: below the object and centred on it,
- * above it when there is no room below (but not over the top bar), and at the bottom middle of
- * the screen when the object leaves no room at all. Only the part of the object that is on
- * screen counts, and the panel never leaves the screen sideways.
+ * Where the menu, or its tile, stands (R-060), in screen px: beside the object on the given side
+ * and level with its top. It is fixed to the object, so it moves with it over the board and goes
+ * away with it (see isVisible); while the object is on the screen the menu is kept on the screen
+ * too, under the top bar, so that it can always be reached (on a narrow tablet it may cover the
+ * object).
  */
-export function panelPosition(
+export function sidePosition(
 	anchor: Rect,
 	size: { w: number; h: number },
 	view: { w: number; h: number },
-): PanelPosition {
-	const seen = {
-		minX: Math.max(anchor.minX, 0),
-		minY: Math.max(anchor.minY, 0),
-		maxX: Math.min(anchor.maxX, view.w),
-		maxY: Math.min(anchor.maxY, view.h),
-	};
-	// An object that is off screen sideways still gets a panel at the edge nearest to it.
-	const centre =
-		seen.minX <= seen.maxX
-			? (seen.minX + seen.maxX) / 2
-			: (anchor.minX + anchor.maxX) / 2;
-	const left = Math.min(
-		Math.max(centre - size.w / 2, MARGIN),
-		view.w - size.w - MARGIN,
+	side: Side,
+): { left: number; top: number } {
+	const beside =
+		side === "right" ? anchor.maxX + SIDE_GAP : anchor.minX - SIDE_GAP - size.w;
+	const left = Math.max(Math.min(beside, view.w - size.w - MARGIN), MARGIN);
+	const top = Math.max(
+		Math.min(anchor.minY, view.h - size.h - MARGIN),
+		TOP_BAR,
 	);
-	if (seen.maxY + GAP + size.h <= view.h - MARGIN)
-		return { left, top: seen.maxY + GAP, placement: "below" };
-	const above = seen.minY - GAP_ABOVE - size.h;
-	if (above >= TOP_BAR) return { left, top: above, placement: "above" };
-	return {
-		left: (view.w - size.w) / 2,
-		top: view.h - size.h - MARGIN,
-		placement: "fallback",
-	};
+	return { left, top };
 }
 
-/** The size of the tile a shut menu leaves, and how far it stands from the object's side. */
-const TILE = 40;
-const TILE_GAP = 32;
-
-/**
- * Where the tile of a shut menu stands (R-060): always in the same place by the object, just right
- * of it and level with its top (left of it when the right side has no room), kept on the screen.
- * It does not depend on where the menu was dragged to.
- */
-export function tilePosition(
+/** Whether any of the object is on the screen: the menu is shown only while it is. */
+export function isVisible(
 	anchor: Rect,
 	view: { w: number; h: number },
-): { left: number; top: number } {
-	let left = anchor.maxX + TILE_GAP;
-	if (left + TILE > view.w - MARGIN) left = anchor.minX - TILE_GAP - TILE;
-	left = Math.min(Math.max(left, MARGIN), view.w - TILE - MARGIN);
-	const top = Math.min(Math.max(anchor.minY, TOP_BAR), view.h - TILE - MARGIN);
-	return { left, top };
+): boolean {
+	return (
+		anchor.maxX > 0 &&
+		anchor.maxY > 0 &&
+		anchor.minX < view.w &&
+		anchor.minY < view.h
+	);
 }
 
 /** What the panel calls what it edits: the class of the object, with a count for several. */

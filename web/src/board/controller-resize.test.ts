@@ -191,6 +191,23 @@ describe("Controller resizing and group rotation", () => {
 		expect(c.rotating).toBe(false);
 	});
 
+	test("while an object is being resized the bounds of the selection follow it, and a callback tells the board (R-060)", () => {
+		c.select("r1");
+		const moved = vi.fn();
+		c.onEditMove = moved;
+		const before = c.selectionBounds();
+		expect(c.editing).toBe(false);
+		c.pointerDown(ev(316, 216)); // the se corner
+		c.pointerMove(ev(516, 266));
+		expect(c.editing).toBe(true);
+		expect(moved).toHaveBeenCalled();
+		const during = c.selectionBounds();
+		expect((during?.maxX ?? 0) - (before?.maxX ?? 0)).toBeGreaterThan(100);
+		c.pointerUp(ev(516, 266));
+		expect(c.editing).toBe(false);
+		expect(c.selectionBounds()?.maxX).toBeCloseTo(during?.maxX ?? 0);
+	});
+
 	test("the frame comes back even if the turn ended where it started", () => {
 		c.select("r1");
 		const f = lastFrame();
