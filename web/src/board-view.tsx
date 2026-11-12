@@ -327,15 +327,6 @@ export function BoardView({
 			controller.select(el.id); // its panel of tools is then next to it
 			setEditingText(el);
 		};
-		// What stands by the object follows it while it is being resized, once per frame.
-		let followFrame = 0;
-		controller.onEditMove = () => {
-			if (followFrame) return;
-			followFrame = requestAnimationFrame(() => {
-				followFrame = 0;
-				setTick((t) => t + 1);
-			});
-		};
 		controller.onSelectionChange = () => {
 			setTick((t) => t + 1);
 		};
@@ -352,11 +343,14 @@ export function BoardView({
 		const viewSaver = createViewSaver((view) => void saveView(boardId, view));
 		let viewReady = false;
 		let viewSettle: ReturnType<typeof setTimeout> | undefined;
-		const changed = () => {
-			// What stands by the object is put away while the view moves (R-060).
+		// What stands by the object is put away while the view moves, and comes back shortly after.
+		const viewMoving = () => {
 			viewMovingUntil.current = Date.now() + VIEW_SETTLE_MS;
 			clearTimeout(viewSettle);
 			viewSettle = setTimeout(() => setTick((t) => t + 1), VIEW_SETTLE_MS);
+		};
+		const changed = () => {
+			viewMoving();
 			canvas.redraw(board.strokes);
 			setScale(viewport.scale);
 			setTick((t) => t + 1);
@@ -516,6 +510,7 @@ export function BoardView({
 			lastPointer = [x, y];
 			sync.cursorMove(x, y);
 			controller.pointerMove(e);
+			if (controller.panning) viewMoving(); // the hand, the right and the middle button
 			setOverTurn.current(controller.overRotate(e.clientX, e.clientY));
 			applyCursor.current(); // a safety net: whichever way the tool changed, it shows
 		};
@@ -868,9 +863,7 @@ export function BoardView({
 		.join(",");
 	const panelElements = typing
 		? [draft as Stroke]
-		: (ctl.current?.busy && !ctl.current.editing) ||
-				ctl.current?.moving ||
-				Date.now() < viewMovingUntil.current
+		: ctl.current?.busy || Date.now() < viewMovingUntil.current
 			? []
 			: (ctl.current?.selection ?? []);
 	const panelAnchor =

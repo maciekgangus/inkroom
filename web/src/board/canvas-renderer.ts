@@ -569,7 +569,6 @@ export class CanvasRenderer implements Renderer {
 		ctx.rotate(f.rot);
 		ctx.lineWidth = 2 * px;
 		ctx.strokeStyle = "#fff";
-		ctx.fillStyle = "#e91e63";
 		const stem = ROT_OFFSET_PX * px;
 		const half = (HANDLE_PX / 2) * px;
 		// The handles that scale: white rounded squares with an ink-coloured edge, at the corners
@@ -656,7 +655,7 @@ export class CanvasRenderer implements Renderer {
 		ctx.save();
 		ctx.lineWidth = 2 * px;
 		ctx.strokeStyle = "#fff";
-		ctx.fillStyle = "#e91e63";
+		ctx.fillStyle = HANDLE_INK;
 		for (const [x, y] of ends) {
 			ctx.beginPath();
 			ctx.arc(x, y, (HANDLE_PX / 2) * px, 0, Math.PI * 2);
