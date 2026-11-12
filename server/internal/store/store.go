@@ -293,6 +293,9 @@ func unix(t time.Time) int64 { return t.Unix() }
 func (s *Store) CreateUser(email, hash string) (User, error) {
 	for attempt := 0; attempt < 5; attempt++ {
 		name := usernameFromEmail(email, func(key string) bool {
+			if IsReservedName(key) {
+				return true
+			}
 			var one int
 			return s.db.QueryRow("SELECT 1 FROM users WHERE username_key = ?", key).Scan(&one) == nil
 		})
@@ -306,6 +309,9 @@ func (s *Store) CreateUser(email, hash string) (User, error) {
 
 // CreateAccount adds an account with the given username. The e-mail must already be normalized.
 func (s *Store) CreateAccount(email, username, hash string) (User, error) {
+	if IsReservedName(username) {
+		return User{}, ErrUsernameReserved
+	}
 	var one int
 	if s.db.QueryRow("SELECT 1 FROM users WHERE email = ?", email).Scan(&one) == nil {
 		return User{}, ErrEmailTaken // reported first when both are taken

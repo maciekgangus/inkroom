@@ -45,11 +45,23 @@ func (c *Client) Identify(id, name string) {
 	if r := []rune(name); len(r) > maxNameLen {
 		name = strings.TrimSpace(string(r[:maxNameLen]))
 	}
-	if id == "" || len(id) > maxIDLen || name == "" {
+	// The name Administrator is the server's to give (IdentifyAdmin), nobody may just say it.
+	if id == "" || len(id) > maxIDLen || name == "" || store.IsReservedName(name) {
 		c.ID, c.Name = "", ""
 		return
 	}
 	c.ID, c.Name = id, name
+}
+
+// IdentifyAdmin lists the client as the Administrator (R-065). Only the server calls it, after it
+// has checked the admin's ticket; an empty or too long id leaves the client anonymous.
+func (c *Client) IdentifyAdmin(id string) {
+	id = strings.TrimSpace(id)
+	if id == "" || len(id) > maxIDLen {
+		c.ID, c.Name = "", ""
+		return
+	}
+	c.ID, c.Name = id, store.ReservedName
 }
 
 // SetPerson says which person the connection belongs to and whether they own the board.
