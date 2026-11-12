@@ -16,6 +16,10 @@ import type { Rect, Viewport } from "./viewport";
 
 /** The most selected elements that still get the neon glow; a bigger selection just has its frame. */
 const GLOW_MAX = 25;
+/** The selection glow (R-058), tuned by eye: a violet close to the nib of the logo. */
+const GLOW_COLOR = "hsl(252, 100%, 60%)";
+const GLOW_BLUR = 4;
+const GLOW_PASSES = 2;
 
 const isFreehand = (s: Stroke) => !s.kind || s.kind === "stroke";
 
@@ -175,6 +179,7 @@ function drawElement(
 	path: Path2D | null,
 	color: string,
 	fill?: string,
+	minWidth = 0,
 ): void {
 	withLook(ctx, s, () => {
 		if (s.kind === "text") {
@@ -200,7 +205,7 @@ function drawElement(
 				ctx.fill(extra?.fill ?? path);
 			}
 			ctx.strokeStyle = color;
-			ctx.lineWidth = s.size;
+			ctx.lineWidth = Math.max(s.size, minWidth);
 			ctx.lineCap = "round";
 			ctx.lineJoin = "round";
 			ctx.setLineDash(dashPattern(s));
@@ -231,7 +236,14 @@ export function paintElements(
 	view: Rect,
 	images: ImageCache | null,
 	placeholders = false,
+	look: {
+		/** Paints a stored colour (dark mode swaps black and white). */
+		ink?: (color: string) => string;
+		/** The thinnest line, in board units, so a small map still shows every line. */
+		minWidth?: number;
+	} = {},
 ): void {
+	const ink = look.ink ?? ((c: string) => c);
 	for (const s of strokes) {
 		if (!intersects(strokeBounds(s), view)) continue;
 		if (s.kind === "image") {
@@ -257,7 +269,14 @@ export function paintElements(
 			);
 			continue;
 		}
-		drawElement(ctx, s, elementPath(s), s.color, s.fill);
+		drawElement(
+			ctx,
+			s,
+			elementPath(s),
+			ink(s.color),
+			s.fill ? ink(s.fill) : undefined,
+			look.minWidth,
+		);
 	}
 }
 
@@ -587,10 +606,10 @@ export class CanvasRenderer implements Renderer {
 		const path = elementPath(s);
 		const color = s.kind === "image" ? "#fff" : this.ink(s.color);
 		ctx.save();
-		ctx.shadowColor = "#00d4ff";
-		// The blur is in device pixels whatever the zoom; two passes make it brighter.
-		for (const blur of [10, 22]) {
-			ctx.shadowBlur = blur * dpr;
+		ctx.shadowColor = GLOW_COLOR;
+		// The blur is in device pixels whatever the zoom; one small pass (R-058).
+		ctx.shadowBlur = GLOW_BLUR * dpr;
+		for (let i = 0; i < GLOW_PASSES; i++) {
 			if (s.kind === "image") {
 				const r = imageRect(s);
 				withLook(ctx, s, () =>

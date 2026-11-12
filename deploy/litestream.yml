@@ -11,6 +11,8 @@ dbs:
       type: s3
       bucket: ${R2_BUCKET}
       path: inkroom
+      # Changes go to R2 once a minute, not after each one: far fewer writes to R2 (ADR 0016).
+      sync-interval: 1m
       # R2 is S3 with its own address and the region "auto".
       endpoint: ${R2_ENDPOINT}
       region: auto

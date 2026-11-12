@@ -134,7 +134,7 @@ działają (punkt 5).
 
 ## 5. Kopie zapasowe bazy (Litestream i Cloudflare R2)
 
-ADR 0016. Kontener `litestream` na bieżąco (co sekundę po każdej zmianie) kopiuje bazę do Cloudflare R2
+ADR 0016. Kontener `litestream` co minutę (jeśli baza się zmieniła) kopiuje bazę do Cloudflare R2
 i trzyma kopie z ostatniego tygodnia. **Bez kluczy R2 aplikacja się nie uruchomi** (celowo).
 
 **Jednorazowo w Cloudflare:**

@@ -393,11 +393,7 @@ export class Controller {
 		this.current = null;
 		this.renderer.drawLive(null);
 		this.renderer.redraw(this.board.strokes);
-		// A shape or line is selected at once, ready to move or resize: the tool becomes Select.
-		if (done.kind) {
-			this.settings.tool = "select";
-			this.select(done.id);
-		}
+		// Nothing is selected and the tool stays as it was, so the next shape is drawn at once (R-059).
 	}
 
 	pointerCancel(e: PointerInput): void {
@@ -1053,17 +1049,12 @@ export class Controller {
 			for (const d of edit.drafts)
 				this.board.applyRemote({ t: "update", stroke: d });
 		}
-		if (edit.mode === "rotate") {
-			// The frame is hidden while turning: only the glow follows the objects.
-			this.renderer.setHighlight?.(edit.drafts);
-			this.renderer.setSelection?.(null);
-			// Neither do the dots stay behind while the figure turns.
-			this.renderer.setEndpoints?.(null);
-			this.renderer.setVertices?.(null);
-			this.renderer.setAdjust?.(null);
-		} else {
-			this.showSelection(edit.drafts);
-		}
+		// Frame and handles are hidden for the whole gesture: only the glow follows (R-057).
+		this.renderer.setHighlight?.(edit.drafts);
+		this.renderer.setSelection?.(null);
+		this.renderer.setEndpoints?.(null);
+		this.renderer.setVertices?.(null);
+		this.renderer.setAdjust?.(null);
 		if (!this.renderer.setDrag) this.renderer.redraw(this.board.strokes);
 	}
 
