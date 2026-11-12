@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "preact/hooks";
 import * as api from "./api";
 import { AuthForms, RegisterPage } from "./auth-forms";
 import { BoardView, newId } from "./board-view";
+import { FeedbackButton } from "./feedback-button";
 import { Panel } from "./panel";
 import type { SocketLike } from "./sync/sync";
 import { ThemeToggle } from "./theme";
@@ -54,6 +55,7 @@ export function App({
 				<Home navigate={navigate} />
 			)}
 			<div class="corner">
+				<FeedbackButton />
 				<ThemeToggle />
 			</div>
 		</>

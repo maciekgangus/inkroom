@@ -552,3 +552,33 @@ func TestRemovingAVisitLeavesTheBoardAndOtherPeoplesVisits(t *testing.T) {
 		t.Fatalf("a visit after the removal is not recorded: %+v", v)
 	}
 }
+
+func TestFeedback(t *testing.T) {
+	s := open(t)
+	u := user(t, s, "a@example.com")
+	now := time.Now()
+	if err := s.AddFeedback(Feedback{Person: "u:1", UserID: u.ID, Name: "a", Message: "first", Page: "/b/x", UserAgent: "UA", Screen: "800x600", At: now.Add(-2 * time.Hour)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AddFeedback(Feedback{Person: "g:2", Message: "second", At: now}); err != nil {
+		t.Fatal(err)
+	}
+	all, err := s.ListFeedback(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 2 || all[0].Message != "second" || all[1].Message != "first" {
+		t.Fatalf("newest first expected, got %+v", all)
+	}
+	if all[1].UserID != u.ID || all[1].Page != "/b/x" || all[1].Screen != "800x600" || all[0].UserID != 0 {
+		t.Fatalf("fields lost: %+v", all)
+	}
+	n, err := s.CountFeedbackSince("u:1", now.Add(-time.Hour))
+	if err != nil || n != 0 {
+		t.Fatalf("count since an hour ago = %d, %v", n, err)
+	}
+	n, _ = s.CountFeedbackSince("u:1", now.Add(-3*time.Hour))
+	if n != 1 {
+		t.Fatalf("count = %d, want 1", n)
+	}
+}

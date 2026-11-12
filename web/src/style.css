@@ -519,6 +519,69 @@ canvas {
 	left: 12px;
 	bottom: 12px;
 }
+.corner {
+	flex-direction: column;
+	gap: 2px;
+}
+.feedback-form,
+.feedback-thanks {
+	position: fixed;
+	left: 12px;
+	bottom: 116px;
+	z-index: 3;
+	width: min(320px, calc(100vw - 24px));
+	box-sizing: border-box;
+	padding: 14px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--surface);
+	box-shadow: var(--shadow);
+}
+.feedback-form {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+.feedback-form label {
+	font-size: 14px;
+	font-weight: 500;
+}
+.feedback-form textarea {
+	box-sizing: border-box;
+	width: 100%;
+	padding: 10px 14px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--bg);
+	color: inherit;
+	font: inherit;
+	font-size: 15px;
+	resize: vertical;
+}
+.feedback-form textarea:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
+}
+.feedback-form .row {
+	justify-content: flex-end;
+}
+/* The form sits in the corner's box in the markup, so the corner's icon-button look is undone. */
+.corner .feedback-form button {
+	width: auto;
+	padding: 0 16px;
+	border-color: var(--border);
+	background: var(--surface);
+	color: inherit;
+}
+.corner .feedback-form button.primary {
+	border-color: var(--text);
+	background: var(--text);
+	color: var(--surface);
+}
+.feedback-thanks {
+	width: auto;
+	font-size: 14px;
+}
 .backgrounds {
 	left: 76px;
 	bottom: 12px;

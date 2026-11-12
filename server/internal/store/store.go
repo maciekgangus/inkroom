@@ -123,6 +123,18 @@ var migrations = []migration{
 )`),
 	// Usernames (R-053, ADR 0013): existing accounts are named after their e-mail.
 	addUsernames,
+	// Notes sent with the feedback button (R-062); user_id is 0 for a guest.
+	stmt(`CREATE TABLE feedback (
+	id INTEGER PRIMARY KEY,
+	created INTEGER NOT NULL,
+	person TEXT NOT NULL,
+	user_id INTEGER NOT NULL DEFAULT 0,
+	name TEXT NOT NULL DEFAULT '',
+	message TEXT NOT NULL,
+	page TEXT NOT NULL DEFAULT '',
+	user_agent TEXT NOT NULL DEFAULT '',
+	screen TEXT NOT NULL DEFAULT ''
+)`),
 }
 
 // migration changes the schema inside a transaction.
@@ -687,4 +699,54 @@ func repointImage(data []byte, renamed map[string]string) []byte {
 		return data
 	}
 	return out
+}
+
+// Feedback is one note sent with the feedback button (R-062).
+type Feedback struct {
+	ID        int64
+	At        time.Time
+	Person    string // who, as the server tells them apart (account, guest cookie)
+	UserID    int64  // 0 for a guest
+	Name      string
+	Message   string
+	Page      string
+	UserAgent string
+	Screen    string
+}
+
+// AddFeedback saves a note.
+func (s *Store) AddFeedback(f Feedback) error {
+	_, err := s.db.Exec(`INSERT INTO feedback (created, person, user_id, name, message, page, user_agent, screen)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		unix(f.At), f.Person, f.UserID, f.Name, f.Message, f.Page, f.UserAgent, f.Screen)
+	return err
+}
+
+// ListFeedback returns the newest notes first, at most limit of them.
+func (s *Store) ListFeedback(limit int) ([]Feedback, error) {
+	rows, err := s.db.Query(`SELECT id, created, person, user_id, name, message, page, user_agent, screen
+		FROM feedback ORDER BY created DESC, id DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Feedback
+	for rows.Next() {
+		var f Feedback
+		var created int64
+		if err := rows.Scan(&f.ID, &created, &f.Person, &f.UserID, &f.Name, &f.Message, &f.Page, &f.UserAgent, &f.Screen); err != nil {
+			return nil, err
+		}
+		f.At = time.Unix(created, 0)
+		out = append(out, f)
+	}
+	return out, rows.Err()
+}
+
+// CountFeedbackSince says how many notes person has sent since the given time.
+func (s *Store) CountFeedbackSince(person string, since time.Time) (int, error) {
+	var n int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM feedback WHERE person = ? AND created > ?`,
+		person, unix(since)).Scan(&n)
+	return n, err
 }
