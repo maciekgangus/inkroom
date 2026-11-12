@@ -208,6 +208,21 @@ describe("Controller resizing and group rotation", () => {
 		expect(c.selectionBounds()?.maxX).toBeCloseTo(during?.maxX ?? 0);
 	});
 
+	test("moving the object is told apart from resizing it, so the menu can be put away for a move only (R-060)", () => {
+		c.select("r1");
+		c.pointerDown(ev(200, 100)); // on its top edge
+		c.pointerMove(ev(260, 160));
+		expect(c.editing).toBe(true);
+		expect(c.moving).toBe(true);
+		c.pointerUp(ev(260, 160));
+		expect(c.moving).toBe(false);
+		c.pointerDown(ev(376, 276)); // the se corner handle, now 60 further on
+		c.pointerMove(ev(476, 326));
+		expect(c.editing).toBe(true);
+		expect(c.moving).toBe(false);
+		c.pointerUp(ev(476, 326));
+	});
+
 	test("the frame comes back even if the turn ended where it started", () => {
 		c.select("r1");
 		const f = lastFrame();

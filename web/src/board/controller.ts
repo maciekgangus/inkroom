@@ -237,6 +237,11 @@ export class Controller {
 		return this.edit !== null && this.edit.mode !== "marquee";
 	}
 
+	/** True while the selection is being moved (as opposed to scaled, turned or reshaped). */
+	get moving(): boolean {
+		return this.edit?.mode === "move";
+	}
+
 	/** Called after each step of such an edit, so what stands by the object can follow it. */
 	onEditMove?: () => void;
 

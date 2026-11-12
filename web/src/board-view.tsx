@@ -57,6 +57,9 @@ import { ZoomControls } from "./zoom-controls";
 export const newId = () =>
 	`${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
+/** How long after the last change of the view it still counts as moving. */
+const VIEW_SETTLE_MS = 200;
+
 const ZOOM_STEP = 1.25;
 const LINE_HEIGHT_PX = 16;
 
@@ -159,6 +162,8 @@ export function BoardView({
 	const theme = useTheme();
 	/** Repaints after the view changed (set up by the effect below). */
 	const viewChanged = useRef<() => void>(() => {});
+	/** Until when the view counts as moving, so the menu stays away (R-060). */
+	const viewMovingUntil = useRef(0);
 	const boardRef = useRef<Board | null>(null);
 	const imagesRef = useRef<ImageCache | null>(null);
 	const [boardMenu, setBoardMenu] = useState<MenuAt | null>(null);
@@ -346,7 +351,12 @@ export function BoardView({
 		let cancelled = false;
 		const viewSaver = createViewSaver((view) => void saveView(boardId, view));
 		let viewReady = false;
+		let viewSettle: ReturnType<typeof setTimeout> | undefined;
 		const changed = () => {
+			// What stands by the object is put away while the view moves (R-060).
+			viewMovingUntil.current = Date.now() + VIEW_SETTLE_MS;
+			clearTimeout(viewSettle);
+			viewSettle = setTimeout(() => setTick((t) => t + 1), VIEW_SETTLE_MS);
 			canvas.redraw(board.strokes);
 			setScale(viewport.scale);
 			setTick((t) => t + 1);
@@ -858,7 +868,9 @@ export function BoardView({
 		.join(",");
 	const panelElements = typing
 		? [draft as Stroke]
-		: ctl.current?.busy && !ctl.current.editing
+		: (ctl.current?.busy && !ctl.current.editing) ||
+				ctl.current?.moving ||
+				Date.now() < viewMovingUntil.current
 			? []
 			: (ctl.current?.selection ?? []);
 	const panelAnchor =
