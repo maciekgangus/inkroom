@@ -1,6 +1,7 @@
 import { render } from "preact";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { Stroke } from "./board/board";
+import { DEFAULT_GLOW } from "./board/glow";
 import type { StylePatch } from "./board/style";
 import { PropertiesPanel } from "./properties-panel";
 
@@ -70,23 +71,25 @@ describe("PropertiesPanel", () => {
 		expect(has("prop fill none")).toBe(false);
 	});
 
-	test("a glow slider for tuning is there only when asked for (R-058)", () => {
+	test("sliders for every glow setting are there only when asked for (R-058)", () => {
 		mount([rect]);
-		expect(slider("prop glow")).toBeNull();
+		expect(slider("prop glow blur")).toBeNull();
 		const onGlow = vi.fn();
 		render(
 			<PropertiesPanel
 				elements={[rect]}
 				colors={COLORS}
 				onChange={onChange}
-				glow={{ value: 14, onChange: onGlow }}
+				glow={{ value: DEFAULT_GLOW, onChange: onGlow }}
 			/>,
 			root,
 		);
-		const el = slider("prop glow") as HTMLInputElement;
-		expect(el.value).toBe("14");
-		move(el, 20, "input");
-		expect(onGlow).toHaveBeenLastCalledWith(20);
+		for (const name of ["blur", "passes", "opacity", "hue", "light"])
+			expect(slider(`prop glow ${name}`)).not.toBeNull();
+		move(slider("prop glow passes") as HTMLInputElement, 4, "input");
+		expect(onGlow).toHaveBeenLastCalledWith({ passes: 4 });
+		move(slider("prop glow opacity") as HTMLInputElement, 55, "input");
+		expect(onGlow).toHaveBeenLastCalledWith({ alpha: 55 });
 		expect(onChange).not.toHaveBeenCalled();
 	});
 

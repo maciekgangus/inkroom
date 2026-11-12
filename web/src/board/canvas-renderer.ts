@@ -3,6 +3,7 @@ import { type Background, drawBackground } from "./background";
 import type { Stroke } from "./board";
 import { intersects, strokeBounds } from "./bounds";
 import type { Renderer } from "./controller";
+import { DEFAULT_GLOW, type Glow, glowColor } from "./glow";
 import type { ImageCache } from "./image-cache";
 import { imageRect } from "./image-geometry";
 import { type Frame, HANDLE_PX, ROT_OFFSET_PX } from "./selection-frame";
@@ -16,8 +17,6 @@ import type { Rect, Viewport } from "./viewport";
 
 /** The most selected elements that still get the neon glow; a bigger selection just has its frame. */
 const GLOW_MAX = 25;
-/** The glow of a selected element: the nib colour of the Inkroom logo (R-058). */
-const GLOW_COLOR = "#7C78FF";
 
 const isFreehand = (s: Stroke) => !s.kind || s.kind === "stroke";
 
@@ -293,8 +292,8 @@ export class CanvasRenderer implements Renderer {
 	private selection: Frame | null = null;
 	private marquee: Rect | null = null;
 	private highlight: Stroke[] = [];
-	/** The blur of the selection glow in px (R-058). */
-	private glowBlur = 14;
+	/** How the selection glows (R-058). */
+	private glow: Glow = DEFAULT_GLOW;
 	/** Elements being dragged: drawn on the live layer, left out of the committed one (performance). */
 	private drag: {
 		ids: Set<string>;
@@ -376,9 +375,9 @@ export class CanvasRenderer implements Renderer {
 		this.schedule(false, true);
 	}
 
-	/** Sets how far the selection glow spreads, in px (for tuning it by eye). */
-	setGlowBlur(px: number): void {
-		this.glowBlur = px;
+	/** Sets how the selection glows (for tuning it by eye). */
+	setGlow(glow: Glow): void {
+		this.glow = glow;
 		this.schedule(true, true);
 	}
 
@@ -612,16 +611,18 @@ export class CanvasRenderer implements Renderer {
 		const path = elementPath(s);
 		const color = s.kind === "image" ? "#fff" : this.ink(s.color);
 		ctx.save();
-		ctx.shadowColor = GLOW_COLOR;
+		ctx.shadowColor = glowColor(this.glow);
 		// The blur is in device pixels whatever the zoom; one small pass (R-058).
-		ctx.shadowBlur = this.glowBlur * dpr;
-		if (s.kind === "image") {
-			const r = imageRect(s);
-			withLook(ctx, s, () =>
-				ctx.strokeRect(r.minX, r.minY, r.maxX - r.minX, r.maxY - r.minY),
-			);
-		} else {
-			drawElement(ctx, s, path, color, s.fill ? this.ink(s.fill) : undefined);
+		ctx.shadowBlur = this.glow.blur * dpr;
+		for (let i = 0; i < this.glow.passes; i++) {
+			if (s.kind === "image") {
+				const r = imageRect(s);
+				withLook(ctx, s, () =>
+					ctx.strokeRect(r.minX, r.minY, r.maxX - r.minX, r.maxY - r.minY),
+				);
+			} else {
+				drawElement(ctx, s, path, color, s.fill ? this.ink(s.fill) : undefined);
+			}
 		}
 		ctx.restore();
 	}

@@ -19,6 +19,7 @@ import {
 import { Controller, type Renderer, type Settings } from "./board/controller";
 import { exportBoard } from "./board/export-file";
 import { TouchGestures } from "./board/gestures";
+import { DEFAULT_GLOW, type Glow, parseGlow } from "./board/glow";
 import { ImageCache } from "./board/image-cache";
 import { defaultSize, placeCentered } from "./board/image-geometry";
 import { prepareImage, uploadImage } from "./board/image-upload";
@@ -180,19 +181,20 @@ export function BoardView({
 			// private mode: the choice is just not remembered
 		}
 	};
-	/** The blur of the selection glow, set by eye with a slider and remembered on this device. */
-	const [glow, setGlowState] = useState(() => {
+	/** How the selection glows, set by eye with sliders and remembered on this device. */
+	const [glow, setGlowState] = useState<Glow>(() => {
 		try {
-			return Number(localStorage.getItem("inkroom.glow")) || 14;
+			return parseGlow(localStorage.getItem("inkroom.glow"));
 		} catch {
-			return 14;
+			return DEFAULT_GLOW;
 		}
 	});
-	const setGlow = (px: number) => {
-		setGlowState(px);
-		rendererRef.current?.setGlowBlur(px);
+	const changeGlow = (patch: Partial<Glow>) => {
+		const next = { ...glow, ...patch };
+		setGlowState(next);
+		rendererRef.current?.setGlow(next);
 		try {
-			localStorage.setItem("inkroom.glow", String(px));
+			localStorage.setItem("inkroom.glow", JSON.stringify(next));
 		} catch {
 			// private mode: the choice is just not remembered
 		}
@@ -253,7 +255,7 @@ export function BoardView({
 		imagesRef.current = images;
 		const canvas = new CanvasRenderer(committed, live, viewport, images);
 		canvas.ink = (c) => displayColor(c, currentTheme());
-		canvas.setGlowBlur(glow);
+		canvas.setGlow(glow);
 		rendererRef.current = canvas;
 		// The text font is bundled; once it has loaded the texts are measured and drawn again.
 		void Promise.all(
@@ -925,7 +927,7 @@ export function BoardView({
 				palette={[...COLORS, ...MORE_COLORS]}
 				anchor={panelAnchor}
 				onClose={typing ? undefined : () => setClosedFor(selectionKey)}
-				glow={{ value: glow, onChange: setGlow }}
+				glow={{ value: glow, onChange: changeGlow }}
 				display={(c) => displayColor(c, currentTheme())}
 				onPreview={(patch) => changeStyle(patch, true)}
 				onChange={(patch) => changeStyle(patch, false)}
