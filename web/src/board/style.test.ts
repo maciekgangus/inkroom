@@ -247,7 +247,7 @@ describe("curves and the coordinate system have no inside to fill (R-039)", () =
 		kind,
 		points: pts([0, 0], [10, 5]),
 	});
-	test.each(["sine", "bell", "scurve", "parabola", "axes"] as const)(
+	test.each(["sine", "cosine", "bell", "scurve", "parabola", "axes"] as const)(
 		"%s",
 		(kind) => {
 			expect(capabilities([open(kind)]).fill).toBe(false);

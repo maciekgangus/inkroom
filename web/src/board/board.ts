@@ -34,6 +34,7 @@ export type ElementKind =
 	| "pyramidfrustum"
 	| "conefrustum"
 	| "sine"
+	| "cosine"
 	| "bell"
 	| "scurve"
 	| "parabola"

@@ -32,6 +32,7 @@ export type ShapeChoice =
 	| "pyramidfrustum"
 	| "conefrustum"
 	| "sine"
+	| "cosine"
 	| "bell"
 	| "scurve"
 	| "parabola"
@@ -96,7 +97,8 @@ export const SHAPE_GROUPS: { title: string; shapes: ShapeEntry[] }[] = [
 	{
 		title: "Krzywe",
 		shapes: [
-			{ kind: "sine", label: "Sinusoida" },
+			{ kind: "sine", label: "Sinusoida (0 do 2π)" },
+			{ kind: "cosine", label: "Cosinusoida (0 do 2π)" },
 			{ kind: "bell", label: "Krzywa dzwonowa" },
 			{ kind: "scurve", label: "Krzywa S" },
 			{ kind: "parabola", label: "Parabola" },
@@ -120,7 +122,14 @@ const PARAMETRIC: ElementKind[] = SHAPES.map((s) => s.kind).filter(
 );
 
 /** The kinds without an inside: curves and the coordinate system. */
-const OPEN: ElementKind[] = ["sine", "bell", "scurve", "parabola", "axes"];
+const OPEN: ElementKind[] = [
+	"sine",
+	"cosine",
+	"bell",
+	"scurve",
+	"parabola",
+	"axes",
+];
 
 /** Whether a shape has an inside that can be filled and hit (false for curves and axes). */
 export const hasInside = (kind: ElementKind | undefined): boolean =>

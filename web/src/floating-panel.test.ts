@@ -86,6 +86,7 @@ describe("panelTitle", () => {
 			"triangle",
 			"cube",
 			"sine",
+			"cosine",
 			"axes",
 		] as const)
 			expect(panelTitle([el(k)])).toBe("Kształt");
