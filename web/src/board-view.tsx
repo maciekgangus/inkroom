@@ -165,9 +165,9 @@ export function BoardView({
 	const [, setTick] = useState(0); // bumped when the view changes, so the text field follows it
 	const bump = () => setTick((t) => t + 1);
 	/**
-	 * When the last paste ended. A paste of many elements is heavy, and a held Ctrl+V or a quick
-	 * second press would queue more of them behind it: while one is under way, or just ended, the
-	 * next is ignored. One paste at a time.
+	 * When the last paste (or duplicate) ended. Copying many elements is heavy, and a held Ctrl+V or
+	 * Ctrl+D or a quick second press would queue more of them behind it: while one is under way, or
+	 * just ended, the next is ignored. One at a time.
 	 */
 	const pasteEnded = useRef(Number.NEGATIVE_INFINITY);
 	const pasteBusy = () => performance.now() - pasteEnded.current < PASTE_GAP_MS;
@@ -681,13 +681,17 @@ export function BoardView({
 			}
 			// Ctrl+C and Ctrl+V are left to the browser: its copy and paste events fill and read the
 			// system clipboard (R-035); preventing the key here would swallow the copy event.
-			if (
-				ctrlKey &&
-				e.key.toLowerCase() === "d" &&
-				controller.duplicateSelected()
-			) {
-				e.preventDefault();
-				return;
+			if (ctrlKey && e.key.toLowerCase() === "d") {
+				// One at a time, like a paste: a held key or a quick repeat is ignored.
+				if (e.repeat || pasteBusy()) {
+					e.preventDefault();
+					return;
+				}
+				if (controller.duplicateSelected()) {
+					pasteDone();
+					e.preventDefault();
+					return;
+				}
 			}
 			if (!ctrlKey || e.key.toLowerCase() !== "z") return;
 			e.preventDefault();

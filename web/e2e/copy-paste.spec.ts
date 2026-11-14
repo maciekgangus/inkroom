@@ -96,4 +96,24 @@ test.describe("Ctrl+C and Ctrl+V on the board (R-030, R-035)", () => {
 		});
 		expect(count).toBe(3);
 	});
+
+	test("holding Ctrl+D duplicates once, and a quick second press waits", async ({
+		page,
+	}) => {
+		await pen(page, [200, 500], [500, 500]);
+		await page.keyboard.press("Escape");
+		await page.mouse.click(350, 500);
+		await page.keyboard.down("Control");
+		for (let i = 0; i < 8; i++) await page.keyboard.down("d"); // held: the key repeats
+		await page.keyboard.up("d");
+		await page.keyboard.up("Control");
+		await page.keyboard.press("Control+d"); // right after: still the same wish
+		await page.waitForTimeout(700);
+		const count = await page.evaluate(async () => {
+			const id = location.pathname.split("/").pop();
+			return (await (await fetch(`/api/boards/${id}/preview`)).json()).strokes
+				.length;
+		});
+		expect(count).toBe(2); // the one drawn and one duplicate
+	});
 });
