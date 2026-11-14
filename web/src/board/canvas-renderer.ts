@@ -14,8 +14,6 @@ import { textFont } from "./text-wrap";
 import { centerOf } from "./transform";
 import type { Rect, Viewport } from "./viewport";
 
-/** The most selected elements that still get the neon glow; a bigger selection just has its frame. */
-const GLOW_MAX = 25;
 /** The selection glow (R-058), tuned by eye: a violet close to the nib of the logo. */
 const GLOW_COLOR = "hsl(252, 100%, 60%)";
 const GLOW_BLUR = 4;
@@ -695,9 +693,9 @@ export class CanvasRenderer implements Renderer {
 			for (const s of this.drag.elements) this.drawStroke(ctx, s, view, dx, dy);
 			ctx.restore();
 		}
-		// A glow is a blurred shadow, which is costly: not while dragging, not on a big selection.
-		if (!this.drag && this.highlight.length <= GLOW_MAX)
-			for (const s of this.highlight) this.drawGlow(ctx, s);
+		// A glow is a blurred shadow, which is costly while dragging: not then. The bottleneck of a
+		// big selection is the network, not the drawing, so every selected element glows.
+		if (!this.drag) for (const s of this.highlight) this.drawGlow(ctx, s);
 		if (this.endpoints) this.drawEndpoints(ctx, this.endpoints);
 		if (this.vertices) this.drawEndpoints(ctx, this.vertices);
 		if (this.adjust) this.drawAdjust(ctx, this.adjust);
