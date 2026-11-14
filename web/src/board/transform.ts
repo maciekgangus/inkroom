@@ -18,17 +18,33 @@ export function geomBox(el: Stroke): Rect {
 		const r = Math.hypot(e[0] - c[0], e[1] - c[1]);
 		return { minX: c[0] - r, minY: c[1] - r, maxX: c[0] + r, maxY: c[1] + r };
 	}
+	return pointsBox(el);
+}
+
+const boxes = new WeakMap<Stroke, { n: number; box: Rect }>();
+
+/**
+ * The box round the points of an element, counted once per element. A pen stroke can have
+ * hundreds of points, and the pointer asks for the frame of the selection at every move: with
+ * a big selection that was a million points each time. An element is replaced, not changed, when
+ * it is edited; one that is still being drawn grows, which the number of points tells.
+ */
+export function pointsBox(el: Stroke): Rect {
+	const kept = boxes.get(el);
+	if (kept && kept.n === el.points.length) return kept.box;
 	let minX = Number.POSITIVE_INFINITY;
 	let minY = Number.POSITIVE_INFINITY;
 	let maxX = Number.NEGATIVE_INFINITY;
 	let maxY = Number.NEGATIVE_INFINITY;
 	for (const [x, y] of el.points) {
-		minX = Math.min(minX, x);
-		minY = Math.min(minY, y);
-		maxX = Math.max(maxX, x);
-		maxY = Math.max(maxY, y);
+		if (x < minX) minX = x;
+		if (y < minY) minY = y;
+		if (x > maxX) maxX = x;
+		if (y > maxY) maxY = y;
 	}
-	return { minX, minY, maxX, maxY };
+	const box = { minX, minY, maxX, maxY };
+	boxes.set(el, { n: el.points.length, box });
+	return box;
 }
 
 /** The point an element rotates around. */

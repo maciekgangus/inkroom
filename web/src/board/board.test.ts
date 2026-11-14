@@ -333,3 +333,29 @@ describe("Board version", () => {
 		expect(b.version).not.toBe(v3);
 	});
 });
+
+describe("Board.applyRemote reports whether anything changed", () => {
+	test("an add of an element already there changes nothing", () => {
+		const b = new Board();
+		const s = {
+			id: "r1",
+			authorId: "a",
+			color: "#111",
+			size: 2,
+			z: 1,
+			points: [[0, 0, 0.5]],
+		} as Stroke;
+		expect(b.applyRemote({ t: "add", stroke: s })).toBe(true);
+		const v = b.version;
+		expect(b.applyRemote({ t: "add", stroke: s })).toBe(false);
+		expect(b.version).toBe(v);
+		expect(b.applyRemote({ t: "remove", id: "nope" })).toBe(false);
+		expect(b.applyRemote({ t: "update", stroke: { ...s, id: "nope" } })).toBe(
+			false,
+		);
+		expect(
+			b.applyRemote({ t: "update", stroke: { ...s, color: "#222" } }),
+		).toBe(true);
+		expect(b.applyRemote({ t: "remove", id: "r1" })).toBe(true);
+	});
+});

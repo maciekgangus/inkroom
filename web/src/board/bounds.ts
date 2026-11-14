@@ -1,6 +1,6 @@
 import type { Stroke } from "./board";
 import { fontSizeOf, textBox } from "./text";
-import { centerOf, rotatePoint } from "./transform";
+import { centerOf, pointsBox, rotatePoint } from "./transform";
 import type { Rect } from "./viewport";
 
 /** Box around an element as it appears on the board: its padded box, turned by its rotation. */
@@ -51,16 +51,7 @@ function plainBounds(stroke: Stroke): Rect {
 		const r = Math.hypot(edge[0] - c[0], edge[1] - c[1]) + stroke.size;
 		return { minX: c[0] - r, minY: c[1] - r, maxX: c[0] + r, maxY: c[1] + r };
 	}
-	let minX = Number.POSITIVE_INFINITY;
-	let minY = Number.POSITIVE_INFINITY;
-	let maxX = Number.NEGATIVE_INFINITY;
-	let maxY = Number.NEGATIVE_INFINITY;
-	for (const [x, y] of stroke.points) {
-		if (x < minX) minX = x;
-		if (y < minY) minY = y;
-		if (x > maxX) maxX = x;
-		if (y > maxY) maxY = y;
-	}
+	const { minX, minY, maxX, maxY } = pointsBox(stroke);
 	const pad = stroke.size;
 	return {
 		minX: minX - pad,

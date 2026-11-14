@@ -506,6 +506,8 @@ export function BoardView({
 		};
 		/** Where the pointer last was on the board: pasted elements land there. */
 		let lastPointer: [number, number] | undefined;
+		/** The text of the last copy made here, to know our own copy when it comes back. */
+		let lastCopy = "";
 
 		const resize = () => {
 			canvas.resize();
@@ -589,7 +591,15 @@ export function BoardView({
 				return;
 			}
 			// Elements copied on a board, on this one or another, travel as JSON text (R-035).
-			const clip = parseClipboard(e.clipboardData?.getData("text/plain") ?? "");
+			const text = e.clipboardData?.getData("text/plain") ?? "";
+			// Our own copy, still on the clipboard: paste it from memory. Reading it back means
+			// checking every point of it, which takes seconds for a big selection.
+			if (text !== "" && text === lastCopy && controller.hasClipboard) {
+				e.preventDefault();
+				controller.paste(lastPointer);
+				return;
+			}
+			const clip = parseClipboard(text);
 			if (clip) {
 				e.preventDefault();
 				pasteClip.current(clip, lastPointer);
@@ -604,10 +614,8 @@ export function BoardView({
 		/** Puts the selection on the system clipboard as JSON; false if nothing is selected. */
 		const copyToEvent = (e: ClipboardEvent): boolean => {
 			if (typing(e) || !controller.copySelected()) return false;
-			e.clipboardData?.setData(
-				"text/plain",
-				serializeSelection(controller.selection, boardId),
-			);
+			lastCopy = serializeSelection(controller.selection, boardId);
+			e.clipboardData?.setData("text/plain", lastCopy);
 			e.preventDefault();
 			return true;
 		};

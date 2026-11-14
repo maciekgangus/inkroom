@@ -286,3 +286,22 @@ func TestRenamingTheBoardIsPushedToEveryoneOnIt(t *testing.T) {
 		t.Fatalf("stored name: got %v", m)
 	}
 }
+
+// Big messages (a paste of hundreds of strokes, the whole board for a newcomer) are compressed on
+// the wire when the client agrees; the little live messages stay under the compression threshold.
+func TestWebSocketCompressesBigMessages(t *testing.T) {
+	srv, _, _ := testApp(t)
+	id := newBoard(t, srv)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	c, resp, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(srv.URL, "http")+"/ws/"+id, &websocket.DialOptions{
+		CompressionMode: websocket.CompressionNoContextTakeover,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { c.CloseNow() })
+	if ext := resp.Header.Get("Sec-WebSocket-Extensions"); !strings.Contains(ext, "permessage-deflate") {
+		t.Fatalf("compression was not negotiated: %q", ext)
+	}
+}

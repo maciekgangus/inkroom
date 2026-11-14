@@ -299,12 +299,14 @@ export class SyncClient {
 					this.send(op);
 				}
 				break;
-			case "add":
+			case "add": {
 				if (!m.stroke) return;
-				this.board.applyRemote({ t: "add", stroke: m.stroke });
+				const added = this.board.applyRemote({ t: "add", stroke: m.stroke });
 				this.liveIn.delete(m.stroke.id);
 				this.acknowledge("add", m.stroke.id);
+				if (!added) return; // the echo of our own: it is on the board already, nothing to draw
 				break;
+			}
 			case "update":
 				if (!m.stroke) return;
 				this.board.applyRemote({ t: "update", stroke: m.stroke });
