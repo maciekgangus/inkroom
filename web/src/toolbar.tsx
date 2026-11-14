@@ -48,6 +48,7 @@ const TOOLS: { tool: Settings["tool"]; label: string }[] = [
 	{ tool: "text", label: "Tekst" },
 	{ tool: "eraser", label: "Gumka" },
 	{ tool: "pan", label: "Ręka" },
+	{ tool: "laser", label: "Wskaźnik" },
 ];
 
 /** Tools that draw something in the chosen colour. */

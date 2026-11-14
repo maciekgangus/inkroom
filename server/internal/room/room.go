@@ -336,6 +336,13 @@ func (r *Room) Handle(c *Client, raw []byte) error {
 			}
 		}
 		r.broadcastLocked(msg, c)
+	case "laser":
+		// The red pointer (a trail that fades): shown to the others, never stored. It is not
+		// drawing, so it needs no right to draw.
+		if err := checkID(m.ID); err != nil {
+			return err
+		}
+		r.broadcastLocked(msg, c)
 	default:
 		return errors.New("unknown message type")
 	}

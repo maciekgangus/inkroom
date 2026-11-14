@@ -564,3 +564,52 @@ func TestTheAdministratorIsIdentifiedByTheServerOnly(t *testing.T) {
 		t.Fatalf("an empty id leaves the client anonymous, got %q %q", c.ID, c.Name)
 	}
 }
+
+const laserMsg = `{"t":"laser","id":"a","start":true,"points":[[1,2],[3,4]]}`
+
+func TestLaserGoesToOthersOnlyAndIsNotStored(t *testing.T) {
+	r := New()
+	a, b := join(r), join(r)
+	recv(t, a)
+	recv(t, b)
+	if err := r.Handle(a, []byte(laserMsg)); err != nil {
+		t.Fatal(err)
+	}
+	none(t, a)
+	m := recv(t, b)
+	if m["t"] != "laser" || m["id"] != "a" || m["start"] != true {
+		t.Fatalf("got %v", m)
+	}
+	if pts, _ := m["points"].([]any); len(pts) != 2 {
+		t.Fatalf("points lost: %v", m)
+	}
+	late := join(r)
+	if ids := strokeIDs(t, recv(t, late)); len(ids) != 0 {
+		t.Fatalf("the laser was stored: %v", ids)
+	}
+}
+
+func TestLaserWorksForSomeoneWhoMayNotDraw(t *testing.T) {
+	// Pointing at something is not drawing: a student whose drawing was taken away can still point.
+	r := New()
+	a, b := join(r), join(r)
+	recv(t, a)
+	recv(t, b)
+	r.setRevoked([]string{"p"})
+	a.SetPerson("p", false)
+	if err := r.Handle(a, []byte(laserMsg)); err != nil {
+		t.Fatal(err)
+	}
+	if m := recv(t, b); m["t"] != "laser" {
+		t.Fatalf("got %v", m)
+	}
+}
+
+func TestLaserNeedsAnId(t *testing.T) {
+	r := New()
+	a := join(r)
+	recv(t, a)
+	if err := r.Handle(a, []byte(`{"t":"laser","points":[[1,2]]}`)); err == nil {
+		t.Fatal("a laser without an id was accepted")
+	}
+}

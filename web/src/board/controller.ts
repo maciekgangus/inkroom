@@ -79,7 +79,15 @@ export interface Renderer {
 
 /** Current tool settings, mutated by the toolbar. */
 export interface Settings {
-	tool: "pen" | "eraser" | "pan" | "line" | "shape" | "text" | "select";
+	tool:
+		| "pen"
+		| "eraser"
+		| "pan"
+		| "line"
+		| "shape"
+		| "text"
+		| "select"
+		| "laser";
 	/** Which shape the shape tool draws (R-033); a rectangle if none was chosen. */
 	shape?: ShapeChoice;
 	/** The line style of new elements (R-038): what fits the tool is used, the rest is ignored. */
@@ -272,6 +280,11 @@ export class Controller {
 		);
 	}
 
+	/** True while the laser tool is pressed: its points go on being reported. */
+	private laserOn = false;
+	/** Called with a board point of the laser's trail; `start` for the first of a press. */
+	onLaser: ((at: [number, number], start: boolean) => void) | null = null;
+
 	/** True while a pen or mouse pointer is down (touch gestures must then be ignored). */
 	get busy(): boolean {
 		return this.activeId !== null;
@@ -286,6 +299,13 @@ export class Controller {
 			// Right button: pan for a moment, whatever the tool; a click opens the menu.
 			this.rightPress = { x: e.clientX, y: e.clientY, moved: false };
 			this.panFrom = { x: e.clientX, y: e.clientY };
+			return;
+		}
+		if (button === 0 && this.settings.tool === "laser") {
+			// The red pointer: a trail that fades, shown to everyone and kept nowhere. Pointing is
+			// not drawing, so it also works when drawing was taken away.
+			this.laserOn = true;
+			this.onLaser?.(this.viewport.toWorld(e.clientX, e.clientY), true);
 			return;
 		}
 		if (button === 1 || this.settings.tool === "pan" || this.readOnly) {
@@ -349,6 +369,10 @@ export class Controller {
 			else this.renderer.redraw(this.board.strokes);
 			return;
 		}
+		if (this.laserOn) {
+			this.onLaser?.(this.viewport.toWorld(e.clientX, e.clientY), false);
+			return;
+		}
 		if (this.edit) {
 			this.dragEdit(e);
 			return;
@@ -390,6 +414,7 @@ export class Controller {
 
 	private finishPointer(e: PointerInput): void {
 		this.activeId = null;
+		this.laserOn = false;
 		this.panFrom = null;
 		const press = this.rightPress;
 		this.rightPress = null;

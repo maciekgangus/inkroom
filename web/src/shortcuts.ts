@@ -11,6 +11,7 @@ const DEFAULT_KEYS: Partial<Record<Tool, string>> = {
 	eraser: "KeyE",
 	line: "KeyL",
 	shape: "KeyK",
+	laser: "KeyP",
 };
 
 /** The tools that have a key, in the order they are listed, with the name shown. */
@@ -22,6 +23,7 @@ export const KEYED_TOOLS: { tool: Tool; name: string }[] = [
 	{ tool: "eraser", name: "Gumka" },
 	{ tool: "line", name: "Linia" },
 	{ tool: "shape", name: "Kształty" },
+	{ tool: "laser", name: "Wskaźnik" },
 ];
 
 /** Keys that already do something else on the board or in the browser: no tool can have them. */

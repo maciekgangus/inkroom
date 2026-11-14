@@ -76,6 +76,105 @@ describe("SyncClient", () => {
 
 	afterEach(() => vi.useRealTimers());
 
+	describe("the laser pointer", () => {
+		const lasersSent = () => sock().sent.filter((m) => m.t === "laser");
+
+		test("points of one frame go out together, the first of a stroke marked as its start", () => {
+			connectAndJoin();
+			client.laserMove(1, 2, true);
+			client.laserMove(3, 4, false);
+			client.laserMove(5, 6, false);
+			expect(lasersSent()).toHaveLength(0); // not before the frame
+			flush();
+			expect(lasersSent()).toEqual([
+				{
+					t: "laser",
+					id: "me",
+					start: true,
+					points: [
+						[1, 2],
+						[3, 4],
+						[5, 6],
+					],
+				},
+			]);
+			client.laserMove(7, 8, false);
+			flush();
+			expect(lasersSent()[1]).toMatchObject({ start: false, points: [[7, 8]] });
+		});
+
+		test("a new stroke inside one frame does not run into the previous one", () => {
+			connectAndJoin();
+			client.laserMove(1, 1, true);
+			client.laserMove(9, 9, true);
+			flush();
+			expect(lasersSent()).toHaveLength(2);
+			expect(lasersSent()[1]).toMatchObject({ start: true, points: [[9, 9]] });
+		});
+
+		test("nothing is sent while the connection is down", () => {
+			client.laserMove(1, 1, true);
+			flush();
+			expect(lasersSent()).toHaveLength(0);
+		});
+
+		test("the laser of another person is passed on, and the board is not repainted for it", () => {
+			const onLaser = vi.fn();
+			const c = new SyncClient(board, {
+				createSocket: () => {
+					const s = new FakeSocket();
+					sockets.push(s);
+					return s;
+				},
+				onUpdate,
+				onLaser,
+				self: { authorId: "me", name: "Ola" },
+			});
+			c.connect();
+			sock().open();
+			sock().receive({ t: "snapshot", strokes: [] });
+			const before = (onUpdate as ReturnType<typeof vi.fn>).mock.calls.length;
+			sock().receive({
+				t: "laser",
+				id: "ann",
+				start: true,
+				points: [
+					[1, 2],
+					[3, 4],
+				],
+			});
+			expect(onLaser).toHaveBeenCalledWith(
+				"ann",
+				[
+					[1, 2],
+					[3, 4],
+				],
+				true,
+			);
+			expect((onUpdate as ReturnType<typeof vi.fn>).mock.calls.length).toBe(
+				before,
+			);
+		});
+
+		test("a broken laser message is ignored", () => {
+			const onLaser = vi.fn();
+			const c = new SyncClient(board, {
+				createSocket: () => {
+					const s = new FakeSocket();
+					sockets.push(s);
+					return s;
+				},
+				onUpdate,
+				onLaser,
+			});
+			c.connect();
+			sock().open();
+			sock().receive({ t: "laser", id: "x", points: "no" });
+			sock().receive({ t: "laser", points: [[1, 2]] });
+			expect(onLaser).not.toHaveBeenCalled();
+		});
+	});
+
 	test("local operations are sent while connected", () => {
 		connectAndJoin();
 		const s = stroke("1");

@@ -22,6 +22,7 @@ import { TouchGestures } from "./board/gestures";
 import { ImageCache } from "./board/image-cache";
 import { defaultSize, placeCentered } from "./board/image-geometry";
 import { prepareImage, uploadImage } from "./board/image-upload";
+import { LaserTrails } from "./board/laser";
 import { contentBounds, fitView } from "./board/minimap";
 import { loadShape } from "./board/shapes";
 import { applyStyle, type StylePatch } from "./board/style";
@@ -171,6 +172,11 @@ export function BoardView({
 	 * just ended, the next is ignored. One at a time.
 	 */
 	const pasteEnded = useRef(Number.NEGATIVE_INFINITY);
+	/** The laser pointer reaches the board from two places (our tool and the network). */
+	const laserBridge = useRef<
+		(id: string, points: [number, number][], start: boolean) => void
+	>(() => {});
+	const laserRafId = useRef(0);
 	const pasteBusy = () => performance.now() - pasteEnded.current < PASTE_GAP_MS;
 	const pasteDone = () => {
 		pasteEnded.current = performance.now();
@@ -279,6 +285,7 @@ export function BoardView({
 			onPeers: setPeers,
 			onName: setTitle,
 			onUpdate: () => remote.mark(BOARD),
+			onLaser: (id, points, start) => laserBridge.current(id, points, start),
 			onLive: () => remote.mark(LIVE),
 		});
 		// What comes from the network is painted once per frame, however many messages came: a
@@ -318,6 +325,27 @@ export function BoardView({
 			newId,
 		);
 		ctl.current = controller;
+		// The red laser pointer: trails that fade, ours and other people's, drawn on the live layer.
+		const lasers = new LaserTrails();
+		const paintLasers = () => {
+			laserRafId.current = 0;
+			const lines = lasers.visible(performance.now());
+			canvas.setLasers(lines);
+			if (lines.length > 0)
+				laserRafId.current = requestAnimationFrame(paintLasers);
+		};
+		const laserSeen = () => {
+			if (!laserRafId.current)
+				laserRafId.current = requestAnimationFrame(paintLasers);
+		};
+		laserBridge.current = (id, points, start) => {
+			lasers.add(id, points, start, performance.now());
+			laserSeen();
+		};
+		controller.onLaser = (p, start) => {
+			laserBridge.current(authorId, [p], start);
+			sync.laserMove(p[0], p[1], start);
+		};
 		let shownCursor = "";
 		/** Whether the pointer rests on the turning handle (set as it moves). */
 		let overTurn = false;
@@ -724,6 +752,7 @@ export function BoardView({
 		return () => {
 			cancelAnimationFrame(anim.raf);
 			remote.cancel();
+			cancelAnimationFrame(laserRafId.current);
 			sync.close();
 			removeEventListener("resize", resize);
 			cancelled = true;
