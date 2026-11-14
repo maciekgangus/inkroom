@@ -18,6 +18,7 @@ import { Icon, type IconName } from "./icon";
 import { Slider } from "./slider";
 import "./properties-panel.css";
 import { useLayoutEffect, useRef, useState } from "preact/hooks";
+import { WIDTH_SHOWN } from "./stroke-controls";
 
 /** How each line style is shown on its button; the natural pen gets a wave icon. */
 const DASH_LABELS: Record<Dash, string> = {
@@ -220,13 +221,13 @@ export function PropertiesPanel({
 						<Slider
 							icon="width"
 							label="prop size"
-							min={0.25}
-							max={50}
-							step={0.25}
-							value={now.size}
+							min={0.25 * WIDTH_SHOWN}
+							max={50 * WIDTH_SHOWN}
+							step={0.25 * WIDTH_SHOWN}
+							value={now.size * WIDTH_SHOWN}
 							unit=" px"
-							onInput={(v) => onPreview({ size: v })}
-							onChange={(v) => onChange({ size: v })}
+							onInput={(v) => onPreview({ size: v / WIDTH_SHOWN })}
+							onChange={(v) => onChange({ size: v / WIDTH_SHOWN })}
 						/>
 					)}
 				</div>
