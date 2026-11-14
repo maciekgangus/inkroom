@@ -200,13 +200,7 @@ func (a *app) adminCopyBoard(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	a.hub.Flush() // what people drew a moment ago may not be in the database yet
-	cp, err := a.st.CopyBoard(b.ID, newBoardID(), b.OwnerID, copyName(b.Name), newBoardID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Błąd serwera")
-		return
-	}
-	writeJSON(w, http.StatusCreated, map[string]string{"id": cp.ID, "name": cp.Name})
+	a.copyTo(w, b, b.OwnerID)
 }
 
 func (a *app) adminDeleteBoard(w http.ResponseWriter, r *http.Request) {

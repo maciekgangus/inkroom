@@ -211,9 +211,14 @@ func (a *app) copyBoard(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	a.hub.Flush() // what people drew a moment ago may not be in the database yet
 	u, _ := a.auth.User(r)
-	cp, err := a.st.CopyBoard(b.ID, newBoardID(), u.ID, copyName(b.Name), newBoardID)
+	a.copyTo(w, b, u.ID)
+}
+
+// copyTo copies a board for the given owner and answers with the new board's id and name.
+func (a *app) copyTo(w http.ResponseWriter, b store.Board, ownerID int64) {
+	a.hub.Flush() // what people drew a moment ago may not be in the database yet
+	cp, err := a.st.CopyBoard(b.ID, newBoardID(), ownerID, copyName(b.Name), newBoardID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Błąd serwera")
 		return

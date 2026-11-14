@@ -1,6 +1,6 @@
 import type { Stroke } from "./board";
 import { worldBounds } from "./transform";
-import { MAX_SCALE, MIN_SCALE, type Rect } from "./viewport";
+import { clampScale, type Rect } from "./viewport";
 
 /** How the mini map maps the board onto its box: map = (board - origin) * scale + offset. */
 export interface MapFit {
@@ -91,7 +91,7 @@ export function fitView(
 	const w = Math.max(content.maxX - content.minX, 1);
 	const h = Math.max(content.maxY - content.minY, 1);
 	const scale = Math.min(screenW / w, screenH / h) * (1 - 2 * MARGIN);
-	v.scale = Math.min(1, Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale)));
+	v.scale = Math.min(1, clampScale(scale));
 	centreOn(
 		v,
 		[(content.minX + content.maxX) / 2, (content.minY + content.maxY) / 2],

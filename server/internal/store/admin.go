@@ -121,12 +121,12 @@ func (s *Store) RenameUser(id int64, username string) error {
 		}
 		return err
 	}
-	return s.oneRow(res, nil)
+	return s.mustAffect(res, nil)
 }
 
 // DeleteUser removes an account with its sessions, visits and boards (and what is on them).
 func (s *Store) DeleteUser(id int64) error {
-	return s.oneRow(s.db.Exec("DELETE FROM users WHERE id = ?", id))
+	return s.mustAffect(s.db.Exec("DELETE FROM users WHERE id = ?", id))
 }
 
 // DeleteUserSessions logs an account out everywhere.
@@ -143,5 +143,5 @@ func (s *Store) SetBoardOwner(boardID string, userID int64) error {
 	} else if err != nil {
 		return err
 	}
-	return s.oneRow(s.db.Exec("UPDATE boards SET owner_id = ? WHERE id = ?", userID, boardID))
+	return s.mustAffect(s.db.Exec("UPDATE boards SET owner_id = ? WHERE id = ?", userID, boardID))
 }

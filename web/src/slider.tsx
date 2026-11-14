@@ -1,3 +1,4 @@
+import { clamp } from "./board/clamp";
 import { Icon, type IconName } from "./icon";
 /** Width of the slider's thumb in px; the CSS draws it this size and the fill follows its middle. */
 export const THUMB_PX = 16;
@@ -29,7 +30,7 @@ export function Slider({
 	// The thumb's middle travels from half a thumb to half a thumb short of the end, so the fill
 	// is drawn to that point: `--p` is the position along that travel (see the CSS).
 	const span = max - min;
-	const p = span > 0 ? Math.min(1, Math.max(0, (value - min) / span)) : 0;
+	const p = span > 0 ? clamp((value - min) / span, 0, 1) : 0;
 	return (
 		<label class="slider">
 			{icon && (

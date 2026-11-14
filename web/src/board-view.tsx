@@ -28,7 +28,7 @@ import { applyStyle, type StylePatch } from "./board/style";
 import { fontSizeFor, fontSizeOf, fontsChanged } from "./board/text";
 import { textFont } from "./board/text-wrap";
 import { createViewSaver } from "./board/view-saver";
-import { MAX_SCALE, MIN_SCALE, type Rect, Viewport } from "./board/viewport";
+import { clampScale, type Rect, Viewport } from "./board/viewport";
 import { stepZoom, wheelZoomFactor } from "./board/zoom";
 import { BoardMenuButton, boardMenuItems, type MenuAt } from "./board-menu";
 import { BoardTitle } from "./board-title";
@@ -116,7 +116,6 @@ export function BoardView({
 	);
 	const viewport = useMemo(() => new Viewport(), []);
 	const [scale, setScale] = useState(1);
-	/** Board position of the text being typed, if any. */
 	/** An existing text being edited (double-click), if any. */
 	const [editingText, setEditingText] = useState<Stroke | null>(null);
 	const [textAt, setTextAt] = useState<{
@@ -152,10 +151,10 @@ export function BoardView({
 			);
 		if (moved) setEditorRect(next);
 	});
-	/** The selection whose panel was put away with the cross; another selection brings it back. */
 	/** The selection whose menu is open: by default only the tile is there, the menu opens on it (R-060). */
 	const [menuOpenFor, setMenuOpenFor] = useState<string | null>(null);
 	const [, setTick] = useState(0); // bumped when the view changes, so the text field follows it
+	const bump = () => setTick((t) => t + 1);
 	const ctl = useRef<Controller | null>(null);
 	const syncRef = useRef<SyncClient | null>(null);
 	const rendererRef = useRef<CanvasRenderer | null>(null);
@@ -254,12 +253,12 @@ export function BoardView({
 		const sync = new SyncClient(board, {
 			createSocket: connect,
 			self: { authorId, name },
-			onCursors: () => setTick((t) => t + 1),
+			onCursors: bump,
 			onBackground: setBackground,
 			onPeers: setPeers,
 			onName: setTitle,
 			onUpdate: () => {
-				setTick((t) => t + 1); // the map of the board follows what others draw
+				bump(); // the map of the board follows what others draw
 				ctl.current?.refreshSelection();
 				canvas.redraw(board.strokes);
 				canvas.setRemoteLive(sync.liveStrokes());
@@ -328,7 +327,7 @@ export function BoardView({
 			setEditingText(el);
 		};
 		controller.onSelectionChange = () => {
-			setTick((t) => t + 1);
+			bump();
 		};
 		// A right click (R-029): the menu, but only with a mouse; tablets have none (R-028).
 		controller.onRightClick = (e) => {
@@ -350,14 +349,14 @@ export function BoardView({
 			clearTimeout(viewSettle);
 			viewSettle = setTimeout(() => {
 				controller.restoreFrame();
-				setTick((t) => t + 1);
+				bump();
 			}, VIEW_SETTLE_MS);
 		};
 		const changed = () => {
 			viewMoving();
 			canvas.redraw(board.strokes);
 			setScale(viewport.scale);
-			setTick((t) => t + 1);
+			bump();
 			if (viewReady)
 				viewSaver.schedule({
 					x: viewport.x,
@@ -376,7 +375,7 @@ export function BoardView({
 			viewReady = true;
 			canvas.redraw(board.strokes);
 			setScale(viewport.scale);
-			setTick((t) => t + 1);
+			bump();
 		});
 		const leaving = () => viewSaver.flush();
 		addEventListener("pagehide", leaving);
@@ -393,7 +392,7 @@ export function BoardView({
 		};
 		zoomAnim.current = {
 			to: (scale, sx, sy) => {
-				anim.target = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale));
+				anim.target = clampScale(scale);
 				anim.sx = sx;
 				anim.sy = sy;
 				if (!anim.raf) {
@@ -437,7 +436,7 @@ export function BoardView({
 			} finally {
 				pdfAbort.current = null;
 				setPdfJob(null);
-				setTick((t) => t + 1);
+				bump();
 			}
 		};
 
@@ -463,7 +462,7 @@ export function BoardView({
 					maxY: y + size.h,
 				});
 				settings.tool = "select"; // so it can be resized right away
-				setTick((t) => t + 1);
+				bump();
 			} catch (e) {
 				setImageError(
 					e instanceof Error ? e.message : "Nie udało się dodać obrazu",
@@ -486,7 +485,7 @@ export function BoardView({
 				const elements = await rehomeImages(clip, boardId, transferImage);
 				controller.pasteSource(elements, at);
 				settings.tool = "select"; // the pasted elements are selected, ready to move
-				setTick((t) => t + 1);
+				bump();
 			} catch (e) {
 				setImageError(e instanceof Error ? e.message : "Nie udało się wkleić");
 			}
@@ -518,7 +517,7 @@ export function BoardView({
 				// The hand, the right and the middle button. The cursors of others and the text field are
 				// HTML above the canvas, so they need a render at every step to stay on the content.
 				viewMoving();
-				setTick((t) => t + 1);
+				bump();
 			}
 			setOverTurn.current(controller.overRotate(e.clientX, e.clientY));
 			applyCursor.current(); // a safety net: whichever way the tool changed, it shows
@@ -621,7 +620,7 @@ export function BoardView({
 				applyToolShortcut(e, settings, () => controller.select(null))
 			) {
 				e.preventDefault();
-				setTick((t) => t + 1);
+				bump();
 				return;
 			}
 			if (
@@ -716,7 +715,7 @@ export function BoardView({
 
 	// Expired cursors vanish even if nothing else happens on the board.
 	useEffect(() => {
-		const timer = setInterval(() => setTick((t) => t + 1), 5000);
+		const timer = setInterval(() => bump(), 5000);
 		return () => clearInterval(timer);
 	}, []);
 
@@ -888,7 +887,7 @@ export function BoardView({
 		} else {
 			ctl.current?.setProps(patch);
 		}
-		setTick((t) => t + 1);
+		bump();
 		// The text keeps being edited while the panel is used.
 		if (typing || editingText)
 			document
@@ -919,7 +918,7 @@ export function BoardView({
 					}
 					fontSize={fontSizeOf(liveText ?? editingText) * viewport.scale}
 					color={displayColor((liveText ?? editingText).color, currentTheme())}
-					onResize={() => setTick((t) => t + 1)}
+					onResize={bump}
 					width={
 						(liveText ?? editingText).width === undefined
 							? undefined
@@ -954,7 +953,7 @@ export function BoardView({
 						viewport.scale
 					}
 					color={displayColor(draft?.color ?? settings.color, theme)}
-					onResize={() => setTick((t) => t + 1)}
+					onResize={bump}
 					width={textAt.area ? textAt.area.w * viewport.scale : undefined}
 					minHeight={textAt.area ? textAt.area.h * viewport.scale : undefined}
 					onCommit={(text) => {

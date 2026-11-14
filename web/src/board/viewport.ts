@@ -1,5 +1,11 @@
+import { clamp } from "./clamp";
+
 export const MIN_SCALE = 0.1;
 export const MAX_SCALE = 5;
+
+/** A zoom held between the smallest and the largest the board allows. */
+export const clampScale = (scale: number): number =>
+	clamp(scale, MIN_SCALE, MAX_SCALE);
 
 /** The visible part of the board, in board coordinates. */
 export interface Rect {
@@ -41,7 +47,7 @@ export class Viewport {
 
 	/** Sets the scale (clamped), keeping the board point under (sx, sy) in place. */
 	setScaleAt(sx: number, sy: number, scale: number): void {
-		const next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale));
+		const next = clampScale(scale);
 		if (next === this.scale) return;
 		const [wx, wy] = this.toWorld(sx, sy);
 		this.scale = next;
