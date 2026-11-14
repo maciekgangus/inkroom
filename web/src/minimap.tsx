@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "preact/hooks";
+import { useEffect, useMemo, useRef } from "preact/hooks";
 import type { Stroke } from "./board/board";
 import { paintElements } from "./board/canvas-renderer";
 import {
@@ -23,6 +23,8 @@ const MAX_DRAWN = 4000;
 
 interface Props {
 	strokes: Stroke[];
+	/** Changes whenever the elements or their colours do; the drawn map is kept until then. */
+	version?: string | number;
 	viewport: Viewport;
 	/** Size of the screen the viewport is shown on. */
 	screen: { w: number; h: number };
@@ -36,42 +38,78 @@ interface Props {
  * A map of the whole board (R-049): every element as a small coloured box, the part on screen as
  * a frame. A click or a drag puts the middle of the screen where the pointer is.
  */
-export function Minimap({ strokes, viewport, screen, ink, onNavigate }: Props) {
+export function Minimap({
+	strokes,
+	version,
+	viewport,
+	screen,
+	ink,
+	onNavigate,
+}: Props) {
 	const canvas = useRef<HTMLCanvasElement>(null);
 	/** While dragging, the map is kept as it was at the press, or it would slide under the pointer. */
 	const frozen = useRef<MapFit | null>(null);
 
 	const view = viewport.worldRect(screen.w, screen.h);
-	const fit =
-		frozen.current ??
-		mapFit(contentBounds(strokes), view, { w: MAP_W, h: MAP_H });
+	// The page is rendered again at every step of a pan and for every cursor: the bounds of all
+	// the elements are counted only when the elements changed.
+	const stamp = version ?? strokes.length;
+	// biome-ignore lint/correctness/useExhaustiveDependencies: the list is changed in place, `stamp` says when
+	const content = useMemo(() => contentBounds(strokes), [strokes, stamp]);
+	const fit = frozen.current ?? mapFit(content, view, { w: MAP_W, h: MAP_H });
+	/** The elements as last drawn, kept apart from the frame of the view that moves over them. */
+	const layer = useRef<{ key: string; el: HTMLCanvasElement } | null>(null);
+	const drawn = useRef("");
 
-	// Drawn after every render: the board changes under it all the time.
+	// Runs after every render, but paints only what changed: the elements when they or the scale
+	// of the map did, the frame when the view did, nothing otherwise.
 	useEffect(() => {
 		const el = canvas.current;
 		const ctx = el?.getContext("2d");
 		if (!el || !ctx) return;
 		const dpr = window.devicePixelRatio || 1;
+		const layerKey = [
+			stamp,
+			dpr,
+			fit.scale,
+			fit.minX,
+			fit.minY,
+			fit.offX,
+			fit.offY,
+		].join("|");
+		const key = `${layerKey}|${view.minX}|${view.minY}|${view.maxX}|${view.maxY}`;
+		if (drawn.current === key) return;
+		drawn.current = key;
 		if (el.width !== MAP_W * dpr) {
 			el.width = MAP_W * dpr;
 			el.height = MAP_H * dpr;
 		}
+		if (layer.current?.key !== layerKey) {
+			const off = layer.current?.el ?? document.createElement("canvas");
+			off.width = MAP_W * dpr; // also clears it
+			off.height = MAP_H * dpr;
+			const octx = off.getContext("2d");
+			if (octx) {
+				const step = Math.max(1, Math.ceil(strokes.length / MAX_DRAWN));
+				// The board itself in miniature (R-061): the same drawing as the screen, drawn small;
+				// photos stay boxes and text is tiny text.
+				const sample =
+					step === 1 ? strokes : strokes.filter((_, i) => i % step === 0);
+				octx.setTransform(dpr, 0, 0, dpr, 0, 0);
+				octx.translate(fit.offX, fit.offY);
+				octx.scale(fit.scale, fit.scale);
+				octx.translate(-fit.minX, -fit.minY);
+				paintElements(octx, sample, ALL, null, true, {
+					ink,
+					minWidth: 1.2 / fit.scale,
+				});
+			}
+			layer.current = { key: layerKey, el: off };
+		}
+		ctx.setTransform(1, 0, 0, 1, 0, 0);
+		ctx.clearRect(0, 0, el.width, el.height);
+		ctx.drawImage(layer.current.el, 0, 0);
 		ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-		ctx.clearRect(0, 0, MAP_W, MAP_H);
-		const step = Math.max(1, Math.ceil(strokes.length / MAX_DRAWN));
-		// The board itself in miniature (R-061): the same drawing as the screen, drawn small; photos
-		// stay boxes and text is tiny text.
-		const sample =
-			step === 1 ? strokes : strokes.filter((_, i) => i % step === 0);
-		ctx.save();
-		ctx.translate(fit.offX, fit.offY);
-		ctx.scale(fit.scale, fit.scale);
-		ctx.translate(-fit.minX, -fit.minY);
-		paintElements(ctx, sample, ALL, null, true, {
-			ink,
-			minWidth: 1.2 / fit.scale,
-		});
-		ctx.restore();
 		const [vx0, vy0] = toMap(fit, view.minX, view.minY);
 		const [vx1, vy1] = toMap(fit, view.maxX, view.maxY);
 		const accent =

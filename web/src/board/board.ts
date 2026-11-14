@@ -110,6 +110,8 @@ const byOrder = (a: Stroke, b: Stroke) =>
 /** Board state: strokes ordered by (z, id) plus a separate undo/redo history per author. */
 export class Board {
 	strokes: Stroke[] = [];
+	/** Grows with every change of the elements, so what is drawn from them can be kept until then. */
+	version = 0;
 	/** Called for every local change (not for remote ones), so it can be sent to the server. */
 	onOp: ((op: BoardOp) => void) | null = null;
 	private histories = new Map<string, History>();
@@ -254,6 +256,7 @@ export class Board {
 	/** Replaces all strokes (server snapshot). */
 	setStrokes(strokes: Stroke[]): void {
 		this.strokes = [...strokes].sort(byOrder);
+		this.version++;
 	}
 
 	private record(authorId: string, action: Action): void {
@@ -290,12 +293,14 @@ export class Board {
 		let i = this.strokes.length;
 		while (i > 0 && byOrder(this.strokes[i - 1], stroke) > 0) i--;
 		this.strokes.splice(i, 0, stroke);
+		this.version++;
 	}
 
 	/** Swaps in a new version of an element that is on the board; ignores unknown ids. */
 	private replace(stroke: Stroke): void {
 		const i = this.strokes.findIndex((s) => s.id === stroke.id);
 		if (i < 0) return;
+		this.version++;
 		if (this.strokes[i].z === stroke.z) {
 			this.strokes[i] = stroke;
 			return;
@@ -307,6 +312,8 @@ export class Board {
 
 	private remove(id: string): void {
 		const i = this.strokes.findIndex((s) => s.id === id);
-		if (i >= 0) this.strokes.splice(i, 1);
+		if (i < 0) return;
+		this.strokes.splice(i, 1);
+		this.version++;
 	}
 }

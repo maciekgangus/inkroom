@@ -36,6 +36,7 @@ import { BrandLink } from "./brand-link";
 import { ContextMenu, type MenuItem } from "./context-menu";
 import { assignColors } from "./cursor-colors";
 import { Cursors } from "./cursors";
+import { frameBatch } from "./frame-batch";
 import { Icon } from "./icon";
 import { Minimap } from "./minimap";
 import { Participants } from "./participants";
@@ -91,6 +92,11 @@ const BACKGROUND_NAMES: Record<Background, string> = {
 };
 
 /** A shared infinite board: two canvas layers, a tool palette, zoom buttons and live sync. */
+/** What a message from the network changed (see `frameBatch`). */
+const BOARD = 1;
+const LIVE = 2;
+const CURSORS = 4;
+
 export function BoardView({
 	boardId,
 	authorId,
@@ -253,16 +259,23 @@ export function BoardView({
 		const sync = new SyncClient(board, {
 			createSocket: connect,
 			self: { authorId, name },
-			onCursors: bump,
+			onCursors: () => remote.mark(CURSORS),
 			onBackground: setBackground,
 			onPeers: setPeers,
 			onName: setTitle,
-			onUpdate: () => {
-				bump(); // the map of the board follows what others draw
+			onUpdate: () => remote.mark(BOARD),
+			onLive: () => remote.mark(LIVE),
+		});
+		// What comes from the network is painted once per frame, however many messages came: a
+		// stroke someone is drawing touches only the live layer, the board is repainted only when
+		// an element changed, and the page is rendered again only for the map and the cursors.
+		const remote = frameBatch((kinds) => {
+			if (kinds & BOARD) {
 				ctl.current?.refreshSelection();
 				canvas.redraw(board.strokes);
-				canvas.setRemoteLive(sync.liveStrokes());
-			},
+			}
+			if (kinds & (BOARD | LIVE)) canvas.setRemoteLive(sync.liveStrokes());
+			if (kinds & (BOARD | CURSORS)) bump();
 		});
 		syncRef.current = sync;
 		const renderer: Renderer = {
@@ -669,6 +682,7 @@ export function BoardView({
 
 		return () => {
 			cancelAnimationFrame(anim.raf);
+			remote.cancel();
 			sync.close();
 			removeEventListener("resize", resize);
 			cancelled = true;
@@ -1133,6 +1147,7 @@ export function BoardView({
 			{mapOpen && ctl.current && (
 				<Minimap
 					strokes={boardRef.current?.strokes ?? []}
+					version={`${boardRef.current?.version}|${theme}`}
 					viewport={viewport}
 					screen={{ w: innerWidth, h: innerHeight }}
 					ink={(c) => displayColor(c, currentTheme())}
