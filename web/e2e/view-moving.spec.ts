@@ -46,3 +46,22 @@ test("another person's cursor follows the board at every step of a pan", async (
 	await pan("middle"); // the middle button
 	await ctx.close();
 });
+
+test("the tile of the selection steps aside while the view is panned and comes back after", async ({
+	page,
+}) => {
+	const { openBoard, pen } = await import("./helpers");
+	await openBoard(page);
+	await pen(page, [200, 500], [500, 500]);
+	await page.keyboard.press("Escape");
+	await page.mouse.click(350, 500);
+	await expect(page.locator(".panel-tile")).toBeVisible();
+	await page.keyboard.press("m");
+	await page.mouse.move(600, 600);
+	await page.mouse.down();
+	await page.mouse.move(650, 620, { steps: 4 });
+	await expect(page.locator(".panel-tile")).toHaveCount(0, { timeout: 150 });
+	await page.mouse.move(700, 640, { steps: 4 });
+	await page.mouse.up();
+	await expect(page.locator(".panel-tile")).toBeVisible();
+});

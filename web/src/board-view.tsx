@@ -346,8 +346,12 @@ export function BoardView({
 		// What stands by the object is put away while the view moves, and comes back shortly after.
 		const viewMoving = () => {
 			viewMovingUntil.current = Date.now() + VIEW_SETTLE_MS;
+			controller.hideFrame(); // the frame and handles go too, and come back with the menu
 			clearTimeout(viewSettle);
-			viewSettle = setTimeout(() => setTick((t) => t + 1), VIEW_SETTLE_MS);
+			viewSettle = setTimeout(() => {
+				controller.restoreFrame();
+				setTick((t) => t + 1);
+			}, VIEW_SETTLE_MS);
 		};
 		const changed = () => {
 			viewMoving();

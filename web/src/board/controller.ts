@@ -747,6 +747,21 @@ export class Controller {
 		this.showSelection(this.selection);
 	}
 
+	/** Puts the frame and the handles away while the view moves; the glow stays (R-060). */
+	hideFrame(): void {
+		if (this.edit || this.selection.length === 0) return;
+		this.renderer.setSelection?.(null);
+		this.renderer.setEndpoints?.(null);
+		this.renderer.setVertices?.(null);
+		this.renderer.setAdjust?.(null);
+	}
+
+	/** Brings them back once the view is still (not while the board is still being dragged). */
+	restoreFrame(): void {
+		if (this.edit || this.panning) return;
+		this.showFrame();
+	}
+
 	/**
 	 * Where the handle of the lone selected adjustable shape is on the board (its turn applied),
 	 * or null when the selection has none (R-041).

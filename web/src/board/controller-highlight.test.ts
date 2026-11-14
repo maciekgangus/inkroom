@@ -42,6 +42,7 @@ describe("Controller selection look (R-034)", () => {
 		[K in keyof Renderer]-?: ReturnType<typeof vi.fn>;
 	};
 	let c: Controller;
+	let settings: Settings;
 	const click = (x: number, y: number) => {
 		c.pointerDown(ev(x, y));
 		c.pointerUp(ev(x, y));
@@ -60,7 +61,7 @@ describe("Controller selection look (R-034)", () => {
 			setAdjust: vi.fn(),
 			setVertices: vi.fn(),
 		};
-		const settings: Settings = { tool: "select", color: "#111", size: 4 };
+		settings = { tool: "select", color: "#111", size: 4 };
 		c = new Controller(
 			board,
 			renderer as unknown as Renderer,
@@ -99,6 +100,34 @@ describe("Controller selection look (R-034)", () => {
 		c.select(["l", "r"]);
 		expect(renderer.setSelection.mock.lastCall?.[0]).not.toBeNull();
 		expect(renderer.setHighlight.mock.lastCall?.[0]).toHaveLength(2);
+	});
+
+	test("the frame and the handles are put away while the view moves; the glow stays (R-060)", () => {
+		c.select("l");
+		c.hideFrame();
+		for (const set of [
+			renderer.setSelection,
+			renderer.setEndpoints,
+			renderer.setVertices,
+			renderer.setAdjust,
+		])
+			expect(set.mock.lastCall?.[0]).toBeNull();
+		expect(renderer.setHighlight.mock.lastCall?.[0]).toHaveLength(1);
+		c.restoreFrame();
+		expect(renderer.setSelection.mock.lastCall?.[0]).not.toBeNull();
+		expect(renderer.setEndpoints.mock.lastCall?.[0]).not.toBeNull();
+	});
+
+	test("the frame does not come back while the board is still being dragged", () => {
+		c.select("r");
+		settings.tool = "pan";
+		c.pointerDown(ev(10, 10));
+		c.hideFrame();
+		c.restoreFrame();
+		expect(renderer.setSelection.mock.lastCall?.[0]).toBeNull();
+		c.pointerUp(ev(10, 10));
+		c.restoreFrame();
+		expect(renderer.setSelection.mock.lastCall?.[0]).not.toBeNull();
 	});
 
 	test("a lone stroke can be scaled with its corner handle like any other element", () => {
