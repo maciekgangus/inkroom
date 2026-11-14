@@ -188,3 +188,4 @@ Pytania o sposób wczytywania PDF rozstrzygnął użytkownik 2026-11-11; decyzje
 - 2026-11-12: dodano R-064 (strona administratora za Cloudflare Access ze stroną logowania Cloudflare, plus weryfikacja tokenu na serwerze, bez kont administratorów), `accepted` po rozmowie.
 - 2026-11-12: dodano R-065 (panel administratora: użytkownicy i tablice z sortowaniem, wyszukiwaniem, wejściem na tablicę i edycją), `proposed`; R-064: tryb deweloperski `ADMIN_DEV_OPEN` bez logowania dla żądań bezpośrednich.
 - 2026-11-12: R-065 `accepted` (usuwanie trwałe z potwierdzeniem, wejście admina widoczne jako „Administrator”, miniatury później); dodano R-066 (zastrzeżona nazwa Administrator).
+- 2026-11-14: uwaga z przycisku opinii (#2, #15): Ctrl+C nie wkładał zaznaczenia do schowka systemowego (R-035, R-030), poprawione; test e2e `copy-paste.spec.ts`.
