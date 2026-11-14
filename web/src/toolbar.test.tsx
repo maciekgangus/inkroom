@@ -208,7 +208,7 @@ describe("Toolbar", () => {
 	test("every tool with a shortcut shows its key in the tooltip", () => {
 		const title = (tool: string) =>
 			(root.querySelector(`[aria-label="${tool}"]`) as HTMLElement).title;
-		expect(title("select")).toBe("Zaznacz (Esc)");
+		expect(title("select")).toBe("Zaznacz (Q)");
 		expect(title("pan")).toBe("Ręka (M)");
 		expect(title("eraser")).toBe("Gumka (E)");
 		expect(title("line")).toBe("Linia (L)");

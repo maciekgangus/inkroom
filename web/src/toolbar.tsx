@@ -4,7 +4,7 @@ import { SHAPE_GROUPS, SHAPES, saveShape } from "./board/shapes";
 import { Icon } from "./icon";
 import { ImageControls, type ImageControlsProps } from "./image-controls";
 import { ShapeIcon } from "./shape-icon";
-import { selectTool, TOOL_KEYS } from "./shortcuts";
+import { selectTool, toolKey } from "./shortcuts";
 import { StrokeControls } from "./stroke-controls";
 import { displayColor, useTheme } from "./theme";
 
@@ -127,7 +127,7 @@ export function Toolbar({
 							aria-pressed={settings.tool === tool}
 							aria-expanded={isShapeTool ? listOpen : undefined}
 							title={
-								TOOL_KEYS[tool] ? `${label} (${TOOL_KEYS[tool]?.label})` : label
+								toolKey(tool) ? `${label} (${toolKey(tool)?.label})` : label
 							}
 							class={`${on(settings.tool === tool)}${isShapeTool ? " has-list" : ""}`}
 							onClick={() => {

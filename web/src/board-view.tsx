@@ -47,6 +47,7 @@ import { PdfProgress } from "./pdf-progress";
 import { hasFinePointer } from "./pointer";
 import { PropertiesPanel } from "./properties-panel";
 import { applyToolShortcut, dropsSelection } from "./shortcuts";
+import { ShortcutsDialog } from "./shortcuts-dialog";
 import { type Peer, type SocketLike, SyncClient } from "./sync/sync";
 import { TextEditor } from "./text-editor";
 import { currentTheme, displayColor, useTheme } from "./theme";
@@ -185,6 +186,7 @@ export function BoardView({
 	const boardRef = useRef<Board | null>(null);
 	const imagesRef = useRef<ImageCache | null>(null);
 	const [boardMenu, setBoardMenu] = useState<MenuAt | null>(null);
+	const [shortcutsOpen, setShortcutsOpen] = useState(false);
 	const [copied, setCopied] = useState<{ id: string; name: string } | null>(
 		null,
 	);
@@ -1130,8 +1132,15 @@ export function BoardView({
 										() => setImageError("Nie udało się utworzyć kopii."),
 									)
 							: undefined,
+						() => setShortcutsOpen(true),
 					)}
 					onClose={() => setBoardMenu(null)}
+				/>
+			)}
+			{shortcutsOpen && (
+				<ShortcutsDialog
+					onClose={() => setShortcutsOpen(false)}
+					onChange={bump}
 				/>
 			)}
 			{pdfJob && (
