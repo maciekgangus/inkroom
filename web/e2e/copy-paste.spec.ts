@@ -56,4 +56,44 @@ test.describe("Ctrl+C and Ctrl+V on the board (R-030, R-035)", () => {
 			),
 		).toBe(0);
 	});
+
+	test("holding Ctrl+V pastes once, not again and again", async ({ page }) => {
+		await pen(page, [200, 500], [500, 500]);
+		await page.keyboard.press("Escape");
+		await page.mouse.click(350, 500);
+		await page.keyboard.press("Control+c");
+		await page.mouse.move(350, 250);
+		await page.keyboard.down("Control");
+		for (let i = 0; i < 8; i++) await page.keyboard.down("v"); // the key repeats while held
+		await page.keyboard.up("v");
+		await page.keyboard.up("Control");
+		await page.waitForTimeout(700);
+		const count = await page.evaluate(async () => {
+			const id = location.pathname.split("/").pop();
+			const r = await fetch(`/api/boards/${id}/preview`);
+			return (await r.json()).strokes.length;
+		});
+		expect(count).toBe(2); // the one drawn and one copy
+	});
+
+	test("a second paste right after the first waits for it to finish", async ({
+		page,
+	}) => {
+		await pen(page, [200, 500], [500, 500]);
+		await page.keyboard.press("Escape");
+		await page.mouse.click(350, 500);
+		await page.keyboard.press("Control+c");
+		await page.mouse.move(350, 250);
+		await page.keyboard.press("Control+v");
+		await page.keyboard.press("Control+v"); // at once, not a separate wish
+		await page.waitForTimeout(700);
+		await page.keyboard.press("Control+v"); // a later one is a new paste
+		await page.waitForTimeout(500);
+		const count = await page.evaluate(async () => {
+			const id = location.pathname.split("/").pop();
+			return (await (await fetch(`/api/boards/${id}/preview`)).json()).strokes
+				.length;
+		});
+		expect(count).toBe(3);
+	});
 });
