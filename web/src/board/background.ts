@@ -7,7 +7,13 @@ export type Background = (typeof BACKGROUNDS)[number];
 export const isBackground = (v: unknown): v is Background =>
 	BACKGROUNDS.includes(v as Background);
 
-const SPACING = 24; // board units between grid lines and dots
+const SPACING = 24; // board units between dots
+/** Board units between the lines of the grid: big cells, as in IDROO. */
+export const GRID_SPACING = 40;
+/** A cluster is a block of this many cells in a row and a column, set off by stronger lines. */
+export const GRID_CLUSTER = 4;
+/** How strongly the lines between the cells of a cluster show against the lines round it. */
+const CELL_STRENGTH = 0.5;
 const LINE_SPACING = 32;
 /** The closest two grid lines may get on screen (CSS px) before the finer level is gone. */
 export const GRID_MIN_SCREEN = 12;
@@ -27,7 +33,8 @@ export interface GridLevel {
  */
 export function gridLevels(kind: Background, scale: number): GridLevel[] {
 	if (kind === "plain") return [];
-	const base = kind === "lines" ? LINE_SPACING : SPACING;
+	const base =
+		kind === "lines" ? LINE_SPACING : kind === "grid" ? GRID_SPACING : SPACING;
 	const k = Math.ceil(Math.log2((GRID_MIN_SCREEN * 2) / (base * scale)));
 	const main = base * 2 ** k;
 	const alpha = (main * scale) / 2 / GRID_MIN_SCREEN - 1;
@@ -35,6 +42,12 @@ export function gridLevels(kind: Background, scale: number): GridLevel[] {
 	if (alpha > 0.01)
 		levels.push({ spacing: main / 2, alpha: Math.min(1, alpha) });
 	return levels;
+}
+
+/** The spacing of the cluster lines of the grid at a zoom (every few lines of the main level), else null. */
+export function clusterSpacing(kind: Background, scale: number): number | null {
+	if (kind !== "grid") return null;
+	return gridLevels(kind, scale)[0].spacing * GRID_CLUSTER;
 }
 
 /** The multiples of `spacing` in [from, to], each computed from its index so nothing drifts. */
@@ -83,7 +96,8 @@ export function drawBackground(
 	for (const { spacing, alpha } of [...levels].reverse()) {
 		const xs = gridPositions(spacing, x, x + w / scale);
 		const ys = gridPositions(spacing, y, y + h / scale);
-		ctx.globalAlpha = alpha;
+		// On the grid the cells are lighter than the clusters drawn over them below.
+		ctx.globalAlpha = kind === "grid" ? alpha * CELL_STRENGTH : alpha;
 		ctx.beginPath();
 		if (kind === "dots") {
 			const r = 1.5 * dpr;
@@ -103,6 +117,20 @@ export function drawBackground(
 			}
 		}
 		for (const gy of ys) {
+			ctx.moveTo(0, sy(gy));
+			ctx.lineTo(w * dpr, sy(gy));
+		}
+		ctx.stroke();
+	}
+	const cluster = clusterSpacing(kind, scale);
+	if (cluster) {
+		ctx.globalAlpha = 1;
+		ctx.beginPath();
+		for (const gx of gridPositions(cluster, x, x + w / scale)) {
+			ctx.moveTo(sx(gx), 0);
+			ctx.lineTo(sx(gx), h * dpr);
+		}
+		for (const gy of gridPositions(cluster, y, y + h / scale)) {
 			ctx.moveTo(0, sy(gy));
 			ctx.lineTo(w * dpr, sy(gy));
 		}

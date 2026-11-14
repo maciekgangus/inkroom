@@ -397,6 +397,19 @@ a.open-link {
 	flex-wrap: wrap;
 	gap: 6px;
 }
+/* The rename field takes what is left of the tile, never more: it may shrink below its own width. */
+.boards.tiles .board {
+	min-width: 0;
+}
+.boards.tiles .board form.row {
+	min-width: 0;
+	flex-wrap: nowrap;
+}
+.boards.tiles .board form.row input {
+	flex: 1 1 0;
+	min-width: 0;
+	width: 100%;
+}
 .boards.tiles .board button {
 	height: 30px;
 	padding: 0 10px;

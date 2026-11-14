@@ -1,8 +1,11 @@
 import { describe, expect, test } from "vitest";
 import {
 	BACKGROUNDS,
+	clusterSpacing,
 	drawBackground,
+	GRID_CLUSTER,
 	GRID_MIN_SCREEN,
+	GRID_SPACING,
 	gridLevels,
 	gridPositions,
 	isBackground,
@@ -45,7 +48,7 @@ describe("gridLevels (R-032)", () => {
 			expect(fine.alpha).toBeLessThanOrEqual(1);
 		}
 		// just past a step the finer level is nearly invisible, just before the next it is full
-		const at = (screen: number) => gridLevels("grid", screen / 24)[1];
+		const at = (screen: number) => gridLevels("grid", screen / GRID_SPACING)[1];
 		expect(at(GRID_MIN_SCREEN * 2 + 0.2)?.alpha ?? 0).toBeLessThan(0.1);
 		expect(at(GRID_MIN_SCREEN * 4 - 0.2).alpha).toBeGreaterThan(0.9);
 	});
@@ -59,9 +62,9 @@ describe("gridLevels (R-032)", () => {
 					return Math.abs(r - Math.round(r)) < 1e-9;
 				})
 				.reduce((a, l) => Math.max(a, l.alpha), 0);
-		// the scale where the main level (48 board units) has just reached 4 x the minimum
-		const edge = (GRID_MIN_SCREEN * 4) / 48;
-		for (const spacing of [48, 24, 12]) {
+		// the scale where the main level (twice the base) has just reached 4 x the minimum
+		const edge = (GRID_MIN_SCREEN * 4) / (GRID_SPACING * 2);
+		for (const spacing of [GRID_SPACING * 2, GRID_SPACING, GRID_SPACING / 2]) {
 			const before = strength(edge * (1 - 1e-6), spacing);
 			const after = strength(edge * (1 + 1e-6), spacing);
 			expect(Math.abs(before - after)).toBeLessThan(1e-3);
@@ -70,7 +73,7 @@ describe("gridLevels (R-032)", () => {
 
 	test("every spacing is the base raster times a power of two, so grids always line up", () => {
 		for (const kind of ["dots", "grid", "lines"] as const) {
-			const base = kind === "lines" ? 32 : 24;
+			const base = kind === "lines" ? 32 : kind === "grid" ? GRID_SPACING : 24;
 			for (const scale of scales) {
 				for (const { spacing } of gridLevels(kind, scale)) {
 					const ratio = Math.log2(spacing / base);
@@ -82,7 +85,7 @@ describe("gridLevels (R-032)", () => {
 
 	test("zoomed in far there are finer lines, so there is always something to line up with", () => {
 		const [main] = gridLevels("grid", 10);
-		expect(main.spacing).toBeLessThan(24);
+		expect(main.spacing).toBeLessThan(GRID_SPACING);
 		expect(main.spacing * 10).toBeGreaterThanOrEqual(GRID_MIN_SCREEN * 2);
 	});
 });
@@ -134,11 +137,11 @@ describe("drawBackground", () => {
 
 	test("lines sit on the pixel grid of the board coordinates, whatever the pan", () => {
 		const ctx = fake();
-		// scale 1: the main level is 24 board units; panned so board x = 100 is at screen 0
+		// scale 1: the main level is the base spacing; panned so board x = 100 is at screen 0
 		drawBackground(ctx as never, "grid", view(100, 0, 1), 400, 100, 1, "#ccc");
 		const xs = ctx.calls.filter((c) => c[0] === "moveTo").map((c) => c[1]);
-		// board x = 144 (a multiple of the 24 unit level) is at screen 44; drawn on the half pixel
-		expect(xs).toContain(44.5);
+		// board x = 120 (a multiple of the 40 unit level) is at screen 20; drawn on the half pixel
+		expect(xs).toContain(20.5);
 	});
 
 	test("the finer level is drawn with its own, lower strength", () => {
@@ -160,5 +163,64 @@ describe("drawBackground", () => {
 		const ctx = fake();
 		drawBackground(ctx as never, "dots", view(0, 0, 1), 100, 100, 1, "#ccc");
 		expect(ctx.calls.some((c) => c[0] === "arc")).toBe(true);
+	});
+});
+
+describe("grid clusters (R-032)", () => {
+	test("the cells are big, like in IDROO: 40 board units to begin with", () => {
+		expect(GRID_SPACING).toBe(40);
+		expect(gridLevels("grid", 1)[0].spacing).toBe(40);
+	});
+
+	test("a cluster is a block of cells: its lines are every GRID_CLUSTER-th line of the main level", () => {
+		expect(GRID_CLUSTER).toBe(4);
+		for (const scale of [0.3, 0.7, 1, 2.5, 8]) {
+			const [main] = gridLevels("grid", scale);
+			expect(clusterSpacing("grid", scale)).toBeCloseTo(
+				main.spacing * GRID_CLUSTER,
+			);
+		}
+	});
+
+	test("only the grid has clusters", () => {
+		for (const kind of ["plain", "dots", "lines"] as const)
+			expect(clusterSpacing(kind, 1)).toBeNull();
+	});
+
+	test("the lines of a cluster are drawn stronger than the lines of its cells", () => {
+		const alphas: number[] = [];
+		const xs: number[] = [];
+		const ctx = {
+			globalAlpha: 1,
+			strokeStyle: "",
+			fillStyle: "",
+			lineWidth: 0,
+			save: () => {},
+			restore: () => {},
+			setTransform: () => {},
+			beginPath: () => {},
+			moveTo: (x: number) => xs.push(x),
+			lineTo: () => {},
+			arc: () => {},
+			stroke() {
+				alphas.push(this.globalAlpha);
+			},
+			fill: () => {},
+		};
+		drawBackground(
+			ctx as never,
+			"grid",
+			Object.assign(new Viewport(), { x: 0, y: 0, scale: 1 }),
+			400,
+			100,
+			1,
+			"#ccc",
+		);
+		// the cell lines first, weaker; the cluster lines last, at full strength
+		expect(alphas.length).toBeGreaterThanOrEqual(2);
+		expect(alphas[alphas.length - 1]).toBe(1);
+		expect(Math.min(...alphas)).toBeLessThan(1);
+		// a line of a cluster (board x = 160) is at screen 160.5; one of a cell (x = 40) too
+		expect(xs.filter((x) => x === 160.5).length).toBeGreaterThanOrEqual(2);
 	});
 });

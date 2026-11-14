@@ -152,7 +152,9 @@ describe("styleOf", () => {
 describe("sliders (R-031)", () => {
 	test("any width in pixels applies, kept between 1 and 50", () => {
 		expect(applyStyle(rect, { size: 17 }).size).toBe(17);
-		expect(applyStyle(rect, { size: 0 }).size).toBe(1);
+		expect(applyStyle(rect, { size: 0 }).size).toBe(0.25);
+		expect(applyStyle(rect, { size: 0.5 }).size).toBe(0.5); // finer than a pixel
+		expect(applyStyle(text, { size: 0.5 }).size).toBe(1); // a text keeps whole sizes
 		expect(applyStyle(rect, { size: 400 }).size).toBe(50);
 	});
 
