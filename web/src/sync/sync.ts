@@ -42,6 +42,8 @@ interface Options {
 	now?: () => number;
 	/** Called whenever the board or the remote live strokes changed (time to redraw). */
 	onUpdate: () => void;
+	/** Called when only other people's unfinished strokes changed; without it `onUpdate` is called. */
+	onLive?: () => void;
 	/** Runs `fn` on the next frame; used to send live strokes at most once per frame. */
 	schedule?: (fn: () => void) => void;
 }
@@ -315,10 +317,12 @@ export class SyncClient {
 				break;
 			case "live":
 				this.addLive(m);
-				break;
+				(this.opts.onLive ?? this.opts.onUpdate)();
+				return; // the board itself did not change
 			case "live_drop":
 				for (const id of m.ids ?? []) this.liveIn.delete(id);
-				break;
+				(this.opts.onLive ?? this.opts.onUpdate)();
+				return;
 			case "cursor":
 				if (!m.id) return;
 				if (m.hidden) {

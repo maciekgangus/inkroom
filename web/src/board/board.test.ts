@@ -305,3 +305,31 @@ describe("Board", () => {
 		});
 	});
 });
+
+describe("Board version", () => {
+	test("changes with every change of the elements, and only then", () => {
+		const b = new Board();
+		const s = {
+			id: "v1",
+			authorId: "a",
+			color: "#111",
+			size: 2,
+			z: 1,
+			points: [[0, 0, 0.5]],
+		} as Stroke;
+		const v0 = b.version;
+		b.addStroke(s);
+		const v1 = b.version;
+		expect(v1).not.toBe(v0);
+		b.applyRemote({ t: "update", stroke: { ...s, color: "#222" } });
+		const v2 = b.version;
+		expect(v2).not.toBe(v1);
+		b.applyRemote({ t: "remove", id: "v1" });
+		expect(b.version).not.toBe(v2);
+		const v3 = b.version;
+		b.applyRemote({ t: "remove", id: "nope" });
+		expect(b.version).toBe(v3);
+		b.setStrokes([s]);
+		expect(b.version).not.toBe(v3);
+	});
+});

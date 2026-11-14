@@ -343,7 +343,9 @@ export class CanvasRenderer implements Renderer {
 	/** Sets our own unfinished stroke (null when finished). */
 	drawLive(stroke: Stroke | null): void {
 		this.local = stroke;
-		this.paintLive();
+		// Once per frame: a pen can report several moves in one frame, and each paint builds the
+		// outline of the whole stroke again.
+		this.schedule(false, true);
 	}
 
 	/** Shows the selection frame, corner handles and rotation handle (null hides them). */
