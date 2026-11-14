@@ -510,7 +510,12 @@ export function BoardView({
 			lastPointer = [x, y];
 			sync.cursorMove(x, y);
 			controller.pointerMove(e);
-			if (controller.panning) viewMoving(); // the hand, the right and the middle button
+			if (controller.panning) {
+				// The hand, the right and the middle button. The cursors of others and the text field are
+				// HTML above the canvas, so they need a render at every step to stay on the content.
+				viewMoving();
+				setTick((t) => t + 1);
+			}
 			setOverTurn.current(controller.overRotate(e.clientX, e.clientY));
 			applyCursor.current(); // a safety net: whichever way the tool changed, it shows
 		};

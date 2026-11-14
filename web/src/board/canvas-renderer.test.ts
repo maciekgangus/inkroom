@@ -19,3 +19,51 @@ describe("CanvasRenderer contexts", () => {
 		}
 	});
 });
+
+describe("CanvasRenderer selection glow (R-058)", () => {
+	test("every selected element glows, however many are selected", () => {
+		vi.stubGlobal("requestAnimationFrame", undefined);
+		vi.stubGlobal(
+			"Path2D",
+			class {
+				moveTo() {}
+				lineTo() {}
+				quadraticCurveTo() {}
+				closePath() {}
+				rect() {}
+				ellipse() {}
+				arc() {}
+			},
+		);
+		const blurs: number[] = [];
+		const ctx = new Proxy(
+			{},
+			{
+				get: (_t, k) => (k === "canvas" ? {} : () => ctx),
+				set: (_t, k, v) => {
+					if (k === "shadowBlur") blurs.push(v);
+					return true;
+				},
+			},
+		) as unknown as CanvasRenderingContext2D;
+		const canvas = () =>
+			({ getContext: () => ctx, width: 100, height: 100 }) as unknown as HTMLCanvasElement;
+		const renderer = new CanvasRenderer(canvas(), canvas(), new Viewport());
+		const many = Array.from({ length: 40 }, (_, i) => ({
+			id: `s${i}`,
+			authorId: "a",
+			color: "#111",
+			size: 4,
+			z: i,
+			kind: "line" as const,
+			points: [
+				[0, i * 5, 0.5],
+				[50, i * 5, 0.5],
+			] as [number, number, number][],
+		}));
+		renderer.setHighlight(many);
+		// Two passes of blur per element.
+		expect(blurs.filter((b) => b > 0).length).toBeGreaterThanOrEqual(40);
+		vi.unstubAllGlobals();
+	});
+});
