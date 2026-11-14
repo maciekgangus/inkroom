@@ -49,6 +49,8 @@ export interface PointerInput {
 export interface Renderer {
 	drawLive(stroke: Stroke | null): void;
 	redraw(strokes: Stroke[]): void;
+	/** The view moved: show it without painting every element (the picture is sharpened later). */
+	moveView?(): void;
 	/** Shows the selection frame and handles (null hides them). */
 	setSelection?(frame: Frame | null): void;
 	/**
@@ -222,8 +224,28 @@ export class Controller {
 	/** The selected elements that are still on the board. */
 	get selection(): Stroke[] {
 		if (this.selectedIds.length === 0) return [];
-		return this.board.strokes.filter((s) => this.selectedIds.includes(s.id));
+		const c = this.selectedCache;
+		if (c && c.version === this.board.version && c.ids === this.selectedIds)
+			return c.list;
+		// The page asks for this several times in every render, which is every frame of a zoom: it
+		// is counted once per change of the board or of the selection (and with a set, not a scan
+		// of the ids for every element).
+		const ids = new Set(this.selectedIds);
+		const list = this.board.strokes.filter((s) => ids.has(s.id));
+		this.selectedCache = {
+			version: this.board.version,
+			ids: this.selectedIds,
+			list,
+		};
+		return list;
 	}
+
+	private selectedCache: {
+		version: number;
+		ids: string[];
+		list: Stroke[];
+		bounds?: Rect | null;
+	} | null = null;
 
 	/** The owner took away our right to draw: a drag only moves the view and nothing changes (R-016). */
 	readOnly = false;
@@ -323,7 +345,8 @@ export class Controller {
 				e.clientY - this.panFrom.y,
 			);
 			this.panFrom = { x: e.clientX, y: e.clientY };
-			this.renderer.redraw(this.board.strokes);
+			if (this.renderer.moveView) this.renderer.moveView();
+			else this.renderer.redraw(this.board.strokes);
 			return;
 		}
 		if (this.edit) {
@@ -492,13 +515,22 @@ export class Controller {
 	selectionBounds(): Rect | null {
 		const sel = this.selection;
 		if (sel.length === 0) return null;
-		const boxes = sel.map(worldBounds);
-		return {
-			minX: Math.min(...boxes.map((b) => b.minX)),
-			minY: Math.min(...boxes.map((b) => b.minY)),
-			maxX: Math.max(...boxes.map((b) => b.maxX)),
-			maxY: Math.max(...boxes.map((b) => b.maxY)),
-		};
+		const c = this.selectedCache;
+		if (c?.list === sel && c.bounds !== undefined) return c.bounds;
+		let box: Rect | null = null;
+		for (const s of sel) {
+			const b = worldBounds(s);
+			box = box
+				? {
+						minX: Math.min(box.minX, b.minX),
+						minY: Math.min(box.minY, b.minY),
+						maxX: Math.max(box.maxX, b.maxX),
+						maxY: Math.max(box.maxY, b.maxY),
+					}
+				: b;
+		}
+		if (c?.list === sel) c.bounds = box;
+		return box;
 	}
 
 	/** Adds an image element covering `rect` and selects it. Returns its id. */
@@ -748,9 +780,14 @@ export class Controller {
 		this.showSelection(this.selection);
 	}
 
-	/** Puts the frame and the handles away while the view moves; the glow stays (R-060). */
+	/**
+	 * Puts the frame, the handles and the glow away while the view moves (R-060). The glow is a
+	 * blurred shadow of every selected element, repainted at every frame of a scroll: with a big
+	 * selection that alone made the scroll crawl.
+	 */
 	hideFrame(): void {
 		if (this.edit || this.selection.length === 0) return;
+		this.renderer.setHighlight?.([]);
 		this.renderer.setSelection?.(null);
 		this.renderer.setEndpoints?.(null);
 		this.renderer.setVertices?.(null);

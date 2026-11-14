@@ -49,6 +49,7 @@ describe("CanvasRenderer selection glow (R-058)", () => {
 		const canvas = () =>
 			({
 				getContext: () => ctx,
+				style: {},
 				width: 100,
 				height: 100,
 			}) as unknown as HTMLCanvasElement;

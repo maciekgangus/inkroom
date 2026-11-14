@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { Stroke } from "./board/board";
 import { paintElements } from "./board/canvas-renderer";
 import {
@@ -18,6 +18,11 @@ const MAP_H = 170;
 /** Everything counts as in view: the map shows the whole board. */
 const ALL = { minX: -1e9, minY: -1e9, maxX: 1e9, maxY: 1e9 };
 
+/**
+ * The elements of the map are painted sharp at most this often: between two paints the last one
+ * is stretched to the new fit, which costs nothing. Zooming changes the fit at every frame.
+ */
+const MAP_REFRESH_MS = 500;
 /** More elements than this are drawn as a thinned-out sample, so a huge board stays cheap. */
 const MAX_DRAWN = 4000;
 
@@ -58,8 +63,16 @@ export function Minimap({
 	const content = useMemo(() => contentBounds(strokes), [strokes, stamp]);
 	const fit = frozen.current ?? mapFit(content, view, { w: MAP_W, h: MAP_H });
 	/** The elements as last drawn, kept apart from the frame of the view that moves over them. */
-	const layer = useRef<{ key: string; el: HTMLCanvasElement } | null>(null);
+	const layer = useRef<{
+		key: string;
+		el: HTMLCanvasElement;
+		fit: MapFit;
+		stamp: string | number;
+		dpr: number;
+		at: number;
+	} | null>(null);
 	const drawn = useRef("");
+	const [, later] = useState(0);
 
 	// Runs after every render, but paints only what changed: the elements when they or the scale
 	// of the map did, the frame when the view did, nothing otherwise.
@@ -84,7 +97,20 @@ export function Minimap({
 			el.width = MAP_W * dpr;
 			el.height = MAP_H * dpr;
 		}
-		if (layer.current?.key !== layerKey) {
+		const old = layer.current;
+		// The fit changes at every frame of a zoom: a recent picture is stretched instead of painted
+		// again, and a sharp one follows when the map has been still for a moment.
+		const stretch =
+			old &&
+			old.key !== layerKey &&
+			old.stamp === stamp &&
+			old.dpr === dpr &&
+			Date.now() - old.at < MAP_REFRESH_MS;
+		if (stretch) {
+			drawn.current = "";
+			const wait = MAP_REFRESH_MS - (Date.now() - old.at) + 20;
+			setTimeout(() => later((n) => n + 1), wait);
+		} else if (old?.key !== layerKey) {
 			const off = layer.current?.el ?? document.createElement("canvas");
 			off.width = MAP_W * dpr; // also clears it
 			off.height = MAP_H * dpr;
@@ -104,11 +130,36 @@ export function Minimap({
 					minWidth: 1.2 / fit.scale,
 				});
 			}
-			layer.current = { key: layerKey, el: off };
+			layer.current = {
+				key: layerKey,
+				el: off,
+				fit,
+				stamp,
+				dpr,
+				at: Date.now(),
+			};
 		}
+		const shown = layer.current;
+		if (!shown) return;
 		ctx.setTransform(1, 0, 0, 1, 0, 0);
 		ctx.clearRect(0, 0, el.width, el.height);
-		ctx.drawImage(layer.current.el, 0, 0);
+		// The picture was made for `shown.fit`; put it where the current fit wants it.
+		const s = fit.scale / shown.fit.scale;
+		ctx.setTransform(
+			dpr * s,
+			0,
+			0,
+			dpr * s,
+			dpr *
+				((shown.fit.minX - fit.minX) * fit.scale +
+					fit.offX -
+					s * shown.fit.offX),
+			dpr *
+				((shown.fit.minY - fit.minY) * fit.scale +
+					fit.offY -
+					s * shown.fit.offY),
+		);
+		ctx.drawImage(shown.el, 0, 0, MAP_W, MAP_H);
 		ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 		const [vx0, vy0] = toMap(fit, view.minX, view.minY);
 		const [vx1, vy1] = toMap(fit, view.maxX, view.maxY);
