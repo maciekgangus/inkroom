@@ -26,7 +26,7 @@ describe("StrokeControls (R-038)", () => {
 	beforeEach(() => {
 		root = document.createElement("div");
 		document.body.replaceChildren(root);
-		settings = { tool: "pen", color: "#111", size: 1 };
+		settings = { tool: "pen", color: "#111", size: 2 };
 		onChange = vi.fn((patch) => {
 			Object.assign(settings, patch);
 			mount();
@@ -36,15 +36,15 @@ describe("StrokeControls (R-038)", () => {
 
 	describe("quick settings: the three ready widths", () => {
 		test("show the current width and set another with one click", () => {
-			expect(el("size 1")?.classList.contains("active")).toBe(true);
-			press("size 2.5");
-			expect(onChange).toHaveBeenCalledWith({ size: 2.5 });
+			expect(el("size 2")?.classList.contains("active")).toBe(true);
+			press("size 4");
+			expect(onChange).toHaveBeenCalledWith({ size: 4 });
 		});
 
 		test("a width set with the sliders that is not a preset marks none", () => {
 			settings.size = 17;
 			mount();
-			for (const s of [0.5, 1, 2.5])
+			for (const s of [1, 2, 4])
 				expect(el(`size ${s}`)?.classList.contains("active")).toBe(false);
 		});
 	});
@@ -61,12 +61,12 @@ describe("StrokeControls (R-038)", () => {
 			settings.opacity = 0.6;
 			mount();
 			press("stroke settings");
-			expect((el("stroke width") as HTMLInputElement).value).toBe("17");
+			expect((el("stroke width") as HTMLInputElement).value).toBe("34");
 			expect((el("stroke opacity") as HTMLInputElement).value).toBe("60");
 			const values = [...root.querySelectorAll(".stroke-popover .value")].map(
 				(v) => v.textContent,
 			);
-			expect(values).toEqual(["17 px", "60%"]);
+			expect(values).toEqual(["34 px", "60%"]);
 		});
 
 		test("opacity is 100% when none was set", () => {
@@ -76,7 +76,7 @@ describe("StrokeControls (R-038)", () => {
 
 		test("moving a slider changes the setting at once", () => {
 			press("stroke settings");
-			move("stroke width", 23, "input");
+			move("stroke width", 46, "input");
 			expect(onChange).toHaveBeenLastCalledWith({ size: 23 });
 			move("stroke opacity", 35, "input");
 			expect(onChange).toHaveBeenLastCalledWith({ opacity: 0.35 });

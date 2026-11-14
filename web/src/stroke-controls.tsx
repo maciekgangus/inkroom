@@ -5,7 +5,13 @@ import { Icon } from "./icon";
 import { Slider } from "./slider";
 
 /** The three ready widths of the quick settings: fine, so the middle one is comfortable to write with. */
-export const SIZES = [0.5, 1, 2.5];
+export const SIZES = [1, 2, 4];
+
+/**
+ * The width shown is this many times the width drawn: a line of 1 px reads as "2 px", so the
+ * numbers feel like those of a marker and need not match the screen.
+ */
+export const WIDTH_SHOWN = 2;
 
 /** What the line style list offers, with the icon of each (R-038). */
 const LINE_STYLES: {
@@ -87,13 +93,13 @@ export function StrokeControls({ settings, onChange }: Props) {
 						<span class="slider-title">Grubość</span>
 						<Slider
 							label="stroke width"
-							min={0.25}
-							max={50}
-							step={0.25}
-							value={settings.size}
+							min={0.25 * WIDTH_SHOWN}
+							max={50 * WIDTH_SHOWN}
+							step={0.25 * WIDTH_SHOWN}
+							value={settings.size * WIDTH_SHOWN}
 							unit=" px"
-							onInput={(v) => onChange({ size: v })}
-							onChange={(v) => onChange({ size: v })}
+							onInput={(v) => onChange({ size: v / WIDTH_SHOWN })}
+							onChange={(v) => onChange({ size: v / WIDTH_SHOWN })}
 						/>
 						<span class="slider-title">Przezroczystość</span>
 						<Slider

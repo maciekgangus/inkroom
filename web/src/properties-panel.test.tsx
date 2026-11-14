@@ -318,12 +318,13 @@ describe("PropertiesPanel", () => {
 	test("the width slider shows pixels, previews while moving and commits on release", () => {
 		mount([{ ...rect, size: 7 }]);
 		const s = slider("prop size") as HTMLInputElement;
-		expect(s.value).toBe("7");
-		expect(root.querySelector(".slider .value")?.textContent).toBe("7 px");
-		move(s, 23, "input");
+		// the number shown is twice the width drawn (the scale of the pens)
+		expect(s.value).toBe("14");
+		expect(root.querySelector(".slider .value")?.textContent).toBe("14 px");
+		move(s, 46, "input");
 		expect(onPreview).toHaveBeenLastCalledWith({ size: 23 });
 		expect(onChange).not.toHaveBeenCalled();
-		move(s, 23, "change");
+		move(s, 46, "change");
 		expect(onChange).toHaveBeenCalledWith({ size: 23 });
 	});
 
