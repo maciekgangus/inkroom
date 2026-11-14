@@ -1,4 +1,5 @@
 import type { Stroke } from "./board";
+import { clamp } from "./clamp";
 import { hasInside, isPolygonKind } from "./shapes";
 import { fontSizeFor, fontSizeOf } from "./text";
 
@@ -16,9 +17,6 @@ export interface StylePatch {
 	fill?: string | null;
 	opacity?: number;
 }
-
-const clamp = (n: number, min: number, max: number) =>
-	Math.max(min, Math.min(max, n));
 
 const isShape = (el: Stroke) =>
 	el.kind === "rect" ||
@@ -67,7 +65,7 @@ export function applyStyle(el: Stroke, patch: StylePatch): Stroke {
 		else out.fill = patch.fill;
 	}
 	if (patch.opacity !== undefined) {
-		const o = Math.max(0, Math.min(1, patch.opacity));
+		const o = clamp(patch.opacity, 0, 1);
 		if (o >= 1) delete out.opacity;
 		else out.opacity = o;
 	}

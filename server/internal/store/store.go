@@ -762,21 +762,10 @@ func (s *Store) CountFeedbackSince(person string, since time.Time) (int, error) 
 
 // SetFeedbackRead marks a note read or unread; ErrNotFound if there is no such note.
 func (s *Store) SetFeedbackRead(id int64, read bool) error {
-	return s.oneRow(s.db.Exec(`UPDATE feedback SET read = ? WHERE id = ?`, read, id))
+	return s.mustAffect(s.db.Exec(`UPDATE feedback SET read = ? WHERE id = ?`, read, id))
 }
 
 // DeleteFeedback removes a note; ErrNotFound if there is no such note.
 func (s *Store) DeleteFeedback(id int64) error {
-	return s.oneRow(s.db.Exec(`DELETE FROM feedback WHERE id = ?`, id))
-}
-
-// oneRow turns the result of a write into ErrNotFound when it changed nothing.
-func (s *Store) oneRow(res sql.Result, err error) error {
-	if err != nil {
-		return err
-	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return ErrNotFound
-	}
-	return nil
+	return s.mustAffect(s.db.Exec(`DELETE FROM feedback WHERE id = ?`, id))
 }

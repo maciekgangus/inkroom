@@ -221,6 +221,7 @@ export class Controller {
 
 	/** The selected elements that are still on the board. */
 	get selection(): Stroke[] {
+		if (this.selectedIds.length === 0) return [];
 		return this.board.strokes.filter((s) => this.selectedIds.includes(s.id));
 	}
 

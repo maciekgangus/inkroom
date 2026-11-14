@@ -1,4 +1,5 @@
 import type { ElementKind, Stroke } from "./board";
+import { clamp } from "./clamp";
 import { isPolygonKind, polygonPoints } from "./shapes";
 
 type Vec = [number, number];
@@ -578,15 +579,6 @@ export function partsOf(s: Stroke): ShapeParts | null {
 	return parts;
 }
 
-/** The shapes that have a parameter and so a handle on one of their vertices (R-041). */
-export const ADJUSTABLE: ElementKind[] = [
-	"trapezoid",
-	"parallelogram",
-	"righttrapezoid",
-	"triangle",
-	"roundrect",
-];
-
 /** The usual value of a shape's parameter and the range that looks right. */
 const RANGE: Partial<
 	Record<ElementKind, { def: number; min: number; max: number }>
@@ -598,12 +590,15 @@ const RANGE: Partial<
 	roundrect: { def: 0.25, min: 0, max: 0.5 },
 };
 
+/** The shapes that have a parameter and so a handle on one of their vertices (R-041). */
+export const ADJUSTABLE = Object.keys(RANGE) as ElementKind[];
+
 /** The parameter of a shape: the given one kept in range, the usual one if none was given. */
 function parameter(kind: ElementKind, adj: number | undefined): number {
 	const r = RANGE[kind];
 	if (!r) return adj ?? 0;
 	const value = adj === undefined || !Number.isFinite(adj) ? r.def : adj;
-	return Math.min(r.max, Math.max(r.min, value));
+	return clamp(value, r.min, r.max);
 }
 
 /** The box of two corners and which way the shape was dragged (it is turned over or mirrored). */
@@ -662,7 +657,7 @@ export function adjustFromPoint(
 	const size = kind === "roundrect" ? Math.min(w, h) : w;
 	if (size <= 0) return r.def;
 	const k = kind === "righttrapezoid" ? (x1 - x) / size : (x - x0) / size;
-	return Math.min(r.max, Math.max(r.min, k));
+	return clamp(k, r.min, r.max);
 }
 
 /** The most corners that are offered as handles; a shape with arcs has too many to be useful. */
