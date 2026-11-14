@@ -286,3 +286,32 @@ describe("rehomeImages", () => {
 		expect(bad).toBeNull();
 	});
 });
+
+describe("numbered coordinate system in the clipboard", () => {
+	const axes = {
+		id: "x",
+		authorId: "a",
+		color: "#111",
+		size: 2,
+		z: 1,
+		kind: "axes",
+		numbered: true,
+		points: [
+			[0, 0, 0.5],
+			[200, 160, 0.5],
+		],
+	} as Stroke;
+
+	test("the option survives a copy and a paste", () => {
+		const clip = parseClipboard(serializeSelection([axes], "b"));
+		expect(clip?.elements[0].numbered).toBe(true);
+	});
+
+	test("anything but a boolean is refused", () => {
+		const text = serializeSelection(
+			[{ ...axes, numbered: "yes" as never }],
+			"b",
+		);
+		expect(parseClipboard(text)).toBeNull();
+	});
+});

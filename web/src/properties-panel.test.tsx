@@ -71,6 +71,26 @@ describe("PropertiesPanel", () => {
 		expect(has("prop fill none")).toBe(false);
 	});
 
+	test("a coordinate system offers a switch for the numbers on its marks", () => {
+		const axes = { ...rect, kind: "axes" } as Stroke;
+		mount([axes]);
+		const sw = root.querySelector(
+			'[aria-label="prop numbers"]',
+		) as HTMLButtonElement;
+		expect(sw).not.toBeNull();
+		expect(sw.getAttribute("aria-pressed")).toBe("false");
+		sw.click();
+		expect(onChange).toHaveBeenCalledWith({ numbered: true });
+	});
+
+	test("the switch shows it is on, and is not there for other shapes", () => {
+		mount([{ ...rect, kind: "axes", numbered: true } as Stroke]);
+		const sw = root.querySelector('[aria-label="prop numbers"]');
+		expect(sw?.getAttribute("aria-pressed")).toBe("true");
+		mount([rect]);
+		expect(root.querySelector('[aria-label="prop numbers"]')).toBeNull();
+	});
+
 	describe("the menu of an object (R-060)", () => {
 		const anchor = { minX: 300, minY: 200, maxX: 500, maxY: 300 };
 		const mountWith = (extra: Record<string, unknown>) =>

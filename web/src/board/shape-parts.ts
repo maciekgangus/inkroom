@@ -13,10 +13,17 @@ export interface ShapeParts {
 	lines: Vec[][];
 	hidden: Vec[][];
 	fill: Vec[];
+	/** Lines drawn much thinner than the rest (the marks of a coordinate system). */
+	fine?: Vec[][];
+	/** Numbers written beside the marks, centred on the given point. */
+	labels?: { text: string; x: number; y: number }[];
 }
 
 /** Distance (board units) between the marks of the coordinate system's axes (R-040). */
 export const AXES_STEP = 24;
+
+/** The height of the numbers on the marks of the axes, in board units. */
+export const LABEL_PX = 11;
 
 interface Box {
 	x0: number;
@@ -415,7 +422,12 @@ const FLIPPABLE: ElementKind[] = [
 ];
 
 /** The shapes that are made in the real coordinates of the box (their curves depend on its size). */
-function direct(kind: ElementKind, b: Box, adj: number): ShapeParts | null {
+function direct(
+	kind: ElementKind,
+	b: Box,
+	adj: number,
+	numbered = false,
+): ShapeParts | null {
 	const n = 96; // the quarters of a period (peaks and zeros of sine and cosine) fall on samples
 	const along = (f: (u: number) => number): Vec[] =>
 		Array.from({ length: n + 1 }, (_, i) => {
@@ -486,27 +498,37 @@ function direct(kind: ElementKind, b: Box, adj: number): ShapeParts | null {
 					[b.cx + a * 0.45, b.y0 + a],
 				],
 			];
+			// The marks of the units are thin and apart from the axes; with the option they are numbered.
+			const fine: Vec[][] = [];
+			const labels: { text: string; x: number; y: number }[] = [];
 			const across = Math.floor((b.w / 2 - a * 1.5) / AXES_STEP);
 			for (let i = 1; i <= across; i++) {
 				for (const s of [-1, 1]) {
 					const x = b.cx + s * i * AXES_STEP;
-					lines.push([
+					fine.push([
 						[x, b.cy - 4],
 						[x, b.cy + 4],
 					]);
+					labels.push({ text: String(s * i), x, y: b.cy + 4 + LABEL_PX * 0.7 });
 				}
 			}
 			const up = Math.floor((b.h / 2 - a * 1.5) / AXES_STEP);
 			for (let i = 1; i <= up; i++) {
 				for (const s of [-1, 1]) {
 					const y = b.cy + s * i * AXES_STEP;
-					lines.push([
+					fine.push([
 						[b.cx - 4, y],
 						[b.cx + 4, y],
 					]);
+					// up is up on the screen: the positive numbers are above the centre
+					labels.push({
+						text: String(-s * i),
+						x: b.cx - 6 - LABEL_PX * 0.55,
+						y,
+					});
 				}
 			}
-			return solid(...lines);
+			return { ...solid(...lines), fine, ...(numbered ? { labels } : {}) };
 		}
 		default:
 			return null;
@@ -526,6 +548,8 @@ export function shapeParts(
 	verts?: Vec[],
 	/** The kind's own shape, whatever `verts` say (what a solid's skeleton is made from). */
 	plain = false,
+	/** A coordinate system numbered along its marks. */
+	numbered = false,
 ): ShapeParts | null {
 	if (!kind || !isPolygonKind(kind)) return null;
 	if (POLYHEDRA.includes(kind) && !plain)
@@ -555,7 +579,7 @@ export function shapeParts(
 	};
 	const make = FIT[kind];
 	const k = parameter(kind, adj);
-	let parts = make ? fitted(make(k), box) : direct(kind, box, k);
+	let parts = make ? fitted(make(k), box) : direct(kind, box, k, numbered);
 	if (!parts) return null;
 	if (FLIPPABLE.includes(kind)) {
 		const flipX = b[0] < a[0];
@@ -578,7 +602,15 @@ export function partsOf(s: Stroke): ShapeParts | null {
 	const [a, b] = s.points;
 	const parts =
 		a && b
-			? shapeParts(s.kind, [a[0], a[1]], [b[0], b[1]], s.adj, s.verts)
+			? shapeParts(
+					s.kind,
+					[a[0], a[1]],
+					[b[0], b[1]],
+					s.adj,
+					s.verts,
+					false,
+					s.numbered,
+				)
 			: null;
 	cache.set(s, parts);
 	return parts;
