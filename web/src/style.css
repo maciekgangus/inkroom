@@ -579,8 +579,43 @@ canvas {
 	color: var(--surface);
 }
 .feedback-thanks {
-	width: auto;
+	display: flex;
+	align-items: flex-start;
+	gap: 12px;
 	font-size: 14px;
+}
+.feedback-thanks strong {
+	display: block;
+	font-size: 15px;
+}
+.feedback-thanks p {
+	margin: 2px 0 0;
+	color: var(--muted);
+}
+.feedback-check {
+	flex: none;
+	display: grid;
+	place-items: center;
+	width: 32px;
+	height: 32px;
+	border-radius: 50%;
+	background: var(--accent-soft);
+	color: var(--accent);
+}
+.corner .feedback-thanks .feedback-thanks-close {
+	flex: none;
+	width: 28px;
+	min-width: 28px;
+	height: 28px;
+	margin: -4px -6px 0 auto;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: var(--muted);
+}
+.feedback-thanks-close svg {
+	width: 16px;
+	height: 16px;
 }
 .backgrounds {
 	left: 76px;
