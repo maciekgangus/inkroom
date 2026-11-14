@@ -6,7 +6,7 @@ import type { Renderer } from "./controller";
 import type { ImageCache } from "./image-cache";
 import { imageRect } from "./image-geometry";
 import { type Frame, HANDLE_PX, ROT_OFFSET_PX } from "./selection-frame";
-import { partsOf } from "./shape-parts";
+import { LABEL_PX, partsOf } from "./shape-parts";
 import { isPolygonKind } from "./shapes";
 import { strokeOptions } from "./stroke-style";
 import { fontSizeOf, LINE_HEIGHT, textLines } from "./text";
@@ -18,6 +18,8 @@ import type { Rect, Viewport } from "./viewport";
 const GLOW_COLOR = "hsl(252, 100%, 60%)";
 const GLOW_BLUR = 4;
 const GLOW_PASSES = 2;
+/** The marks of a coordinate system are this part of the width of its axes. */
+const FINE_RATIO = 0.3;
 /** How long the view must stand still before the bitmaps are painted sharp again. */
 const MOVE_SETTLE_MS = 120;
 /** The longest the bitmaps are only moved, however long the view keeps moving. */
@@ -78,13 +80,15 @@ function addPolyline(path: Path2D, pts: [number, number][]): void {
  * What a shape made of lines needs besides its path: the contour to fill and the hidden edges
  * of a solid (drawn dotted), computed once per element.
  */
-const extras = new WeakMap<
-	Stroke,
-	{ fill: Path2D | null; hidden: Path2D | null }
->();
-function extraPaths(
-	s: Stroke,
-): { fill: Path2D | null; hidden: Path2D | null } | null {
+interface Extras {
+	fill: Path2D | null;
+	hidden: Path2D | null;
+	/** The marks of a coordinate system, drawn thin. */
+	fine: Path2D | null;
+	labels: { text: string; x: number; y: number }[];
+}
+const extras = new WeakMap<Stroke, Extras>();
+function extraPaths(s: Stroke): Extras | null {
 	if (!isPolygonKind(s.kind)) return null;
 	let e = extras.get(s);
 	if (!e) {
@@ -99,7 +103,12 @@ function extraPaths(
 			hidden = new Path2D();
 			for (const line of parts.hidden) addPolyline(hidden, line);
 		}
-		e = { fill, hidden };
+		let fine: Path2D | null = null;
+		if (parts?.fine?.length) {
+			fine = new Path2D();
+			for (const line of parts.fine) addPolyline(fine, line);
+		}
+		e = { fill, hidden, fine, labels: parts?.labels ?? [] };
 		extras.set(s, e);
 	}
 	return e;
@@ -220,6 +229,19 @@ function drawElement(
 				ctx.stroke(extra.hidden);
 			}
 			ctx.setLineDash([]);
+			if (extra?.fine) {
+				// The marks of the units: much thinner than the axes themselves.
+				ctx.lineWidth = Math.max(s.size * FINE_RATIO, minWidth * 0.5);
+				ctx.stroke(extra.fine);
+			}
+			if (extra?.labels.length) {
+				ctx.fillStyle = color;
+				ctx.font = textFont(LABEL_PX);
+				ctx.textAlign = "center";
+				ctx.textBaseline = "middle";
+				for (const l of extra.labels) ctx.fillText(l.text, l.x, l.y);
+				ctx.textAlign = "start";
+			}
 		}
 	});
 }

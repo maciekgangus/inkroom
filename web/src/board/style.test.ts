@@ -89,6 +89,7 @@ describe("capabilities", () => {
 			fill: false,
 			text: false,
 			textOnly: false,
+			numbers: false,
 		});
 		expect(capabilities([rect, freehand])).toEqual({
 			color: true,
@@ -97,6 +98,7 @@ describe("capabilities", () => {
 			fill: true,
 			text: false,
 			textOnly: false,
+			numbers: false,
 		});
 		expect(capabilities([text])).toEqual({
 			color: true,
@@ -105,6 +107,7 @@ describe("capabilities", () => {
 			fill: false,
 			text: true,
 			textOnly: true,
+			numbers: false,
 		});
 		expect(capabilities([image])).toEqual({
 			color: false,
@@ -113,6 +116,7 @@ describe("capabilities", () => {
 			fill: false,
 			text: false,
 			textOnly: false,
+			numbers: false,
 		});
 	});
 });
@@ -126,6 +130,7 @@ describe("styleOf", () => {
 			dash: "dashed",
 			fill: "#0f0",
 			opacity: 0.5,
+			numbered: false,
 		};
 		expect(styleOf([r, line])).toEqual({
 			color: "#abc",
@@ -134,6 +139,7 @@ describe("styleOf", () => {
 			dash: "dashed",
 			fill: "#0f0",
 			opacity: 0.5,
+			numbered: false,
 		});
 	});
 
@@ -145,6 +151,7 @@ describe("styleOf", () => {
 			dash: "solid",
 			fill: null,
 			opacity: 1,
+			numbered: false,
 		});
 	});
 });
@@ -267,5 +274,37 @@ describe("curves and the coordinate system have no inside to fill (R-039)", () =
 			"cone",
 		] as const)
 			expect(capabilities([open(kind)]).fill).toBe(true);
+	});
+});
+
+describe("numbering the coordinate system", () => {
+	const axes = {
+		...base,
+		kind: "axes",
+		points: pts([0, 0], [100, 80]),
+	} as Stroke;
+
+	test("numbered switches on and off for a coordinate system", () => {
+		const on = applyStyle(axes, { numbered: true });
+		expect(on.numbered).toBe(true);
+		expect(applyStyle(on, { numbered: false }).numbered).toBeUndefined();
+	});
+
+	test("other elements ignore it", () => {
+		const rect = {
+			...base,
+			kind: "rect",
+			points: pts([0, 0], [10, 10]),
+		} as Stroke;
+		expect(applyStyle(rect, { numbered: true }).numbered).toBeUndefined();
+	});
+
+	test("only a coordinate system offers it, and the panel shows its state", () => {
+		expect(capabilities([axes]).numbers).toBe(true);
+		expect(capabilities([{ ...axes, kind: "sine" } as Stroke]).numbers).toBe(
+			false,
+		);
+		expect(styleOf([{ ...axes, numbered: true }]).numbered).toBe(true);
+		expect(styleOf([axes]).numbered).toBe(false);
 	});
 });

@@ -247,6 +247,19 @@ export function PropertiesPanel({
 					))}
 				</div>
 			)}
+			{can.numbers && (
+				<div class="row">
+					<button
+						type="button"
+						aria-label="prop numbers"
+						aria-pressed={now.numbered}
+						class={on(now.numbered)}
+						onClick={() => onChange({ numbered: !now.numbered })}
+					>
+						Numeracja 1 2 3
+					</button>
+				</div>
+			)}
 			{can.fill && (
 				<div class="row">
 					<ColorBlock

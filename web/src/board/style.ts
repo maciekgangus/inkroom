@@ -16,6 +16,8 @@ export interface StylePatch {
 	/** A colour, or null to remove the fill. */
 	fill?: string | null;
 	opacity?: number;
+	/** Numbers on the marks of a coordinate system. */
+	numbered?: boolean;
 }
 
 const isShape = (el: Stroke) =>
@@ -64,6 +66,10 @@ export function applyStyle(el: Stroke, patch: StylePatch): Stroke {
 		if (patch.fill === null) delete out.fill;
 		else out.fill = patch.fill;
 	}
+	if (patch.numbered !== undefined && el.kind === "axes") {
+		if (patch.numbered) out.numbered = true;
+		else delete out.numbered;
+	}
 	if (patch.opacity !== undefined) {
 		const o = clamp(patch.opacity, 0, 1);
 		if (o >= 1) delete out.opacity;
@@ -80,6 +86,8 @@ export function capabilities(els: Stroke[]) {
 		dash: dashOptions(els).length > 1,
 		fill: els.some((e) => isShape(e) && hasInside(e.kind)),
 		text: els.some((e) => e.kind === "text"),
+		/** A coordinate system is selected: its marks can be numbered. */
+		numbers: els.some((e) => e.kind === "axes"),
 		/** Only texts are selected: the size slider is then a font size. */
 		textOnly: els.length > 0 && els.every((e) => e.kind === "text"),
 	};
@@ -93,6 +101,7 @@ export function styleOf(els: Stroke[]): {
 	dash: Dash;
 	fill: string | null;
 	opacity: number;
+	numbered: boolean;
 } {
 	const e = els[0];
 	return {
@@ -102,5 +111,6 @@ export function styleOf(els: Stroke[]): {
 		dash: e.dash ?? "solid",
 		fill: e.fill ?? null,
 		opacity: e.opacity ?? 1,
+		numbered: e.numbered === true,
 	};
 }

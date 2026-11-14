@@ -117,6 +117,10 @@ function cleanElement(raw: unknown): ClipElement | null {
 		if (!isNum(raw.adj)) return null;
 		out.adj = raw.adj;
 	}
+	if (raw.numbered !== undefined) {
+		if (typeof raw.numbered !== "boolean") return null;
+		if (raw.numbered) out.numbered = true;
+	}
 	if (raw.verts !== undefined) {
 		const v = raw.verts;
 		if (

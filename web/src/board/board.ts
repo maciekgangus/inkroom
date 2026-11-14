@@ -74,6 +74,8 @@ export interface Stroke {
 	 * the apex of a triangle, the radius of a rounded rectangle; missing means the usual look.
 	 */
 	adj?: number;
+	/** A coordinate system numbered along its marks: 1 2 3 and -1 -2 -3 on both axes. */
+	numbered?: boolean;
 	/** Width of a text area in board units: the text wraps to it (R-044); missing for a text at a point. */
 	width?: number;
 	id: string;

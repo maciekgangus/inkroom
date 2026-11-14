@@ -305,8 +305,7 @@ describe("solids", () => {
 });
 
 describe("the coordinate system", () => {
-	const ticks = (a: Vec, b: Vec) =>
-		parts("axes", a, b).lines.filter((l) => l.length === 2);
+	const ticks = (a: Vec, b: Vec) => parts("axes", a, b).fine ?? [];
 
 	test("has two axes through the centre with arrow heads", () => {
 		const p = parts("axes");
@@ -640,5 +639,61 @@ describe("the corners of solids (R-050)", () => {
 		);
 		const fill = shapeParts("pyramid", A, B, undefined, verts)?.fill ?? [];
 		expect(fill.some((p) => p[1] < 100 - 100)).toBe(true); // the apex is far above the box
+	});
+});
+
+describe("the coordinate system: fine marks and numbers", () => {
+	const axes = (numbered: boolean) =>
+		shapeParts("axes", A, B, undefined, undefined, false, numbered);
+
+	test("the marks of the units are a group of their own, so they can be drawn thin", () => {
+		const p = axes(false);
+		expect(p?.fine?.length).toBeGreaterThan(4);
+		// the main lines and the arrow heads stay in `lines`: two axes and two heads
+		expect(p?.lines).toHaveLength(4);
+		for (const m of p?.fine ?? []) expect(m).toHaveLength(2);
+	});
+
+	test("without the option there are no numbers", () => {
+		expect(axes(false)?.labels ?? []).toEqual([]);
+	});
+
+	test("with it every mark is numbered: 1 2 3 to the right and up, -1 -2 -3 to the left and down", () => {
+		const labels = axes(true)?.labels ?? [];
+		const text = labels.map((l) => l.text);
+		for (const t of ["1", "2", "3", "-1", "-2", "-3"])
+			expect(text).toContain(t);
+		expect(text).not.toContain("0");
+		const cx = 220; // the centre of the box
+		const cy = 190;
+		const one = labels.find((l) => l.text === "1" && l.y > cy); // under the horizontal axis
+		const minusOne = labels.find((l) => l.text === "-1" && l.y > cy);
+		expect(one?.x).toBeCloseTo(cx + AXES_STEP, 6);
+		expect(minusOne?.x).toBeCloseTo(cx - AXES_STEP, 6);
+		const beside = (l: { x: number }) => Math.abs(l.x - cx) < 20; // by the vertical axis
+		const up = labels.find((l) => l.text === "1" && beside(l)); // beside the vertical axis
+		expect(up?.y).toBeCloseTo(cy - AXES_STEP, 6); // up is up on the screen
+		const down = labels.find((l) => l.text === "-1" && beside(l));
+		expect(down?.y).toBeCloseTo(cy + AXES_STEP, 6);
+	});
+
+	test("an element carries the option: partsOf reads `numbered`", () => {
+		const el = {
+			id: "a",
+			authorId: "x",
+			color: "#111",
+			size: 2,
+			z: 1,
+			kind: "axes",
+			numbered: true,
+			points: [
+				[100, 100, 0.5],
+				[340, 280, 0.5],
+			],
+		} as Stroke;
+		expect((partsOf(el)?.labels ?? []).length).toBeGreaterThan(4);
+		expect((partsOf({ ...el, numbered: undefined })?.labels ?? []).length).toBe(
+			0,
+		);
 	});
 });
