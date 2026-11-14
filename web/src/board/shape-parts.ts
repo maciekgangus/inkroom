@@ -408,6 +408,7 @@ const FLIPPABLE: ElementKind[] = [
 	"semicircle",
 	"quadrant",
 	"sine",
+	"cosine",
 	"bell",
 	"scurve",
 	"parabola",
@@ -415,7 +416,7 @@ const FLIPPABLE: ElementKind[] = [
 
 /** The shapes that are made in the real coordinates of the box (their curves depend on its size). */
 function direct(kind: ElementKind, b: Box, adj: number): ShapeParts | null {
-	const n = 96; // the peaks of the sine (at 1/6, 1/2, 5/6) fall on samples
+	const n = 96; // the quarters of a period (peaks and zeros of sine and cosine) fall on samples
 	const along = (f: (u: number) => number): Vec[] =>
 		Array.from({ length: n + 1 }, (_, i) => {
 			const u = i / n;
@@ -445,8 +446,12 @@ function direct(kind: ElementKind, b: Box, adj: number): ShapeParts | null {
 			];
 			return { lines: [closed(p)], hidden: [], fill: p };
 		}
+		// One period, 0 to 2π, across the width of the box: the sine starts in the middle and goes
+		// up (up is up on the screen), the cosine starts at the top.
 		case "sine":
-			return solid(along((u) => b.cy - (b.h / 2) * Math.sin(3 * Math.PI * u)));
+			return solid(along((u) => b.cy - (b.h / 2) * Math.sin(2 * Math.PI * u)));
+		case "cosine":
+			return solid(along((u) => b.cy - (b.h / 2) * Math.cos(2 * Math.PI * u)));
 		case "bell": {
 			// A Gauss bell, lowered so that both ends sit exactly on the bottom of the box.
 			const g = (u: number) => Math.exp(-((u - 0.5) ** 2) / (2 * 0.13 ** 2));

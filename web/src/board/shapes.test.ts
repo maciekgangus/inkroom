@@ -123,7 +123,7 @@ describe("the list of shapes (R-039)", () => {
 	test("has every shape of the catalog once, each with a Polish name", () => {
 		const kinds = SHAPES.map((s) => s.kind);
 		expect(new Set(kinds).size).toBe(kinds.length);
-		expect(kinds).toHaveLength(7 + 4 + 4 + 12 + 4 + 1);
+		expect(kinds).toHaveLength(7 + 4 + 4 + 12 + 5 + 1); // five curves: sine, cosine, bell, S, parabola
 		for (const s of SHAPES) expect(s.label.length).toBeGreaterThan(0);
 	});
 
@@ -179,7 +179,14 @@ describe("the remembered shape", () => {
 
 describe("hasInside", () => {
 	test("is false for the curves and the coordinate system, true for the other shapes", () => {
-		for (const kind of ["sine", "bell", "scurve", "parabola", "axes"] as const)
+		for (const kind of [
+			"sine",
+			"cosine",
+			"bell",
+			"scurve",
+			"parabola",
+			"axes",
+		] as const)
 			expect(hasInside(kind)).toBe(false);
 		for (const kind of [
 			"rect",

@@ -48,7 +48,7 @@ const SOLIDS: ElementKind[] = [
 	"pyramidfrustum",
 	"conefrustum",
 ];
-const CURVES: ElementKind[] = ["sine", "bell", "scurve", "parabola"];
+const CURVES: ElementKind[] = ["sine", "cosine", "bell", "scurve", "parabola"];
 const EVERY: ElementKind[] = [
 	...BASIC,
 	...REGULAR,
@@ -214,11 +214,26 @@ describe("2D shapes", () => {
 describe("curves", () => {
 	const ys = (kind: ElementKind) => parts(kind).lines[0].map((p) => p[1]);
 
-	test("a sine crosses the middle and reaches the top and the bottom", () => {
+	test("a sine is one period, 0 to 2π: from the middle up to the top, down to the bottom, back to the middle", () => {
 		const y = ys("sine");
+		const n = y.length - 1;
 		expect(Math.min(...y)).toBeCloseTo(100, 1);
 		expect(Math.max(...y)).toBeCloseTo(280, 1);
-		expect(y.some((v) => v < 190) && y.some((v) => v > 190)).toBe(true);
+		expect(y[0]).toBeCloseTo(190, 1); // 0
+		expect(y[n / 4]).toBeCloseTo(100, 1); // π/2: the top (up is up on the screen)
+		expect(y[n / 2]).toBeCloseTo(190, 1); // π
+		expect(y[(3 * n) / 4]).toBeCloseTo(280, 1); // 3π/2: the bottom
+		expect(y[n]).toBeCloseTo(190, 1); // 2π
+	});
+
+	test("a cosine is one period too, but starts at the top: 1, 0, -1, 0, 1", () => {
+		const y = ys("cosine");
+		const n = y.length - 1;
+		expect(y[0]).toBeCloseTo(100, 1); // 0: the top
+		expect(y[n / 4]).toBeCloseTo(190, 1); // π/2
+		expect(y[n / 2]).toBeCloseTo(280, 1); // π: the bottom
+		expect(y[(3 * n) / 4]).toBeCloseTo(190, 1); // 3π/2
+		expect(y[n]).toBeCloseTo(100, 1); // 2π: the top again
 	});
 
 	test("a bell peaks in the middle and falls to the bottom at both ends", () => {
@@ -387,6 +402,7 @@ describe("adjustable shapes (R-041, phase 2)", () => {
 			"star",
 			"cube",
 			"sine",
+			"cosine",
 			"axes",
 			"rhombus",
 		] as const)
@@ -549,6 +565,7 @@ describe("free vertices (R-047)", () => {
 			"circle",
 			"sphere",
 			"sine",
+			"cosine",
 			"axes",
 			"roundrect",
 		] as const)
