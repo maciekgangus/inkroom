@@ -32,6 +32,10 @@ describe("Toolbar", () => {
 		expect(SIZES).toHaveLength(3);
 	});
 
+	test("the ready widths are fine: the thickest is no more than 5 px, the thinnest 1 px", () => {
+		expect(SIZES).toEqual([1, 2, 5]);
+	});
+
 	test("tool buttons show an icon and a Polish tooltip instead of a text label", () => {
 		const pen = root.querySelector('[aria-label="pen"]') as HTMLElement;
 		expect(pen.querySelector("svg")).not.toBeNull();
@@ -284,9 +288,9 @@ describe("Toolbar", () => {
 
 	test("the quick widths, the slider window and the line style list are in the toolbar (R-038)", () => {
 		for (const label of [
+			"size 1",
 			"size 2",
 			"size 5",
-			"size 10",
 			"stroke settings",
 			"line style",
 		])

@@ -286,6 +286,31 @@ input::placeholder {
 	border: 1px solid var(--border);
 	overflow: hidden;
 }
+/* While the picture is on its way a soft band runs over the empty frame. */
+.preview-box.loading {
+	background:
+		linear-gradient(
+			100deg,
+			transparent 30%,
+			color-mix(in srgb, var(--border) 70%, transparent) 50%,
+			transparent 70%
+		)
+		0 0 / 200% 100% #fff;
+	animation: preview-loading 1.4s linear infinite;
+}
+@keyframes preview-loading {
+	from {
+		background-position: 200% 0;
+	}
+	to {
+		background-position: -100% 0;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.preview-box.loading {
+		animation: none;
+	}
+}
 .preview-box .preview {
 	display: block;
 	width: 100%;

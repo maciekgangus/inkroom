@@ -11,6 +11,7 @@ import { getPreview, setPreview } from "./preview-cache";
 export function BoardPreview({ boardId }: { boardId: string }) {
 	const box = useRef<HTMLDivElement>(null);
 	const [src, setSrc] = useState<string | null>(null);
+	const [failed, setFailed] = useState(false);
 
 	useEffect(() => {
 		let gone = false;
@@ -23,7 +24,9 @@ export function BoardPreview({ boardId }: { boardId: string }) {
 					if (!kept && etag) setPreview(boardId, etag, url);
 					setSrc(url);
 				},
-				() => {}, // no picture: the tile still has its name and buttons
+				() => {
+					if (!gone) setFailed(true);
+				}, // no picture: the tile still has its name and buttons
 			);
 		};
 		const el = box.current;
@@ -51,7 +54,7 @@ export function BoardPreview({ boardId }: { boardId: string }) {
 	}, [boardId]);
 
 	return (
-		<div class="preview-box" ref={box}>
+		<div class={`preview-box${src || failed ? "" : " loading"}`} ref={box}>
 			{src && <img class="preview" src={src} alt="" loading="lazy" />}
 		</div>
 	);

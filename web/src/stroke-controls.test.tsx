@@ -26,7 +26,7 @@ describe("StrokeControls (R-038)", () => {
 	beforeEach(() => {
 		root = document.createElement("div");
 		document.body.replaceChildren(root);
-		settings = { tool: "pen", color: "#111", size: 5 };
+		settings = { tool: "pen", color: "#111", size: 2 };
 		onChange = vi.fn((patch) => {
 			Object.assign(settings, patch);
 			mount();
@@ -36,15 +36,15 @@ describe("StrokeControls (R-038)", () => {
 
 	describe("quick settings: the three ready widths", () => {
 		test("show the current width and set another with one click", () => {
-			expect(el("size 5")?.classList.contains("active")).toBe(true);
-			press("size 10");
-			expect(onChange).toHaveBeenCalledWith({ size: 10 });
+			expect(el("size 2")?.classList.contains("active")).toBe(true);
+			press("size 5");
+			expect(onChange).toHaveBeenCalledWith({ size: 5 });
 		});
 
 		test("a width set with the sliders that is not a preset marks none", () => {
 			settings.size = 17;
 			mount();
-			for (const s of [2, 5, 10])
+			for (const s of [1, 2, 5])
 				expect(el(`size ${s}`)?.classList.contains("active")).toBe(false);
 		});
 	});
