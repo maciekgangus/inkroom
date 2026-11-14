@@ -220,8 +220,9 @@ export function PropertiesPanel({
 						<Slider
 							icon="width"
 							label="prop size"
-							min={1}
+							min={0.25}
 							max={50}
+							step={0.25}
 							value={now.size}
 							unit=" px"
 							onInput={(v) => onPreview({ size: v })}

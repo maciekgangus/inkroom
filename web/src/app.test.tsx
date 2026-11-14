@@ -545,13 +545,44 @@ describe("App", () => {
 			const pressed = (label: string) =>
 				button(label)?.getAttribute("aria-pressed") === "true";
 
-			test("starts as a list, with no previews fetched", async () => {
+			test("starts as tiles for everyone, each with a placeholder until its picture is there", async () => {
+				localStorage.removeItem("inkroom.boardView"); // no choice made on this device
+				// A tile that is not yet in view has not asked for its picture: only the placeholder.
+				vi.stubGlobal(
+					"IntersectionObserver",
+					class {
+						observe() {}
+						disconnect() {}
+					},
+				);
 				const api = await openPanel();
-				expect(pressed("Lista")).toBe(true);
-				expect(pressed("Kafelki")).toBe(false);
-				expect(lists().every((l) => !l.classList.contains("tiles"))).toBe(true);
+				expect(pressed("Kafelki")).toBe(true);
+				expect(pressed("Lista")).toBe(false);
+				expect(lists().every((l) => l.classList.contains("tiles"))).toBe(true);
+				expect(root.querySelectorAll(".preview-box.loading")).toHaveLength(2);
 				expect(root.querySelector("img.preview")).toBeNull();
 				expect(api.called(`GET /api/boards/${ID}/preview`)).toHaveLength(0);
+				vi.unstubAllGlobals();
+			});
+
+			test("a tile loses its placeholder when the picture arrives", async () => {
+				localStorage.removeItem("inkroom.boardView");
+				const api = await openPanel();
+				await vi.waitFor(() =>
+					expect(root.querySelectorAll("img.preview")).toHaveLength(2),
+				);
+				expect(root.querySelectorAll(".preview-box.loading")).toHaveLength(0);
+				expect(api.called(`GET /api/boards/${ID}/preview`)).toHaveLength(1);
+			});
+
+			test("the list stays available and fetches no previews", async () => {
+				const api = await openPanel();
+				await click("Lista");
+				expect(lists().every((l) => !l.classList.contains("tiles"))).toBe(true);
+				expect(root.querySelector(".preview-box")).toBeNull();
+				expect(api.called(`GET /api/boards/${ID}/preview`).length).toBeLessThan(
+					2,
+				);
 			});
 
 			test("tiles show a picture of each board, in both lists", async () => {
@@ -581,16 +612,16 @@ describe("App", () => {
 				expect(tile?.querySelector("a.open-link")).not.toBeNull();
 			});
 
-			test("the choice is remembered on the device", async () => {
+			test("the choice of the list is remembered on the device", async () => {
 				await openPanel();
-				await click("Kafelki");
-				expect(localStorage.getItem("inkroom.boardView")).toBe("tiles");
-				render(null, root);
-				await openPanel();
-				expect(pressed("Kafelki")).toBe(true);
-				expect(lists().every((l) => l.classList.contains("tiles"))).toBe(true);
 				await click("Lista");
 				expect(localStorage.getItem("inkroom.boardView")).toBe("list");
+				render(null, root);
+				await openPanel();
+				expect(pressed("Lista")).toBe(true);
+				expect(lists().every((l) => !l.classList.contains("tiles"))).toBe(true);
+				await click("Kafelki");
+				expect(localStorage.getItem("inkroom.boardView")).toBe("tiles");
 			});
 
 			test("a picture already drawn for this version is not drawn again", async () => {

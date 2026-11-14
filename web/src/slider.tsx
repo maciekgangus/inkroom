@@ -8,6 +8,7 @@ export function Slider({
 	label,
 	min,
 	max,
+	step = 1,
 	value,
 	unit,
 	onInput,
@@ -18,6 +19,8 @@ export function Slider({
 	label: string;
 	min: number;
 	max: number;
+	/** How far one notch moves the value; a finer step shows the fraction. */
+	step?: number;
 	value: number;
 	unit: string;
 	onInput: (v: number) => void;
@@ -40,13 +43,13 @@ export function Slider({
 				aria-label={label}
 				min={min}
 				max={max}
-				step={1}
+				step={step}
 				value={value}
 				onInput={(e) => onInput(Number(e.currentTarget.value))}
 				onChange={(e) => onChange(Number(e.currentTarget.value))}
 			/>
 			<span class="value">
-				{Math.round(value)}
+				{Number(value.toFixed(2))}
 				{unit}
 			</span>
 		</label>

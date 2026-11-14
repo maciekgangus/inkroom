@@ -10,9 +10,10 @@ type View = "list" | "tiles";
 
 const storedView = (): View => {
 	try {
-		return localStorage.getItem(VIEW_KEY) === "tiles" ? "tiles" : "list";
+		// Tiles for everyone, unless this device chose the list.
+		return localStorage.getItem(VIEW_KEY) === "list" ? "list" : "tiles";
 	} catch {
-		return "list";
+		return "tiles";
 	}
 };
 

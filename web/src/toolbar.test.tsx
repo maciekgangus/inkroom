@@ -32,6 +32,10 @@ describe("Toolbar", () => {
 		expect(SIZES).toHaveLength(3);
 	});
 
+	test("the ready widths are very fine: even the thinnest on the screen is a hair, the thickest 2.5 px", () => {
+		expect(SIZES).toEqual([0.5, 1, 2.5]);
+	});
+
 	test("tool buttons show an icon and a Polish tooltip instead of a text label", () => {
 		const pen = root.querySelector('[aria-label="pen"]') as HTMLElement;
 		expect(pen.querySelector("svg")).not.toBeNull();
@@ -155,7 +159,7 @@ describe("Toolbar", () => {
 	});
 
 	test("keeps colour and size in place, dimmed, while something is selected (the panel owns them then)", () => {
-		expect(root.querySelector('[aria-label="size 5"]')).not.toBeNull();
+		expect(root.querySelector('[aria-label="size 2.5"]')).not.toBeNull();
 		act(() =>
 			render(
 				<Toolbar
@@ -168,7 +172,7 @@ describe("Toolbar", () => {
 			),
 		);
 		expect(root.querySelector('[aria-label^="color "]')).not.toBeNull();
-		expect(root.querySelector('[aria-label="size 5"]')).not.toBeNull();
+		expect(root.querySelector('[aria-label="size 2.5"]')).not.toBeNull();
 		expect(root.querySelectorAll(".group.dimmed").length).toBe(2);
 		expect(root.querySelector('[aria-label="select"]')).not.toBeNull();
 		expect(root.querySelector('[aria-label="undo"]')).not.toBeNull();
@@ -284,9 +288,9 @@ describe("Toolbar", () => {
 
 	test("the quick widths, the slider window and the line style list are in the toolbar (R-038)", () => {
 		for (const label of [
-			"size 2",
-			"size 5",
-			"size 10",
+			"size 0.5",
+			"size 1",
+			"size 2.5",
 			"stroke settings",
 			"line style",
 		])
@@ -306,7 +310,7 @@ describe("Toolbar", () => {
 				root,
 			),
 		);
-		expect(root.querySelector('[aria-label="size 5"]')).not.toBeNull();
+		expect(root.querySelector('[aria-label="size 2.5"]')).not.toBeNull();
 		expect(root.querySelector(".group.dimmed")).not.toBeNull();
 	});
 

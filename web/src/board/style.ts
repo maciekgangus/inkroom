@@ -49,7 +49,11 @@ export function applyStyle(el: Stroke, patch: StylePatch): Stroke {
 	const out: Stroke = { ...el };
 	if (patch.color !== undefined && el.kind !== "image") out.color = patch.color;
 	if (patch.size !== undefined && el.kind !== "image") {
-		out.size = clamp(patch.size, 1, 50);
+		// A line may be finer than a pixel; a text keeps whole sizes (its size makes the font).
+		out.size =
+			el.kind === "text"
+				? clamp(patch.size, 1, 50)
+				: clamp(patch.size, 0.25, 50);
 		if (el.kind === "text") out.fontSize = fontSizeFor(out.size);
 	}
 	if (patch.fontSize !== undefined && el.kind === "text")

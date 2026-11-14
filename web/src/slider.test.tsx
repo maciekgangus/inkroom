@@ -47,3 +47,36 @@ describe("Slider fill", () => {
 		expect(along(mount(5, 5, 5))).toBe(0);
 	});
 });
+
+describe("Slider steps", () => {
+	const mountStep = (value: number, step?: number) => {
+		const root = document.createElement("div");
+		render(
+			<Slider
+				label="test"
+				min={0.25}
+				max={50}
+				step={step}
+				value={value}
+				unit=" px"
+				onInput={vi.fn()}
+				onChange={vi.fn()}
+			/>,
+			root,
+		);
+		return root;
+	};
+
+	test("moves by whole steps unless told otherwise", () => {
+		expect(mountStep(5).querySelector("input")?.step).toBe("1");
+	});
+
+	test("a finer step shows the value with its fraction, not rounded away", () => {
+		const root = mountStep(0.5, 0.25);
+		expect(root.querySelector("input")?.step).toBe("0.25");
+		expect(root.querySelector(".value")?.textContent).toBe("0.5 px");
+		expect(mountStep(17, 0.25).querySelector(".value")?.textContent).toBe(
+			"17 px",
+		);
+	});
+});

@@ -4,8 +4,8 @@ import type { Dash } from "./board/style";
 import { Icon } from "./icon";
 import { Slider } from "./slider";
 
-/** The three ready widths of the quick settings. */
-export const SIZES = [2, 5, 10];
+/** The three ready widths of the quick settings: fine, so the middle one is comfortable to write with. */
+export const SIZES = [0.5, 1, 2.5];
 
 /** What the line style list offers, with the icon of each (R-038). */
 const LINE_STYLES: {
@@ -67,7 +67,7 @@ export function StrokeControls({ settings, onChange }: Props) {
 				>
 					<span
 						class="dot"
-						style={{ width: `${s + 2}px`, height: `${s + 2}px` }}
+						style={{ width: `${s * 2 + 2}px`, height: `${s * 2 + 2}px` }}
 					/>
 				</button>
 			))}
@@ -87,8 +87,9 @@ export function StrokeControls({ settings, onChange }: Props) {
 						<span class="slider-title">Grubość</span>
 						<Slider
 							label="stroke width"
-							min={1}
+							min={0.25}
 							max={50}
+							step={0.25}
 							value={settings.size}
 							unit=" px"
 							onInput={(v) => onChange({ size: v })}

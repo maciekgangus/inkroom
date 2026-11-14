@@ -286,6 +286,31 @@ input::placeholder {
 	border: 1px solid var(--border);
 	overflow: hidden;
 }
+/* While the picture is on its way a soft band runs over the empty frame. */
+.preview-box.loading {
+	background:
+		linear-gradient(
+			100deg,
+			transparent 30%,
+			color-mix(in srgb, var(--border) 70%, transparent) 50%,
+			transparent 70%
+		)
+		0 0 / 200% 100% #fff;
+	animation: preview-loading 1.4s linear infinite;
+}
+@keyframes preview-loading {
+	from {
+		background-position: 200% 0;
+	}
+	to {
+		background-position: -100% 0;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.preview-box.loading {
+		animation: none;
+	}
+}
 .preview-box .preview {
 	display: block;
 	width: 100%;
@@ -371,6 +396,19 @@ a.open-link {
 .boards.tiles .board .row {
 	flex-wrap: wrap;
 	gap: 6px;
+}
+/* The rename field takes what is left of the tile, never more: it may shrink below its own width. */
+.boards.tiles .board {
+	min-width: 0;
+}
+.boards.tiles .board form.row {
+	min-width: 0;
+	flex-wrap: nowrap;
+}
+.boards.tiles .board form.row input {
+	flex: 1 1 0;
+	min-width: 0;
+	width: 100%;
 }
 .boards.tiles .board button {
 	height: 30px;
