@@ -47,7 +47,11 @@ describe("CanvasRenderer selection glow (R-058)", () => {
 			},
 		) as unknown as CanvasRenderingContext2D;
 		const canvas = () =>
-			({ getContext: () => ctx, width: 100, height: 100 }) as unknown as HTMLCanvasElement;
+			({
+				getContext: () => ctx,
+				width: 100,
+				height: 100,
+			}) as unknown as HTMLCanvasElement;
 		const renderer = new CanvasRenderer(canvas(), canvas(), new Viewport());
 		const many = Array.from({ length: 40 }, (_, i) => ({
 			id: `s${i}`,
