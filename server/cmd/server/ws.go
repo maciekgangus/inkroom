@@ -30,7 +30,13 @@ func (a *app) serveWS(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	conn, err := websocket.Accept(w, r, nil)
+	// Big messages (a paste of hundreds of strokes, the whole board for a newcomer, tens of MB of
+	// point lists) shrink several times when compressed; the small live and cursor messages are
+	// under the library's threshold and go as they are. A new window per message keeps the memory
+	// of each connection small.
+	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+		CompressionMode: websocket.CompressionNoContextTakeover,
+	})
 	if err != nil {
 		return
 	}

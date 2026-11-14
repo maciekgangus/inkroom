@@ -246,11 +246,16 @@ export class Board {
 		return true;
 	}
 
-	/** Applies an operation from the server. Idempotent; not reported via onOp, not in any history. */
-	applyRemote(op: BoardOp): void {
+	/**
+	 * Applies an operation from the server. Idempotent; not reported via onOp, not in any history.
+	 * False when it changed nothing (the echo of an element we already have), so no repaint.
+	 */
+	applyRemote(op: BoardOp): boolean {
+		const before = this.version;
 		if (op.t === "add") this.insert(op.stroke);
 		else if (op.t === "update") this.replace(op.stroke);
 		else this.remove(op.id);
+		return this.version !== before;
 	}
 
 	/** Replaces all strokes (server snapshot). */

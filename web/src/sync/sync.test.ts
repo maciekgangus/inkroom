@@ -115,6 +115,20 @@ describe("SyncClient", () => {
 		expect(sock().sent).toEqual([]); // nothing re-sent
 	});
 
+	test("the echo of an element we already have does not repaint the board", () => {
+		connectAndJoin();
+		board.addStroke(stroke("1")); // a paste of hundreds: each comes back from the server
+		const before = (onUpdate as ReturnType<typeof vi.fn>).mock.calls.length;
+		sock().receive({ t: "add", stroke: stroke("1") });
+		expect((onUpdate as ReturnType<typeof vi.fn>).mock.calls.length).toBe(
+			before,
+		);
+		sock().receive({ t: "add", stroke: stroke("9", 2, "other") }); // something new does
+		expect((onUpdate as ReturnType<typeof vi.fn>).mock.calls.length).toBe(
+			before + 1,
+		);
+	});
+
 	test("operations made offline are sent after the next snapshot", () => {
 		connectAndJoin();
 		sock().drop();

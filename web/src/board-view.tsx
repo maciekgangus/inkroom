@@ -92,6 +92,9 @@ const BACKGROUND_NAMES: Record<Background, string> = {
 };
 
 /** A shared infinite board: two canvas layers, a tool palette, zoom buttons and live sync. */
+/** The shortest time between the end of one paste and the start of the next. */
+const PASTE_GAP_MS = 400;
+
 /** What a message from the network changed (see `frameBatch`). */
 const BOARD = 1;
 const LIVE = 2;
@@ -161,6 +164,16 @@ export function BoardView({
 	const [menuOpenFor, setMenuOpenFor] = useState<string | null>(null);
 	const [, setTick] = useState(0); // bumped when the view changes, so the text field follows it
 	const bump = () => setTick((t) => t + 1);
+	/**
+	 * When the last paste (or duplicate) ended. Copying many elements is heavy, and a held Ctrl+V or
+	 * Ctrl+D or a quick second press would queue more of them behind it: while one is under way, or
+	 * just ended, the next is ignored. One at a time.
+	 */
+	const pasteEnded = useRef(Number.NEGATIVE_INFINITY);
+	const pasteBusy = () => performance.now() - pasteEnded.current < PASTE_GAP_MS;
+	const pasteDone = () => {
+		pasteEnded.current = performance.now();
+	};
 	const ctl = useRef<Controller | null>(null);
 	const syncRef = useRef<SyncClient | null>(null);
 	const rendererRef = useRef<CanvasRenderer | null>(null);
@@ -506,6 +519,8 @@ export function BoardView({
 		};
 		/** Where the pointer last was on the board: pasted elements land there. */
 		let lastPointer: [number, number] | undefined;
+		/** The text of the last copy made here, to know our own copy when it comes back. */
+		let lastCopy = "";
 
 		const resize = () => {
 			canvas.resize();
@@ -577,8 +592,7 @@ export function BoardView({
 			["TEXTAREA", "INPUT"].includes(
 				(e.target as HTMLElement | null)?.tagName ?? "",
 			);
-		const paste = (e: ClipboardEvent) => {
-			if (typing(e)) return;
+		const pasteNow = (e: ClipboardEvent) => {
 			const item = Array.from(e.clipboardData?.items ?? []).find((i) =>
 				i.type.startsWith("image/"),
 			);
@@ -589,7 +603,15 @@ export function BoardView({
 				return;
 			}
 			// Elements copied on a board, on this one or another, travel as JSON text (R-035).
-			const clip = parseClipboard(e.clipboardData?.getData("text/plain") ?? "");
+			const text = e.clipboardData?.getData("text/plain") ?? "";
+			// Our own copy, still on the clipboard: paste it from memory. Reading it back means
+			// checking every point of it, which takes seconds for a big selection.
+			if (text !== "" && text === lastCopy && controller.hasClipboard) {
+				e.preventDefault();
+				controller.paste(lastPointer);
+				return;
+			}
+			const clip = parseClipboard(text);
 			if (clip) {
 				e.preventDefault();
 				pasteClip.current(clip, lastPointer);
@@ -601,13 +623,20 @@ export function BoardView({
 				controller.paste(lastPointer);
 			}
 		};
+		const paste = (e: ClipboardEvent) => {
+			if (typing(e)) return;
+			if (pasteBusy()) {
+				e.preventDefault(); // one at a time: this one is ignored
+				return;
+			}
+			pasteNow(e);
+			pasteDone();
+		};
 		/** Puts the selection on the system clipboard as JSON; false if nothing is selected. */
 		const copyToEvent = (e: ClipboardEvent): boolean => {
 			if (typing(e) || !controller.copySelected()) return false;
-			e.clipboardData?.setData(
-				"text/plain",
-				serializeSelection(controller.selection, boardId),
-			);
+			lastCopy = serializeSelection(controller.selection, boardId);
+			e.clipboardData?.setData("text/plain", lastCopy);
 			e.preventDefault();
 			return true;
 		};
@@ -645,15 +674,24 @@ export function BoardView({
 				return;
 			}
 			const ctrlKey = e.ctrlKey || e.metaKey;
-			// Ctrl+C and Ctrl+V are left to the browser: its copy and paste events fill and read the
-			// system clipboard (R-035); preventing the key here would swallow the copy event.
-			if (
-				ctrlKey &&
-				e.key.toLowerCase() === "d" &&
-				controller.duplicateSelected()
-			) {
+			// A held Ctrl+V repeats the key: only the first press pastes.
+			if (ctrlKey && e.key.toLowerCase() === "v" && e.repeat) {
 				e.preventDefault();
 				return;
+			}
+			// Ctrl+C and Ctrl+V are left to the browser: its copy and paste events fill and read the
+			// system clipboard (R-035); preventing the key here would swallow the copy event.
+			if (ctrlKey && e.key.toLowerCase() === "d") {
+				// One at a time, like a paste: a held key or a quick repeat is ignored.
+				if (e.repeat || pasteBusy()) {
+					e.preventDefault();
+					return;
+				}
+				if (controller.duplicateSelected()) {
+					pasteDone();
+					e.preventDefault();
+					return;
+				}
 			}
 			if (!ctrlKey || e.key.toLowerCase() !== "z") return;
 			e.preventDefault();
@@ -751,6 +789,8 @@ export function BoardView({
 	 * here or elsewhere; failing that, what was last copied on this board.
 	 */
 	const pasteFromClipboard = async (at?: [number, number]) => {
+		if (pasteBusy()) return;
+		pasteDone();
 		setImageError("");
 		const internal = () => {
 			const ctrl = ctl.current;
