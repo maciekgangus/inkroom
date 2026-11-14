@@ -115,6 +115,8 @@ describe("Toolbar", () => {
 	test("the hand button switches to panning", () => {
 		click("pan");
 		expect(settings.tool).toBe("pan");
+		click("laser");
+		expect(settings.tool).toBe("laser");
 		click(`color ${COLORS[1]}`);
 		expect(settings.tool).toBe("pen");
 	});
@@ -210,6 +212,7 @@ describe("Toolbar", () => {
 			(root.querySelector(`[aria-label="${tool}"]`) as HTMLElement).title;
 		expect(title("select")).toBe("Zaznacz (Q)");
 		expect(title("pan")).toBe("Ręka (M)");
+		expect(title("laser")).toBe("Wskaźnik (P)");
 		expect(title("eraser")).toBe("Gumka (E)");
 		expect(title("line")).toBe("Linia (L)");
 		expect(title("shape")).toBe("Kształty (K)");

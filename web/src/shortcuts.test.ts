@@ -37,6 +37,7 @@ describe("tool shortcuts (R-030)", () => {
 		["KeyE", "eraser"],
 		["KeyL", "line"],
 		["KeyK", "shape"],
+		["KeyP", "laser"],
 	] as const)("%s switches to %s", (code, tool) => {
 		const s = fresh("eraser");
 		expect(applyToolShortcut(key(code), s)).toBe(true);
@@ -102,7 +103,7 @@ describe("tool shortcuts (R-030)", () => {
 		test("dropsSelection tells which tools start a new drawing", () => {
 			for (const t of ["pen", "line", "shape", "text"] as const)
 				expect(dropsSelection(t)).toBe(true);
-			for (const t of ["select", "eraser", "pan"] as const)
+			for (const t of ["select", "eraser", "pan", "laser"] as const)
 				expect(dropsSelection(t)).toBe(false);
 		});
 

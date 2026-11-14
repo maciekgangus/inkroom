@@ -147,3 +147,59 @@ describe("the coordinate system on the canvas", () => {
 		expect(on.texts).toContain("-1");
 	});
 });
+
+describe("the laser pointer on the live layer", () => {
+	test("a trail is drawn red, fainter towards its tail, and the layer is cleared when it is gone", () => {
+		vi.stubGlobal("requestAnimationFrame", undefined);
+		const alphas: number[] = [];
+		const styles: string[] = [];
+		let clears = 0;
+		const ctx = new Proxy(
+			{ globalAlpha: 1, strokeStyle: "" } as Record<string, unknown>,
+			{
+				get: (t, k) => {
+					if (k === "stroke")
+						return () => {
+							alphas.push(t.globalAlpha as number);
+							styles.push(String(t.strokeStyle));
+						};
+					if (k === "clearRect" || k === "fillRect") return () => clears++;
+					if (k === "canvas") return {};
+					if (k in t) return t[k as string];
+					return () => ctx;
+				},
+				set: (t, k, v) => {
+					t[k as string] = v;
+					return true;
+				},
+			},
+		) as unknown as CanvasRenderingContext2D;
+		const canvas = () =>
+			({
+				getContext: () => ctx,
+				width: 100,
+				height: 100,
+				style: {},
+			}) as unknown as HTMLCanvasElement;
+		const r = new CanvasRenderer(canvas(), canvas(), new Viewport());
+		r.setLasers([
+			{
+				id: "a",
+				points: [
+					{ x: 0, y: 0, alpha: 0.2 },
+					{ x: 10, y: 10, alpha: 0.6 },
+					{ x: 20, y: 20, alpha: 1 },
+				],
+			},
+		]);
+		expect(alphas.length).toBeGreaterThanOrEqual(2);
+		expect(alphas[0]).toBeLessThan(alphas[alphas.length - 1]);
+		expect(styles.every((s) => /^#(f|e|d)[0-9a-f]{5}$|red|rgb/i.test(s))).toBe(
+			true,
+		);
+		const before = clears;
+		r.setLasers([]);
+		expect(clears).toBeGreaterThan(before); // painted again, empty
+		vi.unstubAllGlobals();
+	});
+});

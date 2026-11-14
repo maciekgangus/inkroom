@@ -42,6 +42,8 @@ interface Options {
 	now?: () => number;
 	/** Called whenever the board or the remote live strokes changed (time to redraw). */
 	onUpdate: () => void;
+	/** Called with another person's laser pointer points (R-068); `start` begins a new line. */
+	onLaser?: (id: string, points: [number, number][], start: boolean) => void;
 	/** Called when only other people's unfinished strokes changed; without it `onUpdate` is called. */
 	onLive?: () => void;
 	/** Runs `fn` on the next frame; used to send live strokes at most once per frame. */
@@ -83,6 +85,9 @@ export class SyncClient {
 	private cursorSent: { x: number; y: number } | null = null;
 	private cursorScheduled = false;
 	private cursorLastSent = Number.NEGATIVE_INFINITY;
+	private laserPending: { points: [number, number][]; start: boolean } | null =
+		null;
+	private laserScheduled = false;
 	private schedule: (fn: () => void) => void;
 
 	constructor(
@@ -204,6 +209,31 @@ export class SyncClient {
 		this.cursorSent = pos;
 		this.cursorOut = null;
 		this.cursorLastSent = this.now();
+	}
+
+	/** Reports a point of our laser pointer; the points of a frame go out together. */
+	laserMove(x: number, y: number, start: boolean): void {
+		if (start && this.laserPending) this.flushLaser(); // a new line does not join the last
+		if (!this.laserPending) this.laserPending = { points: [], start };
+		this.laserPending.points.push([x, y]);
+		if (this.laserScheduled) return;
+		this.laserScheduled = true;
+		this.schedule(() => {
+			this.laserScheduled = false;
+			this.flushLaser();
+		});
+	}
+
+	private flushLaser(): void {
+		const p = this.laserPending;
+		this.laserPending = null;
+		if (!p || p.points.length === 0 || !this.isOpen) return;
+		this.send({
+			t: "laser",
+			id: this.opts.self?.authorId ?? "",
+			start: p.start,
+			points: p.points,
+		});
 	}
 
 	/** Other people's unfinished strokes, to be drawn on the live layer. */
@@ -340,6 +370,20 @@ export class SyncClient {
 				}
 				this.opts.onCursors?.();
 				return; // cursors never repaint the board
+			case "laser":
+				if (typeof m.id !== "string" || !m.id || !Array.isArray(m.points))
+					return;
+				this.opts.onLaser?.(
+					m.id,
+					(m.points as unknown[]).filter(
+						(p): p is [number, number] =>
+							Array.isArray(p) &&
+							typeof p[0] === "number" &&
+							typeof p[1] === "number",
+					),
+					(m as { start?: boolean }).start === true,
+				);
+				return; // a pointer, not the board
 			case "cursor_drop":
 				for (const id of m.ids ?? []) this.cursorsIn.delete(id);
 				this.opts.onCursors?.();

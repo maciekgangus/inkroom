@@ -34,6 +34,9 @@ const TURN = (() => {
 	return `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">${stroke("#000", 3.5)}${stroke("#fff", 1.75)}</svg>`;
 })();
 
+// A red dot with a light edge, the laser pointer; the hotspot is its middle.
+const LASER = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="6" fill="#ff1744" stroke="#fff" stroke-width="2"/></svg>`;
+
 /** The mouse cursor for the active tool (R-030), so it is always clear what is switched on. */
 export function toolCursor(
 	tool: Settings["tool"],
@@ -51,6 +54,8 @@ export function toolCursor(
 			return "default";
 		case "pen":
 			return svgCursor(PEN, 3, 21, "crosshair");
+		case "laser":
+			return svgCursor(LASER, 10, 10, "crosshair");
 		case "eraser":
 			return svgCursor(ERASER, ERASER_RADIUS + 1, ERASER_RADIUS + 1, "cell");
 		default:

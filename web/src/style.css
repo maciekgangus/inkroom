@@ -1329,3 +1329,17 @@ button.participant {
 	color: #d32f2f;
 	font-size: 13px;
 }
+
+/* One more tool (the laser) must still fit the bar of a narrow iPad in one row. */
+@media (max-width: 900px) {
+	.toolbar {
+		padding: 4px;
+	}
+	.toolbar .group {
+		padding: 0 1px;
+		gap: 0;
+	}
+	.toolbar button {
+		width: 36px;
+	}
+}

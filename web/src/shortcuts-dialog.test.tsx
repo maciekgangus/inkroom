@@ -43,6 +43,7 @@ describe("ShortcutsDialog (own shortcuts)", () => {
 			"Gumka",
 			"Linia",
 			"Kształty",
+			"Wskaźnik",
 		]);
 		expect(row("Zaznacz").querySelector("button")?.textContent).toBe("Q");
 		expect(row("Pióro").querySelector("button")?.textContent).toBe("F");

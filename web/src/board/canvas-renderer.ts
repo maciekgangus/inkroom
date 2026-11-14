@@ -5,6 +5,7 @@ import { intersects, strokeBounds } from "./bounds";
 import type { Renderer } from "./controller";
 import type { ImageCache } from "./image-cache";
 import { imageRect } from "./image-geometry";
+import type { LaserLine } from "./laser";
 import { type Frame, HANDLE_PX, ROT_OFFSET_PX } from "./selection-frame";
 import { LABEL_PX, partsOf } from "./shape-parts";
 import { isPolygonKind } from "./shapes";
@@ -20,6 +21,9 @@ const GLOW_BLUR = 4;
 const GLOW_PASSES = 2;
 /** The marks of a coordinate system are this part of the width of its axes. */
 const FINE_RATIO = 0.3;
+/** The red of the laser pointer, and the width of its line on the screen. */
+const LASER_COLOR = "#ff1744";
+const LASER_WIDTH_PX = 4;
 /** How long the view must stand still before the bitmaps are painted sharp again. */
 const MOVE_SETTLE_MS = 120;
 /** The longest the bitmaps are only moved, however long the view keeps moving. */
@@ -321,6 +325,7 @@ export class CanvasRenderer implements Renderer {
 	private selection: Frame | null = null;
 	private marquee: Rect | null = null;
 	private highlight: Stroke[] = [];
+	private lasers: LaserLine[] = [];
 	/** Elements being dragged: drawn on the live layer, left out of the committed one (performance). */
 	private drag: {
 		ids: Set<string>;
@@ -403,6 +408,12 @@ export class CanvasRenderer implements Renderer {
 	/** Makes the selected elements glow like neon (an empty list clears it). */
 	setHighlight(els: Stroke[]): void {
 		this.highlight = els;
+		this.schedule(false, true);
+	}
+
+	/** Shows the trails of the laser pointer, as they are now (an empty list clears them). */
+	setLasers(lines: LaserLine[]): void {
+		this.lasers = lines;
 		this.schedule(false, true);
 	}
 
@@ -790,5 +801,34 @@ export class CanvasRenderer implements Renderer {
 		if (this.adjust) this.drawAdjust(ctx, this.adjust);
 		if (this.selection) this.drawFrame(ctx, this.selection);
 		if (this.marquee) this.drawMarquee(ctx, this.marquee);
+		this.drawLasers(ctx);
+	}
+
+	/** The trails of the red laser pointer: fainter towards the tail, a bright dot at the head. */
+	private drawLasers(ctx: CanvasRenderingContext2D): void {
+		if (this.lasers.length === 0) return;
+		const px = 1 / this.viewport.scale;
+		ctx.save();
+		ctx.strokeStyle = LASER_COLOR;
+		ctx.fillStyle = LASER_COLOR;
+		// Flat ends: two soft segments with round ends would show a darker dot where they meet.
+		ctx.lineCap = "butt";
+		ctx.lineWidth = LASER_WIDTH_PX * px;
+		for (const line of this.lasers) {
+			const pts = line.points;
+			for (let i = 1; i < pts.length; i++) {
+				ctx.globalAlpha = pts[i].alpha;
+				ctx.beginPath();
+				ctx.moveTo(pts[i - 1].x, pts[i - 1].y);
+				ctx.lineTo(pts[i].x, pts[i].y);
+				ctx.stroke();
+			}
+			const head = pts[pts.length - 1];
+			ctx.globalAlpha = head.alpha;
+			ctx.beginPath();
+			ctx.arc(head.x, head.y, LASER_WIDTH_PX * 1.1 * px, 0, Math.PI * 2);
+			ctx.fill();
+		}
+		ctx.restore();
 	}
 }
