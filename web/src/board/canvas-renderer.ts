@@ -18,6 +18,10 @@ import type { Rect, Viewport } from "./viewport";
 const GLOW_COLOR = "hsl(252, 100%, 60%)";
 const GLOW_BLUR = 4;
 const GLOW_PASSES = 2;
+/** How long the view must stand still before the bitmaps are painted sharp again. */
+const MOVE_SETTLE_MS = 120;
+/** The longest the bitmaps are only moved, however long the view keeps moving. */
+const MOVE_MAX_MS = 350;
 /** The ink colour of the Inkroom brand, for the handles that edit the selection. */
 const HANDLE_INK = "#5b5bf0";
 
@@ -328,6 +332,8 @@ export class CanvasRenderer implements Renderer {
 		// at every move, and a canvas shown without waiting for the compositor can be shown between
 		// the two, so the stroke blinks. The stroke still appears at once, on the next frame.
 		this.live = liveCanvas.getContext("2d");
+		const at = { x: viewport.x, y: viewport.y, k: viewport.scale };
+		this.shown = { committed: at, live: { ...at } };
 	}
 
 	/** Matches the canvas buffers to the window size and device pixel ratio. */
@@ -451,13 +457,72 @@ export class CanvasRenderer implements Renderer {
 	private flush(): void {
 		const { committed, live } = this.pending;
 		this.pending = { committed: false, live: false };
-		if (committed) this.paintCommitted();
-		if (live) this.paintLive();
+		if (committed) {
+			this.paintCommitted();
+			this.settled("committed");
+		}
+		if (live) {
+			this.paintLive();
+			this.settled("live");
+		}
 	}
 
 	private paint(): void {
 		this.paintCommitted();
+		this.settled("committed");
 		this.paintLive();
+		this.settled("live");
+	}
+
+	/** The view each layer was last painted for: the layers are moved from there while it moves. */
+	private shown = {
+		committed: { x: 0, y: 0, k: 1 },
+		live: { x: 0, y: 0, k: 1 },
+	};
+	private movingSince = 0;
+	private settleTimer: ReturnType<typeof setTimeout> | null = null;
+
+	/**
+	 * Shows the view moved or zoomed without painting: the bitmaps of both layers are moved and
+	 * scaled with CSS (the graphics card does it), which costs nothing however many elements
+	 * there are. A sharp picture follows once the view stands still (or every MOVE_MAX_MS of a
+	 * long move). Painting every element at every frame of a zoom made it crawl.
+	 */
+	moveView(): void {
+		const v = this.viewport;
+		if (!this.movingSince) this.movingSince = Date.now();
+		for (const [name, canvas] of [
+			["committed", this.committedCanvas],
+			["live", this.liveCanvas],
+		] as const) {
+			const from = this.shown[name];
+			canvas.style.transformOrigin = "0 0";
+			canvas.style.transform = `translate(${(from.x - v.x) * v.scale}px, ${(from.y - v.y) * v.scale}px) scale(${v.scale / from.k})`;
+		}
+		if (this.settleTimer) clearTimeout(this.settleTimer);
+		const wait = Math.max(
+			0,
+			Math.min(MOVE_SETTLE_MS, this.movingSince + MOVE_MAX_MS - Date.now()),
+		);
+		this.settleTimer = setTimeout(() => {
+			this.settleTimer = null;
+			this.schedule(true, true);
+		}, wait);
+	}
+
+	/** A layer was painted for the current view: its bitmap goes back to its place. */
+	private settled(layer: "committed" | "live"): void {
+		const v = this.viewport;
+		this.shown[layer] = { x: v.x, y: v.y, k: v.scale };
+		const canvas =
+			layer === "committed" ? this.committedCanvas : this.liveCanvas;
+		if (canvas.style.transform) canvas.style.transform = "";
+		const other = this.shown[layer === "committed" ? "live" : "committed"];
+		if (other.x === v.x && other.y === v.y && other.k === v.scale) {
+			this.movingSince = 0;
+			if (this.settleTimer) clearTimeout(this.settleTimer);
+			this.settleTimer = null;
+		}
 	}
 
 	/** Clears the canvas and applies the view transform. */

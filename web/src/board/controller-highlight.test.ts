@@ -53,6 +53,7 @@ describe("Controller selection look (R-034)", () => {
 		renderer = {
 			drawLive: vi.fn(),
 			redraw: vi.fn(),
+			moveView: vi.fn(),
 			setSelection: vi.fn(),
 			setMarquee: vi.fn(),
 			setHighlight: vi.fn(),
@@ -102,7 +103,7 @@ describe("Controller selection look (R-034)", () => {
 		expect(renderer.setHighlight.mock.lastCall?.[0]).toHaveLength(2);
 	});
 
-	test("the frame and the handles are put away while the view moves; the glow stays (R-060)", () => {
+	test("the frame, the handles and the glow are put away while the view moves (R-060)", () => {
 		c.select("l");
 		c.hideFrame();
 		for (const set of [
@@ -112,8 +113,9 @@ describe("Controller selection look (R-034)", () => {
 			renderer.setAdjust,
 		])
 			expect(set.mock.lastCall?.[0]).toBeNull();
-		expect(renderer.setHighlight.mock.lastCall?.[0]).toHaveLength(1);
+		expect(renderer.setHighlight.mock.lastCall?.[0]).toHaveLength(0);
 		c.restoreFrame();
+		expect(renderer.setHighlight.mock.lastCall?.[0]).toHaveLength(1);
 		expect(renderer.setSelection.mock.lastCall?.[0]).not.toBeNull();
 		expect(renderer.setEndpoints.mock.lastCall?.[0]).not.toBeNull();
 	});

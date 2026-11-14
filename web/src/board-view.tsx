@@ -285,6 +285,7 @@ export function BoardView({
 				if (stroke && !stroke.kind) sync.liveUpdate(stroke);
 			},
 			redraw: (strokes) => canvas.redraw(strokes),
+			moveView: () => canvas.moveView(),
 			setSelection: (frame) => canvas.setSelection(frame),
 			setHighlight: (els) => canvas.setHighlight(els),
 			setEndpoints: (ends) => canvas.setEndpoints(ends),
@@ -367,7 +368,7 @@ export function BoardView({
 		};
 		const changed = () => {
 			viewMoving();
-			canvas.redraw(board.strokes);
+			canvas.moveView(); // the picture is moved, not painted; a sharp one follows when it stops
 			setScale(viewport.scale);
 			bump();
 			if (viewReady)
