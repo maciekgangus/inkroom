@@ -14,6 +14,7 @@ export interface MenuAt {
 export function boardMenuItems(
 	onPick: (a: BoardAction) => void,
 	onCopy?: () => void,
+	onShortcuts?: () => void,
 ): MenuItem[] {
 	return [
 		{ label: "PNG: widok", icon: "image", onSelect: () => onPick("png-view") },
@@ -29,6 +30,15 @@ export function boardMenuItems(
 		},
 		...(onCopy
 			? [{ label: "Utwórz kopię", icon: "copy" as const, onSelect: onCopy }]
+			: []),
+		...(onShortcuts
+			? [
+					{
+						label: "Skróty klawiszowe",
+						icon: "sliders" as const,
+						onSelect: onShortcuts,
+					},
+				]
 			: []),
 	];
 }
