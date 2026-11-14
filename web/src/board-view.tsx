@@ -623,10 +623,8 @@ export function BoardView({
 				return;
 			}
 			const ctrlKey = e.ctrlKey || e.metaKey;
-			if (ctrlKey && e.key.toLowerCase() === "c" && controller.copySelected()) {
-				e.preventDefault();
-				return;
-			}
+			// Ctrl+C and Ctrl+V are left to the browser: its copy and paste events fill and read the
+			// system clipboard (R-035); preventing the key here would swallow the copy event.
 			if (
 				ctrlKey &&
 				e.key.toLowerCase() === "d" &&
