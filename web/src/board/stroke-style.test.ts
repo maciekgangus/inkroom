@@ -1,3 +1,4 @@
+import { getStroke } from "perfect-freehand";
 import { describe, expect, test } from "vitest";
 import type { Stroke } from "./board";
 import { strokeOptions } from "./stroke-style";
@@ -41,6 +42,15 @@ describe("strokeOptions (R-037)", () => {
 		expect(o.start).toMatchObject({ cap: true });
 		expect((o.start as { taper: number }).taper).toBeGreaterThan(0);
 		expect((o.end as { taper: number }).taper).toBeGreaterThan(0);
+	});
+
+	test("a tap with the natural pen leaves a dot: the tapers never eat a short stroke (R-075)", () => {
+		for (const pts of [[pt(10, 10, 0.5)], [pt(10, 10, 0.5), pt(11, 10, 0.5)]]) {
+			const s = make({ dash: "natural", size: 4 }, pts);
+			const outline = getStroke(s.points, strokeOptions(s));
+			const xs = outline.map((p) => p[0]);
+			expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(3);
+		}
 	});
 
 	test("a stylus keeps its real pressure instead of a simulated one", () => {
