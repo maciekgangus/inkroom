@@ -2,7 +2,7 @@ import type { Board, Point, Stroke } from "./board";
 import { contains, intersects } from "./bounds";
 import type { ClipElement } from "./clipboard";
 import { constrainEnd } from "./draw-aids";
-import { findHit, objectHit } from "./hit";
+import { findHit, loopTouches, objectHit } from "./hit";
 import {
 	type Frame,
 	frameOf,
@@ -1200,17 +1200,8 @@ export class Controller {
 		if (edit.mode === "lasso") {
 			this.renderer.setLasso?.(null);
 			if (edit.path.length < 3) return;
-			const inside = (r: Rect) =>
-				(
-					[
-						[r.minX, r.minY],
-						[r.maxX, r.minY],
-						[r.maxX, r.maxY],
-						[r.minX, r.maxY],
-					] as Vec[]
-				).every(([x, y]) => pointInPolygon(edit.path, x, y));
 			const ids = this.board.strokes
-				.filter((s) => inside(worldBounds(s)))
+				.filter((s) => loopTouches(s, edit.path, 1 / this.viewport.scale))
 				.map((s) => s.id);
 			this.select(edit.additive ? [...new Set([...edit.base, ...ids])] : ids);
 			return;

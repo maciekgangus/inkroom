@@ -2,7 +2,7 @@ import type { Stroke } from "./board";
 import { partsOf } from "./shape-parts";
 import { isPolygonKind, pointInPolygon } from "./shapes";
 import { textBox } from "./text";
-import { geomBox, toLocal } from "./transform";
+import { geomBox, toLocal, worldBounds } from "./transform";
 
 function distToSegment(
 	px: number,
@@ -180,4 +180,47 @@ export function findHit(
 		if (strokeHit(strokes[i], x, y, radius)) return strokes[i];
 	}
 	return undefined;
+}
+
+/** The most sample points a lasso tests on one object, so a huge shape is not tested for long. */
+const LOOP_SAMPLES = 6000;
+
+/**
+ * Whether a lasso (a free-hand loop, closed from its end to its start) touches an element
+ * (R-071): the element has a point inside the loop, or the loop lies inside it. The element's
+ * real shape is tested, not its box, and nothing is added to the loop's reach, so nothing is
+ * caught by accident. An image (a PDF page too) is taken only when the loop holds it whole.
+ * `px` is the size of a screen pixel in board units, the fineness of the test.
+ */
+export function loopTouches(
+	stroke: Stroke,
+	loop: [number, number][],
+	px: number,
+): boolean {
+	if (loop.length < 3) return false;
+	const b = worldBounds(stroke);
+	if (stroke.kind === "image") {
+		return [
+			[b.minX, b.minY],
+			[b.maxX, b.minY],
+			[b.maxX, b.maxY],
+			[b.minX, b.maxY],
+		].every(([x, y]) => pointInPolygon(loop, x, y));
+	}
+	const xs = loop.map((p) => p[0]);
+	const ys = loop.map((p) => p[1]);
+	const minX = Math.max(b.minX, Math.min(...xs));
+	const maxX = Math.min(b.maxX, Math.max(...xs));
+	const minY = Math.max(b.minY, Math.min(...ys));
+	const maxY = Math.min(b.maxY, Math.max(...ys));
+	if (minX > maxX || minY > maxY) return false;
+	// Points a few screen pixels apart; the line's own width does the rest.
+	let step = Math.max(px * 2, 0.5);
+	const cells = ((maxX - minX) / step + 1) * ((maxY - minY) / step + 1);
+	if (cells > LOOP_SAMPLES) step *= Math.sqrt(cells / LOOP_SAMPLES);
+	for (let x = minX; x <= maxX + step; x += step)
+		for (let y = minY; y <= maxY + step; y += step)
+			if (pointInPolygon(loop, x, y) && objectHit(stroke, x, y, step / 2))
+				return true;
+	return false;
 }

@@ -193,7 +193,7 @@ describe("Controller selection", () => {
 			c.pointerUp(ev("pen", ...pts[pts.length - 1], extra));
 		};
 
-		test("selects the objects wholly inside the loop and nothing else", () => {
+		test("takes the objects the loop touches, even a little, and nothing else", () => {
 			loop([
 				[50, 50],
 				[330, 60],
@@ -201,25 +201,32 @@ describe("Controller selection", () => {
 				[60, 230],
 			]);
 			expect(selIds()).toEqual(["r1"]);
-		});
-
-		test("an object only partly inside the loop stays unselected", () => {
 			loop([
 				[50, 50],
 				[250, 60],
 				[250, 220],
 				[60, 230],
+			]); // r1 only partly inside: the whole of it is taken
+			expect(selIds()).toEqual(["r1"]);
+		});
+
+		test("a loop that passes beside an object, not touching, leaves it", () => {
+			loop([
+				[50, 50],
+				[96, 50],
+				[96, 230],
+				[50, 230],
 			]);
 			expect(selIds()).toEqual([]);
 		});
 
-		test("a loop can leave out what a rectangle round both would take", () => {
+		test("a loop follows the real shape, not its box", () => {
 			// A notch cut out of the loop leaves r2 out although the loop's box would hold it.
 			loop([
 				[50, 50],
 				[500, 50],
-				[500, 110],
-				[390, 110],
+				[500, 90],
+				[390, 90],
 				[390, 230],
 				[50, 230],
 			]);
