@@ -182,9 +182,11 @@ describe("Controller selection", () => {
 			ops.length = 0;
 		});
 
-		test("dragging over empty space selects whatever the frame touches", () => {
+		test("dragging over empty space selects only what lies wholly inside the frame (R-072)", () => {
 			drag([50, 50], [320, 220]);
 			expect(selIds()).toEqual(["r1"]);
+			drag([50, 50], [280, 220]); // r1 is only touched, not inside
+			expect(selIds()).toEqual([]);
 			drag([50, 50], [470, 220]);
 			expect(selIds()).toEqual(["r1", "r2"]);
 		});

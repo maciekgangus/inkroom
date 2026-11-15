@@ -196,11 +196,11 @@ describe("Controller selection look (R-034)", () => {
 		).toBeCloseTo(160);
 	});
 
-	test("grabbing is generous: a thin line is caught 12 px away, not 20", () => {
-		click(200, 110);
+	test("grabbing is tight (R-072): a thin line is caught 5 px away, not 12", () => {
+		click(200, 105);
 		expect(c.selection.map((s) => s.id)).toEqual(["l"]);
 		c.select(null);
-		click(200, 120);
+		click(200, 112);
 		expect(c.selection).toEqual([]);
 	});
 });
