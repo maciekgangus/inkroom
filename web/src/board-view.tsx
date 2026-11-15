@@ -560,12 +560,14 @@ export function BoardView({
 		sync.connect();
 
 		const down = (e: PointerEvent) => {
+			if (e.pointerType === "pen") gestures.penSeen();
 			if (e.pointerType === "touch") return gestures.down(e);
 			live.setPointerCapture(e.pointerId);
 			controller.pointerDown(e);
 			applyCursor.current();
 		};
 		const move = (e: PointerEvent) => {
+			if (e.pointerType === "pen") gestures.penSeen(); // also while it hovers
 			if (e.pointerType === "touch") return gestures.move(e);
 			// Mouse and pen are shared as a cursor, also while hovering without pressing.
 			const [x, y] = viewport.toWorld(e.clientX, e.clientY);
@@ -585,6 +587,7 @@ export function BoardView({
 			if (e.pointerType !== "touch") sync.cursorHide();
 		};
 		const up = (e: PointerEvent) => {
+			if (e.pointerType === "pen") gestures.penSeen();
 			if (e.pointerType === "touch") return gestures.up(e);
 			controller.pointerUp(e);
 			applyCursor.current();

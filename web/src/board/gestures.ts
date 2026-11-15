@@ -10,28 +10,39 @@ interface Baseline {
 	dist: number;
 }
 
+/** How long after the pen was last seen a new finger still counts as a resting palm (N-010). */
+const PALM_MS = 500;
+
 /**
- * Two-finger pan and pinch-zoom. One finger does nothing (palm rejection, N-010), and
- * touches are ignored while the pen is drawing. The view is computed from where the
- * gesture started, so it does not drift when fingers move one at a time.
+ * One finger pans, two fingers pan and pinch-zoom (R-070). Touches are ignored while the pen
+ * is drawing, and for a moment after it was last seen (a palm resting beside it, N-010). The
+ * view is computed from where the gesture started, so it does not drift when fingers move
+ * one at a time.
  */
 export class TouchGestures {
 	private touches = new Map<number, { x: number; y: number }>();
 	private baseline: Baseline | null = null;
+	private lastPen = -Infinity;
 
 	constructor(
 		private viewport: Viewport,
 		private penActive: () => boolean,
 		private onChange: () => void,
+		private now: () => number = () => performance.now(),
 	) {}
 
-	/** True while two fingers are down. */
+	/** Notes that the pen is at the screen (touching or hovering): fingers now are a palm. */
+	penSeen(): void {
+		this.lastPen = this.now();
+	}
+
+	/** True while a finger is down and moves the view. */
 	get active(): boolean {
 		return this.baseline !== null;
 	}
 
 	down(e: PointerInput): void {
-		if (this.penActive()) return;
+		if (this.penActive() || this.now() - this.lastPen < PALM_MS) return;
 		this.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
 		this.rebase();
 	}
@@ -67,7 +78,7 @@ export class TouchGestures {
 	}
 
 	private measure(): { cx: number; cy: number; dist: number } {
-		const [a, b] = [...this.touches.values()];
+		const [a, b = a] = [...this.touches.values()];
 		return {
 			cx: (a.x + b.x) / 2,
 			cy: (a.y + b.y) / 2,
@@ -77,7 +88,7 @@ export class TouchGestures {
 
 	/** Starts a new gesture from the current finger positions (or ends it with fewer than two). */
 	private rebase(): void {
-		if (this.touches.size < 2) {
+		if (this.touches.size < 1) {
 			this.baseline = null;
 			return;
 		}
