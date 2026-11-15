@@ -1,5 +1,5 @@
 import type { Board, Point, Stroke } from "./board";
-import { contains } from "./bounds";
+import { contains, intersects } from "./bounds";
 import type { ClipElement } from "./clipboard";
 import { constrainEnd } from "./draw-aids";
 import { findHit, objectHit } from "./hit";
@@ -106,8 +106,8 @@ export interface Settings {
 export const ERASER_RADIUS = 10;
 /** A shape dragged less than this many screen pixels is treated as a stray click and dropped. */
 const MIN_SHAPE_PX = 2;
-/** How far (px) from an element still grabs it: tight, so a click does not catch its neighbours (R-072). */
-const HIT_PX = 5;
+/** How far (px) from an element a direct click still grabs it, so a thin line need not be hit exactly (R-072). */
+const HIT_PX = 8;
 /** The smallest a selection can be scaled down to, in screen pixels. */
 const MIN_SELECTION_PX = 24;
 const SNAP_STEP = Math.PI / 12; // 15 degrees, with Shift
@@ -1186,7 +1186,13 @@ export class Controller {
 			const r = edit.rect;
 			if (!r) return;
 			const ids = this.board.strokes
-				.filter((s) => contains(r, worldBounds(s)))
+				// Touching is enough, but an image (a PDF page is one) must be wholly inside: it is big
+				// and easily caught by a frame meant for something else (R-072).
+				.filter((s) =>
+					s.kind === "image"
+						? contains(r, worldBounds(s))
+						: intersects(worldBounds(s), r),
+				)
 				.map((s) => s.id);
 			this.select(edit.additive ? [...new Set([...edit.base, ...ids])] : ids);
 			return;

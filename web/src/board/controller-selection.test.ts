@@ -274,13 +274,31 @@ describe("Controller selection", () => {
 			ops.length = 0;
 		});
 
-		test("dragging over empty space selects only what lies wholly inside the frame (R-072)", () => {
+		test("touching an object even a little selects the whole of it (R-072)", () => {
 			drag([50, 50], [320, 220]);
 			expect(selIds()).toEqual(["r1"]);
-			drag([50, 50], [280, 220]); // r1 is only touched, not inside
-			expect(selIds()).toEqual([]);
+			drag([50, 50], [150, 120]); // only r1's corner is in the frame
+			expect(selIds()).toEqual(["r1"]);
 			drag([50, 50], [470, 220]);
 			expect(selIds()).toEqual(["r1", "r2"]);
+		});
+
+		test("the reach of a direct click is not added to the frame: it must really touch", () => {
+			drag([50, 50], [96, 220]); // 4 px short of r1, within a click's reach
+			expect(selIds()).toEqual([]);
+		});
+
+		test("an image or a PDF page is taken only when wholly inside the frame", () => {
+			board.addStroke({
+				...box("pic", [500, 300], [700, 400]),
+				kind: "image",
+				fill: undefined,
+				src: "x",
+			});
+			drag([450, 250], [600, 350]); // touches the picture only
+			expect(selIds()).toEqual([]);
+			drag([450, 250], [750, 450]); // holds it whole
+			expect(selIds()).toEqual(["pic"]);
 		});
 
 		test("shows the rubber band while dragging and hides it on release", () => {
