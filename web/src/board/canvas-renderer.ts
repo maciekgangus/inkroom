@@ -783,7 +783,10 @@ export class CanvasRenderer implements Renderer {
 		path: [number, number][],
 	): void {
 		ctx.beginPath();
-		path.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+		for (const [i, [x, y]] of path.entries()) {
+			if (i) ctx.lineTo(x, y);
+			else ctx.moveTo(x, y);
+		}
 		ctx.closePath(); // the closing line is the one the selection will follow
 		ctx.fillStyle = "rgba(25, 118, 210, 0.12)";
 		ctx.fill();
