@@ -94,12 +94,12 @@ describe("Toolbar", () => {
 		});
 	});
 
-	test("in dark mode the black swatch is shown as white (the stored colour stays black)", () => {
+	test("in dark mode the black swatch is shown as the light violet (the stored colour stays black)", () => {
 		act(() => setTheme("dark"));
 		const black = root.querySelector(
 			`[aria-label="color ${COLORS[0]}"]`,
 		) as HTMLElement;
-		expect(black.style.background).toMatch(/#ffffff|rgb\(255, 255, 255\)/);
+		expect(black.style.background).toMatch(/#8f8fff|rgb\(143, 143, 255\)/);
 		act(() => black.click());
 		expect(settings.color).toBe(COLORS[0]);
 		act(() => setTheme("light"));

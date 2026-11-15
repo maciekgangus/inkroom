@@ -39,8 +39,8 @@ describe("theme", () => {
 		expect(document.documentElement.dataset.theme).toBe("light");
 	});
 
-	test("in dark mode default black ink shows as white and white as black", () => {
-		expect(displayColor("#111111", "dark")).toBe("#ffffff");
+	test("in dark mode default black ink shows as the light violet of the logo and white as black (R-026)", () => {
+		expect(displayColor("#111111", "dark")).toBe("#8f8fff");
 		expect(displayColor("#FFFFFF", "dark")).toBe("#111111");
 		expect(displayColor("#d32f2f", "dark")).toBe("#d32f2f");
 		expect(displayColor("#111111", "light")).toBe("#111111");
