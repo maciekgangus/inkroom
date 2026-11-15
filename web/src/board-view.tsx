@@ -316,6 +316,7 @@ export function BoardView({
 			setVertices: (at) => canvas.setVertices(at),
 			setDrag: (drag) => canvas.setDrag(drag),
 			setMarquee: (rect) => canvas.setMarquee(rect),
+			setLasso: (path) => canvas.setLasso(path),
 		};
 		const controller = new Controller(
 			board,

@@ -24,7 +24,12 @@ describe("TouchGestures", () => {
 		onChange = vi.fn();
 		penActive = false;
 		clock = 1000;
-		g = new TouchGestures(viewport, () => penActive, onChange, () => clock);
+		g = new TouchGestures(
+			viewport,
+			() => penActive,
+			onChange,
+			() => clock,
+		);
 	});
 
 	test("a single finger pans the view (R-070)", () => {

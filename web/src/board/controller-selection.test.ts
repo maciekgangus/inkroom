@@ -23,6 +23,7 @@ const ev = (
 	...extra,
 });
 const SHIFT = { shiftKey: true };
+const CTRL = { ctrlKey: true };
 
 const base = { authorId: "a", color: "#111", size: 4, z: 0 };
 const pt = (x: number, y: number) => [x, y, 0.5] as [number, number, number];
@@ -75,6 +76,7 @@ describe("Controller selection", () => {
 			redraw: vi.fn(),
 			setSelection: vi.fn(),
 			setMarquee: vi.fn(),
+			setLasso: vi.fn(),
 		};
 		settings = { tool: "select", color: "#111", size: 4 };
 		viewport = new Viewport();
@@ -173,6 +175,96 @@ describe("Controller selection", () => {
 			settings.tool = "pen";
 			click(200, 150);
 			expect(c.selection).toEqual([]);
+		});
+	});
+
+	describe("lasso selection with Ctrl (R-071)", () => {
+		beforeEach(() => {
+			board.addStroke(box("far", [800, 800], [850, 850]));
+			ops.length = 0;
+		});
+		/** Draws a free-hand loop through the given screen points, with Ctrl held. */
+		const loop = (
+			pts: [number, number][],
+			extra: Partial<PointerInput> = CTRL,
+		) => {
+			c.pointerDown(ev("pen", ...pts[0], extra));
+			for (const p of pts.slice(1)) c.pointerMove(ev("pen", ...p, extra));
+			c.pointerUp(ev("pen", ...pts[pts.length - 1], extra));
+		};
+
+		test("selects the objects wholly inside the loop and nothing else", () => {
+			loop([
+				[50, 50],
+				[330, 60],
+				[320, 220],
+				[60, 230],
+			]);
+			expect(selIds()).toEqual(["r1"]);
+		});
+
+		test("an object only partly inside the loop stays unselected", () => {
+			loop([
+				[50, 50],
+				[250, 60],
+				[250, 220],
+				[60, 230],
+			]);
+			expect(selIds()).toEqual([]);
+		});
+
+		test("a loop can leave out what a rectangle round both would take", () => {
+			// A notch cut out of the loop leaves r2 out although the loop's box would hold it.
+			loop([
+				[50, 50],
+				[500, 50],
+				[500, 110],
+				[390, 110],
+				[390, 230],
+				[50, 230],
+			]);
+			expect(selIds()).toEqual(["r1"]);
+		});
+
+		test("shows the loop while it is drawn and hides it on release; the board is not touched", () => {
+			c.pointerDown(ev("pen", 50, 50, CTRL));
+			c.pointerMove(ev("pen", 330, 60, CTRL));
+			c.pointerMove(ev("pen", 320, 220, CTRL));
+			expect(renderer.setLasso).toHaveBeenLastCalledWith([
+				[50, 50],
+				[330, 60],
+				[320, 220],
+			]);
+			c.pointerUp(ev("pen", 320, 220, CTRL));
+			expect(renderer.setLasso).toHaveBeenLastCalledWith(null);
+			expect(ops).toEqual([]);
+		});
+
+		test("with Ctrl and Shift it adds to the selection", () => {
+			c.select("far");
+			loop(
+				[
+					[50, 50],
+					[330, 60],
+					[320, 220],
+					[60, 230],
+				],
+				{ ctrlKey: true, shiftKey: true },
+			);
+			expect(selIds().sort()).toEqual(["far", "r1"]);
+		});
+
+		test("without Ctrl the drag is still the rectangle", () => {
+			drag([50, 50], [320, 220]);
+			expect(renderer.setLasso).not.toHaveBeenCalledWith(
+				expect.arrayContaining([[320, 220]]),
+			);
+			expect(selIds()).toEqual(["r1"]);
+		});
+
+		test("Ctrl on an object does not start a loop: the object is grabbed as ever", () => {
+			click(150, 150, CTRL);
+			expect(selIds()).toEqual(["r1"]);
 		});
 	});
 

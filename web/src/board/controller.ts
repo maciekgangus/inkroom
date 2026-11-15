@@ -14,7 +14,7 @@ import {
 	ROT_OFFSET_PX,
 } from "./selection-frame";
 import { adjustFromPoint, adjustHandle, outlineOf } from "./shape-parts";
-import type { ShapeChoice } from "./shapes";
+import { pointInPolygon, type ShapeChoice } from "./shapes";
 import { applyStyle, type Dash, type StylePatch } from "./style";
 import {
 	bakeRotation,
@@ -42,6 +42,9 @@ export interface PointerInput {
 	button?: number;
 	/** Shift held: add to the selection, snap a rotation. */
 	shiftKey?: boolean;
+	/** Ctrl (Cmd on a Mac) held: select with a free-hand loop instead of a rectangle (R-071). */
+	ctrlKey?: boolean;
+	metaKey?: boolean;
 	getCoalescedEvents?: () => PointerInput[];
 }
 
@@ -75,6 +78,8 @@ export interface Renderer {
 	setHighlight?(els: Stroke[]): void;
 	/** Shows the rubber band while dragging over empty space (null hides it). */
 	setMarquee?(rect: Rect | null): void;
+	/** Shows the free-hand loop of a lasso selection being drawn (null hides it). */
+	setLasso?(path: [number, number][] | null): void;
 }
 
 /** Current tool settings, mutated by the toolbar. */
@@ -156,6 +161,12 @@ type Edit =
 			additive: boolean;
 			base: string[];
 			rect: Rect | null;
+	  }
+	| {
+			mode: "lasso";
+			additive: boolean;
+			base: string[];
+			path: Vec[];
 	  };
 
 const withRect = (el: Stroke, r: Rect): Stroke => ({
@@ -978,6 +989,15 @@ export class Controller {
 			this.edit = { mode: "move", start: p, originals: now, drafts: now };
 		} else {
 			if (!e.shiftKey) this.select(null);
+			if (e.ctrlKey || e.metaKey) {
+				this.edit = {
+					mode: "lasso",
+					additive: !!e.shiftKey,
+					base: [...this.selectedIds],
+					path: [p],
+				};
+				return;
+			}
 			this.edit = {
 				mode: "marquee",
 				start: p,
@@ -1000,6 +1020,11 @@ export class Controller {
 				maxY: Math.max(edit.start[1], p[1]),
 			};
 			this.renderer.setMarquee?.(edit.rect);
+			return;
+		}
+		if (edit.mode === "lasso") {
+			edit.path.push(p);
+			this.renderer.setLasso?.(edit.path);
 			return;
 		}
 		let offset: [number, number] | undefined;
@@ -1162,6 +1187,24 @@ export class Controller {
 			if (!r) return;
 			const ids = this.board.strokes
 				.filter((s) => contains(r, worldBounds(s)))
+				.map((s) => s.id);
+			this.select(edit.additive ? [...new Set([...edit.base, ...ids])] : ids);
+			return;
+		}
+		if (edit.mode === "lasso") {
+			this.renderer.setLasso?.(null);
+			if (edit.path.length < 3) return;
+			const inside = (r: Rect) =>
+				(
+					[
+						[r.minX, r.minY],
+						[r.maxX, r.minY],
+						[r.maxX, r.maxY],
+						[r.minX, r.maxY],
+					] as Vec[]
+				).every(([x, y]) => pointInPolygon(edit.path, x, y));
+			const ids = this.board.strokes
+				.filter((s) => inside(worldBounds(s)))
 				.map((s) => s.id);
 			this.select(edit.additive ? [...new Set([...edit.base, ...ids])] : ids);
 			return;

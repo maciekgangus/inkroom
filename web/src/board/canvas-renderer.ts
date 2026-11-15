@@ -324,6 +324,7 @@ export class CanvasRenderer implements Renderer {
 	private cache = new WeakMap<Stroke, Cached>();
 	private selection: Frame | null = null;
 	private marquee: Rect | null = null;
+	private lasso: [number, number][] | null = null;
 	private highlight: Stroke[] = [];
 	private lasers: LaserLine[] = [];
 	/** Elements being dragged: drawn on the live layer, left out of the committed one (performance). */
@@ -420,6 +421,12 @@ export class CanvasRenderer implements Renderer {
 	/** Shows the rubber band of a selection being dragged (null hides it). */
 	setMarquee(rect: Rect | null): void {
 		this.marquee = rect;
+		this.schedule(false, true);
+	}
+
+	/** Shows the free-hand loop of a lasso selection being drawn (null hides it). */
+	setLasso(path: [number, number][] | null): void {
+		this.lasso = path;
 		this.schedule(false, true);
 	}
 
@@ -771,6 +778,20 @@ export class CanvasRenderer implements Renderer {
 		ctx.strokeRect(r.minX, r.minY, r.maxX - r.minX, r.maxY - r.minY);
 	}
 
+	private drawLasso(
+		ctx: CanvasRenderingContext2D,
+		path: [number, number][],
+	): void {
+		ctx.beginPath();
+		path.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+		ctx.closePath(); // the closing line is the one the selection will follow
+		ctx.fillStyle = "rgba(25, 118, 210, 0.12)";
+		ctx.fill();
+		ctx.strokeStyle = "#1976d2";
+		ctx.lineWidth = 1 / this.viewport.scale;
+		ctx.stroke();
+	}
+
 	private paintLive(): void {
 		const ctx = this.live;
 		if (!ctx) return;
@@ -801,6 +822,7 @@ export class CanvasRenderer implements Renderer {
 		if (this.adjust) this.drawAdjust(ctx, this.adjust);
 		if (this.selection) this.drawFrame(ctx, this.selection);
 		if (this.marquee) this.drawMarquee(ctx, this.marquee);
+		if (this.lasso) this.drawLasso(ctx, this.lasso);
 		this.drawLasers(ctx);
 	}
 
