@@ -861,29 +861,51 @@ export class CanvasRenderer implements Renderer {
 		this.drawLasers(ctx);
 	}
 
-	/** The trails of the red laser pointer: fainter towards the tail, a bright dot at the head. */
+	/**
+	 * The trails of the red laser pointer (R-076): a comet. The tail narrows and fades away from
+	 * the head, with a soft red halo under a brighter core; the head is a glowing dot with a
+	 * white-hot centre.
+	 */
 	private drawLasers(ctx: CanvasRenderingContext2D): void {
 		if (this.lasers.length === 0) return;
 		const px = 1 / this.viewport.scale;
+		const w = LASER_WIDTH_PX * px;
 		ctx.save();
 		ctx.strokeStyle = LASER_COLOR;
-		ctx.fillStyle = LASER_COLOR;
-		// Flat ends: two soft segments with round ends would show a darker dot where they meet.
-		ctx.lineCap = "butt";
-		ctx.lineWidth = LASER_WIDTH_PX * px;
+		ctx.lineCap = "round";
+		ctx.lineJoin = "round";
 		for (const line of this.lasers) {
 			const pts = line.points;
 			for (let i = 1; i < pts.length; i++) {
-				ctx.globalAlpha = pts[i].alpha;
+				const a = pts[i].alpha;
 				ctx.beginPath();
 				ctx.moveTo(pts[i - 1].x, pts[i - 1].y);
 				ctx.lineTo(pts[i].x, pts[i].y);
+				// The halo: wide and faint; the core: narrower, and thinner towards the tail.
+				ctx.globalAlpha = a * 0.22;
+				ctx.lineWidth = w * (1.2 + 2.6 * a);
+				ctx.stroke();
+				ctx.globalAlpha = Math.min(1, a * 1.2);
+				ctx.lineWidth = w * (0.35 + 0.65 * a);
 				ctx.stroke();
 			}
 			const head = pts[pts.length - 1];
+			const r = w * 3.2;
+			const glow = ctx.createRadialGradient(
+				head.x,
+				head.y,
+				0,
+				head.x,
+				head.y,
+				r,
+			);
+			glow.addColorStop(0, "rgba(255, 245, 240, 1)");
+			glow.addColorStop(0.25, LASER_COLOR);
+			glow.addColorStop(1, "rgba(255, 0, 0, 0)");
 			ctx.globalAlpha = head.alpha;
+			ctx.fillStyle = glow;
 			ctx.beginPath();
-			ctx.arc(head.x, head.y, LASER_WIDTH_PX * 1.1 * px, 0, Math.PI * 2);
+			ctx.arc(head.x, head.y, r, 0, Math.PI * 2);
 			ctx.fill();
 		}
 		ctx.restore();
