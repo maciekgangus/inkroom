@@ -61,6 +61,16 @@ function plainBounds(stroke: Stroke): Rect {
 	};
 }
 
+/** Whether `inner` lies wholly inside `outer`. */
+export function contains(outer: Rect, inner: Rect): boolean {
+	return (
+		inner.minX >= outer.minX &&
+		inner.maxX <= outer.maxX &&
+		inner.minY >= outer.minY &&
+		inner.maxY <= outer.maxY
+	);
+}
+
 /** True if the two rectangles overlap (touching counts). */
 export function intersects(a: Rect, b: Rect): boolean {
 	return (

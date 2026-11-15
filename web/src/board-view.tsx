@@ -121,6 +121,7 @@ export function BoardView({
 			tool: "pen",
 			color: COLORS[0],
 			size: SIZES[1],
+			lineStyle: "natural", // R-073: the natural pen is the default
 			shape: loadShape(),
 		}),
 		[],
@@ -315,6 +316,7 @@ export function BoardView({
 			setVertices: (at) => canvas.setVertices(at),
 			setDrag: (drag) => canvas.setDrag(drag),
 			setMarquee: (rect) => canvas.setMarquee(rect),
+			setLasso: (path) => canvas.setLasso(path),
 		};
 		const controller = new Controller(
 			board,
@@ -560,12 +562,14 @@ export function BoardView({
 		sync.connect();
 
 		const down = (e: PointerEvent) => {
+			if (e.pointerType === "pen") gestures.penSeen();
 			if (e.pointerType === "touch") return gestures.down(e);
 			live.setPointerCapture(e.pointerId);
 			controller.pointerDown(e);
 			applyCursor.current();
 		};
 		const move = (e: PointerEvent) => {
+			if (e.pointerType === "pen") gestures.penSeen(); // also while it hovers
 			if (e.pointerType === "touch") return gestures.move(e);
 			// Mouse and pen are shared as a cursor, also while hovering without pressing.
 			const [x, y] = viewport.toWorld(e.clientX, e.clientY);
@@ -585,6 +589,7 @@ export function BoardView({
 			if (e.pointerType !== "touch") sync.cursorHide();
 		};
 		const up = (e: PointerEvent) => {
+			if (e.pointerType === "pen") gestures.penSeen();
 			if (e.pointerType === "touch") return gestures.up(e);
 			controller.pointerUp(e);
 			applyCursor.current();
@@ -786,6 +791,10 @@ export function BoardView({
 			getComputedStyle(document.documentElement)
 				.getPropertyValue("--grid")
 				.trim() || canvas.gridColor;
+		canvas.gridClusterColor =
+			getComputedStyle(document.documentElement)
+				.getPropertyValue("--grid-strong")
+				.trim() || canvas.gridClusterColor;
 		canvas.refresh();
 	}, [background, theme]);
 

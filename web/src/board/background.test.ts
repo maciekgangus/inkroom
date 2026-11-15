@@ -189,6 +189,8 @@ describe("grid clusters (R-032)", () => {
 
 	test("the lines of a cluster are drawn stronger than the lines of its cells", () => {
 		const alphas: number[] = [];
+		const widths: number[] = [];
+		const colors: string[] = [];
 		const xs: number[] = [];
 		const ctx = {
 			globalAlpha: 1,
@@ -204,6 +206,8 @@ describe("grid clusters (R-032)", () => {
 			arc: () => {},
 			stroke() {
 				alphas.push(this.globalAlpha);
+				widths.push(this.lineWidth);
+				colors.push(this.strokeStyle);
 			},
 			fill: () => {},
 		};
@@ -215,7 +219,13 @@ describe("grid clusters (R-032)", () => {
 			100,
 			1,
 			"#ccc",
+			"#999",
 		);
+		// the cluster lines are thicker and darker, so a graph can be drawn on them (R-032)
+		expect(widths[widths.length - 1]).toBeGreaterThanOrEqual(2);
+		expect(widths[widths.length - 1]).toBeGreaterThan(widths[0]);
+		expect(colors[colors.length - 1]).toBe("#999");
+		expect(colors[0]).toBe("#ccc");
 		// the cell lines first, weaker; the cluster lines last, at full strength
 		expect(alphas.length).toBeGreaterThanOrEqual(2);
 		expect(alphas[alphas.length - 1]).toBe(1);

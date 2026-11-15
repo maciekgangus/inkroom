@@ -24,13 +24,26 @@ export function strokeOptions(s: Stroke): StrokeOptions {
 	}
 	// Wider to begin with, because the width then falls with the speed of the hand.
 	const size = s.size * 1.5;
+	// A short stroke has little room for the tapers, which would eat it whole (a tap left no
+	// mark): they shrink with its length, none for a dot (R-075).
+	const length = s.points.reduce(
+		(sum, p, i) =>
+			i
+				? sum + Math.hypot(p[0] - s.points[i - 1][0], p[1] - s.points[i - 1][1])
+				: 0,
+		0,
+	);
+	const tapered = length >= size * 3; // a tap or a tiny dash stays a plain dot
 	return {
 		size,
 		thinning: 0.5,
 		smoothing: 0.7,
 		streamline: 0.65,
 		simulatePressure: uniformPressure(s),
-		start: { taper: size * 2.5, cap: true },
-		end: { taper: size * 4, cap: true },
+		start: {
+			taper: tapered ? Math.min(size * 2.5, length * 0.4) : 0,
+			cap: true,
+		},
+		end: { taper: tapered ? Math.min(size * 4, length * 0.6) : 0, cap: true },
 	};
 }

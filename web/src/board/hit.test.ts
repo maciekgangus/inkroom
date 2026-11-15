@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import type { Stroke } from "./board";
-import { findHit, objectHit, strokeHit } from "./hit";
+import { findHit, loopTouches, objectHit, strokeHit } from "./hit";
 import { textBox } from "./text";
 
 function line(id: string, pts: [number, number][], size = 4): Stroke {
@@ -374,5 +374,65 @@ describe("polygon shapes (R-033)", () => {
 		const turned = { ...rhombus("#fcc"), rot: Math.PI / 2 };
 		expect(objectHit(turned, 50, 25, 3)).toBe(true); // the centre stays
 		expect(objectHit(turned, 50, -5, 3)).toBe(true); // now reaches higher than before
+	});
+});
+
+describe("loopTouches: a lasso takes what it really touches (R-071)", () => {
+	const square = (
+		x0: number,
+		y0: number,
+		x1: number,
+		y1: number,
+	): [number, number][] => [
+		[x0, y0],
+		[x1, y0],
+		[x1, y1],
+		[x0, y1],
+	];
+	const bar = line("bar", [
+		[100, 100],
+		[300, 100],
+	]);
+	const filled: Stroke = {
+		...line("box", [
+			[100, 100],
+			[300, 200],
+		]),
+		kind: "rect",
+		fill: "#fcc",
+	};
+
+	test("a loop round a line takes it, and a loop that crosses only its end does too", () => {
+		expect(loopTouches(bar, square(50, 50, 350, 150), 1)).toBe(true);
+		expect(loopTouches(bar, square(250, 50, 350, 150), 1)).toBe(true);
+	});
+
+	test("a loop beside a line, even close, does not", () => {
+		expect(loopTouches(bar, square(50, 106, 350, 150), 1)).toBe(false);
+	});
+
+	test("a loop wholly inside a filled shape takes it", () => {
+		expect(loopTouches(filled, square(150, 120, 200, 160), 1)).toBe(true);
+	});
+
+	test("a loop that misses a shape's empty corner of its box does not take it", () => {
+		const diagonal = line("d", [
+			[0, 0],
+			[200, 200],
+		]);
+		expect(loopTouches(diagonal, square(150, 0, 200, 40), 1)).toBe(false);
+	});
+
+	test("an image is taken only when the loop holds it whole", () => {
+		const pic: Stroke = {
+			...line("pic", [
+				[100, 100],
+				[300, 200],
+			]),
+			kind: "image",
+			src: "x",
+		};
+		expect(loopTouches(pic, square(50, 50, 200, 150), 1)).toBe(false);
+		expect(loopTouches(pic, square(50, 50, 350, 250), 1)).toBe(true);
 	});
 });

@@ -26,6 +26,17 @@ const LASER_COLOR = "#ff1744";
 const LASER_WIDTH_PX = 4;
 /** How long the view must stand still before the bitmaps are painted sharp again. */
 const MOVE_SETTLE_MS = 120;
+/**
+ * How much more than the screen the board layer is painted, on each side, as a share of the
+ * window (R-074): the view can be moved a little and moved back without waiting for a repaint.
+ */
+const OVERDRAW = 0.25;
+
+/** The overdraw in CSS px, left/right and top/bottom. */
+const overdraw = () => ({
+	mx: Math.round(innerWidth * OVERDRAW),
+	my: Math.round(innerHeight * OVERDRAW),
+});
 /** The longest the bitmaps are only moved, however long the view keeps moving. */
 const MOVE_MAX_MS = 350;
 /** The ink colour of the Inkroom brand, for the handles that edit the selection. */
@@ -324,6 +335,7 @@ export class CanvasRenderer implements Renderer {
 	private cache = new WeakMap<Stroke, Cached>();
 	private selection: Frame | null = null;
 	private marquee: Rect | null = null;
+	private lasso: [number, number][] | null = null;
 	private highlight: Stroke[] = [];
 	private lasers: LaserLine[] = [];
 	/** Elements being dragged: drawn on the live layer, left out of the committed one (performance). */
@@ -346,6 +358,8 @@ export class CanvasRenderer implements Renderer {
 	/** Which grid to draw under the elements (R-027, R-032) and in which colour. */
 	background: Background = "plain";
 	gridColor = "#dcdee8";
+	/** The colour of the cluster lines of the grid, stronger than the cells'. */
+	gridClusterColor = "#b9bdd0";
 
 	constructor(
 		private committedCanvas: HTMLCanvasElement,
@@ -366,8 +380,14 @@ export class CanvasRenderer implements Renderer {
 	/** Matches the canvas buffers to the window size and device pixel ratio. */
 	resize(): void {
 		const dpr = window.devicePixelRatio || 1;
-		this.committedCanvas.width = innerWidth * dpr;
-		this.committedCanvas.height = innerHeight * dpr;
+		const { mx, my } = overdraw();
+		this.committedCanvas.width = (innerWidth + 2 * mx) * dpr;
+		this.committedCanvas.height = (innerHeight + 2 * my) * dpr;
+		const css = this.committedCanvas.style;
+		css.left = `${-mx}px`;
+		css.top = `${-my}px`;
+		css.width = `${innerWidth + 2 * mx}px`;
+		css.height = `${innerHeight + 2 * my}px`;
 		this.liveCanvas.width = innerWidth * dpr;
 		this.liveCanvas.height = innerHeight * dpr;
 		this.paint();
@@ -420,6 +440,12 @@ export class CanvasRenderer implements Renderer {
 	/** Shows the rubber band of a selection being dragged (null hides it). */
 	setMarquee(rect: Rect | null): void {
 		this.marquee = rect;
+		this.schedule(false, true);
+	}
+
+	/** Shows the free-hand loop of a lasso selection being drawn (null hides it). */
+	setLasso(path: [number, number][] | null): void {
+		this.lasso = path;
 		this.schedule(false, true);
 	}
 
@@ -529,7 +555,9 @@ export class CanvasRenderer implements Renderer {
 			["live", this.liveCanvas],
 		] as const) {
 			const from = this.shown[name];
-			canvas.style.transformOrigin = "0 0";
+			// The screen's corner: the board layer starts beyond it (overdraw).
+			const { mx, my } = name === "committed" ? overdraw() : { mx: 0, my: 0 };
+			canvas.style.transformOrigin = `${mx}px ${my}px`;
 			canvas.style.transform = `translate(${(from.x - v.x) * v.scale}px, ${(from.y - v.y) * v.scale}px) scale(${v.scale / from.k})`;
 		}
 		if (this.settleTimer) clearTimeout(this.settleTimer);
@@ -559,9 +587,12 @@ export class CanvasRenderer implements Renderer {
 	}
 
 	/** Clears the canvas and applies the view transform. */
-	private begin(ctx: CanvasRenderingContext2D): void {
+	private begin(ctx: CanvasRenderingContext2D, mx = 0, my = 0): void {
 		const dpr = window.devicePixelRatio || 1;
-		const { x, y, scale } = this.viewport;
+		const { scale } = this.viewport;
+		// The layer's corner is (mx, my) CSS px before the screen's: the view starts there.
+		const x = this.viewport.x - mx / scale;
+		const y = this.viewport.y - my / scale;
 		ctx.setTransform(1, 0, 0, 1, 0, 0);
 		ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 		ctx.setTransform(
@@ -577,17 +608,28 @@ export class CanvasRenderer implements Renderer {
 	private paintCommitted(): void {
 		const ctx = this.committed;
 		if (!ctx) return;
-		this.begin(ctx);
+		const { mx, my } = overdraw();
+		this.begin(ctx, mx, my);
+		const w = innerWidth + 2 * mx;
+		const h = innerHeight + 2 * my;
+		const { x, y, scale } = this.viewport;
+		const from = { x: x - mx / scale, y: y - my / scale, scale } as Viewport;
 		drawBackground(
 			ctx,
 			this.background,
-			this.viewport,
-			innerWidth,
-			innerHeight,
+			from,
+			w,
+			h,
 			window.devicePixelRatio || 1,
 			this.gridColor,
+			this.gridClusterColor,
 		);
-		const view = this.viewport.worldRect(innerWidth, innerHeight);
+		const view = {
+			minX: from.x,
+			minY: from.y,
+			maxX: from.x + w / scale,
+			maxY: from.y + h / scale,
+		};
 		for (const s of this.strokes) {
 			if (this.drag?.ids.has(s.id)) continue; // drawn on the live layer while dragged
 			this.drawStroke(ctx, s, view);
@@ -771,6 +813,23 @@ export class CanvasRenderer implements Renderer {
 		ctx.strokeRect(r.minX, r.minY, r.maxX - r.minX, r.maxY - r.minY);
 	}
 
+	private drawLasso(
+		ctx: CanvasRenderingContext2D,
+		path: [number, number][],
+	): void {
+		ctx.beginPath();
+		for (const [i, [x, y]] of path.entries()) {
+			if (i) ctx.lineTo(x, y);
+			else ctx.moveTo(x, y);
+		}
+		ctx.closePath(); // the closing line is the one the selection will follow
+		ctx.fillStyle = "rgba(25, 118, 210, 0.12)";
+		ctx.fill();
+		ctx.strokeStyle = "#1976d2";
+		ctx.lineWidth = 1 / this.viewport.scale;
+		ctx.stroke();
+	}
+
 	private paintLive(): void {
 		const ctx = this.live;
 		if (!ctx) return;
@@ -801,32 +860,55 @@ export class CanvasRenderer implements Renderer {
 		if (this.adjust) this.drawAdjust(ctx, this.adjust);
 		if (this.selection) this.drawFrame(ctx, this.selection);
 		if (this.marquee) this.drawMarquee(ctx, this.marquee);
+		if (this.lasso) this.drawLasso(ctx, this.lasso);
 		this.drawLasers(ctx);
 	}
 
-	/** The trails of the red laser pointer: fainter towards the tail, a bright dot at the head. */
+	/**
+	 * The trails of the red laser pointer (R-076): a comet. The tail narrows and fades away from
+	 * the head, with a soft red halo under a brighter core; the head is a glowing dot with a
+	 * white-hot centre.
+	 */
 	private drawLasers(ctx: CanvasRenderingContext2D): void {
 		if (this.lasers.length === 0) return;
 		const px = 1 / this.viewport.scale;
+		const w = LASER_WIDTH_PX * px;
 		ctx.save();
 		ctx.strokeStyle = LASER_COLOR;
-		ctx.fillStyle = LASER_COLOR;
-		// Flat ends: two soft segments with round ends would show a darker dot where they meet.
-		ctx.lineCap = "butt";
-		ctx.lineWidth = LASER_WIDTH_PX * px;
+		ctx.lineCap = "round";
+		ctx.lineJoin = "round";
 		for (const line of this.lasers) {
 			const pts = line.points;
 			for (let i = 1; i < pts.length; i++) {
-				ctx.globalAlpha = pts[i].alpha;
+				const a = pts[i].alpha;
 				ctx.beginPath();
 				ctx.moveTo(pts[i - 1].x, pts[i - 1].y);
 				ctx.lineTo(pts[i].x, pts[i].y);
+				// The halo: wide and faint; the core: narrower, and thinner towards the tail.
+				ctx.globalAlpha = a * 0.22;
+				ctx.lineWidth = w * (1.2 + 2.6 * a);
+				ctx.stroke();
+				ctx.globalAlpha = Math.min(1, a * 1.2);
+				ctx.lineWidth = w * (0.35 + 0.65 * a);
 				ctx.stroke();
 			}
 			const head = pts[pts.length - 1];
+			const r = w * 3.2;
+			const glow = ctx.createRadialGradient(
+				head.x,
+				head.y,
+				0,
+				head.x,
+				head.y,
+				r,
+			);
+			glow.addColorStop(0, "rgba(255, 245, 240, 1)");
+			glow.addColorStop(0.25, LASER_COLOR);
+			glow.addColorStop(1, "rgba(255, 0, 0, 0)");
 			ctx.globalAlpha = head.alpha;
+			ctx.fillStyle = glow;
 			ctx.beginPath();
-			ctx.arc(head.x, head.y, LASER_WIDTH_PX * 1.1 * px, 0, Math.PI * 2);
+			ctx.arc(head.x, head.y, r, 0, Math.PI * 2);
 			ctx.fill();
 		}
 		ctx.restore();

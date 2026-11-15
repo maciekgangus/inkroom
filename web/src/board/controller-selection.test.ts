@@ -23,6 +23,7 @@ const ev = (
 	...extra,
 });
 const SHIFT = { shiftKey: true };
+const CTRL = { ctrlKey: true };
 
 const base = { authorId: "a", color: "#111", size: 4, z: 0 };
 const pt = (x: number, y: number) => [x, y, 0.5] as [number, number, number];
@@ -75,6 +76,7 @@ describe("Controller selection", () => {
 			redraw: vi.fn(),
 			setSelection: vi.fn(),
 			setMarquee: vi.fn(),
+			setLasso: vi.fn(),
 		};
 		settings = { tool: "select", color: "#111", size: 4 };
 		viewport = new Viewport();
@@ -176,17 +178,134 @@ describe("Controller selection", () => {
 		});
 	});
 
+	describe("lasso selection with Ctrl (R-071)", () => {
+		beforeEach(() => {
+			board.addStroke(box("far", [800, 800], [850, 850]));
+			ops.length = 0;
+		});
+		/** Draws a free-hand loop through the given screen points, with Ctrl held. */
+		const loop = (
+			pts: [number, number][],
+			extra: Partial<PointerInput> = CTRL,
+		) => {
+			c.pointerDown(ev("pen", ...pts[0], extra));
+			for (const p of pts.slice(1)) c.pointerMove(ev("pen", ...p, extra));
+			c.pointerUp(ev("pen", ...pts[pts.length - 1], extra));
+		};
+
+		test("takes the objects the loop touches, even a little, and nothing else", () => {
+			loop([
+				[50, 50],
+				[330, 60],
+				[320, 220],
+				[60, 230],
+			]);
+			expect(selIds()).toEqual(["r1"]);
+			loop([
+				[50, 50],
+				[250, 60],
+				[250, 220],
+				[60, 230],
+			]); // r1 only partly inside: the whole of it is taken
+			expect(selIds()).toEqual(["r1"]);
+		});
+
+		test("a loop that passes beside an object, not touching, leaves it", () => {
+			loop([
+				[50, 50],
+				[96, 50],
+				[96, 230],
+				[50, 230],
+			]);
+			expect(selIds()).toEqual([]);
+		});
+
+		test("a loop follows the real shape, not its box", () => {
+			// A notch cut out of the loop leaves r2 out although the loop's box would hold it.
+			loop([
+				[50, 50],
+				[500, 50],
+				[500, 90],
+				[390, 90],
+				[390, 230],
+				[50, 230],
+			]);
+			expect(selIds()).toEqual(["r1"]);
+		});
+
+		test("shows the loop while it is drawn and hides it on release; the board is not touched", () => {
+			c.pointerDown(ev("pen", 50, 50, CTRL));
+			c.pointerMove(ev("pen", 330, 60, CTRL));
+			c.pointerMove(ev("pen", 320, 220, CTRL));
+			expect(renderer.setLasso).toHaveBeenLastCalledWith([
+				[50, 50],
+				[330, 60],
+				[320, 220],
+			]);
+			c.pointerUp(ev("pen", 320, 220, CTRL));
+			expect(renderer.setLasso).toHaveBeenLastCalledWith(null);
+			expect(ops).toEqual([]);
+		});
+
+		test("with Ctrl and Shift it adds to the selection", () => {
+			c.select("far");
+			loop(
+				[
+					[50, 50],
+					[330, 60],
+					[320, 220],
+					[60, 230],
+				],
+				{ ctrlKey: true, shiftKey: true },
+			);
+			expect(selIds().sort()).toEqual(["far", "r1"]);
+		});
+
+		test("without Ctrl the drag is still the rectangle", () => {
+			drag([50, 50], [320, 220]);
+			expect(renderer.setLasso).not.toHaveBeenCalledWith(
+				expect.arrayContaining([[320, 220]]),
+			);
+			expect(selIds()).toEqual(["r1"]);
+		});
+
+		test("Ctrl on an object does not start a loop: the object is grabbed as ever", () => {
+			click(150, 150, CTRL);
+			expect(selIds()).toEqual(["r1"]);
+		});
+	});
+
 	describe("rubber-band selection", () => {
 		beforeEach(() => {
 			board.addStroke(box("far", [800, 800], [850, 850]));
 			ops.length = 0;
 		});
 
-		test("dragging over empty space selects whatever the frame touches", () => {
+		test("touching an object even a little selects the whole of it (R-072)", () => {
 			drag([50, 50], [320, 220]);
+			expect(selIds()).toEqual(["r1"]);
+			drag([50, 50], [150, 120]); // only r1's corner is in the frame
 			expect(selIds()).toEqual(["r1"]);
 			drag([50, 50], [470, 220]);
 			expect(selIds()).toEqual(["r1", "r2"]);
+		});
+
+		test("the reach of a direct click is not added to the frame: it must really touch", () => {
+			drag([50, 50], [96, 220]); // 4 px short of r1, within a click's reach
+			expect(selIds()).toEqual([]);
+		});
+
+		test("an image or a PDF page is taken only when wholly inside the frame", () => {
+			board.addStroke({
+				...box("pic", [500, 300], [700, 400]),
+				kind: "image",
+				fill: undefined,
+				src: "x",
+			});
+			drag([450, 250], [600, 350]); // touches the picture only
+			expect(selIds()).toEqual([]);
+			drag([450, 250], [750, 450]); // holds it whole
+			expect(selIds()).toEqual(["pic"]);
 		});
 
 		test("shows the rubber band while dragging and hides it on release", () => {

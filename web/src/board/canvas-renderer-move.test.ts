@@ -27,6 +27,41 @@ const layer = () => {
 	return { ctx, canvas: canvas as unknown as HTMLCanvasElement };
 };
 
+describe("CanvasRenderer overdraw: the board is painted a little beyond the screen (R-074)", () => {
+	beforeEach(() => {
+		vi.stubGlobal("requestAnimationFrame", undefined);
+		vi.stubGlobal("innerWidth", 1000);
+		vi.stubGlobal("innerHeight", 800);
+		vi.stubGlobal("devicePixelRatio", 1);
+	});
+	afterEach(() => vi.unstubAllGlobals());
+
+	test("the board layer is larger than the window and stands out beyond its edges; the live layer is not", () => {
+		const a = layer();
+		const b = layer();
+		const r = new CanvasRenderer(a.canvas, b.canvas, new Viewport());
+		r.resize();
+		expect(a.canvas.width).toBe(1500); // a quarter more on each side
+		expect(a.canvas.height).toBe(1200);
+		expect(a.canvas.style.left).toBe("-250px");
+		expect(a.canvas.style.top).toBe("-200px");
+		expect(a.canvas.style.width).toBe("1500px");
+		expect(a.canvas.style.height).toBe("1200px");
+		expect(b.canvas.width).toBe(1000);
+		expect(b.canvas.style.left).toBeUndefined();
+	});
+
+	test("while the view moves, the board layer scales about the screen's corner, not its own", () => {
+		const a = layer();
+		const v = new Viewport();
+		const r = new CanvasRenderer(a.canvas, layer().canvas, v);
+		r.resize();
+		v.setScaleAt(0, 0, 2);
+		r.moveView();
+		expect(a.canvas.style.transformOrigin).toBe("250px 200px");
+	});
+});
+
 describe("CanvasRenderer.moveView: the view moves without painting every frame", () => {
 	beforeEach(() => {
 		vi.useFakeTimers();

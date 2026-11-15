@@ -61,6 +61,7 @@ describe("Controller selection look (R-034)", () => {
 			setDrag: vi.fn(),
 			setAdjust: vi.fn(),
 			setVertices: vi.fn(),
+			setLasso: vi.fn(),
 		};
 		settings = { tool: "select", color: "#111", size: 4 };
 		c = new Controller(
@@ -196,11 +197,11 @@ describe("Controller selection look (R-034)", () => {
 		).toBeCloseTo(160);
 	});
 
-	test("grabbing is generous: a thin line is caught 12 px away, not 20", () => {
-		click(200, 110);
+	test("grabbing a thin line by a direct click has a little reach (R-072): 5 px away, not 12", () => {
+		click(200, 105);
 		expect(c.selection.map((s) => s.id)).toEqual(["l"]);
 		c.select(null);
-		click(200, 120);
+		click(200, 112);
 		expect(c.selection).toEqual([]);
 	});
 });

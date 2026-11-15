@@ -58,15 +58,18 @@ export function useTheme(): Theme {
 
 const BLACK = "#111111";
 const WHITE = "#ffffff";
+/** The light violet of the logo: seen on the dark board and on white pages and images alike. */
+const DARK_INK = "#8f8fff";
 
 /**
  * The colour to paint a stored ink colour with. In dark mode the default black is shown
- * as white and white as black, so one board reads well in both themes (R-026).
+ * as light violet (white would vanish on a white page or image) and white as black, so one
+ * board reads well in both themes (R-026).
  */
 export function displayColor(color: string, theme: Theme): string {
 	if (theme !== "dark") return color;
 	const c = color.toLowerCase();
-	if (c === BLACK) return WHITE;
+	if (c === BLACK) return DARK_INK;
 	if (c === WHITE) return BLACK;
 	return color;
 }

@@ -1,8 +1,8 @@
 import type { Board, Point, Stroke } from "./board";
-import { intersects } from "./bounds";
+import { contains, intersects } from "./bounds";
 import type { ClipElement } from "./clipboard";
 import { constrainEnd } from "./draw-aids";
-import { findHit, objectHit } from "./hit";
+import { findHit, loopTouches, objectHit } from "./hit";
 import {
 	type Frame,
 	frameOf,
@@ -14,7 +14,7 @@ import {
 	ROT_OFFSET_PX,
 } from "./selection-frame";
 import { adjustFromPoint, adjustHandle, outlineOf } from "./shape-parts";
-import type { ShapeChoice } from "./shapes";
+import { pointInPolygon, type ShapeChoice } from "./shapes";
 import { applyStyle, type Dash, type StylePatch } from "./style";
 import {
 	bakeRotation,
@@ -42,6 +42,9 @@ export interface PointerInput {
 	button?: number;
 	/** Shift held: add to the selection, snap a rotation. */
 	shiftKey?: boolean;
+	/** Ctrl (Cmd on a Mac) held: select with a free-hand loop instead of a rectangle (R-071). */
+	ctrlKey?: boolean;
+	metaKey?: boolean;
 	getCoalescedEvents?: () => PointerInput[];
 }
 
@@ -75,6 +78,8 @@ export interface Renderer {
 	setHighlight?(els: Stroke[]): void;
 	/** Shows the rubber band while dragging over empty space (null hides it). */
 	setMarquee?(rect: Rect | null): void;
+	/** Shows the free-hand loop of a lasso selection being drawn (null hides it). */
+	setLasso?(path: [number, number][] | null): void;
 }
 
 /** Current tool settings, mutated by the toolbar. */
@@ -101,9 +106,8 @@ export interface Settings {
 export const ERASER_RADIUS = 10;
 /** A shape dragged less than this many screen pixels is treated as a stray click and dropped. */
 const MIN_SHAPE_PX = 2;
-/** How far from an object (screen pixels) a click still selects it. */
-/** How far (px) from an element still grabs it: generous, so thin lines are easy to catch. */
-const HIT_PX = 10;
+/** How far (px) from an element a direct click still grabs it, so a thin line need not be hit exactly (R-072). */
+const HIT_PX = 8;
 /** The smallest a selection can be scaled down to, in screen pixels. */
 const MIN_SELECTION_PX = 24;
 const SNAP_STEP = Math.PI / 12; // 15 degrees, with Shift
@@ -157,6 +161,12 @@ type Edit =
 			additive: boolean;
 			base: string[];
 			rect: Rect | null;
+	  }
+	| {
+			mode: "lasso";
+			additive: boolean;
+			base: string[];
+			path: Vec[];
 	  };
 
 const withRect = (el: Stroke, r: Rect): Stroke => ({
@@ -979,6 +989,15 @@ export class Controller {
 			this.edit = { mode: "move", start: p, originals: now, drafts: now };
 		} else {
 			if (!e.shiftKey) this.select(null);
+			if (e.ctrlKey || e.metaKey) {
+				this.edit = {
+					mode: "lasso",
+					additive: !!e.shiftKey,
+					base: [...this.selectedIds],
+					path: [p],
+				};
+				return;
+			}
 			this.edit = {
 				mode: "marquee",
 				start: p,
@@ -1001,6 +1020,11 @@ export class Controller {
 				maxY: Math.max(edit.start[1], p[1]),
 			};
 			this.renderer.setMarquee?.(edit.rect);
+			return;
+		}
+		if (edit.mode === "lasso") {
+			edit.path.push(p);
+			this.renderer.setLasso?.(edit.path);
 			return;
 		}
 		let offset: [number, number] | undefined;
@@ -1162,7 +1186,22 @@ export class Controller {
 			const r = edit.rect;
 			if (!r) return;
 			const ids = this.board.strokes
-				.filter((s) => intersects(worldBounds(s), r))
+				// Touching is enough, but an image (a PDF page is one) must be wholly inside: it is big
+				// and easily caught by a frame meant for something else (R-072).
+				.filter((s) =>
+					s.kind === "image"
+						? contains(r, worldBounds(s))
+						: intersects(worldBounds(s), r),
+				)
+				.map((s) => s.id);
+			this.select(edit.additive ? [...new Set([...edit.base, ...ids])] : ids);
+			return;
+		}
+		if (edit.mode === "lasso") {
+			this.renderer.setLasso?.(null);
+			if (edit.path.length < 3) return;
+			const ids = this.board.strokes
+				.filter((s) => loopTouches(s, edit.path, 1 / this.viewport.scale))
 				.map((s) => s.id);
 			this.select(edit.additive ? [...new Set([...edit.base, ...ids])] : ids);
 			return;

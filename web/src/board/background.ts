@@ -81,6 +81,8 @@ export function drawBackground(
 	h: number,
 	dpr: number,
 	color: string,
+	/** The colour of the cluster lines of the grid; the cell lines' colour if left out. */
+	clusterColor: string = color,
 ): void {
 	const levels = gridLevels(kind, viewport.scale);
 	if (levels.length === 0) return;
@@ -124,7 +126,10 @@ export function drawBackground(
 	}
 	const cluster = clusterSpacing(kind, scale);
 	if (cluster) {
+		// Thicker and darker than the cells: a graph is drawn along these lines (R-032).
 		ctx.globalAlpha = 1;
+		ctx.strokeStyle = clusterColor;
+		ctx.lineWidth = Math.max(2, Math.round(dpr * 2));
 		ctx.beginPath();
 		for (const gx of gridPositions(cluster, x, x + w / scale)) {
 			ctx.moveTo(sx(gx), 0);
