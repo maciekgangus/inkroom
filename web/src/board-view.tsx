@@ -791,6 +791,10 @@ export function BoardView({
 			getComputedStyle(document.documentElement)
 				.getPropertyValue("--grid")
 				.trim() || canvas.gridColor;
+		canvas.gridClusterColor =
+			getComputedStyle(document.documentElement)
+				.getPropertyValue("--grid-strong")
+				.trim() || canvas.gridClusterColor;
 		canvas.refresh();
 	}, [background, theme]);
 

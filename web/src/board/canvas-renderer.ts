@@ -358,6 +358,8 @@ export class CanvasRenderer implements Renderer {
 	/** Which grid to draw under the elements (R-027, R-032) and in which colour. */
 	background: Background = "plain";
 	gridColor = "#dcdee8";
+	/** The colour of the cluster lines of the grid, stronger than the cells'. */
+	gridClusterColor = "#b9bdd0";
 
 	constructor(
 		private committedCanvas: HTMLCanvasElement,
@@ -620,6 +622,7 @@ export class CanvasRenderer implements Renderer {
 			h,
 			window.devicePixelRatio || 1,
 			this.gridColor,
+			this.gridClusterColor,
 		);
 		const view = {
 			minX: from.x,
