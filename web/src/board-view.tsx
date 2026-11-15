@@ -121,6 +121,7 @@ export function BoardView({
 			tool: "pen",
 			color: COLORS[0],
 			size: SIZES[1],
+			lineStyle: "natural", // R-073: the natural pen is the default
 			shape: loadShape(),
 		}),
 		[],

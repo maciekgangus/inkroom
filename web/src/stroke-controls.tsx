@@ -19,10 +19,10 @@ const LINE_STYLES: {
 	label: string;
 	icon: "style-solid" | "style-dashed" | "style-dotted" | "wave";
 }[] = [
+	{ style: "natural", label: "Naturalne pióro", icon: "wave" },
 	{ style: "solid", label: "Ciągła", icon: "style-solid" },
 	{ style: "dashed", label: "Kreskowana", icon: "style-dashed" },
 	{ style: "dotted", label: "Kropkowana", icon: "style-dotted" },
-	{ style: "natural", label: "Naturalne pióro", icon: "wave" },
 ];
 
 interface Props {
@@ -56,9 +56,14 @@ export function StrokeControls({ settings, onChange }: Props) {
 		};
 	}, [open]);
 
-	const current =
-		LINE_STYLES.find((s) => s.style === (settings.lineStyle ?? "solid")) ??
-		LINE_STYLES[0];
+	// Lines and shapes have no natural pen: they draw the classic style, and show it (R-073).
+	const chosen = settings.lineStyle ?? "solid";
+	const shown =
+		chosen === "natural" &&
+		(settings.tool === "line" || settings.tool === "shape")
+			? "solid"
+			: chosen;
+	const current = LINE_STYLES.find((s) => s.style === shown) ?? LINE_STYLES[1];
 
 	return (
 		<>

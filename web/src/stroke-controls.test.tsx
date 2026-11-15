@@ -125,14 +125,15 @@ describe("StrokeControls (R-038)", () => {
 				(b) => b.textContent,
 			);
 			expect(labels).toEqual([
+				"Naturalne pióro",
 				"Ciągła",
 				"Kreskowana",
 				"Kropkowana",
-				"Naturalne pióro",
 			]);
 		});
 
 		test("choosing one sets it and closes the list; the current one is marked", () => {
+			settings.lineStyle = "solid";
 			press("line style");
 			expect(item("solid")?.classList.contains("active")).toBe(true);
 			press("line style natural");
@@ -140,6 +141,14 @@ describe("StrokeControls (R-038)", () => {
 			expect(root.querySelector(".style-list")).toBeNull();
 			press("line style");
 			expect(item("natural")?.classList.contains("active")).toBe(true);
+		});
+
+		test("for a line or a shape the natural pen shows as the classic style (R-073)", () => {
+			settings.lineStyle = "natural";
+			settings.tool = "line";
+			press("line style");
+			expect(item("solid")?.classList.contains("active")).toBe(true);
+			expect(item("natural")?.classList.contains("active")).toBe(false);
 		});
 
 		test("opening one list closes the other", () => {
