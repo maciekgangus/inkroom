@@ -26,6 +26,17 @@ const LASER_COLOR = "#ff1744";
 const LASER_WIDTH_PX = 4;
 /** How long the view must stand still before the bitmaps are painted sharp again. */
 const MOVE_SETTLE_MS = 120;
+/**
+ * How much more than the screen the board layer is painted, on each side, as a share of the
+ * window (R-074): the view can be moved a little and moved back without waiting for a repaint.
+ */
+const OVERDRAW = 0.25;
+
+/** The overdraw in CSS px, left/right and top/bottom. */
+const overdraw = () => ({
+	mx: Math.round(innerWidth * OVERDRAW),
+	my: Math.round(innerHeight * OVERDRAW),
+});
 /** The longest the bitmaps are only moved, however long the view keeps moving. */
 const MOVE_MAX_MS = 350;
 /** The ink colour of the Inkroom brand, for the handles that edit the selection. */
@@ -367,8 +378,14 @@ export class CanvasRenderer implements Renderer {
 	/** Matches the canvas buffers to the window size and device pixel ratio. */
 	resize(): void {
 		const dpr = window.devicePixelRatio || 1;
-		this.committedCanvas.width = innerWidth * dpr;
-		this.committedCanvas.height = innerHeight * dpr;
+		const { mx, my } = overdraw();
+		this.committedCanvas.width = (innerWidth + 2 * mx) * dpr;
+		this.committedCanvas.height = (innerHeight + 2 * my) * dpr;
+		const css = this.committedCanvas.style;
+		css.left = `${-mx}px`;
+		css.top = `${-my}px`;
+		css.width = `${innerWidth + 2 * mx}px`;
+		css.height = `${innerHeight + 2 * my}px`;
 		this.liveCanvas.width = innerWidth * dpr;
 		this.liveCanvas.height = innerHeight * dpr;
 		this.paint();
@@ -536,7 +553,9 @@ export class CanvasRenderer implements Renderer {
 			["live", this.liveCanvas],
 		] as const) {
 			const from = this.shown[name];
-			canvas.style.transformOrigin = "0 0";
+			// The screen's corner: the board layer starts beyond it (overdraw).
+			const { mx, my } = name === "committed" ? overdraw() : { mx: 0, my: 0 };
+			canvas.style.transformOrigin = `${mx}px ${my}px`;
 			canvas.style.transform = `translate(${(from.x - v.x) * v.scale}px, ${(from.y - v.y) * v.scale}px) scale(${v.scale / from.k})`;
 		}
 		if (this.settleTimer) clearTimeout(this.settleTimer);
@@ -566,9 +585,12 @@ export class CanvasRenderer implements Renderer {
 	}
 
 	/** Clears the canvas and applies the view transform. */
-	private begin(ctx: CanvasRenderingContext2D): void {
+	private begin(ctx: CanvasRenderingContext2D, mx = 0, my = 0): void {
 		const dpr = window.devicePixelRatio || 1;
-		const { x, y, scale } = this.viewport;
+		const { scale } = this.viewport;
+		// The layer's corner is (mx, my) CSS px before the screen's: the view starts there.
+		const x = this.viewport.x - mx / scale;
+		const y = this.viewport.y - my / scale;
 		ctx.setTransform(1, 0, 0, 1, 0, 0);
 		ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 		ctx.setTransform(
@@ -584,17 +606,27 @@ export class CanvasRenderer implements Renderer {
 	private paintCommitted(): void {
 		const ctx = this.committed;
 		if (!ctx) return;
-		this.begin(ctx);
+		const { mx, my } = overdraw();
+		this.begin(ctx, mx, my);
+		const w = innerWidth + 2 * mx;
+		const h = innerHeight + 2 * my;
+		const { x, y, scale } = this.viewport;
+		const from = { x: x - mx / scale, y: y - my / scale, scale } as Viewport;
 		drawBackground(
 			ctx,
 			this.background,
-			this.viewport,
-			innerWidth,
-			innerHeight,
+			from,
+			w,
+			h,
 			window.devicePixelRatio || 1,
 			this.gridColor,
 		);
-		const view = this.viewport.worldRect(innerWidth, innerHeight);
+		const view = {
+			minX: from.x,
+			minY: from.y,
+			maxX: from.x + w / scale,
+			maxY: from.y + h / scale,
+		};
 		for (const s of this.strokes) {
 			if (this.drag?.ids.has(s.id)) continue; // drawn on the live layer while dragged
 			this.drawStroke(ctx, s, view);
