@@ -39,8 +39,15 @@ export const inkIn = (page: Page, x: number, y: number, w: number, h: number) =>
 			const c = document.querySelector<HTMLCanvasElement>("canvas#board");
 			const ctx = c?.getContext("2d");
 			if (!c || !ctx) return 0;
-			const k = c.width / innerWidth;
-			const d = ctx.getImageData(x * k, y * k, w * k, h * k).data;
+			// The board layer is larger than the window and starts beyond its corner (R-074).
+			const r = c.getBoundingClientRect();
+			const k = c.width / r.width;
+			const d = ctx.getImageData(
+				(x - r.left) * k,
+				(y - r.top) * k,
+				w * k,
+				h * k,
+			).data;
 			let painted = 0;
 			for (let i = 3; i < d.length; i += 4) if (d[i]) painted++;
 			return painted;
