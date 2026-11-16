@@ -221,10 +221,8 @@ describe("grid clusters (R-032)", () => {
 			"#ccc",
 			"#999",
 		);
-		// the cluster lines are thicker and darker, so a graph can be drawn on them (R-032)
-		expect(widths[widths.length - 1]).toBeGreaterThanOrEqual(1.5);
-		expect(widths[widths.length - 1]).toBeLessThan(2); // not as heavy as it was
-		expect(widths[widths.length - 1]).toBeGreaterThan(widths[0]);
+		// the cluster lines are as thin as the cells' (a heavier line was too much) but darker
+		expect(widths[widths.length - 1]).toBe(widths[0]);
 		expect(colors[colors.length - 1]).toBe("#999");
 		expect(colors[0]).toBe("#ccc");
 		// the cell lines first, weaker; the cluster lines last, at full strength

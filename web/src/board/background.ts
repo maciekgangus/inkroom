@@ -126,10 +126,10 @@ export function drawBackground(
 	}
 	const cluster = clusterSpacing(kind, scale);
 	if (cluster) {
-		// Thicker and darker than the cells: a graph is drawn along these lines (R-032).
+		// Darker than the cells, but as thin: a graph is drawn along these lines (R-032).
 		ctx.globalAlpha = 1;
 		ctx.strokeStyle = clusterColor;
-		ctx.lineWidth = 1.5 * dpr;
+		ctx.lineWidth = Math.max(1, Math.round(dpr));
 		ctx.beginPath();
 		for (const gx of gridPositions(cluster, x, x + w / scale)) {
 			ctx.moveTo(sx(gx), 0);
