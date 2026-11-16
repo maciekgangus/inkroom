@@ -11,7 +11,7 @@ const SPACING = 24; // board units between dots
 /** Board units between the lines of the grid: big cells, as in IDROO. */
 export const GRID_SPACING = 40;
 /** A cluster is a block of this many cells in a row and a column, set off by stronger lines. */
-export const GRID_CLUSTER = 4;
+export const GRID_CLUSTER = 3;
 /** How strongly the lines between the cells of a cluster show against the lines round it. */
 const CELL_STRENGTH = 0.5;
 const LINE_SPACING = 32;
@@ -129,7 +129,7 @@ export function drawBackground(
 		// Thicker and darker than the cells: a graph is drawn along these lines (R-032).
 		ctx.globalAlpha = 1;
 		ctx.strokeStyle = clusterColor;
-		ctx.lineWidth = Math.max(2, Math.round(dpr * 2));
+		ctx.lineWidth = 1.5 * dpr;
 		ctx.beginPath();
 		for (const gx of gridPositions(cluster, x, x + w / scale)) {
 			ctx.moveTo(sx(gx), 0);

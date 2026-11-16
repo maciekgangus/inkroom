@@ -173,7 +173,7 @@ describe("grid clusters (R-032)", () => {
 	});
 
 	test("a cluster is a block of cells: its lines are every GRID_CLUSTER-th line of the main level", () => {
-		expect(GRID_CLUSTER).toBe(4);
+		expect(GRID_CLUSTER).toBe(3);
 		for (const scale of [0.3, 0.7, 1, 2.5, 8]) {
 			const [main] = gridLevels("grid", scale);
 			expect(clusterSpacing("grid", scale)).toBeCloseTo(
@@ -222,7 +222,8 @@ describe("grid clusters (R-032)", () => {
 			"#999",
 		);
 		// the cluster lines are thicker and darker, so a graph can be drawn on them (R-032)
-		expect(widths[widths.length - 1]).toBeGreaterThanOrEqual(2);
+		expect(widths[widths.length - 1]).toBeGreaterThanOrEqual(1.5);
+		expect(widths[widths.length - 1]).toBeLessThan(2); // not as heavy as it was
 		expect(widths[widths.length - 1]).toBeGreaterThan(widths[0]);
 		expect(colors[colors.length - 1]).toBe("#999");
 		expect(colors[0]).toBe("#ccc");
@@ -230,7 +231,7 @@ describe("grid clusters (R-032)", () => {
 		expect(alphas.length).toBeGreaterThanOrEqual(2);
 		expect(alphas[alphas.length - 1]).toBe(1);
 		expect(Math.min(...alphas)).toBeLessThan(1);
-		// a line of a cluster (board x = 160) is at screen 160.5; one of a cell (x = 40) too
-		expect(xs.filter((x) => x === 160.5).length).toBeGreaterThanOrEqual(2);
+		// a line of a cluster (board x = 120) is at screen 120.5; one of a cell (x = 40) too
+		expect(xs.filter((x) => x === 120.5).length).toBeGreaterThanOrEqual(2);
 	});
 });
