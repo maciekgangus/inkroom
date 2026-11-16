@@ -11,7 +11,7 @@ const SPACING = 24; // board units between dots
 /** Board units between the lines of the grid: big cells, as in IDROO. */
 export const GRID_SPACING = 40;
 /** A cluster is a block of this many cells in a row and a column, set off by stronger lines. */
-export const GRID_CLUSTER = 3;
+export const GRID_CLUSTER = 2;
 /** How strongly the lines between the cells of a cluster show against the lines round it. */
 const CELL_STRENGTH = 0.5;
 const LINE_SPACING = 32;
