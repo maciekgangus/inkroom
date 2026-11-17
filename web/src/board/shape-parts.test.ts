@@ -723,7 +723,7 @@ describe("the coordinate plane (R-084)", () => {
 		const p = of(plane());
 		// 10 vertical and 10 horizontal lines besides the axes, +-1 to +-5 cells from the centre
 		expect(p.grid?.length).toBe(12); // +-1, +-3, +-5, both ways
-		expect(p.cluster?.length).toBe(8 + 1); // +-2, +-4 both ways, and the frame
+		expect(p.cluster?.length).toBe(8); // +-2, +-4 both ways
 		const xs = new Set(
 			[...(p.grid ?? []), ...(p.cluster ?? [])]
 				.filter((l) => l.length === 2 && l[0][0] === l[1][0])
@@ -734,22 +734,25 @@ describe("the coordinate plane (R-084)", () => {
 		]);
 	});
 
-	test("the axes cross at the middle with an arrow head on each", () => {
+	test("the axes cross at the middle and stop under a filled arrow head each", () => {
 		const p = of(plane());
-		expect(p.lines.filter((l) => l.length === 2)).toHaveLength(2);
-		expect(p.lines.filter((l) => l.length === 3)).toHaveLength(2);
-		expect(
-			p.lines.some((l) => l.length === 2 && l[0][1] === 200 && l[1][1] === 200),
-		).toBe(true);
+		expect(p.lines).toHaveLength(2);
+		expect(p.plane?.heads).toHaveLength(2);
+		const horizontal = p.lines.find((l) => l[0][1] === 200 && l[1][1] === 200);
+		expect(horizontal).toBeDefined();
+		// the axis ends inside the head, which stands a little in from the edge
+		const tip = Math.max(...(p.plane?.heads[0] ?? []).map((v) => v[0]));
+		expect(tip).toBeLessThan(400);
+		expect(horizontal?.[1][0]).toBeLessThan(tip);
 	});
 
 	test("the size of a cell is the stroke's own: a bigger one has fewer lines", () => {
 		const p = of(plane({ cell: 80 }));
 		expect((p.grid?.length ?? 0) + (p.cluster?.length ?? 0)).toBeLessThan(
-			12 + 9,
+			12 + 8,
 		);
 		expect(p.grid?.length).toBe(4); // +-80 along each way
-		expect(p.cluster?.length).toBe(4 + 1); // +-160 along each way, and the frame
+		expect(p.cluster?.length).toBe(4); // +-160 along each way
 	});
 
 	test("stretching the box adds cells, it does not change their size", () => {
@@ -770,24 +773,64 @@ describe("the coordinate plane (R-084)", () => {
 	test("the grid can be left out: only the frame and the axes remain", () => {
 		const p = of(plane({ grid: false }));
 		expect(p.grid ?? []).toHaveLength(0);
-		expect(p.cluster).toHaveLength(1); // the frame
-		expect(p.lines.length).toBe(4);
+		expect(p.cluster ?? []).toHaveLength(0);
+		expect(p.lines).toHaveLength(2);
+		expect(p.plane?.text.length).toBeGreaterThan(0); // the axes keep their numbers
 	});
 
 	test("the axes can be left out, with their numbers", () => {
 		const p = of(plane({ showAxes: false }));
 		expect(p.lines).toHaveLength(0);
-		expect(p.labels ?? []).toHaveLength(0);
+		expect(p.plane?.heads).toHaveLength(0);
+		expect(p.plane?.text).toHaveLength(0);
 	});
 
 	test("numbers sit at every cell along both axes, and only when asked for", () => {
 		const on = of(plane());
-		expect(on.labels).toHaveLength(16); // 4 cells each side of the middle, two axes
-		expect(on.labels?.map((l) => l.text)).toEqual(
-			expect.arrayContaining(["1", "-1", "4", "-4"]),
+		const numbers = (on.plane?.text ?? []).filter(
+			(l) => !l.letter && l.t !== "0",
+		);
+		expect(numbers).toHaveLength(16); // 4 cells each side of the middle, two axes
+		expect(numbers.map((l) => l.t)).toEqual(
+			expect.arrayContaining(["1", "\u22121", "4", "\u22124"]), // a real minus sign
 		);
 		const off = of(plane({ numbered: undefined }));
-		expect(off.labels ?? []).toHaveLength(0);
+		expect(off.plane?.text ?? []).toHaveLength(0);
+	});
+
+	test("it has a 0 at the origin and the letters x and y at the tips of the axes", () => {
+		const text = of(plane()).plane?.text ?? [];
+		expect(text.find((l) => l.t === "0")).toBeDefined();
+		expect(
+			text
+				.filter((l) => l.letter)
+				.map((l) => l.t)
+				.sort(),
+		).toEqual(["x", "y"]);
+	});
+
+	test("a narrow cell is numbered only at every few lines, so the numbers never overlap", () => {
+		const wide = of(plane({ cell: 40 })).plane?.text.length ?? 0;
+		const narrow = of(plane({ cell: 10 }, [800, 800])).plane;
+		const numbers = (narrow?.text ?? []).filter(
+			(l) => !l.letter && l.t !== "0",
+		);
+		// cell 10: every fifth line, not 40 numbers per axis side
+		expect(numbers.length).toBeLessThan(wide * 3);
+		const xs = numbers
+			.filter((l) => l.align === "center")
+			.map((l) => l.x)
+			.sort((a, b) => a - b);
+		for (let i = 1; i < xs.length; i++)
+			expect(xs[i] - xs[i - 1]).toBeGreaterThanOrEqual(30);
+	});
+
+	test("it has the sheet's shape: rounded corners, a size for the numbers that follows the cell", () => {
+		const look = of(plane()).plane;
+		expect(look?.r).toBeGreaterThanOrEqual(4);
+		expect(look?.r).toBeLessThanOrEqual(10);
+		expect(look?.px).toBeGreaterThanOrEqual(10);
+		expect(look?.px).toBeLessThanOrEqual(15);
 	});
 
 	test("it has no inside to fill or to hit", () => {

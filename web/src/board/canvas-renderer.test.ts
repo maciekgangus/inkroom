@@ -270,7 +270,7 @@ describe("the coordinate plane on the canvas (R-084)", () => {
 	const plane = {
 		id: "pl",
 		authorId: "a",
-		color: "#111",
+		color: "#d32f2f",
 		size: 4,
 		z: 1,
 		kind: "plane",
@@ -282,7 +282,8 @@ describe("the coordinate plane on the canvas (R-084)", () => {
 	} as Stroke;
 	const big = { minX: -1e9, minY: -1e9, maxX: 1e9, maxY: 1e9 };
 	const record = () => {
-		const strokes: { width: number; alpha: number }[] = [];
+		const strokes: { width: number; style: string }[] = [];
+		const fills: string[] = [];
 		const texts: string[] = [];
 		const state: Record<string, unknown> = { lineWidth: 1, globalAlpha: 1 };
 		const ctx = new Proxy(state, {
@@ -291,8 +292,11 @@ describe("the coordinate plane on the canvas (R-084)", () => {
 					return () =>
 						strokes.push({
 							width: t.lineWidth as number,
-							alpha: t.globalAlpha as number,
+							style: String(t.strokeStyle),
 						});
+				if (k === "fill") return () => fills.push(String(t.fillStyle));
+				// zoomed in: 100 device pixels to a board unit, so no line is held up to a pixel
+				if (k === "getTransform") return () => ({ a: 100, b: 0 });
 				if (k === "fillText") return (text: string) => texts.push(text);
 				if (k in t) return t[k as string];
 				return () => ctx;
@@ -302,46 +306,61 @@ describe("the coordinate plane on the canvas (R-084)", () => {
 				return true;
 			},
 		}) as unknown as CanvasRenderingContext2D;
-		return { ctx, strokes, texts };
+		return { ctx, strokes, fills, texts };
+	};
+	const stub = () =>
+		vi.stubGlobal(
+			"Path2D",
+			class {
+				moveTo() {}
+				lineTo() {}
+				closePath() {}
+				rect() {}
+			},
+		);
+	const paint = (ink?: (c: string) => string) => {
+		stub();
+		const r = record();
+		paintElements(r.ctx, [plane], big, null, false, ink ? { ink } : {});
+		vi.unstubAllGlobals();
+		return r;
 	};
 
-	test("the cells are fainter and thinner than the axes, which are drawn last", () => {
-		vi.stubGlobal(
-			"Path2D",
-			class {
-				moveTo() {}
-				lineTo() {}
-				closePath() {}
-				rect() {}
-			},
-		);
-		const r = record();
-		paintElements(r.ctx, [plane], big, null);
-		vi.unstubAllGlobals();
-		expect(r.strokes.length).toBeGreaterThanOrEqual(3);
-		const [cells, cluster, ...rest] = r.strokes;
-		const axes = rest[0];
-		expect(cells.alpha).toBeLessThan(cluster.alpha);
-		expect(cluster.alpha).toBeLessThan(axes.alpha);
-		expect(cells.width).toBeLessThan(cluster.width);
-		expect(cluster.width).toBeLessThan(axes.width);
-		expect(axes.alpha).toBe(1);
-		expect(axes.width).toBe(4);
+	test("it is an opaque white sheet, so the board's own background does not show through", () => {
+		const r = paint();
+		expect(r.fills).toContain("#ffffff");
+		// the sheet is painted before anything else of it
+		expect(r.fills.indexOf("#ffffff")).toBeLessThanOrEqual(1);
 	});
 
-	test("the numbers are written along the axes", () => {
-		vi.stubGlobal(
-			"Path2D",
-			class {
-				moveTo() {}
-				lineTo() {}
-				closePath() {}
-				rect() {}
-			},
+	test("in dark mode the sheet is a dark one, a little lighter than the board", () => {
+		const dark = paint((c) =>
+			c === "#ffffff" ? "#111111" : c === "#111111" ? "#8f8fff" : c,
 		);
-		const r = record();
-		paintElements(r.ctx, [plane], big, null);
-		vi.unstubAllGlobals();
-		expect(r.texts).toEqual(expect.arrayContaining(["1", "-1", "4", "-4"]));
+		expect(dark.fills).toContain("#1c1e26");
+		expect(dark.fills).not.toContain("#ffffff");
+	});
+
+	test("the cells are in a quiet colour, never the colour of the axes, thin, with the axes drawn last and strongest", () => {
+		const r = paint();
+		const cells = r.strokes.find((s) => s.style === "#e4e9f2");
+		const major = r.strokes.find((s) => s.style === "#c5d0e2");
+		const axes = r.strokes.filter((s) => s.style === "#d32f2f");
+		expect(cells).toBeDefined();
+		expect(major).toBeDefined();
+		expect(cells?.width).toBeLessThan(major?.width ?? 0);
+		expect(major?.width).toBeLessThan(axes[0].width);
+		expect(axes[0].width).toBe(4);
+		// the axes come after the cells
+		expect(r.strokes.findIndex((s) => s.style === "#d32f2f")).toBeGreaterThan(
+			r.strokes.findIndex((s) => s.style === "#c5d0e2"),
+		);
+	});
+
+	test("the numbers, with a real minus, and the letters x and y are written", () => {
+		const r = paint();
+		expect(r.texts).toEqual(
+			expect.arrayContaining(["1", "\u22121", "4", "\u22124", "0", "x", "y"]),
+		);
 	});
 });

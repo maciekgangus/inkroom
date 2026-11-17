@@ -7,11 +7,11 @@ import type { ImageCache } from "./image-cache";
 import { imageRect } from "./image-geometry";
 import type { LaserLine } from "./laser";
 import { type Frame, HANDLE_PX, ROT_OFFSET_PX } from "./selection-frame";
-import { LABEL_PX, partsOf } from "./shape-parts";
+import { LABEL_PX, type PlaneLook, partsOf } from "./shape-parts";
 import { isPolygonKind } from "./shapes";
 import { strokeOptions } from "./stroke-style";
 import { fontSizeOf, LINE_HEIGHT, textLines } from "./text";
-import { textFont } from "./text-wrap";
+import { TEXT_FONT_FAMILY, textFont } from "./text-wrap";
 import { centerOf } from "./transform";
 import type { Rect, Viewport } from "./viewport";
 
@@ -103,6 +103,10 @@ interface Extras {
 	/** The cells of a coordinate plane: very light, and every second line with the frame (R-084). */
 	grid: Path2D | null;
 	cluster: Path2D | null;
+	/** A coordinate plane's sheet (rounded), its filled arrow heads and the rest of its look. */
+	paper: Path2D | null;
+	heads: Path2D | null;
+	plane: PlaneLook | null;
 	labels: { text: string; x: number; y: number }[];
 }
 const extras = new WeakMap<Stroke, Extras>();
@@ -132,12 +136,23 @@ function extraPaths(s: Stroke): Extras | null {
 			for (const line of lines) addPolyline(p, line);
 			return p;
 		};
+		const look = parts?.plane ?? null;
+		let paper: Path2D | null = null;
+		if (look) {
+			paper = new Path2D();
+			if (typeof paper.roundRect === "function")
+				paper.roundRect(look.x0, look.y0, look.w, look.h, look.r);
+			else paper.rect(look.x0, look.y0, look.w, look.h);
+		}
 		e = {
 			fill,
 			hidden,
 			fine,
 			grid: lined(parts?.grid),
 			cluster: lined(parts?.cluster),
+			paper,
+			heads: lined(look?.heads),
+			plane: look,
 			labels: parts?.labels ?? [],
 		};
 		extras.set(s, e);
@@ -216,6 +231,119 @@ function dashPattern(s: Stroke): number[] {
 	return [];
 }
 
+/**
+ * The colour an element is filled with: its own, or for a coordinate plane the white of a sheet of
+ * paper, which dark mode shows as the dark of the board's own sheet (R-084).
+ */
+const fillOf = (
+	s: Stroke,
+	ink: (color: string) => string,
+): string | undefined =>
+	s.kind === "plane" ? ink("#ffffff") : s.fill ? ink(s.fill) : undefined;
+
+/** The colours of a coordinate plane's sheet, for the light and the dark theme (R-084). */
+const PLANE = {
+	light: {
+		paper: "#ffffff",
+		minor: "#e4e9f2",
+		major: "#c5d0e2",
+		edge: "rgba(30, 40, 70, 0.22)",
+		shadow: "rgba(20, 30, 60, 0.09)",
+		text: "#5b6378",
+	},
+	dark: {
+		paper: "#1c1e26",
+		minor: "#262935",
+		major: "#343949",
+		edge: "rgba(255, 255, 255, 0.13)",
+		shadow: "rgba(0, 0, 0, 0.45)",
+		text: "#9aa1b6",
+	},
+};
+
+/**
+ * A coordinate plane as an opaque sheet of graph paper laid on the board (R-084): rounded, with a
+ * hairline edge and a hard shadow, light grid lines of a colour no pen uses so handwriting always
+ * wins, axes in the ink colour with filled heads, small numbers on a halo of paper colour, and an
+ * x and a y at the tips. It runs inside `withLook`, so rotation and opacity are already applied.
+ */
+function drawPlane(
+	ctx: CanvasRenderingContext2D,
+	s: Stroke,
+	e: Extras,
+	axes: Path2D,
+	color: string,
+	fill: string | undefined,
+	minWidth: number,
+): void {
+	const p = e.plane;
+	const paper = e.paper;
+	if (!p || !paper) return;
+	// A fill that is the dark ink means the dark theme (see `fillOf`).
+	const L = fill?.toLowerCase() === "#111111" ? PLANE.dark : PLANE.light;
+	const m = ctx.getTransform();
+	const dev = Math.hypot(m.a, m.b) || 1; // device pixels per board unit, whatever the rotation
+	const thin = (w: number) => Math.max(w, 1 / dev, minWidth * 0.5);
+	ctx.setLineDash([]);
+	// The shadow is one unblurred copy, a little lower on the screen whatever the rotation.
+	const rot = s.rot ?? 0;
+	ctx.save();
+	ctx.translate(Math.sin(rot) * 2, Math.cos(rot) * 2);
+	ctx.fillStyle = L.shadow;
+	ctx.fill(paper);
+	ctx.restore();
+	ctx.fillStyle = L.paper;
+	ctx.fill(paper);
+	ctx.save();
+	ctx.clip(paper);
+	ctx.lineCap = "butt";
+	if (e.grid && p.cell * dev >= 7) {
+		ctx.strokeStyle = L.minor;
+		ctx.lineWidth = thin(0.75);
+		ctx.stroke(e.grid);
+	}
+	if (e.cluster) {
+		ctx.strokeStyle = L.major;
+		ctx.lineWidth = thin(1);
+		ctx.stroke(e.cluster);
+	}
+	ctx.restore();
+	ctx.strokeStyle = L.edge;
+	ctx.lineWidth = thin(1);
+	ctx.stroke(paper);
+	const aw = Math.max(s.size, 1.5 / dev, minWidth);
+	ctx.strokeStyle = color;
+	ctx.fillStyle = color;
+	ctx.lineCap = "butt";
+	ctx.lineWidth = aw;
+	ctx.stroke(axes);
+	if (e.heads) ctx.fill(e.heads);
+	if (e.fine) {
+		ctx.lineWidth = Math.max(aw * 0.6, minWidth * 0.5);
+		ctx.stroke(e.fine);
+	}
+	if (!p.text.length || p.px * dev < 5) return;
+	// Each number sits on a halo of paper colour, so the grid does not cut through it.
+	ctx.lineJoin = "round";
+	ctx.strokeStyle = L.paper;
+	ctx.lineWidth = p.px * 0.32;
+	for (const letter of [false, true]) {
+		ctx.font = letter
+			? `italic 500 ${p.px * 1.3}px ${TEXT_FONT_FAMILY}`
+			: `500 ${p.px}px ${TEXT_FONT_FAMILY}`;
+		ctx.fillStyle = letter ? color : L.text;
+		for (const t of p.text) {
+			if (!!t.letter !== letter) continue;
+			ctx.textAlign = t.align;
+			ctx.textBaseline = t.base;
+			ctx.strokeText(t.t, t.x, t.y);
+			ctx.fillText(t.t, t.x, t.y);
+		}
+	}
+	ctx.textAlign = "start";
+	ctx.textBaseline = "alphabetic";
+}
+
 /** Draws one element in `color` (and `fill`, for shapes); `path` is its (cached) path, unused for text. */
 function drawElement(
 	ctx: CanvasRenderingContext2D,
@@ -255,6 +383,10 @@ function drawElement(
 			ctx.fill(path);
 		} else if (path) {
 			const extra = extraPaths(s);
+			if (extra?.plane && extra.paper) {
+				drawPlane(ctx, s, extra, path, color, fill, minWidth);
+				return;
+			}
 			if (fill) {
 				ctx.fillStyle = fill;
 				// A solid is filled inside its silhouette only, not inside its inner edges.
@@ -263,22 +395,6 @@ function drawElement(
 			ctx.strokeStyle = color;
 			ctx.lineCap = "round";
 			ctx.lineJoin = "round";
-			if (extra?.grid || extra?.cluster) {
-				// A coordinate plane (R-084): its cells under the axes, in the colour of the axes but
-				// faint, so a drawing over them stays readable, and the same in either theme.
-				const base = ctx.globalAlpha;
-				if (extra.grid) {
-					ctx.globalAlpha = base * 0.16;
-					ctx.lineWidth = Math.max(s.size * FINE_RATIO, minWidth * 0.5);
-					ctx.stroke(extra.grid);
-				}
-				if (extra.cluster) {
-					ctx.globalAlpha = base * 0.34;
-					ctx.lineWidth = Math.max(s.size * 0.5, minWidth * 0.5);
-					ctx.stroke(extra.cluster);
-				}
-				ctx.globalAlpha = base;
-			}
 			ctx.lineWidth = Math.max(s.size, minWidth);
 			ctx.setLineDash(dashPattern(s));
 			ctx.stroke(path);
@@ -359,7 +475,7 @@ export function paintElements(
 			s,
 			elementPath(s),
 			ink(s.color),
-			s.fill ? ink(s.fill) : undefined,
+			fillOf(s, ink),
 			look.minWidth,
 		);
 	}
@@ -714,7 +830,7 @@ export class CanvasRenderer implements Renderer {
 			s,
 			c.path,
 			this.ink(s.color),
-			s.fill ? this.ink(s.fill) : undefined,
+			fillOf(s, (c) => this.ink(c)),
 		);
 	}
 
@@ -802,7 +918,13 @@ export class CanvasRenderer implements Renderer {
 					ctx.strokeRect(r.minX, r.minY, r.maxX - r.minX, r.maxY - r.minY),
 				);
 			} else {
-				drawElement(ctx, s, path, color, s.fill ? this.ink(s.fill) : undefined);
+				drawElement(
+					ctx,
+					s,
+					path,
+					color,
+					fillOf(s, (c) => this.ink(c)),
+				);
 			}
 		}
 		ctx.restore();
@@ -885,7 +1007,7 @@ export class CanvasRenderer implements Renderer {
 				s,
 				elementPath(s),
 				this.ink(s.color),
-				s.fill ? this.ink(s.fill) : undefined,
+				fillOf(s, (c) => this.ink(c)),
 			);
 		}
 		if (this.drag) {
