@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { ink, inkIn, openBoard, pen } from "./helpers";
+import { darkInk, ink, inkIn, openBoard, pen } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
 	await openBoard(page);
@@ -26,16 +26,18 @@ test("a click with the coordinate plane tool puts a square with a grid and axes 
 test("the eraser leaves the plane and takes only what is drawn on it (R-084)", async ({
 	page,
 }) => {
+	await page.emulateMedia({ colorScheme: "light" });
 	await page.locator("[aria-label='plane']").tap();
 	await page.mouse.click(420, 420);
 	await expect.poll(() => ink(page)).toBeGreaterThan(0);
-	const planeOnly = await ink(page);
+	const planeOnly = await darkInk(page);
 	await page.locator("[aria-label='pen']").tap();
 	await pen(page, [300, 500], [520, 500]);
-	await expect.poll(() => ink(page)).toBeGreaterThan(planeOnly);
-	const withStroke = await ink(page);
+	await expect.poll(() => darkInk(page)).toBeGreaterThan(planeOnly);
+	const withStroke = await darkInk(page);
 	await page.locator("[aria-label='eraser']").tap();
 	await pen(page, [260, 500], [560, 500]);
-	await expect.poll(() => ink(page)).toBeLessThan(withStroke);
-	expect(await ink(page)).toBeGreaterThan(0); // the plane is still there
+	await expect.poll(() => darkInk(page)).toBeLessThan(withStroke);
+	// the sheet and its axes are still there
+	expect(await darkInk(page)).toBeGreaterThanOrEqual(planeOnly - 5);
 });
