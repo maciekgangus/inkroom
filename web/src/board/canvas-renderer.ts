@@ -917,6 +917,15 @@ export class CanvasRenderer implements Renderer {
 				withLook(ctx, s, () =>
 					ctx.strokeRect(r.minX, r.minY, r.maxX - r.minX, r.maxY - r.minY),
 				);
+			} else if (s.kind === "plane") {
+				// A sheet like a picture: only its edge glows, not the grid and the axes (R-084).
+				const paper = extraPaths(s)?.paper;
+				if (paper)
+					withLook(ctx, s, () => {
+						ctx.strokeStyle = "#fff";
+						ctx.lineWidth = 2 / this.viewport.scale;
+						ctx.stroke(paper);
+					});
 			} else {
 				drawElement(
 					ctx,

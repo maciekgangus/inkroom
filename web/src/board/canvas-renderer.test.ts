@@ -74,6 +74,68 @@ describe("CanvasRenderer selection glow (R-058)", () => {
 	});
 });
 
+describe("the glow of a selected coordinate plane (R-084)", () => {
+	test("only the edge of the sheet glows, not its grid, axes or numbers", () => {
+		vi.stubGlobal("requestAnimationFrame", undefined);
+		vi.stubGlobal(
+			"Path2D",
+			class {
+				moveTo() {}
+				lineTo() {}
+				quadraticCurveTo() {}
+				closePath() {}
+				rect() {}
+				ellipse() {}
+				arc() {}
+			},
+		);
+		const calls: string[] = [];
+		const ctx = new Proxy(
+			{},
+			{
+				get: (_t, k) =>
+					k === "canvas"
+						? {}
+						: (..._a: unknown[]) => {
+								calls.push(String(k));
+								return ctx;
+							},
+				set: () => true,
+			},
+		) as unknown as CanvasRenderingContext2D;
+		const canvas = () =>
+			({
+				getContext: () => ctx,
+				style: {},
+				width: 100,
+				height: 100,
+			}) as unknown as HTMLCanvasElement;
+		const renderer = new CanvasRenderer(canvas(), canvas(), new Viewport());
+		renderer.setHighlight([
+			{
+				id: "pl",
+				authorId: "a",
+				color: "#111",
+				size: 3,
+				z: 1,
+				kind: "plane",
+				numbered: true,
+				points: [
+					[0, 0, 0.5],
+					[400, 400, 0.5],
+				],
+			} as Stroke,
+		]);
+		vi.unstubAllGlobals();
+		expect(calls).not.toContain("fillText");
+		expect(calls).not.toContain("strokeText");
+		expect(calls).not.toContain("fill");
+		// one stroke of the edge for each pass of the glow
+		expect(calls.filter((c) => c === "stroke").length).toBeLessThanOrEqual(2);
+		expect(calls.filter((c) => c === "stroke").length).toBeGreaterThan(0);
+	});
+});
+
 describe("the coordinate system on the canvas", () => {
 	const record = () => {
 		const widths: number[] = [];
