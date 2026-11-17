@@ -36,10 +36,12 @@ test.describe("lists and panels stay on the screen", () => {
 		await onScreen(page, ".shape-list");
 	});
 
-	test("the colour palette opens whole", async ({ page }) => {
-		await page.locator("[aria-label='more colors']").tap();
-		await expect(page.locator(".palette")).toBeVisible();
-		await onScreen(page, ".palette");
+	test("the list of colour, width and style opens whole (R-082)", async ({
+		page,
+	}) => {
+		await page.locator("[aria-label='pen settings']").tap();
+		await expect(page.locator(".settings-list")).toBeVisible();
+		await onScreen(page, ".settings-list");
 	});
 
 	test("the board menu opens whole", async ({ page }) => {

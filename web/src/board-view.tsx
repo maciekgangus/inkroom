@@ -49,6 +49,7 @@ import { PdfProgress } from "./pdf-progress";
 import { hasFinePointer } from "./pointer";
 import { PropertiesPanel } from "./properties-panel";
 import { ShareButton } from "./share-button";
+import { useToolbarLayout } from "./toolbar-layout";
 import { applyToolShortcut, colorForKey, dropsSelection } from "./shortcuts";
 import { ShortcutsDialog } from "./shortcuts-dialog";
 import { type Peer, type SocketLike, SyncClient } from "./sync/sync";
@@ -169,6 +170,7 @@ export function BoardView({
 	const [menuOpenFor, setMenuOpenFor] = useState<string | null>(null);
 	const [, setTick] = useState(0); // bumped when the view changes, so the text field follows it
 	const bump = () => setTick((t) => t + 1);
+	const toolbarLayout = useToolbarLayout();
 	/**
 	 * When the last paste (or duplicate) ended. Copying many elements is heavy, and a held Ctrl+V or
 	 * Ctrl+D or a quick second press would queue more of them behind it: while one is under way, or
@@ -1092,7 +1094,7 @@ export function BoardView({
 				viewport={viewport}
 				colors={colors}
 			/>
-			<div class="topbar">
+			<div class={`topbar${toolbarLayout === "full" ? "" : ` ${toolbarLayout}`}`}>
 				<BoardTitle
 					name={title}
 					editable={!!onRename}

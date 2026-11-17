@@ -26,6 +26,8 @@ const LINE_STYLES: {
 ];
 
 interface Props {
+	/** Shown in a list (R-082) instead of as buttons that open lists of their own. */
+	inline?: boolean;
 	settings: Settings;
 	/** Changes settings of new elements; the toolbar mutates `settings` and redraws. */
 	onChange: (patch: Partial<Settings>) => void;
@@ -36,7 +38,7 @@ interface Props {
  * and behind two buttons the detail: a window with sliders for width and opacity, and a list of
  * line styles with icons, like the list of shapes.
  */
-export function StrokeControls({ settings, onChange }: Props) {
+export function StrokeControls({ settings, onChange, inline }: Props) {
 	const [open, setOpen] = useState<"stroke" | "style" | null>(null);
 	const on = (active: boolean) => (active ? "active" : "");
 
@@ -64,6 +66,71 @@ export function StrokeControls({ settings, onChange }: Props) {
 			? "solid"
 			: chosen;
 	const current = LINE_STYLES.find((s) => s.style === shown) ?? LINE_STYLES[1];
+
+	const sizeButtons = SIZES.map((s) => (
+		<button
+			type="button"
+			key={s}
+			aria-label={`size ${s}`}
+			aria-pressed={settings.size === s}
+			class={on(settings.size === s)}
+			onClick={() => onChange({ size: s })}
+		>
+			<span
+				class="dot"
+				style={{ width: `${s * 2 + 2}px`, height: `${s * 2 + 2}px` }}
+			/>
+		</button>
+	));
+	const sliders = (
+		<>
+			<span class="slider-title">Grubość</span>
+			<Slider
+				label="stroke width"
+				min={0.25 * WIDTH_SHOWN}
+				max={50 * WIDTH_SHOWN}
+				step={0.25 * WIDTH_SHOWN}
+				value={settings.size * WIDTH_SHOWN}
+				unit=" px"
+				onInput={(v) => onChange({ size: v / WIDTH_SHOWN })}
+				onChange={(v) => onChange({ size: v / WIDTH_SHOWN })}
+			/>
+			<span class="slider-title">Przezroczystość</span>
+			<Slider
+				label="stroke opacity"
+				min={1}
+				max={100}
+				value={Math.round((settings.opacity ?? 1) * 100)}
+				unit="%"
+				onInput={(v) => onChange({ opacity: v / 100 })}
+				onChange={(v) => onChange({ opacity: v / 100 })}
+			/>
+		</>
+	);
+
+	if (inline)
+		return (
+			<>
+				<div class="settings-sizes">{sizeButtons}</div>
+				<div class="settings-sliders">{sliders}</div>
+				<span class="settings-title">Styl linii</span>
+				<div class="settings-styles">
+					{LINE_STYLES.map((s) => (
+						<button
+							type="button"
+							key={s.style}
+							aria-label={`line style ${s.style}`}
+							aria-pressed={s.style === current.style}
+							class={on(s.style === current.style)}
+							onClick={() => onChange({ lineStyle: s.style })}
+						>
+							<Icon name={s.icon} />
+							{s.label}
+						</button>
+					))}
+				</div>
+			</>
+		);
 
 	return (
 		<>
