@@ -83,11 +83,20 @@ test("the PDF button is right next to the image button and opens the file choose
 }) => {
 	const image = await page.locator("[aria-label='add image']").boundingBox();
 	const pdf = await page.locator("[aria-label='add pdf']").boundingBox();
-	expect(pdf?.x).toBeGreaterThan((image?.x ?? 0) + (image?.width ?? 0) - 1);
-	expect((pdf?.x ?? 0) - ((image?.x ?? 0) + (image?.width ?? 0))).toBeLessThan(
-		16,
-	);
-	expect(Math.abs((pdf?.y ?? 0) - (image?.y ?? 0))).toBeLessThan(2);
+	if (await page.locator(".toolbar.rail").count()) {
+		// in the column down the left edge it is the next one down (R-082)
+		expect(pdf?.y).toBeGreaterThan((image?.y ?? 0) + (image?.height ?? 0) - 1);
+		expect(
+			(pdf?.y ?? 0) - ((image?.y ?? 0) + (image?.height ?? 0)),
+		).toBeLessThan(16);
+		expect(Math.abs((pdf?.x ?? 0) - (image?.x ?? 0))).toBeLessThan(2);
+	} else {
+		expect(pdf?.x).toBeGreaterThan((image?.x ?? 0) + (image?.width ?? 0) - 1);
+		expect(
+			(pdf?.x ?? 0) - ((image?.x ?? 0) + (image?.width ?? 0)),
+		).toBeLessThan(16);
+		expect(Math.abs((pdf?.y ?? 0) - (image?.y ?? 0))).toBeLessThan(2);
+	}
 	const chooser = page.waitForEvent("filechooser");
 	await page.locator("[aria-label='add pdf']").tap();
 	expect((await chooser).isMultiple()).toBe(false);

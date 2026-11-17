@@ -2,6 +2,8 @@ import { expect, test } from "@playwright/test";
 import { openBoard } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
+	// The letters are measured as dark on white, so the light theme, whatever the system says.
+	await page.emulateMedia({ colorScheme: "light" });
 	await openBoard(page);
 });
 
@@ -45,8 +47,12 @@ test("a text looks the same while it is typed and after it is set (R-081)", asyn
 	const typing = await inkRows(page, await page.screenshot({ clip }));
 	await page.keyboard.press("Enter");
 	await expect(field).toHaveCount(0);
-	await page.waitForTimeout(300);
-	const set = await inkRows(page, await page.screenshot({ clip }));
+	// The board paints the set text a moment later; wait for it rather than for a fixed time.
+	let set = await inkRows(page, await page.screenshot({ clip }));
+	for (let i = 0; i < 40 && set.top < 0; i++) {
+		await page.waitForTimeout(100);
+		set = await inkRows(page, await page.screenshot({ clip }));
+	}
 	expect(typing.top).toBeGreaterThanOrEqual(0);
 	expect(set.top).toBeGreaterThanOrEqual(0);
 	// Within a pixel of each other, in a screenshot taken at the device's pixel ratio.

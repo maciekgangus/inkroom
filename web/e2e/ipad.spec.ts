@@ -6,12 +6,16 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe("layout on an iPad screen", () => {
-	test("the tool bar is one row (two on the smallest iPad), not a tower", async ({
+	test("the tool bar is one row across, a column down the left edge upright (R-082)", async ({
 		page,
-	}, info) => {
+	}) => {
+		const { width, height } = page.viewportSize() ?? { width: 0, height: 0 };
 		const box = await page.locator(".topbar .toolbar").boundingBox();
-		const oneRow = info.project.name !== "ipad-mini";
-		expect(box?.height).toBeLessThan(oneRow ? 64 : 110);
+		if (width > height) expect(box?.height).toBeLessThan(64);
+		else {
+			await expect(page.locator(".toolbar.rail")).toHaveCount(1);
+			expect(box?.width).toBeLessThan(90);
+		}
 	});
 
 	test("the top bar fits the screen, in at most two rows", async ({ page }) => {

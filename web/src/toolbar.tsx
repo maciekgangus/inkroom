@@ -1,4 +1,4 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useState } from "preact/hooks";
 import type { Settings } from "./board/controller";
 import { SHAPE_GROUPS, SHAPES, saveShape } from "./board/shapes";
 import { getExtraColor, setExtraColor } from "./extra-color";
@@ -8,6 +8,7 @@ import { ShapeIcon } from "./shape-icon";
 import { selectTool, toolKey } from "./shortcuts";
 import { StrokeControls } from "./stroke-controls";
 import { displayColor, useTheme } from "./theme";
+import { useToolbarLayout } from "./toolbar-layout";
 
 export const COLORS = ["#111111", "#d32f2f", "#1976d2", "#388e3c", "#f57c00"];
 /** The colours at hand in the bar; the rest of COLORS and MORE_COLORS are behind the plus. */
@@ -70,6 +71,25 @@ export function Toolbar({
 		rerender((n) => n + 1);
 		if (patch.tool) onToolChange?.();
 	};
+	const layout = useToolbarLayout();
+	const compact = layout !== "full";
+	const [settingsOpen, setSettingsOpen] = useState(false);
+	// The list of settings belongs to the narrow bar: Escape or a press outside closes it. Set up
+	// at once (not after the next paint), so a key pressed right after it opens already counts.
+	useLayoutEffect(() => {
+		if (!compact || !settingsOpen) return;
+		const close = () => setSettingsOpen(false);
+		const key = (e: KeyboardEvent) => e.key === "Escape" && close();
+		const outside = (e: Event) => {
+			if (!(e.target as HTMLElement).closest?.(".settings-wrap")) close();
+		};
+		addEventListener("keydown", key);
+		addEventListener("pointerdown", outside, true);
+		return () => {
+			removeEventListener("keydown", key);
+			removeEventListener("pointerdown", outside, true);
+		};
+	}, [compact, settingsOpen]);
 	const [paletteOpen, setPaletteOpen] = useState(false);
 	const [shapesOpen, setShapesOpen] = useState(false);
 	// The list belongs to the shape tool: leaving it closes the list.
@@ -123,7 +143,7 @@ export function Toolbar({
 	);
 
 	return (
-		<div class="toolbar">
+		<div class={`toolbar ${layout === "rail" ? "rail" : ""}`}>
 			<div class="group">
 				{TOOLS.map(({ tool, label }) => {
 					const isShapeTool = tool === "shape";
@@ -199,54 +219,99 @@ export function Toolbar({
 					);
 				})}
 			</div>
-			{
+			{compact ? (
 				<div class={`group${hasSelection ? " dimmed" : ""}`}>
-					{QUICK_COLORS.map((c) => swatch(c))}
-					<button
-						type="button"
-						aria-label="more colors"
-						aria-pressed={drawing && custom}
-						aria-expanded={paletteOpen}
-						title={
-							extra
-								? "Ostatni dodatkowy kolor (klawisz 4); jeszcze raz otwiera paletę"
-								: "Więcej kolorów"
-						}
-						class={`swatch more ${on(drawing && custom)}`}
-						style={
-							extra ? { background: displayColor(extra, theme) } : undefined
-						}
-						onClick={() => {
-							// The kept colour is picked first; pressed again, it opens the palette.
-							if (!custom && extra) pick(extra);
-							else setPaletteOpen(!paletteOpen);
-						}}
-					>
-						{!extra && <Icon name="plus" />}
-					</button>
-					{paletteOpen && (
-						<div class="palette">
-							{[...COLORS.slice(3), ...MORE_COLORS].map((c) =>
-								swatch(c, () => setPaletteOpen(false)),
-							)}
-							<label class="custom">
-								Własny kolor
-								<input
-									type="color"
-									aria-label="custom color"
-									value={custom ? settings.color : "#5b5bf0"}
-									onInput={(e) =>
-										pick((e.currentTarget as HTMLInputElement).value)
-									}
-								/>
-							</label>
-						</div>
-					)}
+					<div class="flyout-wrap settings-wrap">
+						<button
+							type="button"
+							aria-label="pen settings"
+							aria-expanded={settingsOpen}
+							title="Kolor, grubość i styl"
+							class={`has-list settings-button ${on(settingsOpen)}`}
+							onClick={() => setSettingsOpen(!settingsOpen)}
+						>
+							<span
+								class="settings-color"
+								style={{ background: displayColor(settings.color, theme) }}
+							/>
+							<span
+								class="settings-width"
+								style={{ height: `${Math.min(8, settings.size * 2 + 1)}px` }}
+							/>
+						</button>
+						{settingsOpen && (
+							<div class="settings-list">
+								<span class="settings-title">Kolor</span>
+								<div class="settings-colors">
+									{[...COLORS, ...MORE_COLORS].map((c) => swatch(c))}
+									<label class="custom">
+										Własny kolor
+										<input
+											type="color"
+											aria-label="custom color"
+											value={custom ? settings.color : "#5b5bf0"}
+											onInput={(e) =>
+												pick((e.currentTarget as HTMLInputElement).value)
+											}
+										/>
+									</label>
+								</div>
+								<span class="settings-title">Grubość</span>
+								<StrokeControls settings={settings} onChange={set} inline />
+							</div>
+						)}
+					</div>
 				</div>
-			}
-			<div class={`group${hasSelection ? " dimmed" : ""}`}>
-				<StrokeControls settings={settings} onChange={set} />
-			</div>
+			) : (
+				<>
+					<div class={`group${hasSelection ? " dimmed" : ""}`}>
+						{QUICK_COLORS.map((c) => swatch(c))}
+						<button
+							type="button"
+							aria-label="more colors"
+							aria-pressed={drawing && custom}
+							aria-expanded={paletteOpen}
+							title={
+								extra
+									? "Ostatni dodatkowy kolor (klawisz 4); jeszcze raz otwiera paletę"
+									: "Więcej kolorów"
+							}
+							class={`swatch more ${on(drawing && custom)}`}
+							style={
+								extra ? { background: displayColor(extra, theme) } : undefined
+							}
+							onClick={() => {
+								// The kept colour is picked first; pressed again, it opens the palette.
+								if (!custom && extra) pick(extra);
+								else setPaletteOpen(!paletteOpen);
+							}}
+						>
+							{!extra && <Icon name="plus" />}
+						</button>
+						{paletteOpen && (
+							<div class="palette">
+								{[...COLORS.slice(3), ...MORE_COLORS].map((c) =>
+									swatch(c, () => setPaletteOpen(false)),
+								)}
+								<label class="custom">
+									Własny kolor
+									<input
+										type="color"
+										aria-label="custom color"
+										value={custom ? settings.color : "#5b5bf0"}
+										onInput={(e) =>
+											pick((e.currentTarget as HTMLInputElement).value)
+										}
+									/>
+								</label>
+							</div>
+						)}
+					</div>
+					<div class={`group${hasSelection ? " dimmed" : ""}`}>
+						<StrokeControls settings={settings} onChange={set} />
+					</div>
+				</>
+			)}
 			{images && <ImageControls {...images} />}
 			<div class="group">
 				<button type="button" aria-label="undo" title="Cofnij" onClick={onUndo}>

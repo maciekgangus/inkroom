@@ -1,6 +1,6 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { Settings } from "./board/controller";
 import { resetExtraColor } from "./extra-color";
 import { setTheme } from "./theme";
@@ -397,5 +397,120 @@ describe("the colours in the bar", () => {
 		expect(settings.color).toBe("#388e3c");
 		// the plus now shows the colour that was picked from the palette
 		expect(root.querySelector(".swatch.more.active")).not.toBeNull();
+	});
+});
+
+describe("Toolbar on a narrow screen: one button for colour, width and style (R-082)", () => {
+	let root: HTMLElement;
+	let settings: Settings;
+
+	const screen = (layout: "compact" | "rail" | "full") =>
+		vi.stubGlobal("matchMedia", (q: string) => ({
+			matches:
+				layout === "rail"
+					? q.includes("orientation: portrait") || q.includes("max-width")
+					: layout === "compact"
+						? q.includes("max-width")
+						: false,
+			addEventListener: () => {},
+			removeEventListener: () => {},
+		}));
+	const q = (label: string) =>
+		root.querySelector(`[aria-label="${label}"]`) as HTMLElement | null;
+	const show = () =>
+		act(() =>
+			render(
+				<Toolbar settings={settings} onUndo={() => {}} onRedo={() => {}} />,
+				root,
+			),
+		);
+
+	beforeEach(() => {
+		resetExtraColor();
+		root = document.createElement("div");
+		settings = { tool: "pen", color: COLORS[0], size: SIZES[1] };
+	});
+	afterEach(() => {
+		act(() => render(null, root));
+		vi.unstubAllGlobals();
+	});
+
+	test("the colours and the widths are not in the bar, one settings button is", () => {
+		screen("compact");
+		show();
+		expect(q(`color ${COLORS[1]}`)).toBeNull();
+		expect(q(`size ${SIZES[0]}`)).toBeNull();
+		expect(q("more colors")).toBeNull();
+		expect(q("pen settings")).not.toBeNull();
+		expect(q("pen")).not.toBeNull(); // the tools stay
+		expect(q("undo")).not.toBeNull();
+	});
+
+	test("the button shows the current colour, and the list opens from it with three sections", () => {
+		screen("compact");
+		show();
+		const btn = q("pen settings") as HTMLElement;
+		expect(btn.querySelector(".settings-color")).not.toBeNull();
+		expect(root.querySelector(".settings-list")).toBeNull();
+		act(() => btn.click());
+		const list = root.querySelector(".settings-list") as HTMLElement;
+		expect(list).not.toBeNull();
+		expect(
+			[...list.querySelectorAll(".settings-title")].map((e) => e.textContent),
+		).toEqual(["Kolor", "Grubość", "Styl linii"]);
+		expect(btn.getAttribute("aria-expanded")).toBe("true");
+	});
+
+	test("the list holds the quick colours, the palette, the widths and the styles", () => {
+		screen("compact");
+		show();
+		act(() => (q("pen settings") as HTMLElement).click());
+		for (const c of [...COLORS, ...MORE_COLORS])
+			expect(q(`color ${c}`)).not.toBeNull();
+		expect(q("custom color")).not.toBeNull();
+		for (const s of SIZES) expect(q(`size ${s}`)).not.toBeNull();
+		expect(q("stroke width")).not.toBeNull();
+		expect(q("stroke opacity")).not.toBeNull();
+		for (const s of ["natural", "solid", "dashed", "dotted"])
+			expect(q(`line style ${s}`)).not.toBeNull();
+	});
+
+	test("choosing a colour or a width works from the list and leaves it open", () => {
+		screen("compact");
+		show();
+		act(() => (q("pen settings") as HTMLElement).click());
+		act(() => (q(`color ${COLORS[1]}`) as HTMLElement).click());
+		expect(settings.color).toBe(COLORS[1]);
+		act(() => (q(`size ${SIZES[2]}`) as HTMLElement).click());
+		expect(settings.size).toBe(SIZES[2]);
+		act(() => (q("line style dashed") as HTMLElement).click());
+		expect(settings.lineStyle).toBe("dashed");
+		expect(root.querySelector(".settings-list")).not.toBeNull();
+	});
+
+	test("Escape closes the list", () => {
+		screen("compact");
+		show();
+		act(() => (q("pen settings") as HTMLElement).click());
+		act(() => {
+			dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+		});
+		expect(root.querySelector(".settings-list")).toBeNull();
+	});
+
+	test("the rail has the same button, and is marked as the rail", () => {
+		screen("rail");
+		show();
+		expect(q("pen settings")).not.toBeNull();
+		expect(root.querySelector(".toolbar.rail")).not.toBeNull();
+	});
+
+	test("a wide window keeps everything in the bar, as it is", () => {
+		screen("full");
+		show();
+		expect(q("pen settings")).toBeNull();
+		expect(q(`color ${COLORS[1]}`)).not.toBeNull();
+		expect(q(`size ${SIZES[0]}`)).not.toBeNull();
+		expect(root.querySelector(".toolbar.rail")).toBeNull();
 	});
 });
