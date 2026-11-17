@@ -84,7 +84,7 @@ export function StrokeControls({ settings, onChange, inline }: Props) {
 	));
 	const sliders = (
 		<>
-			<span class="slider-title">Grubość</span>
+			{!inline && <span class="slider-title">Grubość</span>}
 			<Slider
 				label="stroke width"
 				min={0.25 * WIDTH_SHOWN}
