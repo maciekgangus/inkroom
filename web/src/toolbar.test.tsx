@@ -2,6 +2,7 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { Settings } from "./board/controller";
+import { resetExtraColor } from "./extra-color";
 import { setTheme } from "./theme";
 import { COLORS, MORE_COLORS, SIZES, Toolbar } from "./toolbar";
 
@@ -12,6 +13,7 @@ describe("Toolbar", () => {
 	let onRedo: () => void;
 
 	beforeEach(() => {
+		resetExtraColor();
 		root = document.createElement("div");
 		settings = { tool: "pen", color: COLORS[0], size: SIZES[1] };
 		onUndo = vi.fn();
@@ -79,6 +81,36 @@ describe("Toolbar", () => {
 			expect(q(`color ${COLORS[0]}`)?.getAttribute("aria-pressed")).toBe(
 				"false",
 			);
+		});
+
+		test("the colour picked from beyond the quick ones stays in the fourth slot after a quick colour is chosen (R-079)", () => {
+			act(() => click("more colors"));
+			act(() => click(`color ${MORE_COLORS[3]}`));
+			act(() => click(`color ${COLORS[1]}`)); // a quick colour
+			expect(settings.color).toBe(COLORS[1]);
+			const slot = q("more colors") as HTMLElement;
+			expect(slot.style.background).not.toBe("");
+			expect(slot.querySelector("svg")).toBeNull(); // no plus: the colour is there
+			expect(slot.getAttribute("aria-pressed")).toBe("false");
+		});
+
+		test("pressing the kept colour picks it; pressing it again opens the palette", () => {
+			act(() => click("more colors"));
+			act(() => click(`color ${MORE_COLORS[3]}`));
+			act(() => click(`color ${COLORS[1]}`));
+			act(() => click("more colors"));
+			expect(settings.color).toBe(MORE_COLORS[3]);
+			expect(q(`color ${MORE_COLORS[5]}`)).toBeNull(); // the palette is not open yet
+			act(() => click("more colors"));
+			expect(q(`color ${MORE_COLORS[5]}`)).not.toBeNull();
+		});
+
+		test("the quick colours and the kept one show their keys 1 to 4", () => {
+			act(() => click("more colors"));
+			act(() => click(`color ${MORE_COLORS[3]}`));
+			expect(q(`color ${COLORS[0]}`)?.title).toMatch(/1/);
+			expect(q(`color ${COLORS[2]}`)?.title).toMatch(/3/);
+			expect(q("more colors")?.title).toMatch(/4/);
 		});
 
 		test("the picker sets any colour and goes back to the pen from the eraser", () => {

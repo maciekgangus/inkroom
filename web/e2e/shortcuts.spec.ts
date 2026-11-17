@@ -43,3 +43,23 @@ test("own shortcut: set in the window from the board menu, used on the board, ke
 	await page.keyboard.press("KeyG");
 	expect(await pressed(page, "pen")).toBe("true");
 });
+
+test("1 to 3 pick the quick colours, and 4 the colour kept in the fourth slot (R-079)", async ({
+	page,
+}) => {
+	const swatch = (c: string) => page.locator(`[aria-label='color ${c}']`);
+	await page.keyboard.press("Digit2");
+	await expect(swatch("#d32f2f")).toHaveAttribute("aria-pressed", "true");
+	await page.keyboard.press("Digit3");
+	await expect(swatch("#1976d2")).toHaveAttribute("aria-pressed", "true");
+	// pick a colour from the palette: it stays in the fourth slot after a quick colour
+	await page.locator("[aria-label='more colors']").click();
+	await swatch("#7c3aed").click();
+	await page.keyboard.press("Digit1");
+	await expect(swatch("#111111")).toHaveAttribute("aria-pressed", "true");
+	await page.keyboard.press("Digit4");
+	await expect(page.locator("[aria-label='more colors']")).toHaveAttribute(
+		"aria-pressed",
+		"true",
+	);
+});

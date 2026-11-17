@@ -137,6 +137,39 @@ describe("Controller", () => {
 		expect(board.strokes).toHaveLength(0);
 	});
 
+	test("one drag of the eraser is one undo step: undo brings back everything it erased (R-078)", () => {
+		for (const y of [0, 40, 80]) {
+			c.pointerDown(ev("pen", 0, y));
+			c.pointerMove(ev("pen", 100, y));
+			c.pointerUp(ev("pen", 100, y));
+		}
+		settings.tool = "eraser";
+		c.pointerDown(ev("pen", 50, 0));
+		c.pointerMove(ev("pen", 50, 40));
+		c.pointerMove(ev("pen", 50, 80));
+		c.pointerUp(ev("pen", 50, 80));
+		expect(board.strokes).toHaveLength(0);
+		c.undo();
+		expect(board.strokes).toHaveLength(3); // one step, not three
+		c.redo();
+		expect(board.strokes).toHaveLength(0);
+	});
+
+	test("a second drag of the eraser is its own undo step", () => {
+		for (const y of [0, 40]) {
+			c.pointerDown(ev("pen", 0, y));
+			c.pointerMove(ev("pen", 100, y));
+			c.pointerUp(ev("pen", 100, y));
+		}
+		settings.tool = "eraser";
+		c.pointerDown(ev("pen", 50, 0));
+		c.pointerUp(ev("pen", 50, 0));
+		c.pointerDown(ev("pen", 50, 40));
+		c.pointerUp(ev("pen", 50, 40));
+		c.undo();
+		expect(board.strokes).toHaveLength(1);
+	});
+
 	test("undo and redo redraw the board for the current author", () => {
 		c.pointerDown(ev("pen", 0, 0));
 		c.pointerUp(ev("pen", 0, 0));

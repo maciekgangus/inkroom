@@ -1,6 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import type { Settings } from "./board/controller";
 import { SHAPE_GROUPS, SHAPES, saveShape } from "./board/shapes";
+import { getExtraColor, setExtraColor } from "./extra-color";
 import { Icon } from "./icon";
 import { ImageControls, type ImageControlsProps } from "./image-controls";
 import { ShapeIcon } from "./shape-icon";
@@ -10,7 +11,7 @@ import { displayColor, useTheme } from "./theme";
 
 export const COLORS = ["#111111", "#d32f2f", "#1976d2", "#388e3c", "#f57c00"];
 /** The colours at hand in the bar; the rest of COLORS and MORE_COLORS are behind the plus. */
-const QUICK_COLORS = COLORS.slice(0, 3);
+export const QUICK_COLORS = COLORS.slice(0, 3);
 /** Extra colours behind the palette button (R-025). */
 export const MORE_COLORS = [
 	"#6b7280",
@@ -92,16 +93,25 @@ export function Toolbar({
 	const drawing = colourTools.includes(settings.tool);
 	const custom = !QUICK_COLORS.includes(settings.color);
 	// Picking a colour while erasing or panning goes back to the pen; shapes and text stay.
-	const pick = (color: string) =>
+	const pick = (color: string) => {
+		// A colour from beyond the quick ones is kept in the fourth slot (R-079).
+		if (!QUICK_COLORS.includes(color)) setExtraColor(color);
 		set({
 			color,
 			tool: colourTools.includes(settings.tool) ? settings.tool : "pen",
 		});
+	};
+	const extra = custom ? settings.color : getExtraColor();
 	const swatch = (c: string, after?: () => void) => (
 		<button
 			type="button"
 			key={c}
 			aria-label={`color ${c}`}
+			title={
+				QUICK_COLORS.includes(c)
+					? `Kolor ${QUICK_COLORS.indexOf(c) + 1} (klawisz ${QUICK_COLORS.indexOf(c) + 1})`
+					: undefined
+			}
 			aria-pressed={drawing && settings.color === c}
 			class={`swatch ${on(drawing && settings.color === c)}`}
 			style={{ background: displayColor(c, theme) }}
@@ -197,16 +207,22 @@ export function Toolbar({
 						aria-label="more colors"
 						aria-pressed={drawing && custom}
 						aria-expanded={paletteOpen}
-						title="Więcej kolorów"
+						title={
+							extra
+								? "Ostatni dodatkowy kolor (klawisz 4); jeszcze raz otwiera paletę"
+								: "Więcej kolorów"
+						}
 						class={`swatch more ${on(drawing && custom)}`}
 						style={
-							custom
-								? { background: displayColor(settings.color, theme) }
-								: undefined
+							extra ? { background: displayColor(extra, theme) } : undefined
 						}
-						onClick={() => setPaletteOpen(!paletteOpen)}
+						onClick={() => {
+							// The kept colour is picked first; pressed again, it opens the palette.
+							if (!custom && extra) pick(extra);
+							else setPaletteOpen(!paletteOpen);
+						}}
 					>
-						{!custom && <Icon name="plus" />}
+						{!extra && <Icon name="plus" />}
 					</button>
 					{paletteOpen && (
 						<div class="palette">

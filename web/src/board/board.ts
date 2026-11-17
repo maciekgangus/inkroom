@@ -174,6 +174,38 @@ export class Board {
 		return true;
 	}
 
+	/**
+	 * Starts a batch of erasing that goes on over time (one drag of the eraser): each `erase`
+	 * takes the element off the board and sends it at once, and `done` makes all of them one undo
+	 * step (R-078).
+	 */
+	eraseBatch(authorId: string): {
+		erase(strokeId: string): boolean;
+		done(): void;
+	} {
+		const erased: Stroke[] = [];
+		let finished = false;
+		return {
+			erase: (strokeId) => {
+				const stroke = this.strokes.find((s) => s.id === strokeId);
+				if (!stroke) return false;
+				this.remove(strokeId);
+				erased.push(stroke);
+				this.onOp?.({ t: "remove", id: strokeId });
+				return true;
+			},
+			done: () => {
+				if (finished || erased.length === 0) return;
+				finished = true;
+				this.record(authorId, {
+					type: "erase",
+					stroke: erased[0],
+					group: erased,
+				});
+			},
+		};
+	}
+
 	/** Erases several elements as one undo step. Returns false if none of them exists. */
 	eraseMany(authorId: string, strokeIds: string[]): boolean {
 		const group = strokeIds

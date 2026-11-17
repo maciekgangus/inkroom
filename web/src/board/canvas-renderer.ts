@@ -214,13 +214,25 @@ function drawElement(
 			const fs = fontSizeOf(s);
 			ctx.fillStyle = color;
 			ctx.font = textFont(fs);
-			ctx.textBaseline = "top";
 			const [x, y] = s.points[0];
 			const lineHeight = fs * LINE_HEIGHT;
-			const halfLeading = (lineHeight - fs) / 2; // where a text field puts the first line
+			// Where a text field puts the first line (R-081): the line is centred on its content
+			// area, the font's own ascent and descent. The baseline is placed from those, not with
+			// textBaseline "top", which browsers (Safari on an iPad) put at different heights.
+			const m = ctx.measureText("Mg");
+			const ascent = m.fontBoundingBoxAscent;
+			const descent = m.fontBoundingBoxDescent;
+			let first: number;
+			if (typeof ascent === "number" && typeof descent === "number") {
+				ctx.textBaseline = "alphabetic";
+				first = (lineHeight - (ascent + descent)) / 2 + ascent;
+			} else {
+				ctx.textBaseline = "top";
+				first = (lineHeight - fs) / 2;
+			}
 			// A text area is wrapped to its width (R-044), a text at a point keeps its own lines.
 			textLines(s).forEach((line, i) => {
-				ctx.fillText(line, x, y + i * lineHeight + halfLeading);
+				ctx.fillText(line, x, y + i * lineHeight + first);
 			});
 		} else if (path && isFilled(s)) {
 			ctx.fillStyle = color;

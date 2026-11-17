@@ -203,3 +203,65 @@ describe("the laser pointer on the live layer", () => {
 		vi.unstubAllGlobals();
 	});
 });
+
+describe("text sits where a text field puts it, in every browser (R-081)", () => {
+	const textEl = (extra: Partial<Stroke> = {}) =>
+		({
+			id: "t",
+			authorId: "a",
+			color: "#111",
+			size: 4,
+			z: 1,
+			kind: "text",
+			text: "Mg\nMg",
+			fontSize: 20,
+			points: [[100, 50, 0.5]],
+			...extra,
+		}) as Stroke;
+	const draw = (metrics?: { a: number; d: number }) => {
+		const placed: { y: number; base: string }[] = [];
+		const state: Record<string, unknown> = {};
+		const ctx = new Proxy(state, {
+			get: (t, k) => {
+				if (k === "fillText")
+					return (_: string, _x: number, y: number) =>
+						placed.push({ y, base: String(t.textBaseline) });
+				if (k === "measureText")
+					return () =>
+						metrics
+							? {
+									fontBoundingBoxAscent: metrics.a,
+									fontBoundingBoxDescent: metrics.d,
+								}
+							: { width: 10 };
+				if (k in t) return t[k as string];
+				return () => ctx;
+			},
+			set: (t, k, v) => {
+				t[k as string] = v;
+				return true;
+			},
+		}) as unknown as CanvasRenderingContext2D;
+		paintElements(
+			ctx,
+			[textEl()],
+			{ minX: -1e9, minY: -1e9, maxX: 1e9, maxY: 1e9 },
+			null,
+		);
+		return placed;
+	};
+
+	test("the baseline comes from the font's own ascent and descent, as a text field's line does", () => {
+		// line height 25, content area 12 + 4 = 16: half-leading 4.5, baseline 4.5 + 12 below the top
+		const [first, second] = draw({ a: 12, d: 4 });
+		expect(first.base).toBe("alphabetic");
+		expect(first.y).toBeCloseTo(50 + 16.5);
+		expect(second.y).toBeCloseTo(50 + 25 + 16.5);
+	});
+
+	test("without font metrics the old placement is kept", () => {
+		const [first] = draw();
+		expect(first.base).toBe("top");
+		expect(first.y).toBeCloseTo(50 + 2.5);
+	});
+});

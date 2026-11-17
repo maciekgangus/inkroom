@@ -1,8 +1,17 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { getPreview, setPreview } from "./preview-cache";
+import {
+	checkedRecently,
+	forgetPreviews,
+	getPreview,
+	peekPreview,
+	setPreview,
+} from "./preview-cache";
 
 describe("the preview cache (R-052)", () => {
-	beforeEach(() => localStorage.clear());
+	beforeEach(() => {
+		localStorage.clear();
+		forgetPreviews();
+	});
 
 	test("gives back a picture of the same version of a board", () => {
 		setPreview("b1", '"7-plain"', "data:image/png;base64,AAA");
@@ -47,5 +56,45 @@ describe("the preview cache (R-052)", () => {
 			});
 		expect(getPreview("b1", "v")).toBeNull();
 		noRead.mockRestore();
+	});
+});
+
+describe("showing the last picture at once (R-080)", () => {
+	beforeEach(() => {
+		localStorage.clear();
+		forgetPreviews();
+	});
+
+	test("peek gives the last picture of a board whatever its version", () => {
+		setPreview("b1", '"7-plain"', "data:old");
+		expect(peekPreview("b1")).toEqual({ tag: '"7-plain"', url: "data:old" });
+		expect(peekPreview("nope")).toBeNull();
+	});
+
+	test("the picture is kept in memory too, so a full or refused storage does not lose it", () => {
+		const full = vi
+			.spyOn(Storage.prototype, "setItem")
+			.mockImplementation(() => {
+				throw new Error("quota");
+			});
+		setPreview("b1", "v", "data:x");
+		full.mockRestore();
+		expect(peekPreview("b1")?.url).toBe("data:x");
+	});
+
+	test("a picture is read from storage after a reload (memory empty)", () => {
+		setPreview("b1", "v", "data:x");
+		forgetPreviews(true); // memory only
+		expect(peekPreview("b1")?.url).toBe("data:x");
+	});
+
+	test("a board checked a moment ago needs no new request", () => {
+		vi.useFakeTimers();
+		setPreview("b1", "v", "data:x");
+		expect(checkedRecently("b1", 20_000)).toBe(true);
+		vi.advanceTimersByTime(21_000);
+		expect(checkedRecently("b1", 20_000)).toBe(false);
+		expect(checkedRecently("never", 20_000)).toBe(false);
+		vi.useRealTimers();
 	});
 });

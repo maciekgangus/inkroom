@@ -2,6 +2,7 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { App } from "./app";
+import { forgetPreviews } from "./preview-cache";
 import type { SocketLike } from "./sync/sync";
 
 // The preview is drawn on a canvas, which the test DOM does not have: only its use is checked.
@@ -102,6 +103,7 @@ describe("App", () => {
 
 	beforeEach(() => {
 		localStorage.clear();
+		forgetPreviews(true); // memory is not cleared with the storage
 		sessionStorage.clear();
 		root = document.createElement("div");
 		document.body.append(root);

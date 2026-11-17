@@ -37,6 +37,7 @@ import { BrandLink } from "./brand-link";
 import { ContextMenu, type MenuItem } from "./context-menu";
 import { assignColors } from "./cursor-colors";
 import { Cursors } from "./cursors";
+import { getExtraColor, setExtraColor } from "./extra-color";
 import { frameBatch } from "./frame-batch";
 import { Icon } from "./icon";
 import { Minimap } from "./minimap";
@@ -47,13 +48,13 @@ import { loadPdf } from "./pdf/loader";
 import { PdfProgress } from "./pdf-progress";
 import { hasFinePointer } from "./pointer";
 import { PropertiesPanel } from "./properties-panel";
-import { applyToolShortcut, dropsSelection } from "./shortcuts";
+import { applyToolShortcut, colorForKey, dropsSelection } from "./shortcuts";
 import { ShortcutsDialog } from "./shortcuts-dialog";
 import { type Peer, type SocketLike, SyncClient } from "./sync/sync";
 import { TextEditor } from "./text-editor";
 import { currentTheme, displayColor, useTheme } from "./theme";
 import { toolCursor } from "./tool-cursor";
-import { COLORS, SIZES, Toolbar } from "./toolbar";
+import { COLORS, QUICK_COLORS, SIZES, Toolbar } from "./toolbar";
 import { ZoomControls } from "./zoom-controls";
 
 /** Not crypto.randomUUID: it is missing on http:// pages (LAN testing on an iPad). */
@@ -706,6 +707,24 @@ export function BoardView({
 				controller.deleteSelected()
 			) {
 				e.preventDefault();
+				return;
+			}
+			// 1 to 3 pick a quick colour and 4 the extra one (R-079): the selection takes it when there
+			// is one, otherwise the next drawing does.
+			const colour = e.repeat
+				? null
+				: colorForKey(e, QUICK_COLORS, getExtraColor());
+			if (colour) {
+				if (controller.selection.length > 0) {
+					controller.setProps({ color: colour });
+				} else {
+					if (!QUICK_COLORS.includes(colour)) setExtraColor(colour);
+					settings.color = colour;
+					if (!["pen", "line", "shape", "text"].includes(settings.tool))
+						settings.tool = "pen";
+				}
+				e.preventDefault();
+				bump();
 				return;
 			}
 			const ctrlKey = e.ctrlKey || e.metaKey;
