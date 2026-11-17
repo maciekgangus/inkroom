@@ -47,6 +47,7 @@ const TOOLS: { tool: Settings["tool"]; label: string }[] = [
 	{ tool: "pen", label: "Pióro" },
 	{ tool: "line", label: "Linia" },
 	{ tool: "shape", label: "Kształty" },
+	{ tool: "plane", label: "Układ współrzędnych" },
 	{ tool: "text", label: "Tekst" },
 	{ tool: "eraser", label: "Gumka" },
 	{ tool: "pan", label: "Ręka" },
@@ -54,7 +55,13 @@ const TOOLS: { tool: Settings["tool"]; label: string }[] = [
 ];
 
 /** Tools that draw something in the chosen colour. */
-const colourTools: Settings["tool"][] = ["pen", "line", "shape", "text"];
+const colourTools: Settings["tool"][] = [
+	"pen",
+	"line",
+	"shape",
+	"text",
+	"plane",
+];
 
 /** Tool palette: tools, color, size, undo/redo. Mutates `settings` in place. */
 export function Toolbar({

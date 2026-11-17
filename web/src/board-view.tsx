@@ -49,7 +49,6 @@ import { PdfProgress } from "./pdf-progress";
 import { hasFinePointer } from "./pointer";
 import { PropertiesPanel } from "./properties-panel";
 import { ShareButton } from "./share-button";
-import { useToolbarLayout } from "./toolbar-layout";
 import { applyToolShortcut, colorForKey, dropsSelection } from "./shortcuts";
 import { ShortcutsDialog } from "./shortcuts-dialog";
 import { type Peer, type SocketLike, SyncClient } from "./sync/sync";
@@ -57,6 +56,7 @@ import { TextEditor } from "./text-editor";
 import { currentTheme, displayColor, useTheme } from "./theme";
 import { toolCursor } from "./tool-cursor";
 import { COLORS, QUICK_COLORS, SIZES, Toolbar } from "./toolbar";
+import { useToolbarLayout } from "./toolbar-layout";
 import { ZoomControls } from "./zoom-controls";
 
 /** Not crypto.randomUUID: it is missing on http:// pages (LAN testing on an iPad). */
@@ -723,7 +723,9 @@ export function BoardView({
 				} else {
 					if (!QUICK_COLORS.includes(colour)) setExtraColor(colour);
 					settings.color = colour;
-					if (!["pen", "line", "shape", "text"].includes(settings.tool))
+					if (
+						!["pen", "line", "shape", "text", "plane"].includes(settings.tool)
+					)
 						settings.tool = "pen";
 				}
 				e.preventDefault();
@@ -1094,7 +1096,9 @@ export function BoardView({
 				viewport={viewport}
 				colors={colors}
 			/>
-			<div class={`topbar${toolbarLayout === "full" ? "" : ` ${toolbarLayout}`}`}>
+			<div
+				class={`topbar${toolbarLayout === "full" ? "" : ` ${toolbarLayout}`}`}
+			>
 				<BoardTitle
 					name={title}
 					editable={!!onRename}

@@ -44,7 +44,11 @@ describe("ShortcutsDialog (own shortcuts)", () => {
 			"Linia",
 			"Kształty",
 			"Wskaźnik",
+			"Układ współrzędnych",
 		]);
+		expect(
+			row("Układ współrzędnych").querySelector("button")?.textContent,
+		).toBe("U");
 		expect(row("Zaznacz").querySelector("button")?.textContent).toBe("Q");
 		expect(row("Pióro").querySelector("button")?.textContent).toBe("F");
 	});

@@ -18,6 +18,10 @@ export interface StylePatch {
 	opacity?: number;
 	/** Numbers on the marks of a coordinate system. */
 	numbered?: boolean;
+	/** For a coordinate plane (R-084): the grid on or off, the axes on or off, the size of a cell. */
+	grid?: boolean;
+	showAxes?: boolean;
+	cell?: number;
 }
 
 const isShape = (el: Stroke) =>
@@ -27,7 +31,8 @@ const isShape = (el: Stroke) =>
 	isPolygonKind(el.kind);
 /** A freehand stroke: no kind, or the explicit stroke kind. */
 const isFreehand = (el: Stroke) => !el.kind || el.kind === "stroke";
-const isDashable = (el: Stroke) => el.kind === "line" || isShape(el);
+const isDashable = (el: Stroke) =>
+	el.kind === "line" || (isShape(el) && el.kind !== "plane");
 
 /** Lines and shapes take solid, dashed and dotted; freehand strokes all four (R-037). */
 function dashFits(el: Stroke, dash: Dash): boolean {
@@ -66,7 +71,22 @@ export function applyStyle(el: Stroke, patch: StylePatch): Stroke {
 		if (patch.fill === null) delete out.fill;
 		else out.fill = patch.fill;
 	}
-	if (patch.numbered !== undefined && el.kind === "axes") {
+	if (el.kind === "plane") {
+		// On is the usual state, so only "off" is stored (R-084).
+		if (patch.grid !== undefined) {
+			if (patch.grid) delete out.grid;
+			else out.grid = false;
+		}
+		if (patch.showAxes !== undefined) {
+			if (patch.showAxes) delete out.showAxes;
+			else out.showAxes = false;
+		}
+		if (patch.cell !== undefined) out.cell = clamp(patch.cell, 10, 200);
+	}
+	if (
+		patch.numbered !== undefined &&
+		(el.kind === "axes" || el.kind === "plane")
+	) {
 		if (patch.numbered) out.numbered = true;
 		else delete out.numbered;
 	}
@@ -87,7 +107,9 @@ export function capabilities(els: Stroke[]) {
 		fill: els.some((e) => isShape(e) && hasInside(e.kind)),
 		text: els.some((e) => e.kind === "text"),
 		/** A coordinate system is selected: its marks can be numbered. */
-		numbers: els.some((e) => e.kind === "axes"),
+		numbers: els.some((e) => e.kind === "axes" || e.kind === "plane"),
+		/** A coordinate plane is selected: its grid, axes and cell can be set (R-084). */
+		plane: els.some((e) => e.kind === "plane"),
 		/** Only texts are selected: the size slider is then a font size. */
 		textOnly: els.length > 0 && els.every((e) => e.kind === "text"),
 	};
@@ -112,5 +134,19 @@ export function styleOf(els: Stroke[]): {
 		fill: e.fill ?? null,
 		opacity: e.opacity ?? 1,
 		numbered: e.numbered === true,
+	};
+}
+
+/** The settings of the first selected coordinate plane, with their usual values (R-084). */
+export function planeOf(els: Stroke[]): {
+	cell: number;
+	grid: boolean;
+	showAxes: boolean;
+} {
+	const e = els.find((x) => x.kind === "plane");
+	return {
+		cell: e?.cell ?? 40,
+		grid: e?.grid !== false,
+		showAxes: e?.showAxes !== false,
 	};
 }

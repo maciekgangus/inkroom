@@ -3,6 +3,7 @@ import {
 	capabilities,
 	type Dash,
 	dashOptions,
+	planeOf,
 	type StylePatch,
 	styleOf,
 } from "./board/style";
@@ -135,6 +136,7 @@ export function PropertiesPanel({
 		: null;
 	const can = capabilities(elements);
 	const now = styleOf(elements);
+	const plane = planeOf(elements);
 	const on = (active: boolean) => (active ? "active" : "");
 
 	return (
@@ -246,6 +248,43 @@ export function PropertiesPanel({
 						</button>
 					))}
 				</div>
+			)}
+			{can.plane && (
+				<>
+					<div class="row">
+						<button
+							type="button"
+							aria-label="prop grid"
+							aria-pressed={plane.grid}
+							class={on(plane.grid)}
+							onClick={() => onChange({ grid: !plane.grid })}
+						>
+							Siatka
+						</button>
+						<button
+							type="button"
+							aria-label="prop axes"
+							aria-pressed={plane.showAxes}
+							class={on(plane.showAxes)}
+							onClick={() => onChange({ showAxes: !plane.showAxes })}
+						>
+							Osie
+						</button>
+					</div>
+					<div class="row">
+						<Slider
+							icon="grid"
+							label="prop cell"
+							min={10}
+							max={200}
+							step={5}
+							value={plane.cell}
+							unit=" j."
+							onInput={(v) => onPreview({ cell: v })}
+							onChange={(v) => onChange({ cell: v })}
+						/>
+					</div>
+				</>
 			)}
 			{can.numbers && (
 				<div class="row">

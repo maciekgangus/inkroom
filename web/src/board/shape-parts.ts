@@ -32,6 +32,10 @@ export interface PlaneOptions {
 
 /** The size of a cell of a coordinate plane, in board units. */
 export const PLANE_CELL = 40;
+/** The least side of a new coordinate plane, so that a graph on it makes sense (R-084). */
+export const PLANE_MIN_SIDE = 240;
+/** The side of the plane a click gives. */
+export const PLANE_DEFAULT_SIDE = 480;
 
 /** Distance (board units) between the marks of the coordinate system's axes (R-040). */
 export const AXES_STEP = 24;

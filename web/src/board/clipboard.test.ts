@@ -315,3 +315,44 @@ describe("numbered coordinate system in the clipboard", () => {
 		expect(parseClipboard(text)).toBeNull();
 	});
 });
+
+describe("a coordinate plane in the clipboard (R-084)", () => {
+	const plane = {
+		id: "p",
+		authorId: "a",
+		color: "#111",
+		size: 2,
+		z: 1,
+		kind: "plane",
+		numbered: true,
+		cell: 80,
+		grid: false,
+		showAxes: false,
+		points: [
+			[0, 0, 0.5],
+			[480, 480, 0.5],
+		],
+	} as Stroke;
+
+	test("its kind and settings survive a copy and a paste", () => {
+		const clip = parseClipboard(serializeSelection([plane], "b"));
+		expect(clip?.elements[0]).toMatchObject({
+			kind: "plane",
+			cell: 80,
+			grid: false,
+			showAxes: false,
+			numbered: true,
+		});
+	});
+
+	test("a cell that is not a number, or a switch that is not a boolean, is refused", () => {
+		expect(
+			parseClipboard(
+				serializeSelection([{ ...plane, cell: "big" as never }], "b"),
+			),
+		).toBeNull();
+		expect(
+			parseClipboard(serializeSelection([{ ...plane, grid: 1 as never }], "b")),
+		).toBeNull();
+	});
+});

@@ -1,6 +1,12 @@
 import { describe, expect, test } from "vitest";
 import type { Stroke } from "./board";
-import { applyStyle, capabilities, dashOptions, styleOf } from "./style";
+import {
+	applyStyle,
+	capabilities,
+	dashOptions,
+	planeOf,
+	styleOf,
+} from "./style";
 
 const base = { id: "e", authorId: "a", color: "#111", size: 4, z: 0 };
 const pts = (...p: [number, number][]) =>
@@ -90,6 +96,7 @@ describe("capabilities", () => {
 			text: false,
 			textOnly: false,
 			numbers: false,
+			plane: false,
 		});
 		expect(capabilities([rect, freehand])).toEqual({
 			color: true,
@@ -99,6 +106,7 @@ describe("capabilities", () => {
 			text: false,
 			textOnly: false,
 			numbers: false,
+			plane: false,
 		});
 		expect(capabilities([text])).toEqual({
 			color: true,
@@ -108,6 +116,7 @@ describe("capabilities", () => {
 			text: true,
 			textOnly: true,
 			numbers: false,
+			plane: false,
 		});
 		expect(capabilities([image])).toEqual({
 			color: false,
@@ -117,6 +126,7 @@ describe("capabilities", () => {
 			text: false,
 			textOnly: false,
 			numbers: false,
+			plane: false,
 		});
 	});
 });
@@ -306,5 +316,64 @@ describe("numbering the coordinate system", () => {
 		);
 		expect(styleOf([{ ...axes, numbered: true }]).numbered).toBe(true);
 		expect(styleOf([axes]).numbered).toBe(false);
+	});
+});
+
+describe("the coordinate plane's own settings (R-084)", () => {
+	const plane = {
+		...base,
+		kind: "plane",
+		numbered: true,
+		points: pts([0, 0], [400, 400]),
+	} as Stroke;
+
+	test("the grid and the axes are switched off and on again (on is the usual state)", () => {
+		const off = applyStyle(plane, { grid: false, showAxes: false });
+		expect(off.grid).toBe(false);
+		expect(off.showAxes).toBe(false);
+		const on = applyStyle(off, { grid: true, showAxes: true });
+		expect(on.grid).toBeUndefined();
+		expect(on.showAxes).toBeUndefined();
+	});
+
+	test("the size of a cell is kept between 10 and 200", () => {
+		expect(applyStyle(plane, { cell: 80 }).cell).toBe(80);
+		expect(applyStyle(plane, { cell: 1 }).cell).toBe(10);
+		expect(applyStyle(plane, { cell: 999 }).cell).toBe(200);
+	});
+
+	test("the numbers switch works for it, and colour and width are those of its axes", () => {
+		expect(applyStyle(plane, { numbered: false }).numbered).toBeUndefined();
+		expect(applyStyle(plane, { color: "#d32f2f" }).color).toBe("#d32f2f");
+		expect(applyStyle(plane, { size: 6 }).size).toBe(6);
+	});
+
+	test("other elements ignore the plane's settings", () => {
+		const rect = {
+			...base,
+			kind: "rect",
+			points: pts([0, 0], [10, 10]),
+		} as Stroke;
+		const same = applyStyle(rect, { grid: false, showAxes: false, cell: 80 });
+		expect(same.grid).toBeUndefined();
+		expect(same.showAxes).toBeUndefined();
+		expect(same.cell).toBeUndefined();
+	});
+
+	test("it takes no dashes and no fill, but the panel offers its settings", () => {
+		expect(applyStyle(plane, { dash: "dashed" }).dash).toBeUndefined();
+		const can = capabilities([plane]);
+		expect(can.plane).toBe(true);
+		expect(can.numbers).toBe(true);
+		expect(can.fill).toBe(false);
+		expect(can.dash).toBe(false);
+		expect(capabilities([base as Stroke]).plane).toBe(false);
+	});
+
+	test("the panel reads them with their usual values when nothing is set", () => {
+		expect(planeOf([plane])).toEqual({ cell: 40, grid: true, showAxes: true });
+		expect(
+			planeOf([{ ...plane, cell: 80, grid: false, showAxes: false }]),
+		).toEqual({ cell: 80, grid: false, showAxes: false });
 	});
 });
