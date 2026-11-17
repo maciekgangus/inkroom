@@ -14,7 +14,7 @@ import {
 	ROT_OFFSET_PX,
 } from "./selection-frame";
 import { adjustFromPoint, adjustHandle, outlineOf } from "./shape-parts";
-import { pointInPolygon, type ShapeChoice } from "./shapes";
+import type { ShapeChoice } from "./shapes";
 import { applyStyle, type Dash, type StylePatch } from "./style";
 import {
 	bakeRotation,
@@ -290,6 +290,9 @@ export class Controller {
 		);
 	}
 
+	/** The erasing of the drag in progress, so it is undone in one go. */
+	private erasing: { erase(id: string): boolean; done(): void } | null = null;
+
 	/** True while the laser tool is pressed: its points go on being reported. */
 	private laserOn = false;
 	/** Called with a board point of the laser's trail; `start` for the first of a press. */
@@ -424,6 +427,9 @@ export class Controller {
 
 	private finishPointer(e: PointerInput): void {
 		this.activeId = null;
+		// What one drag of the eraser took is one undo step (R-078).
+		this.erasing?.done();
+		this.erasing = null;
 		this.laserOn = false;
 		this.panFrom = null;
 		const press = this.rightPress;
@@ -1302,7 +1308,8 @@ export class Controller {
 			y,
 			ERASER_RADIUS / this.viewport.scale,
 		);
-		if (hit && this.board.eraseStroke(this.authorId, hit.id)) {
+		this.erasing ??= this.board.eraseBatch(this.authorId);
+		if (hit && this.erasing.erase(hit.id)) {
 			this.renderer.redraw(this.board.strokes);
 			this.refreshSelection(); // an erased selected element must not leave its handles
 		}
