@@ -150,3 +150,18 @@ export function applyToolShortcut(
 	if (e.code === "Escape" || dropsSelection(tool)) dropSelection?.();
 	return true;
 }
+
+/**
+ * The colour a colour key picks (R-079): 1, 2 and 3 are the quick colours of the bar, 4 the colour
+ * kept in the extra slot. Null when the key is not one, or the slot is empty.
+ */
+export function colorForKey(
+	e: KeyboardEvent,
+	quick: string[],
+	extra: string | null,
+): string | null {
+	if (e.ctrlKey || e.metaKey || e.altKey) return null;
+	const m = /^Digit([1-4])$/.exec(e.code);
+	if (!m) return null;
+	return [...quick, extra][Number(m[1]) - 1] ?? null;
+}

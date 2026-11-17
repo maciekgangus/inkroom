@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { Settings } from "./board/controller";
 import {
 	applyToolShortcut,
+	colorForKey,
 	dropsSelection,
 	resetShortcuts,
 	setShortcut,
@@ -188,5 +189,35 @@ describe("own shortcuts", () => {
 		applyToolShortcut(key("Escape"), s, drop);
 		expect(s.tool).toBe("select");
 		expect(drop).toHaveBeenCalledOnce();
+	});
+});
+
+describe("colour keys (R-079)", () => {
+	const quick = ["#111111", "#d32f2f", "#1976d2"];
+	test.each([
+		["Digit1", "#111111"],
+		["Digit2", "#d32f2f"],
+		["Digit3", "#1976d2"],
+		["Digit4", "#ff7043"],
+	])("%s picks the colour of its slot", (code, color) => {
+		expect(colorForKey(key(code), quick, "#ff7043")).toBe(color);
+	});
+
+	test("the fourth key does nothing until a colour was kept there", () => {
+		expect(colorForKey(key("Digit4"), quick, null)).toBeNull();
+	});
+
+	test("other keys, and digits with Ctrl, Alt or Cmd, are left alone", () => {
+		expect(colorForKey(key("Digit5"), quick, "#ff7043")).toBeNull();
+		expect(colorForKey(key("KeyA"), quick, "#ff7043")).toBeNull();
+		expect(
+			colorForKey(key("Digit1", { ctrlKey: true }), quick, null),
+		).toBeNull();
+		expect(
+			colorForKey(key("Digit1", { altKey: true }), quick, null),
+		).toBeNull();
+		expect(
+			colorForKey(key("Digit1", { metaKey: true }), quick, null),
+		).toBeNull();
 	});
 });
