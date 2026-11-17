@@ -22,6 +22,8 @@ export interface StylePatch {
 	grid?: boolean;
 	showAxes?: boolean;
 	cell?: number;
+	/** For a coordinate plane: the numbers 1 2 3, the multiples of π, or none (R-084). */
+	numbering?: "numbers" | "pi" | "none";
 }
 
 const isShape = (el: Stroke) =>
@@ -82,6 +84,12 @@ export function applyStyle(el: Stroke, patch: StylePatch): Stroke {
 			else out.showAxes = false;
 		}
 		if (patch.cell !== undefined) out.cell = clamp(patch.cell, 10, 200);
+		if (patch.numbering !== undefined) {
+			if (patch.numbering === "none") delete out.numbered;
+			else out.numbered = true;
+			if (patch.numbering === "pi") out.pi = true;
+			else delete out.pi;
+		}
 	}
 	if (
 		patch.numbered !== undefined &&
@@ -142,11 +150,13 @@ export function planeOf(els: Stroke[]): {
 	cell: number;
 	grid: boolean;
 	showAxes: boolean;
+	numbering: "numbers" | "pi" | "none";
 } {
 	const e = els.find((x) => x.kind === "plane");
 	return {
 		cell: e?.cell ?? 40,
 		grid: e?.grid !== false,
 		showAxes: e?.showAxes !== false,
+		numbering: !e?.numbered ? "none" : e.pi ? "pi" : "numbers",
 	};
 }

@@ -83,6 +83,8 @@ export interface Stroke {
 	grid?: boolean;
 	/** For a coordinate plane: false hides the axes and their numbers; missing means shown. */
 	showAxes?: boolean;
+	/** For a coordinate plane: the x axis is numbered in π and its cells are twelfths of π. */
+	pi?: boolean;
 	/** Width of a text area in board units: the text wraps to it (R-044); missing for a text at a point. */
 	width?: number;
 	id: string;

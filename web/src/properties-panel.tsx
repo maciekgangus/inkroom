@@ -286,7 +286,29 @@ export function PropertiesPanel({
 					</div>
 				</>
 			)}
-			{can.numbers && (
+			{can.plane && (
+				<div class="row">
+					{(
+						[
+							["numbers", "1 2 3"],
+							["pi", "π"],
+							["none", "Bez"],
+						] as const
+					).map(([how, label]) => (
+						<button
+							type="button"
+							key={how}
+							aria-label={`prop numbering ${how}`}
+							aria-pressed={plane.numbering === how}
+							class={on(plane.numbering === how)}
+							onClick={() => onChange({ numbering: how })}
+						>
+							{label}
+						</button>
+					))}
+				</div>
+			)}
+			{can.numbers && !can.plane && (
 				<div class="row">
 					<button
 						type="button"

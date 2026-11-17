@@ -837,3 +837,149 @@ describe("the coordinate plane (R-084)", () => {
 		expect(of(plane()).fill).toHaveLength(0);
 	});
 });
+
+describe("the coordinate plane numbered in π (R-084)", () => {
+	const piPlane = (
+		extra: Partial<Stroke> = {},
+		b: Vec = [400, 400],
+	): Stroke => ({
+		id: "pi",
+		authorId: "a",
+		color: "#111",
+		size: 3,
+		z: 1,
+		kind: "plane",
+		numbered: true,
+		pi: true,
+		points: [
+			[0, 0, 0.5],
+			[b[0], b[1], 0.5],
+		],
+		...extra,
+	});
+	const of = (s: Stroke) => {
+		const p = partsOf(s);
+		if (!p) throw new Error("no parts");
+		return p;
+	};
+	const xs = (p: ReturnType<typeof of>) =>
+		(p.plane?.text ?? []).filter((l) => l.align === "center").map((l) => l.t);
+	const PI = Math.PI * 40; // pi along the x axis, in board units, with a cell of 40
+
+	test("a cell along x is a twelfth of π (15 degrees); every sixth line, a half π, is the stronger one", () => {
+		const p = of(piPlane());
+		const lines = [...(p.grid ?? []), ...(p.cluster ?? [])].filter(
+			(l) => l.length === 2 && l[0][0] === l[1][0],
+		);
+		const at = (list: typeof lines) =>
+			list.map((l) => l[0][0] - 200).sort((a, b) => a - b);
+		const d = PI / 12;
+		const major = at(
+			(p.cluster ?? []).filter((l) => l.length === 2 && l[0][0] === l[1][0]),
+		);
+		expect(major.some((x) => Math.abs(x - PI / 2) < 1e-6)).toBe(true);
+		expect(major.some((x) => Math.abs(x - d) < 1e-6)).toBe(false);
+		const all = at(lines);
+		expect(all.some((x) => Math.abs(x - d) < 1e-6)).toBe(true); // π/12
+	});
+
+	test("the rows of the grid across are the usual cells of the plane", () => {
+		const p = of(piPlane());
+		const across = [...(p.grid ?? []), ...(p.cluster ?? [])].filter(
+			(l) => l.length === 2 && l[0][1] === l[1][1],
+		);
+		expect(across.length).toBeGreaterThan(0);
+		expect(new Set(across.map((l) => l[0][1])).has(200 - 40)).toBe(true);
+	});
+
+	test("the full multiples of π and the halves are written everywhere along x", () => {
+		const t = xs(of(piPlane({}, [800, 400])));
+		for (const label of [
+			"π",
+			"\u2212π",
+			"π/2",
+			"\u2212π/2",
+			"3π/2",
+			"\u22123π/2",
+		])
+			expect(t).toContain(label);
+	});
+
+	test("π/6, π/4 and π/3 are written only in the first quarter, positive and negative", () => {
+		const t = xs(of(piPlane({}, [800, 400])));
+		for (const label of [
+			"π/6",
+			"π/4",
+			"π/3",
+			"\u2212π/6",
+			"\u2212π/4",
+			"\u2212π/3",
+		])
+			expect(t).toContain(label);
+		for (const label of ["5π/6", "3π/4", "2π/3", "7π/6", "5π/4", "4π/3"])
+			expect(t).not.toContain(label);
+	});
+
+	test("the small fractions are small, and stand in two rows so that they do not overlap", () => {
+		const text = of(piPlane()).plane?.text ?? [];
+		const small = text.filter((l) => ["π/6", "π/4", "π/3"].includes(l.t));
+		const half = text.find((l) => l.t === "π/2");
+		const full = text.find((l) => l.t === "π");
+		expect(small.length).toBeGreaterThan(0);
+		for (const l of small) expect(l.scale ?? 1).toBeLessThan(half?.scale ?? 1);
+		expect(half?.scale ?? 1).toBeLessThan(full?.scale ?? 1);
+		const rows = new Set(small.map((l) => l.y));
+		expect(rows.size).toBe(2);
+		// within one row, two neighbours are far enough apart
+		for (const y of rows) {
+			const row = small
+				.filter((l) => l.y === y && l.x > 200)
+				.map((l) => l.x)
+				.sort((a, b) => a - b);
+			for (let i = 1; i < row.length; i++)
+				expect(row[i] - row[i - 1]).toBeGreaterThanOrEqual(20);
+		}
+	});
+
+	test("the y axis keeps its numbers 1 2 3, and a 0 stands at the origin", () => {
+		const text = of(piPlane()).plane?.text ?? [];
+		const ys = text
+			.filter((l) => l.align === "right" && l.t !== "0")
+			.map((l) => l.t);
+		expect(ys).toEqual(
+			expect.arrayContaining(["1", "\u22121", "2", "\u22122"]),
+		);
+		expect(text.find((l) => l.t === "0")).toBeDefined();
+	});
+
+	test("every label has a mark on the axis, the longer the more important", () => {
+		const p = of(piPlane());
+		const ticks = (p.fine ?? []).filter(
+			(l) => l.length === 2 && l[0][0] === l[1][0],
+		);
+		const at = (x: number) =>
+			ticks.find((l) => Math.abs(l[0][0] - (200 + x)) < 1e-6);
+		const len = (l: Vec[] | undefined) => (l ? Math.abs(l[1][1] - l[0][1]) : 0);
+		expect(len(at(PI))).toBeGreaterThan(len(at(PI / 2)));
+		expect(len(at(PI / 2))).toBeGreaterThan(len(at(PI / 3)));
+		expect(len(at(PI / 3))).toBeGreaterThan(0);
+	});
+
+	test("on a narrow plane the fractions are left out so that nothing is crowded", () => {
+		const t = xs(of(piPlane({ cell: 10 }, [400, 400])));
+		expect(t).not.toContain("π/6");
+		expect(t).toContain("π");
+	});
+
+	test("without π numbering the x axis has the usual numbers", () => {
+		const t = xs(of(piPlane({ pi: undefined })));
+		expect(t).toContain("1");
+		expect(t).not.toContain("π");
+	});
+
+	test("with the numbers off, π mode writes nothing", () => {
+		expect(of(piPlane({ numbered: undefined })).plane?.text ?? []).toHaveLength(
+			0,
+		);
+	});
+});

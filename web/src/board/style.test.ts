@@ -371,9 +371,54 @@ describe("the coordinate plane's own settings (R-084)", () => {
 	});
 
 	test("the panel reads them with their usual values when nothing is set", () => {
-		expect(planeOf([plane])).toEqual({ cell: 40, grid: true, showAxes: true });
+		expect(planeOf([plane])).toEqual({
+			cell: 40,
+			grid: true,
+			showAxes: true,
+			numbering: "numbers",
+		});
 		expect(
 			planeOf([{ ...plane, cell: 80, grid: false, showAxes: false }]),
-		).toEqual({ cell: 80, grid: false, showAxes: false });
+		).toEqual({ cell: 80, grid: false, showAxes: false, numbering: "numbers" });
+	});
+});
+
+describe("the numbering of a coordinate plane: numbers, π or none (R-084)", () => {
+	const plane = {
+		...base,
+		kind: "plane",
+		numbered: true,
+		points: pts([0, 0], [400, 400]),
+	} as Stroke;
+
+	test("π numbering is on, and the numbers go with it", () => {
+		const pi = applyStyle(plane, { numbering: "pi" });
+		expect(pi.numbered).toBe(true);
+		expect(pi.pi).toBe(true);
+	});
+
+	test("numbers and none take it off again", () => {
+		const pi = applyStyle(plane, { numbering: "pi" });
+		const numbers = applyStyle(pi, { numbering: "numbers" });
+		expect(numbers.numbered).toBe(true);
+		expect(numbers.pi).toBeUndefined();
+		const none = applyStyle(pi, { numbering: "none" });
+		expect(none.numbered).toBeUndefined();
+		expect(none.pi).toBeUndefined();
+	});
+
+	test("the panel reads which of the three is on", () => {
+		expect(planeOf([plane]).numbering).toBe("numbers");
+		expect(planeOf([{ ...plane, pi: true }]).numbering).toBe("pi");
+		expect(planeOf([{ ...plane, numbered: undefined }]).numbering).toBe("none");
+	});
+
+	test("other elements ignore it", () => {
+		const rect = {
+			...base,
+			kind: "rect",
+			points: pts([0, 0], [10, 10]),
+		} as Stroke;
+		expect(applyStyle(rect, { numbering: "pi" }).pi).toBeUndefined();
 	});
 });

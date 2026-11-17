@@ -32,6 +32,8 @@ export interface PlaneOptions {
 	axes: boolean;
 	/** The width of the axes, from which the heads and the gaps to the numbers follow. */
 	axisWidth: number;
+	/** The x axis is in multiples of π, its cells a twelfth of π (R-084). */
+	pi?: boolean;
 }
 
 /** The size of a cell of a coordinate plane, in board units. */
@@ -581,6 +583,8 @@ export interface PlaneLook {
 		align: "left" | "right" | "center";
 		base: "top" | "middle" | "bottom";
 		letter?: boolean;
+		/** The size of this text as a part of the usual one; missing means 1. */
+		scale?: number;
 	}[];
 }
 
@@ -608,12 +612,14 @@ function planeParts(
 	const fine: Vec[][] = [];
 	const grid: Vec[][] = [];
 	const cluster: Vec[][] = [];
+	// In π mode the cells along x are a twelfth of π and every sixth line, a half π, is stronger.
+	const dx = options.pi ? (Math.PI * step) / 12 : step;
 	if (options.grid) {
-		const across = Math.floor(b.w / 2 / step);
+		const across = Math.floor(b.w / 2 / dx);
 		for (let i = -across; i <= across; i++) {
 			if (i === 0 && options.axes) continue; // the axis is drawn there
-			const x = b.cx + i * step;
-			(i % 2 === 0 ? cluster : grid).push([
+			const x = b.cx + i * dx;
+			((options.pi ? i % 6 === 0 : i % 2 === 0) ? cluster : grid).push([
 				[x, b.y0],
 				[x, b.y1],
 			]);
@@ -665,7 +671,7 @@ function planeParts(
 				[b.cx + a * 0.42, yt + a],
 			]),
 		);
-		if (!options.grid) {
+		if (!options.grid && !options.pi) {
 			// Without the grid the units are marked on the axes.
 			for (let i = 1; i <= Math.floor((b.w / 2 - a - px) / step); i++)
 				for (const s of [-1, 1])
@@ -686,15 +692,16 @@ function planeParts(
 				[1, 2, 5, 10, 20, 50].find((n) => step * n >= 2.6 * px) ?? 100;
 			const nx = Math.floor((b.w / 2 - a - px) / step);
 			const ny = Math.floor((b.h / 2 - a - px) / step);
-			for (let i = every; i <= nx; i += every)
-				for (const s of [-1, 1])
-					text.push({
-						t: planeNumber(s * i),
-						x: b.cx + s * i * step,
-						y: b.cy + gap,
-						align: "center",
-						base: "top",
-					});
+			if (!options.pi)
+				for (let i = every; i <= nx; i += every)
+					for (const s of [-1, 1])
+						text.push({
+							t: planeNumber(s * i),
+							x: b.cx + s * i * step,
+							y: b.cy + gap,
+							align: "center",
+							base: "top",
+						});
 			// up is up on the screen: the positive numbers are above the middle
 			for (let i = every; i <= ny; i += every)
 				for (const s of [-1, 1])
@@ -705,8 +712,76 @@ function planeParts(
 						align: "right",
 						base: "middle",
 					});
+			if (options.pi) {
+				// The x axis in π: every full π, every half π, and the small fractions of the first
+				// quarter (π/6, π/4, π/3) on both sides. Where the cells are narrow, the fractions go.
+				const reach = b.w / 2 - a - px;
+				const room = Math.PI * step; // the length of π along x
+				const small = px * 0.62;
+				for (let k = 6; k * dx <= reach; k += 6) {
+					const n = k / 6; // halves of π
+					if (n % 2 === 1 && room < 50) continue;
+					const half = n % 2 === 1;
+					const name = half
+						? `${n === 1 ? "" : n}\u03c0/2`
+						: `${n / 2 === 1 ? "" : n / 2}\u03c0`;
+					for (const s of [-1, 1]) {
+						const x = b.cx + s * k * dx;
+						text.push({
+							t: s < 0 ? `\u2212${name}` : name,
+							x,
+							y: b.cy + gap,
+							align: "center",
+							base: "top",
+							...(half ? { scale: 0.85 } : {}),
+						});
+						fine.push([
+							[x, b.cy - (half ? 4.5 : 6)],
+							[x, b.cy + (half ? 4.5 : 6)],
+						]);
+					}
+				}
+				if (room >= 100)
+					for (const [k, name, row] of [
+						[2, "\u03c0/6", 0],
+						[3, "\u03c0/4", 1],
+						[4, "\u03c0/3", 0],
+					] as const) {
+						if (k * dx > reach) continue;
+						for (const s of [-1, 1]) {
+							const x = b.cx + s * k * dx;
+							text.push({
+								t: s < 0 ? `\u2212${name}` : name,
+								x,
+								y: b.cy + gap + row * small * 1.15,
+								align: "center",
+								base: "top",
+								scale: 0.62,
+							});
+							fine.push([
+								[x, b.cy - 3],
+								[x, b.cy + 3],
+							]);
+						}
+					}
+			}
 			text.push(
-				{ t: "0", x: b.cx - gap, y: b.cy + gap, align: "right", base: "top" },
+				// In π mode the fractions crowd the place under the origin, so the 0 stands above.
+				options.pi
+					? {
+							t: "0",
+							x: b.cx - gap,
+							y: b.cy - gap,
+							align: "right",
+							base: "bottom",
+						}
+					: {
+							t: "0",
+							x: b.cx - gap,
+							y: b.cy + gap,
+							align: "right",
+							base: "top",
+						},
 				{
 					t: "x",
 					x: xt,
@@ -732,7 +807,7 @@ function planeParts(
 		w: b.w,
 		h: b.h,
 		r: clamp(Math.min(b.w, b.h) * 0.015, 4, 10),
-		cell: step,
+		cell: Math.min(step, dx),
 		px,
 		heads,
 		text,
@@ -825,6 +900,7 @@ export function partsOf(s: Stroke): ShapeParts | null {
 								grid: s.grid !== false,
 								axes: s.showAxes !== false,
 								axisWidth: s.size,
+								pi: s.pi === true,
 							}
 						: undefined,
 				)

@@ -327,13 +327,18 @@ function drawPlane(
 	ctx.lineJoin = "round";
 	ctx.strokeStyle = L.paper;
 	ctx.lineWidth = p.px * 0.32;
+	let font = "";
 	for (const letter of [false, true]) {
-		ctx.font = letter
-			? `italic 500 ${p.px * 1.3}px ${TEXT_FONT_FAMILY}`
-			: `500 ${p.px}px ${TEXT_FONT_FAMILY}`;
 		ctx.fillStyle = letter ? color : L.text;
 		for (const t of p.text) {
 			if (!!t.letter !== letter) continue;
+			const size = p.px * (t.scale ?? 1) * (letter ? 1.3 : 1);
+			const f = `${letter ? "italic " : ""}500 ${size}px ${TEXT_FONT_FAMILY}`;
+			if (f !== font) {
+				ctx.font = f;
+				font = f;
+			}
+			ctx.lineWidth = size * (letter ? 0.25 : 0.32);
 			ctx.textAlign = t.align;
 			ctx.textBaseline = t.base;
 			ctx.strokeText(t.t, t.x, t.y);

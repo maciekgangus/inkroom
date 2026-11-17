@@ -131,6 +131,10 @@ function cleanElement(raw: unknown): ClipElement | null {
 		if (typeof raw.grid !== "boolean") return null;
 		out.grid = raw.grid;
 	}
+	if (raw.pi !== undefined) {
+		if (typeof raw.pi !== "boolean") return null;
+		if (raw.pi) out.pi = true;
+	}
 	if (raw.showAxes !== undefined) {
 		if (typeof raw.showAxes !== "boolean") return null;
 		out.showAxes = raw.showAxes;
