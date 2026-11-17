@@ -36,7 +36,8 @@ export type ShapeChoice =
 	| "bell"
 	| "scurve"
 	| "parabola"
-	| "axes";
+	| "axes"
+	| "plane";
 
 /** One entry of the list: the element kind, its Polish name and, for the two with a fixed icon, that icon. */
 export interface ShapeEntry {
@@ -117,9 +118,9 @@ export const SHAPES: ShapeEntry[] = SHAPE_GROUPS.flatMap((g) => g.shapes);
  * The kinds drawn from the box of their two corners by `shapeParts` (everything of the list
  * except the rectangle and the ellipse, which have their own paths).
  */
-const PARAMETRIC: ElementKind[] = SHAPES.map((s) => s.kind).filter(
-	(k) => k !== "rect" && k !== "ellipse",
-);
+const PARAMETRIC: ElementKind[] = SHAPES.map((s) => s.kind)
+	.filter((k) => k !== "rect" && k !== "ellipse")
+	.concat("plane"); // the coordinate plane is drawn from parts too, but has no place in the list
 
 /** The kinds without an inside: curves and the coordinate system. */
 const OPEN: ElementKind[] = [
@@ -129,11 +130,19 @@ const OPEN: ElementKind[] = [
 	"scurve",
 	"parabola",
 	"axes",
+	"plane",
 ];
 
 /** Whether a shape has an inside that can be filled and hit (false for curves and axes). */
 export const hasInside = (kind: ElementKind | undefined): boolean =>
 	kind === undefined || !OPEN.includes(kind);
+
+/**
+ * The kinds that are a block, like a picture (R-084): the eraser passes over them, a click
+ * anywhere inside takes them, and a frame or a lasso takes them only whole.
+ */
+export const isBlockKind = (kind: ElementKind | undefined): boolean =>
+	kind === "image" || kind === "plane";
 
 /** Whether the element is drawn from parts computed from the box of its two corners. */
 export const isPolygonKind = (kind: ElementKind | undefined): boolean =>

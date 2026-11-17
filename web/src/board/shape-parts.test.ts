@@ -697,3 +697,100 @@ describe("the coordinate system: fine marks and numbers", () => {
 		);
 	});
 });
+
+describe("the coordinate plane (R-084)", () => {
+	const plane = (extra: Partial<Stroke> = {}, b: Vec = [400, 400]): Stroke => ({
+		id: "p",
+		authorId: "a",
+		color: "#111",
+		size: 3,
+		z: 1,
+		kind: "plane",
+		numbered: true,
+		points: [
+			[0, 0, 0.5],
+			[b[0], b[1], 0.5],
+		],
+		...extra,
+	});
+	const of = (s: Stroke) => {
+		const p = partsOf(s);
+		if (!p) throw new Error("no parts");
+		return p;
+	};
+
+	test("a cell is 40 units: a 400 box has lines every 40 from the middle, every second one darker", () => {
+		const p = of(plane());
+		// 10 vertical and 10 horizontal lines besides the axes, +-1 to +-5 cells from the centre
+		expect(p.grid?.length).toBe(12); // +-1, +-3, +-5, both ways
+		expect(p.cluster?.length).toBe(8 + 1); // +-2, +-4 both ways, and the frame
+		const xs = new Set(
+			[...(p.grid ?? []), ...(p.cluster ?? [])]
+				.filter((l) => l.length === 2 && l[0][0] === l[1][0])
+				.map((l) => l[0][0]),
+		);
+		expect([...xs].sort((a, b) => a - b)).toEqual([
+			0, 40, 80, 120, 160, 240, 280, 320, 360, 400,
+		]);
+	});
+
+	test("the axes cross at the middle with an arrow head on each", () => {
+		const p = of(plane());
+		expect(p.lines.filter((l) => l.length === 2)).toHaveLength(2);
+		expect(p.lines.filter((l) => l.length === 3)).toHaveLength(2);
+		expect(
+			p.lines.some((l) => l.length === 2 && l[0][1] === 200 && l[1][1] === 200),
+		).toBe(true);
+	});
+
+	test("the size of a cell is the stroke's own: a bigger one has fewer lines", () => {
+		const p = of(plane({ cell: 80 }));
+		expect((p.grid?.length ?? 0) + (p.cluster?.length ?? 0)).toBeLessThan(
+			12 + 9,
+		);
+		expect(p.grid?.length).toBe(4); // +-80 along each way
+		expect(p.cluster?.length).toBe(4 + 1); // +-160 along each way, and the frame
+	});
+
+	test("stretching the box adds cells, it does not change their size", () => {
+		const small = of(plane({}, [400, 400]));
+		const wide = of(plane({}, [800, 400]));
+		const vertical = (q: typeof small) =>
+			[...(q.grid ?? []), ...(q.cluster ?? [])].filter(
+				(l) => l.length === 2 && l[0][0] === l[1][0],
+			).length;
+		expect(vertical(wide)).toBeGreaterThan(vertical(small));
+		// the cell next to the middle is still 40 away
+		const xs = [...(wide.grid ?? [])]
+			.filter((l) => l[0][0] === l[1][0])
+			.map((l) => Math.abs(l[0][0] - 400));
+		expect(Math.min(...xs)).toBe(40);
+	});
+
+	test("the grid can be left out: only the frame and the axes remain", () => {
+		const p = of(plane({ grid: false }));
+		expect(p.grid ?? []).toHaveLength(0);
+		expect(p.cluster).toHaveLength(1); // the frame
+		expect(p.lines.length).toBe(4);
+	});
+
+	test("the axes can be left out, with their numbers", () => {
+		const p = of(plane({ showAxes: false }));
+		expect(p.lines).toHaveLength(0);
+		expect(p.labels ?? []).toHaveLength(0);
+	});
+
+	test("numbers sit at every cell along both axes, and only when asked for", () => {
+		const on = of(plane());
+		expect(on.labels).toHaveLength(16); // 4 cells each side of the middle, two axes
+		expect(on.labels?.map((l) => l.text)).toEqual(
+			expect.arrayContaining(["1", "-1", "4", "-4"]),
+		);
+		const off = of(plane({ numbered: undefined }));
+		expect(off.labels ?? []).toHaveLength(0);
+	});
+
+	test("it has no inside to fill or to hit", () => {
+		expect(of(plane()).fill).toHaveLength(0);
+	});
+});

@@ -14,7 +14,7 @@ import {
 	ROT_OFFSET_PX,
 } from "./selection-frame";
 import { adjustFromPoint, adjustHandle, outlineOf } from "./shape-parts";
-import type { ShapeChoice } from "./shapes";
+import { isBlockKind, type ShapeChoice } from "./shapes";
 import { applyStyle, type Dash, type StylePatch } from "./style";
 import {
 	bakeRotation,
@@ -1195,7 +1195,7 @@ export class Controller {
 				// Touching is enough, but an image (a PDF page is one) must be wholly inside: it is big
 				// and easily caught by a frame meant for something else (R-072).
 				.filter((s) =>
-					s.kind === "image"
+					isBlockKind(s.kind)
 						? contains(r, worldBounds(s))
 						: intersects(worldBounds(s), r),
 				)

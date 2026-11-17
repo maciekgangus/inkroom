@@ -39,6 +39,7 @@ export type ElementKind =
 	| "scurve"
 	| "parabola"
 	| "axes"
+	| "plane"
 	| "text"
 	| "image";
 
@@ -76,6 +77,12 @@ export interface Stroke {
 	adj?: number;
 	/** A coordinate system numbered along its marks: 1 2 3 and -1 -2 -3 on both axes. */
 	numbered?: boolean;
+	/** For a coordinate plane (R-084): the size of a cell in board units; missing means 40. */
+	cell?: number;
+	/** For a coordinate plane: false hides the grid (the frame stays); missing means shown. */
+	grid?: boolean;
+	/** For a coordinate plane: false hides the axes and their numbers; missing means shown. */
+	showAxes?: boolean;
 	/** Width of a text area in board units: the text wraps to it (R-044); missing for a text at a point. */
 	width?: number;
 	id: string;

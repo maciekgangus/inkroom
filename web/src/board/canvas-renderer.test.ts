@@ -265,3 +265,83 @@ describe("text sits where a text field puts it, in every browser (R-081)", () =>
 		expect(first.y).toBeCloseTo(50 + 2.5);
 	});
 });
+
+describe("the coordinate plane on the canvas (R-084)", () => {
+	const plane = {
+		id: "pl",
+		authorId: "a",
+		color: "#111",
+		size: 4,
+		z: 1,
+		kind: "plane",
+		numbered: true,
+		points: [
+			[0, 0, 0.5],
+			[400, 400, 0.5],
+		],
+	} as Stroke;
+	const big = { minX: -1e9, minY: -1e9, maxX: 1e9, maxY: 1e9 };
+	const record = () => {
+		const strokes: { width: number; alpha: number }[] = [];
+		const texts: string[] = [];
+		const state: Record<string, unknown> = { lineWidth: 1, globalAlpha: 1 };
+		const ctx = new Proxy(state, {
+			get: (t, k) => {
+				if (k === "stroke")
+					return () =>
+						strokes.push({
+							width: t.lineWidth as number,
+							alpha: t.globalAlpha as number,
+						});
+				if (k === "fillText") return (text: string) => texts.push(text);
+				if (k in t) return t[k as string];
+				return () => ctx;
+			},
+			set: (t, k, v) => {
+				t[k as string] = v;
+				return true;
+			},
+		}) as unknown as CanvasRenderingContext2D;
+		return { ctx, strokes, texts };
+	};
+
+	test("the cells are fainter and thinner than the axes, which are drawn last", () => {
+		vi.stubGlobal(
+			"Path2D",
+			class {
+				moveTo() {}
+				lineTo() {}
+				closePath() {}
+				rect() {}
+			},
+		);
+		const r = record();
+		paintElements(r.ctx, [plane], big, null);
+		vi.unstubAllGlobals();
+		expect(r.strokes.length).toBeGreaterThanOrEqual(3);
+		const [cells, cluster, ...rest] = r.strokes;
+		const axes = rest[0];
+		expect(cells.alpha).toBeLessThan(cluster.alpha);
+		expect(cluster.alpha).toBeLessThan(axes.alpha);
+		expect(cells.width).toBeLessThan(cluster.width);
+		expect(cluster.width).toBeLessThan(axes.width);
+		expect(axes.alpha).toBe(1);
+		expect(axes.width).toBe(4);
+	});
+
+	test("the numbers are written along the axes", () => {
+		vi.stubGlobal(
+			"Path2D",
+			class {
+				moveTo() {}
+				lineTo() {}
+				closePath() {}
+				rect() {}
+			},
+		);
+		const r = record();
+		paintElements(r.ctx, [plane], big, null);
+		vi.unstubAllGlobals();
+		expect(r.texts).toEqual(expect.arrayContaining(["1", "-1", "4", "-4"]));
+	});
+});

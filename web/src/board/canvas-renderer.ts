@@ -100,6 +100,9 @@ interface Extras {
 	hidden: Path2D | null;
 	/** The marks of a coordinate system, drawn thin. */
 	fine: Path2D | null;
+	/** The cells of a coordinate plane: very light, and every second line with the frame (R-084). */
+	grid: Path2D | null;
+	cluster: Path2D | null;
 	labels: { text: string; x: number; y: number }[];
 }
 const extras = new WeakMap<Stroke, Extras>();
@@ -123,7 +126,20 @@ function extraPaths(s: Stroke): Extras | null {
 			fine = new Path2D();
 			for (const line of parts.fine) addPolyline(fine, line);
 		}
-		e = { fill, hidden, fine, labels: parts?.labels ?? [] };
+		const lined = (lines: [number, number][][] | undefined): Path2D | null => {
+			if (!lines?.length) return null;
+			const p = new Path2D();
+			for (const line of lines) addPolyline(p, line);
+			return p;
+		};
+		e = {
+			fill,
+			hidden,
+			fine,
+			grid: lined(parts?.grid),
+			cluster: lined(parts?.cluster),
+			labels: parts?.labels ?? [],
+		};
 		extras.set(s, e);
 	}
 	return e;
@@ -245,9 +261,25 @@ function drawElement(
 				ctx.fill(extra?.fill ?? path);
 			}
 			ctx.strokeStyle = color;
-			ctx.lineWidth = Math.max(s.size, minWidth);
 			ctx.lineCap = "round";
 			ctx.lineJoin = "round";
+			if (extra?.grid || extra?.cluster) {
+				// A coordinate plane (R-084): its cells under the axes, in the colour of the axes but
+				// faint, so a drawing over them stays readable, and the same in either theme.
+				const base = ctx.globalAlpha;
+				if (extra.grid) {
+					ctx.globalAlpha = base * 0.16;
+					ctx.lineWidth = Math.max(s.size * FINE_RATIO, minWidth * 0.5);
+					ctx.stroke(extra.grid);
+				}
+				if (extra.cluster) {
+					ctx.globalAlpha = base * 0.34;
+					ctx.lineWidth = Math.max(s.size * 0.5, minWidth * 0.5);
+					ctx.stroke(extra.cluster);
+				}
+				ctx.globalAlpha = base;
+			}
+			ctx.lineWidth = Math.max(s.size, minWidth);
 			ctx.setLineDash(dashPattern(s));
 			ctx.stroke(path);
 			if (extra?.hidden) {

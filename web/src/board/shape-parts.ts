@@ -17,7 +17,21 @@ export interface ShapeParts {
 	fine?: Vec[][];
 	/** Numbers written beside the marks, centred on the given point. */
 	labels?: { text: string; x: number; y: number }[];
+	/** The lines of a coordinate plane's cells, very light (R-084). */
+	grid?: Vec[][];
+	/** Every second line of the plane's cells and its frame, a little stronger. */
+	cluster?: Vec[][];
 }
+
+/** What a coordinate plane is made of (R-084); each has a default when the element has none. */
+export interface PlaneOptions {
+	cell: number;
+	grid: boolean;
+	axes: boolean;
+}
+
+/** The size of a cell of a coordinate plane, in board units. */
+export const PLANE_CELL = 40;
 
 /** Distance (board units) between the marks of the coordinate system's axes (R-040). */
 export const AXES_STEP = 24;
@@ -427,6 +441,7 @@ function direct(
 	b: Box,
 	adj: number,
 	numbered = false,
+	plane?: PlaneOptions,
 ): ShapeParts | null {
 	const n = 96; // the quarters of a period (peaks and zeros of sine and cosine) fall on samples
 	const along = (f: (u: number) => number): Vec[] =>
@@ -530,9 +545,112 @@ function direct(
 			}
 			return { ...solid(...lines), fine, ...(numbered ? { labels } : {}) };
 		}
+		case "plane":
+			return planeParts(b, numbered, plane);
 		default:
 			return null;
 	}
+}
+
+/**
+ * A coordinate plane (R-084): a grid of cells from the middle, with every second line and the
+ * frame a little stronger, and axes with arrow heads and numbers through the middle. Stretching
+ * the box adds cells; their size stays.
+ */
+function planeParts(
+	b: Box,
+	numbered: boolean,
+	options: PlaneOptions = { cell: PLANE_CELL, grid: true, axes: true },
+): ShapeParts {
+	const step = options.cell > 0 ? options.cell : PLANE_CELL;
+	const a = Math.max(4, Math.min(10, b.w / 6, b.h / 6));
+	const lines: Vec[][] = [];
+	const fine: Vec[][] = [];
+	const labels: { text: string; x: number; y: number }[] = [];
+	const grid: Vec[][] = [];
+	const cluster: Vec[][] = [
+		[
+			[b.x0, b.y0],
+			[b.x1, b.y0],
+			[b.x1, b.y1],
+			[b.x0, b.y1],
+			[b.x0, b.y0],
+		],
+	];
+	if (options.grid) {
+		const across = Math.floor(b.w / 2 / step);
+		for (let i = -across; i <= across; i++) {
+			if (i === 0 && options.axes) continue; // the axis is drawn there
+			const x = b.cx + i * step;
+			(i % 2 === 0 ? cluster : grid).push([
+				[x, b.y0],
+				[x, b.y1],
+			]);
+		}
+		const up = Math.floor(b.h / 2 / step);
+		for (let i = -up; i <= up; i++) {
+			if (i === 0 && options.axes) continue;
+			const y = b.cy + i * step;
+			(i % 2 === 0 ? cluster : grid).push([
+				[b.x0, y],
+				[b.x1, y],
+			]);
+		}
+	}
+	if (options.axes) {
+		lines.push(
+			[
+				[b.x0, b.cy],
+				[b.x1, b.cy],
+			],
+			[
+				[b.cx, b.y1],
+				[b.cx, b.y0],
+			],
+			[
+				[b.x1 - a, b.cy - a * 0.45],
+				[b.x1, b.cy],
+				[b.x1 - a, b.cy + a * 0.45],
+			],
+			[
+				[b.cx - a * 0.45, b.y0 + a],
+				[b.cx, b.y0],
+				[b.cx + a * 0.45, b.y0 + a],
+			],
+		);
+		const nx = Math.floor((b.w / 2 - a * 1.5) / step);
+		for (let i = 1; i <= nx; i++) {
+			for (const s of [-1, 1]) {
+				const x = b.cx + s * i * step;
+				if (!options.grid)
+					fine.push([
+						[x, b.cy - 4],
+						[x, b.cy + 4],
+					]);
+				labels.push({ text: String(s * i), x, y: b.cy + 4 + LABEL_PX * 0.7 });
+			}
+		}
+		const ny = Math.floor((b.h / 2 - a * 1.5) / step);
+		for (let i = 1; i <= ny; i++) {
+			for (const s of [-1, 1]) {
+				const y = b.cy + s * i * step;
+				if (!options.grid)
+					fine.push([
+						[b.cx - 4, y],
+						[b.cx + 4, y],
+					]);
+				// up is up on the screen: the positive numbers are above the middle
+				labels.push({ text: String(-s * i), x: b.cx - 6 - LABEL_PX * 0.55, y });
+			}
+		}
+	}
+	return {
+		...solid(...lines),
+		fine,
+		grid,
+		cluster,
+		...(numbered && options.axes ? { labels } : {}),
+	};
 }
 
 /**
@@ -550,6 +668,8 @@ export function shapeParts(
 	plain = false,
 	/** A coordinate system numbered along its marks. */
 	numbered = false,
+	/** What a coordinate plane is made of (R-084). */
+	plane?: PlaneOptions,
 ): ShapeParts | null {
 	if (!kind || !isPolygonKind(kind)) return null;
 	if (POLYHEDRA.includes(kind) && !plain)
@@ -579,7 +699,9 @@ export function shapeParts(
 	};
 	const make = FIT[kind];
 	const k = parameter(kind, adj);
-	let parts = make ? fitted(make(k), box) : direct(kind, box, k, numbered);
+	let parts = make
+		? fitted(make(k), box)
+		: direct(kind, box, k, numbered, plane);
 	if (!parts) return null;
 	if (FLIPPABLE.includes(kind)) {
 		const flipX = b[0] < a[0];
@@ -610,6 +732,13 @@ export function partsOf(s: Stroke): ShapeParts | null {
 					s.verts,
 					false,
 					s.numbered,
+					s.kind === "plane"
+						? {
+								cell: s.cell ?? PLANE_CELL,
+								grid: s.grid !== false,
+								axes: s.showAxes !== false,
+							}
+						: undefined,
 				)
 			: null;
 	cache.set(s, parts);
