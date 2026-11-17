@@ -48,6 +48,7 @@ import { loadPdf } from "./pdf/loader";
 import { PdfProgress } from "./pdf-progress";
 import { hasFinePointer } from "./pointer";
 import { PropertiesPanel } from "./properties-panel";
+import { ShareButton } from "./share-button";
 import { applyToolShortcut, colorForKey, dropsSelection } from "./shortcuts";
 import { ShortcutsDialog } from "./shortcuts-dialog";
 import { type Peer, type SocketLike, SyncClient } from "./sync/sync";
@@ -1136,6 +1137,7 @@ export function BoardView({
 							: undefined
 					}
 				/>
+				<ShareButton boardId={boardId} title={title} />
 				<BoardMenuButton onOpen={setBoardMenu} />
 			</div>
 			{menu && (

@@ -1060,6 +1060,23 @@ canvas {
 		margin: 5.5px;
 	}
 }
+.share-wrap {
+	position: relative;
+	display: flex;
+	flex: none;
+}
+.share-said {
+	position: absolute;
+	top: calc(100% + 8px);
+	right: 0;
+	padding: 6px 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--surface);
+	box-shadow: var(--shadow);
+	font-size: 13px;
+	white-space: nowrap;
+}
 .topbar .board-title,
 .topbar .participants,
 .topbar .board-menu {
