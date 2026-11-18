@@ -110,6 +110,45 @@ export async function boardPreview(
 	return { etag: res.headers.get("ETag") ?? "", data: await res.json() };
 }
 
+/** Turns a Blob into a data URL, the form a picture is kept in for a tile. */
+const blobToDataUrl = (blob: Blob) =>
+	new Promise<string>((resolve, reject) => {
+		const r = new FileReader();
+		r.onload = () => resolve(String(r.result));
+		r.onerror = () => reject(r.error);
+		r.readAsDataURL(blob);
+	});
+
+/**
+ * The picture of a board the server kept for its tile (R-088) with the tag of the version it
+ * shows, or null when it has none for the current version (the client then draws it itself).
+ */
+export async function boardPreviewPicture(
+	id: string,
+): Promise<{ etag: string; url: string } | null> {
+	const res = await fetch(`/api/boards/${id}/preview.png`);
+	if (res.status === 404) return null;
+	if (!res.ok) throw new ApiError(res.status, `Błąd ${res.status}`);
+	return {
+		etag: res.headers.get("ETag") ?? "",
+		url: await blobToDataUrl(await res.blob()),
+	};
+}
+
+/** Hands the owner's picture of a board version to the server, so the next tile skips drawing. */
+export async function storePreviewPicture(
+	id: string,
+	tag: string,
+	dataUrl: string,
+): Promise<void> {
+	const body = await (await fetch(dataUrl)).blob();
+	const res = await fetch(
+		`/api/boards/${id}/preview.png?tag=${encodeURIComponent(tag)}`,
+		{ method: "PUT", headers: { "Content-Type": "image/png" }, body },
+	);
+	if (!res.ok) throw new ApiError(res.status, `Błąd ${res.status}`);
+}
+
 /** Takes a board off my list of boards I was invited to; the board itself stays (R-051). */
 export const forgetBoard = (id: string) =>
 	request<void>("DELETE", `/api/boards/${id}/visit`, {});
