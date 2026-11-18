@@ -9,6 +9,7 @@ import { ShapeIcon } from "./shape-icon";
 import { toolKey } from "./shortcuts";
 import { StrokeControls } from "./stroke-controls";
 import { displayColor, useTheme } from "./theme";
+import { rememberLineStyle, switchTool } from "./tool-style";
 import { useToolbarLayout } from "./toolbar-layout";
 
 export const COLORS = ["#111111", "#d32f2f", "#1976d2", "#388e3c", "#f57c00"];
@@ -75,7 +76,10 @@ export function Toolbar({
 }: Props) {
 	const [, rerender] = useState(0);
 	const set = (patch: Partial<Settings>) => {
-		Object.assign(settings, patch);
+		const { tool, ...rest } = patch;
+		Object.assign(settings, rest);
+		if (tool) switchTool(settings, tool);
+		if (patch.lineStyle) rememberLineStyle(settings.tool, patch.lineStyle);
 		rerender((n) => n + 1);
 		if (patch.tool) onToolChange?.();
 	};
