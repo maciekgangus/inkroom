@@ -252,6 +252,7 @@ describe("PropertiesPanel", () => {
 
 		test("the colour and the width of a curve are its own", () => {
 			mount([withFns(f1)]);
+			act(() => btn("fn f1 colors")?.click());
 			act(() => btn("fn f1 color #388e3c")?.click());
 			expect(onChange).toHaveBeenLastCalledWith({
 				fns: [{ ...f1, color: "#388e3c" }],
@@ -420,7 +421,7 @@ describe("PropertiesPanel", () => {
 					maxY: 300,
 				}),
 			);
-			expect(spot(".properties").left).toBeGreaterThan(innerWidth - 20 - 270);
+			expect(spot(".properties").left).toBeGreaterThan(innerWidth - 20 - 280);
 		});
 	});
 
@@ -455,7 +456,7 @@ describe("PropertiesPanel", () => {
 			);
 			const custom = root.querySelector(".swatch.custom") as HTMLElement;
 			expect(custom.classList.contains("active")).toBe(true);
-			expect(custom.style.background).not.toBe("");
+			expect(custom.style.getPropertyValue("--swatch")).not.toBe("");
 		});
 	});
 
@@ -675,10 +676,19 @@ describe("the colour windows of the panel", () => {
 
 	test("show the current colour, and that a shape has no fill, without words on the buttons", () => {
 		const root = show([{ ...rect, color: "#d32f2f" }]);
-		const names = [...root.querySelectorAll(".color-name")].map(
-			(n) => n.textContent,
-		);
-		expect(names).toEqual(["#D32F2F", "brak"]);
+		// No hex code, no black window: the current colour is the ring on its round tile.
+		expect(root.textContent).not.toMatch(/#[0-9a-f]{6}/i);
+		expect(root.querySelector(".color-current, .chip, .color-name")).toBeNull();
+		expect(
+			root
+				.querySelector('[aria-label="prop color #d32f2f"]')
+				?.classList.contains("active"),
+		).toBe(true);
+		expect(
+			root
+				.querySelector('[aria-label="prop fill none"]')
+				?.classList.contains("active"),
+		).toBe(true);
 		expect(root.textContent).not.toContain("Bez wypełnienia");
 		expect(
 			root.querySelector('[aria-label="prop fill none"] svg'),
@@ -702,5 +712,123 @@ describe("the colour windows of the panel", () => {
 	test("the sliders say what they are for with an icon", () => {
 		const root = show([rect]);
 		expect(root.querySelectorAll(".slider .slider-icon svg")).toHaveLength(2); // width, opacity
+	});
+
+	test("the custom colour is a round tile that opens our own picker: a preview while it moves, one change on release", () => {
+		const onChange = vi.fn();
+		const onPreview = vi.fn();
+		const root = document.createElement("div");
+		render(
+			<PropertiesPanel
+				elements={[rect]}
+				colors={COLORS}
+				onChange={onChange}
+				onPreview={onPreview}
+			/>,
+			root,
+		);
+		expect(root.querySelector('input[type="color"]')).toBeNull();
+		act(() =>
+			(
+				root.querySelector('[aria-label="prop color custom"]') as HTMLElement
+			).click(),
+		);
+		const shade = root.querySelector(
+			'input[aria-label="prop color custom shade"]',
+		) as HTMLInputElement;
+		shade.value = "30";
+		act(() => {
+			shade.dispatchEvent(new Event("input", { bubbles: true }));
+		});
+		expect(onPreview).toHaveBeenLastCalledWith({
+			color: expect.stringMatching(/^#[0-9a-f]{6}$/),
+		});
+		expect(onChange).not.toHaveBeenCalled();
+		act(() => {
+			shade.dispatchEvent(new Event("change", { bubbles: true }));
+		});
+		expect(onChange).toHaveBeenCalledOnce();
+	});
+});
+
+describe("the object menu in the language of the wide bar", () => {
+	const show = (els: Stroke[]) => {
+		const root = document.createElement("div");
+		const onChange = vi.fn();
+		render(
+			<PropertiesPanel elements={els} colors={COLORS} onChange={onChange} />,
+			root,
+		);
+		return { root, onChange };
+	};
+	const groups = (root: HTMLElement) =>
+		root.querySelectorAll(".panel-body > .prop-group").length;
+
+	test("is made of groups split by a rule: a shape has four, a text two, an image one", () => {
+		expect(groups(show([rect]).root)).toBe(4); // colours, fill, widths and styles, sliders
+		expect(groups(show([text]).root)).toBe(2); // colours, size and opacity
+		expect(groups(show([image]).root)).toBe(1); // opacity
+	});
+
+	test("never uses the pastel settings button of the narrow bar", () => {
+		const { root } = show([rect]);
+		expect(
+			root.querySelector(".settings-button, .settings-title, .settings-color"),
+		).toBeNull();
+	});
+
+	test("the ready widths are dots, as in the bar, for a line but not for a text or an image", async () => {
+		const { root, onChange } = show([
+			{ ...base, kind: "line", size: 2, points: pts([0, 0], [5, 5]) } as Stroke,
+		]);
+		for (const s of [1, 2, 4])
+			expect(
+				root.querySelector(`[aria-label="prop size ${s}"] .dot`),
+			).not.toBeNull();
+		expect(
+			root
+				.querySelector('[aria-label="prop size 2"]')
+				?.getAttribute("aria-pressed"),
+		).toBe("true");
+		act(() =>
+			(root.querySelector('[aria-label="prop size 4"]') as HTMLElement).click(),
+		);
+		expect(onChange).toHaveBeenLastCalledWith({ size: 4 });
+		expect(
+			show([text]).root.querySelector('[aria-label="prop size 1"]'),
+		).toBeNull();
+		expect(
+			show([image]).root.querySelector('[aria-label="prop size 1"]'),
+		).toBeNull();
+	});
+
+	test("line styles are icons in the bar's order, with the natural pen first for a freehand stroke", () => {
+		const { root } = show([freehand]);
+		const dashes = [...root.querySelectorAll('[aria-label^="prop dash "]')];
+		expect(dashes.map((b) => b.getAttribute("aria-label"))).toEqual([
+			"prop dash natural",
+			"prop dash solid",
+			"prop dash dashed",
+			"prop dash dotted",
+		]);
+		for (const b of dashes) expect(b.querySelector("svg")).not.toBeNull();
+	});
+
+	test("the cross is an icon, not a letter", () => {
+		const root = document.createElement("div");
+		render(
+			<PropertiesPanel
+				elements={[rect]}
+				colors={COLORS}
+				onClose={() => {}}
+				onChange={() => {}}
+			/>,
+			root,
+		);
+		const close = root.querySelector(
+			'[aria-label="close panel"]',
+		) as HTMLElement;
+		expect(close.querySelector("svg")).not.toBeNull();
+		expect(close.textContent).toBe("");
 	});
 });
