@@ -21,6 +21,7 @@ import {
 	PLANE_DEFAULT_SIDE,
 	PLANE_MIN_SIDE,
 } from "./shape-parts";
+import { recognizeShape } from "./shape-recognition";
 import { isBlockKind, type ShapeChoice } from "./shapes";
 import { applyStyle, type Dash, type StylePatch } from "./style";
 import {
@@ -108,9 +109,16 @@ export interface Settings {
 	lineStyle?: Dash;
 	/** Opacity of new elements, 0 to 1; full if none (R-038). */
 	opacity?: number;
+	/** Holding the pen still at the end of a stroke straightens it into a shape (R-095). */
+	snapShapes?: boolean;
 	color: string;
 	size: number;
 }
+
+/** How long the pen must rest at the end of a stroke to snap it to a shape (R-095). */
+const HOLD_MS = 500;
+/** How far (screen px) the pen may drift and still count as resting. */
+const HOLD_SLOP = 6;
 
 export const ERASER_RADIUS = 10;
 /** A shape dragged less than this many screen pixels is treated as a stray click and dropped. */
@@ -222,6 +230,22 @@ export class Controller {
 	/** Elements copied with copySelected, pasted by paste (not shared between clients). */
 	private clipboard: Stroke[] = [];
 	private edit: Edit | null = null;
+	/** Waits for the pen to rest at the end of a stroke (R-095). */
+	private holdTimer: ReturnType<typeof setTimeout> | null = null;
+	/** Where the pen last rested, in screen px; a move beyond the slop starts the wait again. */
+	private holdAnchor: { x: number; y: number } | null = null;
+	/**
+	 * Set once the stroke in progress has snapped to a shape while the pen is still down: the
+	 * stroke as drawn (kept for undo), where the pen was, and the ends the shape can be dragged by.
+	 */
+	private snapped: {
+		orig: Stroke;
+		at: [number, number];
+		start: [number, number];
+		end: [number, number];
+		square: boolean;
+		fixed: boolean;
+	} | null = null;
 	/** Called when the selected image changes, so the UI can show or hide its controls. */
 	onSelectionChange: (() => void) | null = null;
 	/** Called with a text element when it is double-clicked, so the UI can edit its content. */
@@ -379,6 +403,7 @@ export class Controller {
 			points: isShapeTool(tool) ? [start, [...start]] : [start],
 		};
 		this.renderer.drawLive(this.current);
+		this.armHold(e);
 	}
 
 	pointerMove(e: PointerInput): void {
@@ -417,6 +442,10 @@ export class Controller {
 			return;
 		}
 		if (!this.current) return;
+		if (this.snapped) {
+			this.moveSnapped(e);
+			return;
+		}
 		if (this.current.kind) {
 			// A shape only needs where it ends.
 			// A new object each time: what is computed from an element (its parts, its paths) is kept
@@ -439,6 +468,7 @@ export class Controller {
 			this.current.points.push(this.point(p));
 		}
 		this.renderer.drawLive(this.current);
+		this.armHold(e);
 	}
 
 	pointerUp(e: PointerInput): void {
@@ -450,6 +480,7 @@ export class Controller {
 
 	private finishPointer(e: PointerInput): void {
 		this.activeId = null;
+		this.clearHold();
 		// What one drag of the eraser took is one undo step (R-078).
 		this.erasing?.done();
 		this.erasing = null;
@@ -485,6 +516,10 @@ export class Controller {
 			this.finishPlane(e);
 			return;
 		}
+		if (this.snapped) {
+			this.commitSnapped();
+			return;
+		}
 		if (this.current.kind) {
 			const [a] = this.current.points; // Shift as it is on release
 			this.current = {
@@ -503,6 +538,92 @@ export class Controller {
 		this.renderer.drawLive(null);
 		this.renderer.redraw(this.board.strokes);
 		// Nothing is selected and the tool stays as it was, so the next shape is drawn at once (R-059).
+	}
+
+	/** Starts (or restarts, when the pen has moved on) the wait for the pen to rest (R-095). */
+	private armHold(e: PointerInput): void {
+		if (!this.settings.snapShapes || this.settings.tool !== "pen") return;
+		const a = this.holdAnchor;
+		if (a && Math.hypot(e.clientX - a.x, e.clientY - a.y) <= HOLD_SLOP) return;
+		this.clearHold();
+		this.holdAnchor = { x: e.clientX, y: e.clientY };
+		this.holdTimer = setTimeout(() => this.snapNow(), HOLD_MS);
+	}
+
+	private clearHold(): void {
+		if (this.holdTimer) clearTimeout(this.holdTimer);
+		this.holdTimer = null;
+		this.holdAnchor = null;
+	}
+
+	/**
+	 * The pen has rested at the end of a stroke: if the stroke is a line, ellipse, rectangle or
+	 * triangle, it becomes that shape, which can still be adjusted until the pen is lifted (R-095).
+	 */
+	private snapNow(): void {
+		this.holdTimer = null;
+		const cur = this.current;
+		if (!cur || cur.kind || this.activeId === null || this.snapped) return;
+		const r = recognizeShape(cur.points);
+		if (!r) return;
+		const [a, b] = r.points;
+		const last = cur.points[cur.points.length - 1];
+		this.snapped = {
+			orig: cur,
+			at: [last[0], last[1]],
+			start: [a[0], a[1]],
+			end: [b[0], b[1]],
+			square:
+				r.kind !== "line" &&
+				Math.abs(Math.abs(b[0] - a[0]) - Math.abs(b[1] - a[1])) < 1e-6,
+			// A turned box or free vertices are not dragged by an end.
+			fixed: !!r.rot || r.kind === "triangle",
+		};
+		const { dash, ...rest } = cur;
+		this.current = {
+			...rest,
+			// Shapes have no natural pen (R-073).
+			...(dash === "dashed" || dash === "dotted" ? { dash } : {}),
+			kind: r.kind,
+			points: r.points,
+			...(r.rot ? { rot: r.rot } : {}),
+			...(r.verts ? { verts: r.verts } : {}),
+		};
+		this.renderer.drawLive(this.current);
+	}
+
+	/** The pen moves on while holding a snapped shape: its end follows, as with Shift (R-024). */
+	private moveSnapped(e: PointerInput): void {
+		const s = this.snapped;
+		const cur = this.current;
+		if (!s || !cur || s.fixed) return;
+		const p = this.point(e);
+		const line = cur.kind === "line";
+		const [x, y] = constrainEnd(
+			line ? "line" : "rect",
+			s.start,
+			[s.end[0] + p[0] - s.at[0], s.end[1] + p[1] - s.at[1]],
+			line || s.square,
+		);
+		this.current = { ...cur, points: [cur.points[0], [x, y, 0.5]] };
+		this.renderer.drawLive(this.current);
+	}
+
+	/**
+	 * Puts a snapped shape on the board: first the stroke as it was drawn, then the shape in its
+	 * place, so one undo brings the stroke back (R-095).
+	 */
+	private commitSnapped(): void {
+		const s = this.snapped;
+		const shape = this.current;
+		this.snapped = null;
+		this.current = null;
+		if (s && shape) {
+			this.board.addStroke(s.orig);
+			this.board.updateElement(this.authorId, shape);
+		}
+		this.renderer.drawLive(null);
+		this.renderer.redraw(this.board.strokes);
 	}
 
 	pointerCancel(e: PointerInput): void {
