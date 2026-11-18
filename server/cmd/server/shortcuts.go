@@ -3,8 +3,6 @@ package main
 import (
 	"encoding/json"
 	"net/http"
-
-	"github.com/maciekgangus/inkroom/server/internal/auth"
 )
 
 const (

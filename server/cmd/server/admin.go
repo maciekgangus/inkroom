@@ -6,7 +6,6 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/maciekgangus/inkroom/server/internal/cfaccess"
 	"github.com/maciekgangus/inkroom/server/internal/store"

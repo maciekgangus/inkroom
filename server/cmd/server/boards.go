@@ -34,7 +34,7 @@ type boardJSON struct {
 func toJSON(boards []store.Board) []boardJSON {
 	out := make([]boardJSON, 0, len(boards))
 	for _, b := range boards {
-		out = append(out, boardJSON{ID: b.ID, Name: b.Name, UpdatedAt: b.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z"), Owner: b.OwnerName})
+		out = append(out, boardJSON{ID: b.ID, Name: b.Name, UpdatedAt: iso(b.UpdatedAt), Owner: b.OwnerName})
 	}
 	return out
 }
