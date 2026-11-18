@@ -32,6 +32,14 @@ describe("where the menu and its tile stand (R-060)", () => {
 		expect(400 - (l.left + size.w)).toBeCloseTo(r.left - 600);
 	});
 
+	test("it never stands under the column of tools down the left edge (R-082)", () => {
+		const near = rect(100, 200, 300, 300);
+		expect(sidePosition(near, size, view, "left").left).toBeLessThan(72);
+		expect(sidePosition(near, size, view, "left", 72).left).toBe(72);
+		// without room that is just the inset, with room the object's side wins
+		expect(sidePosition(o, size, view, "right", 72).left).toBeGreaterThan(600);
+	});
+
 	test("the side is the right one unless there is no room for the menu there", () => {
 		expect(pickSide(o, size.w, view)).toBe("right");
 		expect(pickSide(rect(1200, 200, 1400, 300), size.w, view)).toBe("left");

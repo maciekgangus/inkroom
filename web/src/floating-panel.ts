@@ -34,10 +34,16 @@ export function sidePosition(
 	size: { w: number; h: number },
 	view: { w: number; h: number },
 	side: Side,
+	/** The least left edge: where a column of tools down the left side (R-082) ends. */
+	leftInset = 0,
 ): { left: number; top: number } {
 	const beside =
 		side === "right" ? anchor.maxX + SIDE_GAP : anchor.minX - SIDE_GAP - size.w;
-	const left = Math.max(Math.min(beside, view.w - size.w - MARGIN), MARGIN);
+	const left = Math.max(
+		Math.min(beside, view.w - size.w - MARGIN),
+		MARGIN,
+		leftInset,
+	);
 	const top = Math.max(
 		Math.min(anchor.minY, view.h - size.h - MARGIN),
 		TOP_BAR,

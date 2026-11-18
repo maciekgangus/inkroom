@@ -1,3 +1,4 @@
+import type { PlaneFn } from "./functions";
 /** A point of a stroke: x, y and pen pressure (0..1). */
 export type Point = [x: number, y: number, pressure: number];
 
@@ -85,6 +86,8 @@ export interface Stroke {
 	showAxes?: boolean;
 	/** For a coordinate plane: the x axis is numbered in π and its cells are twelfths of π. */
 	pi?: boolean;
+	/** For a coordinate plane (R-092): the function graphs on it, each a formula with coefficients. */
+	fns?: PlaneFn[];
 	/** Width of a text area in board units: the text wraps to it (R-044); missing for a text at a point. */
 	width?: number;
 	id: string;

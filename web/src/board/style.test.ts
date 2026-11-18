@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import type { Stroke } from "./board";
+import type { PlaneFn } from "./functions";
 import {
 	applyStyle,
 	capabilities,
@@ -376,10 +377,17 @@ describe("the coordinate plane's own settings (R-084)", () => {
 			grid: true,
 			showAxes: true,
 			numbering: "numbers",
+			fns: [],
 		});
 		expect(
 			planeOf([{ ...plane, cell: 80, grid: false, showAxes: false }]),
-		).toEqual({ cell: 80, grid: false, showAxes: false, numbering: "numbers" });
+		).toEqual({
+			cell: 80,
+			grid: false,
+			showAxes: false,
+			numbering: "numbers",
+			fns: [],
+		});
 	});
 });
 
@@ -420,5 +428,41 @@ describe("the numbering of a coordinate plane: numbers, π or none (R-084)", () 
 			points: pts([0, 0], [10, 10]),
 		} as Stroke;
 		expect(applyStyle(rect, { numbering: "pi" }).pi).toBeUndefined();
+	});
+});
+
+describe("functions on a coordinate plane (R-092)", () => {
+	const plane = {
+		...base,
+		kind: "plane",
+		points: pts([0, 0], [480, 480]),
+	} as Stroke;
+	const f: PlaneFn = {
+		id: "f1",
+		k: "linear",
+		c: [1, 0],
+		color: "#d32f2f",
+		w: 2,
+	};
+
+	test("a list of functions is stored on the plane", () => {
+		expect(applyStyle(plane, { fns: [f] }).fns).toEqual([f]);
+		expect(planeOf([applyStyle(plane, { fns: [f] })]).fns).toEqual([f]);
+	});
+
+	test("an empty list removes the field", () => {
+		const withFns = applyStyle(plane, { fns: [f] });
+		expect("fns" in applyStyle(withFns, { fns: [] })).toBe(false);
+	});
+
+	test("a malformed list is ignored and a plane without functions has an empty list", () => {
+		expect(
+			applyStyle(plane, { fns: [{ ...f, c: [1, 9999] }] as never }).fns,
+		).toBeUndefined();
+		expect(planeOf([plane]).fns).toEqual([]);
+	});
+
+	test("only a plane takes functions", () => {
+		expect(applyStyle(rect, { fns: [f] }).fns).toBeUndefined();
 	});
 });

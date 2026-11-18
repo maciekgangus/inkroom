@@ -3,11 +3,12 @@ import { type Background, drawBackground } from "./background";
 import type { Stroke } from "./board";
 import { intersects, strokeBounds } from "./bounds";
 import type { Renderer } from "./controller";
+import { planeFrame, sampleFn } from "./functions";
 import type { ImageCache } from "./image-cache";
 import { imageRect } from "./image-geometry";
 import type { LaserLine } from "./laser";
 import { type Frame, HANDLE_PX, ROT_OFFSET_PX } from "./selection-frame";
-import { LABEL_PX, type PlaneLook, partsOf } from "./shape-parts";
+import { LABEL_PX, PLANE_CELL, type PlaneLook, partsOf } from "./shape-parts";
 import { isPolygonKind } from "./shapes";
 import { strokeOptions } from "./stroke-style";
 import { isFreehand } from "./style";
@@ -133,9 +134,27 @@ interface Extras {
 	paper: Path2D | null;
 	heads: Path2D | null;
 	plane: PlaneLook | null;
+	/** The function graphs of a coordinate plane, each as one path with its look (R-092). */
+	curves: { path: Path2D; color: string; w: number }[];
 	labels: { text: string; x: number; y: number }[];
 }
 const extras = new WeakMap<Stroke, Extras>();
+
+/**
+ * The function graphs of a plane (R-092) as paths in board units. They are made once per version
+ * of the element (the cache is per element), so repainting while the view moves or zooms costs
+ * nothing more; the sheet clips them when they are drawn.
+ */
+function curvesOf(s: Stroke, look: PlaneLook): Extras["curves"] {
+	if (!s.fns?.length) return [];
+	const cell = s.cell ?? PLANE_CELL;
+	const frame = planeFrame(look, cell);
+	return s.fns.map((f) => {
+		const path = new Path2D();
+		for (const line of sampleFn(f, frame)) addPolyline(path, line);
+		return { path, color: f.color, w: f.w };
+	});
+}
 function extraPaths(s: Stroke): Extras | null {
 	if (!isPolygonKind(s.kind)) return null;
 	let e = extras.get(s);
@@ -169,6 +188,7 @@ function extraPaths(s: Stroke): Extras | null {
 			paper,
 			heads: lined(look?.heads),
 			plane: look,
+			curves: look ? curvesOf(s, look) : [],
 			labels: parts?.labels ?? [],
 		};
 		extras.set(s, e);
@@ -337,6 +357,18 @@ function drawPlane(
 	if (e.fine) {
 		ctx.lineWidth = Math.max(aw * 0.6, minWidth * 0.5);
 		ctx.stroke(e.fine);
+	}
+	if (e.curves.length) {
+		ctx.save();
+		ctx.clip(paper);
+		ctx.lineCap = "round";
+		ctx.lineJoin = "round";
+		for (const c of e.curves) {
+			ctx.strokeStyle = c.color;
+			ctx.lineWidth = Math.max(c.w, 1.5 / dev, minWidth);
+			ctx.stroke(c.path);
+		}
+		ctx.restore();
 	}
 	if (!p.text.length || p.px * dev < 5) return;
 	// Each number sits on a halo of paper colour, so the grid does not cut through it.
