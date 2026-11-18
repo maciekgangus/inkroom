@@ -15,6 +15,7 @@ import {
 	type Side,
 	sidePosition,
 } from "./floating-panel";
+import { FunctionEditor } from "./function-editor";
 import { Icon, type IconName } from "./icon";
 import { Slider } from "./slider";
 import "./properties-panel.css";
@@ -32,6 +33,12 @@ const DASH_LABELS: Record<Dash, string> = {
 /** The most the menu is wide, and the side of its tile, in px. */
 const MENU_WIDTH = 270;
 const TILE = 40;
+
+/** Where the column of tools on the left edge of an upright tablet ends (R-082), or 0 without it. */
+const railEnd = (): number => {
+	const rail = document.querySelector(".toolbar.rail");
+	return rail ? Math.ceil(rail.getBoundingClientRect().right) + 8 : 0;
+};
 
 interface Props {
 	/** The selected elements; the panel shows the values of the first. */
@@ -107,7 +114,7 @@ export function PropertiesPanel({
 	if (anchor && !isVisible(anchor, view)) return null;
 	if (collapsed) {
 		const spot = anchor
-			? sidePosition(anchor, { w: TILE, h: TILE }, view, side)
+			? sidePosition(anchor, { w: TILE, h: TILE }, view, side, railEnd())
 			: null;
 		return (
 			<button
@@ -130,7 +137,9 @@ export function PropertiesPanel({
 			</button>
 		);
 	}
-	const spot = anchor ? sidePosition(anchor, size, view, side) : null;
+	const spot = anchor
+		? sidePosition(anchor, size, view, side, railEnd())
+		: null;
 	const at = spot
 		? { left: spot.left + offset.x, top: spot.top + offset.y }
 		: null;
@@ -307,6 +316,13 @@ export function PropertiesPanel({
 						</button>
 					))}
 				</div>
+			)}
+			{can.plane && (
+				<FunctionEditor
+					fns={plane.fns}
+					onPreview={onPreview}
+					onChange={onChange}
+				/>
 			)}
 			{can.numbers && !can.plane && (
 				<div class="row">

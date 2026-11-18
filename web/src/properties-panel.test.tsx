@@ -154,6 +154,122 @@ describe("PropertiesPanel", () => {
 		});
 	});
 
+	describe("functions on a coordinate plane (R-092)", () => {
+		const plane = {
+			...rect,
+			kind: "plane",
+			numbered: true,
+			points: pts([0, 0], [400, 400]),
+		} as Stroke;
+		const f1 = { id: "f1", k: "linear", c: [2, -1], color: "#d32f2f", w: 2 };
+		const f2 = {
+			id: "f2",
+			k: "quad",
+			c: [1, 0, -4],
+			color: "#1976d2",
+			w: 2,
+		};
+		const lastPatch = (fn: unknown): StylePatch =>
+			(fn as ReturnType<typeof vi.fn>).mock.lastCall?.[0] ?? {};
+		const withFns = (...fns: unknown[]) => ({ ...plane, fns }) as Stroke;
+		const input = (label: string) =>
+			root.querySelector<HTMLInputElement>(`[aria-label="${label}"]`);
+		const type = (el: HTMLInputElement, v: number) => {
+			el.value = String(v);
+			el.dispatchEvent(new Event("change", { bubbles: true }));
+		};
+
+		test("a plane offers to add a function, an ordinary shape does not", () => {
+			mount([plane]);
+			expect(has("fn add")).toBe(true);
+			mount([rect]);
+			expect(has("fn add")).toBe(false);
+		});
+
+		test("the add button lists the presets and picking one adds a function with its own colour", () => {
+			mount([plane]);
+			act(() => btn("fn add")?.click());
+			expect(has("fn add sin")).toBe(true);
+			expect(has("fn add hom")).toBe(true);
+			act(() => btn("fn add linear")?.click());
+			const patch = (onChange as ReturnType<typeof vi.fn>).mock
+				.lastCall?.[0] as StylePatch;
+			expect(patch.fns).toHaveLength(1);
+			expect(patch.fns?.[0]).toMatchObject({ k: "linear", c: [1, 0] });
+			expect(patch.fns?.[0].id).toBeTruthy();
+		});
+
+		test("a second function gets another colour than the first", () => {
+			mount([withFns(f1)]);
+			act(() => btn("fn add")?.click());
+			act(() => btn("fn add abs")?.click());
+			const fns = lastPatch(onChange).fns;
+			expect(fns).toHaveLength(2);
+			expect(fns?.[1].color).not.toBe(fns?.[0].color);
+		});
+
+		test("each function shows its formula and its coefficients in fields and sliders", () => {
+			mount([withFns(f1, f2)]);
+			expect(root.textContent).toContain("y = 2x − 1");
+			expect(root.textContent).toContain("y = x² − 4");
+			expect(input("fn f1 coef 0")?.value).toBe("2");
+			expect(input("fn f1 coef 1")?.value).toBe("-1");
+			expect(input("fn f2 coef 2")?.value).toBe("-4");
+			expect(slider("fn f1 slider 0")).not.toBeNull();
+		});
+
+		test("typing a coefficient changes only that function and that number", () => {
+			mount([withFns(f1, f2)]);
+			act(() => type(input("fn f2 coef 1") as HTMLInputElement, 3));
+			const fns = lastPatch(onChange).fns;
+			expect(fns?.[0]).toEqual(f1);
+			expect(fns?.[1].c).toEqual([1, 3, -4]);
+		});
+
+		test("moving a slider is a preview, releasing it is the change", () => {
+			mount([withFns(f1)]);
+			const s = slider("fn f1 slider 0") as HTMLInputElement;
+			act(() => move(s, 4, "input"));
+			expect(lastPatch(onPreview).fns?.[0].c).toEqual([4, -1]);
+			act(() => move(s, 4, "change"));
+			expect(lastPatch(onChange).fns?.[0].c).toEqual([4, -1]);
+		});
+
+		test("a function is removed with its own button", () => {
+			mount([withFns(f1, f2)]);
+			act(() => btn("fn remove f1")?.click());
+			expect(onChange).toHaveBeenLastCalledWith({ fns: [f2] });
+		});
+
+		test("a quadratic switches to the vertex form and back", () => {
+			mount([withFns(f2)]);
+			act(() => btn("fn canon f2")?.click());
+			expect(onChange).toHaveBeenLastCalledWith({
+				fns: [{ ...f2, canon: true }],
+			});
+			expect(has("fn canon f1")).toBe(false);
+		});
+
+		test("the colour and the width of a curve are its own", () => {
+			mount([withFns(f1)]);
+			act(() => btn("fn f1 color #388e3c")?.click());
+			expect(onChange).toHaveBeenLastCalledWith({
+				fns: [{ ...f1, color: "#388e3c" }],
+			});
+			act(() => move(slider("fn f1 width") as HTMLInputElement, 6, "change"));
+			expect(lastPatch(onChange).fns?.[0].w).toBe(6);
+		});
+
+		test("no more than the most allowed can be added", () => {
+			const many = Array.from({ length: 8 }, (_, i) => ({
+				...f1,
+				id: `f${i}`,
+			}));
+			mount([withFns(...many)]);
+			expect(btn("fn add")?.hasAttribute("disabled")).toBe(true);
+		});
+	});
+
 	describe("the menu of an object (R-060)", () => {
 		const anchor = { minX: 300, minY: 200, maxX: 500, maxY: 300 };
 		const mountWith = (extra: Record<string, unknown>) =>
