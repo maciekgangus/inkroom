@@ -5,11 +5,13 @@ class FakeImage implements ImageLike {
 	src = "";
 	complete = false;
 	naturalWidth = 0;
+	naturalHeight = 0;
 	onload: (() => void) | null = null;
 	onerror: (() => void) | null = null;
 	finish() {
 		this.complete = true;
 		this.naturalWidth = 100;
+		this.naturalHeight = 100;
 		this.onload?.();
 	}
 }
@@ -62,5 +64,50 @@ describe("ImageCache", () => {
 		expect(cache.get("abc")).toBeNull();
 		expect(created).toHaveLength(1);
 		expect(cache.failed("abc")).toBe(true);
+	});
+
+	describe("memory budget (R-090)", () => {
+		const makeBudget = (budget: number) => {
+			let now = 0;
+			const created: FakeImage[] = [];
+			const cache = new ImageCache(
+				"b1",
+				() => {},
+				() => {
+					const img = new FakeImage();
+					created.push(img);
+					return img;
+				},
+				{ maxPixels: budget, idleMs: 1000, now: () => now },
+			);
+			const load = (src: string) => {
+				cache.get(src);
+				created[created.length - 1].finish();
+			};
+			return { cache, created, load, advance: (ms: number) => (now += ms) };
+		};
+
+		test("drops the longest unused image once the decoded pixels exceed the budget", () => {
+			const { cache, created, load, advance } = makeBudget(25_000); // 2.5 images of 10k px
+			load("a");
+			advance(2000);
+			load("b");
+			advance(2000);
+			load("c");
+			cache.get("c"); // keeps asking: the budget is checked at the next request
+			expect(cache.get("b")).toBe(created[1]);
+			expect(cache.get("a")).toBeNull(); // evicted, loads again on demand
+			expect(created.length).toBe(4);
+		});
+
+		test("never drops an image drawn within the last moment, even over budget", () => {
+			const { cache, load, advance } = makeBudget(15_000);
+			load("a");
+			advance(100);
+			load("b");
+			advance(100);
+			expect(cache.get("a")).not.toBeNull();
+			expect(cache.get("b")).not.toBeNull();
+		});
 	});
 });
