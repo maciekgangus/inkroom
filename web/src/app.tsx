@@ -84,6 +84,7 @@ function Home({ navigate }: { navigate: (to: string) => void }) {
 	return (
 		<Panel
 			username={account.username}
+			account={account}
 			navigate={navigate}
 			onLogout={() => setAccount(null)}
 		/>

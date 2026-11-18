@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import type { BoardSummary } from "./api";
+import { AccountDialog } from "./account-dialog";
+import type { Account, BoardSummary } from "./api";
 import * as api from "./api";
 import { BoardPreview } from "./board-preview";
 import { Icon, type IconName } from "./icon";
@@ -19,12 +20,15 @@ const storedView = (): View => {
 
 interface Props {
 	username: string;
+	/** Used by the account window; without it the window loads it itself. */
+	account?: Account;
 	navigate: (to: string) => void;
 	onLogout: () => void;
 }
 
 /** The logged-in user's home: own boards, boards they were invited to, and creating new ones. */
-export function Panel({ username, navigate, onLogout }: Props) {
+export function Panel({ username, account, navigate, onLogout }: Props) {
+	const [accountOpen, setAccountOpen] = useState(false);
 	const [owned, setOwned] = useState<BoardSummary[] | null>(null);
 	const [visited, setVisited] = useState<BoardSummary[]>([]);
 	const [error, setError] = useState("");
@@ -102,12 +106,26 @@ export function Panel({ username, navigate, onLogout }: Props) {
 					<Logo />
 				</h1>
 				<span class="row">
-					<span class="chip">{username}</span>
+					<button
+						type="button"
+						class="chip"
+						title="Konto"
+						onClick={() => setAccountOpen(true)}
+					>
+						{username}
+					</button>
 					<button type="button" onClick={logout}>
 						Wyloguj
 					</button>
 				</span>
 			</header>
+			{accountOpen && (
+				<AccountDialog
+					account={account ?? { email: "", username }}
+					onClose={() => setAccountOpen(false)}
+					onDeleted={onLogout}
+				/>
+			)}
 			{error && (
 				<p class="error" role="alert">
 					{error}
