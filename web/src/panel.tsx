@@ -88,7 +88,7 @@ export function Panel({ account, navigate, onLogout }: Props) {
 			const b = await api.createBoard(name);
 			navigate(`/b/${b.id}`);
 		} catch (e) {
-			setError(e instanceof Error ? e.message : "Błąd");
+			setError(api.errorMessage(e));
 		}
 	};
 
@@ -255,7 +255,7 @@ function BoardRow({
 			onRenamed?.(name);
 			setRenaming(false);
 		} catch (e) {
-			setError(e instanceof Error ? e.message : "Błąd");
+			setError(api.errorMessage(e));
 		}
 	};
 
@@ -263,7 +263,7 @@ function BoardRow({
 		try {
 			onCopied?.(await api.copyBoard(board.id));
 		} catch (e) {
-			setError(e instanceof Error ? e.message : "Błąd");
+			setError(api.errorMessage(e));
 		}
 	};
 
@@ -272,7 +272,7 @@ function BoardRow({
 			await api.forgetBoard(board.id);
 			onForgotten?.();
 		} catch (e) {
-			setError(e instanceof Error ? e.message : "Błąd");
+			setError(api.errorMessage(e));
 		}
 	};
 
@@ -281,7 +281,7 @@ function BoardRow({
 			await api.deleteBoard(board.id);
 			onDeleted?.();
 		} catch (e) {
-			setError(e instanceof Error ? e.message : "Błąd");
+			setError(api.errorMessage(e));
 			setConfirming(false);
 		}
 	};
