@@ -71,7 +71,7 @@ export function StrokeControls({ settings, onChange, inline }: Props) {
 				onClick={() => onChange({ snapShapes: !settings.snapShapes })}
 			>
 				<span class="snap-check" aria-hidden="true" />
-				Prostowanie kształtów
+				Idealne kształty
 			</button>
 		) : null;
 

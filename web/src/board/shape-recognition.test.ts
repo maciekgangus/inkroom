@@ -220,4 +220,136 @@ describe("recognizeShape (R-095)", () => {
 		recognizeShape(many);
 		expect(performance.now() - t).toBeLessThan(200);
 	});
+
+	describe("messier drawings are met half way", () => {
+		test.each([
+			[1, 18],
+			[2, 22],
+			[3, 26],
+		])(
+			"a very uneven circle (noise %i, amp %i) is still an ellipse",
+			(seed, amp) => {
+				const pts = ellipsePts(300, 300, 110, 100, 0, 1.0).map(
+					([x, y], i): [number, number] => [
+						x + Math.sin(i / 4) * 9,
+						y + Math.cos(i / 5) * 9,
+					],
+				);
+				expect(recognizeShape(noisy(pts, amp, seed))?.kind).toBe("ellipse");
+			},
+		);
+
+		test("a circle left open by a gap of a few degrees is still an ellipse", () => {
+			const arc = ellipsePts(300, 300, 100, 100, 0, 0.93);
+			expect(recognizeShape(noisy(arc, 8, 11))?.kind).toBe("ellipse");
+		});
+
+		test("a lopsided rectangle with bowed sides and slack corners is a rectangle", () => {
+			const rect = along(
+				[
+					[50, 50],
+					[380, 40],
+					[372, 226],
+					[44, 240],
+					[62, 70],
+				],
+				7,
+			).map(([x, y], i): [number, number] => [
+				x + Math.sin(i / 3) * 6,
+				y + Math.cos(i / 4) * 6,
+			]);
+			expect(recognizeShape(noisy(rect, 12, 12))?.kind).toBe("rect");
+		});
+
+		test("a rectangle whose corners are far from square (up to about 30 degrees off) still is", () => {
+			const skew = along(
+				[
+					[50, 60],
+					[370, 40],
+					[400, 230],
+					[70, 250],
+					[52, 62],
+				],
+				7,
+			);
+			expect(recognizeShape(noisy(skew, 6, 13))?.kind).toBe("rect");
+		});
+
+		test("a sloppy triangle with rounded corners is a triangle", () => {
+			const tri = along(
+				[
+					[210, 40],
+					[345, 270],
+					[60, 262],
+					[206, 56],
+				],
+				7,
+			).map(([x, y], i): [number, number] => [
+				x + Math.sin(i / 3) * 7,
+				y + Math.cos(i / 4) * 7,
+			]);
+			expect(recognizeShape(noisy(tri, 12, 14))?.kind).toBe("triangle");
+		});
+
+		test("a wavering line is still a line", () => {
+			const line = along(
+				[
+					[40, 300],
+					[520, 330],
+				],
+				8,
+			).map(([x, y], i): [number, number] => [x, y + Math.sin(i / 4) * 9]);
+			expect(recognizeShape(noisy(line, 8, 15))?.kind).toBe("line");
+		});
+	});
+
+	describe("handwriting is never straightened", () => {
+		const loopAt = (
+			cx: number,
+			cy: number,
+			rx: number,
+			ry: number,
+			turns = 1.05,
+		) => ellipsePts(cx, cy, rx, ry, 0, turns);
+		const samples: Record<string, [number, number][]> = {
+			"a small o": loopAt(100, 100, 12, 13),
+			"a tall 0": loopAt(100, 100, 9, 19),
+			"a wide 0": loopAt(100, 100, 17, 12),
+			"an 8": [...loopAt(100, 80, 11, 11, 1), ...loopAt(100, 104, 13, 13, 1)],
+			"an a": [
+				...loopAt(100, 100, 11, 12, 1.1),
+				...along(
+					[
+						[111, 90],
+						[111, 114],
+					],
+					3,
+				),
+			],
+			"an e": [
+				...along(
+					[
+						[88, 100],
+						[113, 98],
+					],
+					3,
+				),
+				...ellipsePts(100, 100, 13, 13, 0, 0.85),
+			],
+			"a 6": [
+				...along(
+					[
+						[110, 70],
+						[92, 100],
+					],
+					3,
+				),
+				...loopAt(100, 108, 11, 11, 1),
+			],
+			"a big handwritten o": loopAt(100, 100, 25, 26),
+		};
+		test.each(Object.keys(samples))("%s stays as written", (name) => {
+			expect(recognizeShape(noisy(samples[name], 1.5, 21))).toBeNull();
+		});
+	});
 });

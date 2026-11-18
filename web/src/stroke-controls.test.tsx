@@ -163,6 +163,7 @@ describe("StrokeControls (R-038)", () => {
 		test("the pen offers the switch, which shows and flips the setting", () => {
 			press("stroke settings");
 			expect(el("snap shapes")).not.toBeNull();
+			expect(el("snap shapes")?.textContent).toBe("Idealne kształty");
 			expect(el("snap shapes")?.getAttribute("aria-checked")).toBe("false");
 			press("snap shapes");
 			expect(onChange).toHaveBeenCalledWith({ snapShapes: true });

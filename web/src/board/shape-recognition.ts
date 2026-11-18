@@ -14,7 +14,7 @@ export interface Recognized {
 }
 
 /** Strokes smaller than this (board units, box diagonal) are handwriting, not a shape. */
-const MIN_DIAG = 24;
+const MIN_DIAG = 80;
 /** The angle step a line snaps to (as with Shift, R-024) and how near it must be to snap. */
 const ANGLE_STEP = Math.PI / 12;
 const LINE_SNAP = (5 * Math.PI) / 180;
@@ -238,7 +238,7 @@ export function recognizeShape(points: Point[]): Recognized | null {
 	if (diag < MIN_DIAG || length === 0) return null;
 
 	const ends = dist(raw[0], raw[raw.length - 1]);
-	const closed = ends <= 0.3 * diag && length >= 1.8 * diag;
+	const closed = ends <= 0.4 * diag && length >= 1.5 * diag;
 	const sample = resample(raw, SAMPLES, length);
 
 	if (!closed) return recognizeLine(raw, sample, length, ends);
@@ -250,13 +250,13 @@ export function recognizeShape(points: Point[]): Recognized | null {
 	const round =
 		ellipse.a > 0.1 * diag &&
 		ellipse.b > 0.1 * diag &&
-		ellErr.mean <= 0.07 &&
-		ellErr.max <= 0.22;
+		ellErr.mean <= 0.11 &&
+		ellErr.max <= 0.34;
 
 	const poly = polygon(raw, diag);
 	if (poly) {
 		const err = polyError(sample, poly.vertices);
-		if (err.mean <= 0.035 * diag && err.max <= 0.1 * diag) {
+		if (err.mean <= 0.055 * diag && err.max <= 0.15 * diag) {
 			// Corners that fit as well as a round line would are the safer reading.
 			if (!round || err.mean < ellErr.mean * diag * 0.5)
 				return poly.shape(sample);
@@ -290,7 +290,7 @@ function recognizeLine(
 		worst = Math.max(worst, d);
 		sumSq += d * d;
 	}
-	if (Math.sqrt(sumSq / sample.length) > 0.03 * chord || worst > 0.07 * chord)
+	if (Math.sqrt(sumSq / sample.length) > 0.045 * chord || worst > 0.1 * chord)
 		return null;
 	let theta = Math.atan2(dy, dx);
 	const snapped = Math.round(theta / ANGLE_STEP) * ANGLE_STEP;
@@ -307,7 +307,7 @@ function recognizeLine(
 
 /** The corners of a closed stroke, with what to turn them into. */
 function polygon(raw: Vec[], diag: number) {
-	const simple = simplify(raw, 0.05 * diag);
+	const simple = simplify(raw, 0.07 * diag);
 	let v = simple.slice(0, -1); // the last point is where the stroke meets its start
 	if (v.length < 3) return null;
 	// Where the stroke starts and ends is a corner only if the line turns there.
@@ -318,7 +318,7 @@ function polygon(raw: Vec[], diag: number) {
 				v[i],
 				v[(i + 1) % v.length],
 			);
-			if (t < (25 * Math.PI) / 180) {
+			if (t < (30 * Math.PI) / 180) {
 				v = v.filter((_, k) => k !== i);
 				i--;
 			}
@@ -345,7 +345,7 @@ function polygon(raw: Vec[], diag: number) {
 	if (v.length === 4) {
 		for (let i = 0; i < 4; i++) {
 			const t = turn(v[(i + 3) % 4], v[i], v[(i + 1) % 4]);
-			if (Math.abs(t - Math.PI / 2) > (28 * Math.PI) / 180) return null;
+			if (Math.abs(t - Math.PI / 2) > (36 * Math.PI) / 180) return null;
 		}
 		// The mean direction of the four sides, modulo a quarter turn.
 		let sx = 0;
