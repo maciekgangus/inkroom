@@ -1539,6 +1539,14 @@ button.participant {
 	border-left: 0;
 	border-top: 1px solid var(--border);
 }
+/* The settings list hangs from the top of the rail, not from its button far down the column, so
+   that it fits the screen (and scrolls inside itself when it does not). */
+.toolbar.rail .settings-wrap {
+	position: static;
+}
+.toolbar.rail .settings-list {
+	max-height: calc(100dvh - 68px - 12px);
+}
 .toolbar.rail .shape-list,
 .toolbar.rail .style-list,
 .toolbar.rail .stroke-popover,
