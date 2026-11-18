@@ -247,9 +247,17 @@ func (s *Service) Logout(w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie(cookieName); err == nil {
 		_ = s.store.DeleteSession(hashToken(c.Value))
 	}
-	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: isSecure(r)})
+	s.ClearCookie(w, r)
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// ClearCookie tells the browser to drop the session cookie.
+func (s *Service) ClearCookie(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: isSecure(r)})
+}
+
+// MinPassword and MaxPassword bound the length of a password.
+const MinPassword, MaxPassword = minPassword, maxPassword
 
 // Me returns the logged-in user and renews the session.
 func (s *Service) Me(w http.ResponseWriter, r *http.Request) {
@@ -394,7 +402,7 @@ func readCredentials(w http.ResponseWriter, r *http.Request) (credentials, bool)
 func respondUser(w http.ResponseWriter, status int, u store.User) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]any{"email": u.Email, "username": u.Username})
+	_ = json.NewEncoder(w).Encode(map[string]any{"email": u.Email, "username": u.Username, "hasPassword": u.Hash != ""})
 }
 
 func fail(w http.ResponseWriter, status int, msg string) {

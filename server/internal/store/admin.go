@@ -124,6 +124,11 @@ func (s *Store) RenameUser(id int64, username string) error {
 	return s.mustAffect(res, nil)
 }
 
+// SetPassword stores a new password hash for an account. ErrNotFound for a missing account.
+func (s *Store) SetPassword(id int64, hash string) error {
+	return s.mustAffect(s.db.Exec("UPDATE users SET hash = ? WHERE id = ?", hash, id))
+}
+
 // DeleteUser removes an account with its sessions, visits and boards (and what is on them).
 func (s *Store) DeleteUser(id int64) error {
 	return s.mustAffect(s.db.Exec("DELETE FROM users WHERE id = ?", id))
