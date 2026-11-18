@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
+	"mime"
 	"net/http"
 	"strconv"
 	"strings"
@@ -240,7 +243,7 @@ func (a *app) boardPreview(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Błąd serwera")
 		return
 	}
-	etag := `"` + strconv.FormatInt(b.UpdatedAt.Unix(), 10) + "-" + b.Background + `"`
+	etag := previewTag(b)
 	w.Header().Set("ETag", etag)
 	w.Header().Set("Cache-Control", "private, no-cache")
 	if r.Header.Get("If-None-Match") == etag {
@@ -257,6 +260,82 @@ func (a *app) boardPreview(w http.ResponseWriter, r *http.Request) {
 		strokes = append(strokes, s)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"background": b.Background, "strokes": strokes})
+}
+
+// previewTag names a version of a board for its preview: it changes when the board does.
+func previewTag(b store.Board) string {
+	return `"` + strconv.FormatInt(b.UpdatedAt.Unix(), 10) + "-" + b.Background + `"`
+}
+
+// Limits of a stored preview picture (R-088): a tile is at most 480 px, so this is generous.
+const maxPreviewBytes = 300 << 10
+
+var pngSignature = []byte("\x89PNG\r\n\x1a\n")
+
+// boardPreviewPicture serves the stored picture of a board for its tile (R-088), or 404 when
+// there is none for the board's current version; the client then draws it from the strokes.
+// Open to whoever has the link, like the preview data; the ETag is the board's version.
+func (a *app) boardPreviewPicture(w http.ResponseWriter, r *http.Request) {
+	b, err := a.st.Board(r.PathValue("id"))
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "Nie ma takiej tablicy")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Błąd serwera")
+		return
+	}
+	tag := previewTag(b)
+	png, err := a.st.Preview(b.ID, tag)
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "Brak podglądu")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Błąd serwera")
+		return
+	}
+	w.Header().Set("ETag", tag)
+	w.Header().Set("Cache-Control", "private, no-cache")
+	if r.Header.Get("If-None-Match") == tag {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	w.Header().Set("Content-Type", "image/png")
+	_, _ = w.Write(png)
+}
+
+// setBoardPreviewPicture stores the picture a client drew of a board (R-088): the server only
+// keeps bytes, so no drawing costs it CPU. Only the owner may, only for the version the picture
+// was drawn from (`tag`), and only a PNG within the limit.
+func (a *app) setBoardPreviewPicture(w http.ResponseWriter, r *http.Request) {
+	b, ok := a.ownedBoard(w, r)
+	if !ok {
+		return
+	}
+	if mt, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); mt != "image/png" {
+		writeError(w, http.StatusUnsupportedMediaType, "Oczekiwano image/png")
+		return
+	}
+	png, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxPreviewBytes))
+	if err != nil {
+		writeError(w, http.StatusRequestEntityTooLarge, "Podgląd jest za duży")
+		return
+	}
+	if !bytes.HasPrefix(png, pngSignature) {
+		writeError(w, http.StatusBadRequest, "To nie jest PNG")
+		return
+	}
+	tag := r.URL.Query().Get("tag")
+	if tag != previewTag(b) {
+		writeError(w, http.StatusConflict, "Tablica zmieniła się od narysowania podglądu")
+		return
+	}
+	if err := a.st.SetPreview(b.ID, tag, png); err != nil {
+		writeError(w, http.StatusInternalServerError, "Błąd serwera")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // forgetBoard takes a board off the caller's list of boards they were invited to (R-051). The
