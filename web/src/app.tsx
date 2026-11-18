@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "preact/hooks";
+import { syncAccountShortcuts } from "./account-shortcuts";
 import * as api from "./api";
 import { AuthForms, RegisterPage } from "./auth-forms";
 import { BoardView, newId } from "./board-view";
@@ -75,7 +76,13 @@ function Home({ navigate }: { navigate: (to: string) => void }) {
 		undefined, // undefined: still asking the server
 	);
 	useEffect(() => {
-		api.me().then(setAccount, () => setAccount(null));
+		api.me().then(
+			(a) => {
+				setAccount(a);
+				if (a) syncAccountShortcuts();
+			},
+			() => setAccount(null),
+		);
 	}, []);
 
 	if (account === undefined) return null;
@@ -112,7 +119,13 @@ function BoardPage({
 	);
 	useEffect(() => {
 		api.boardInfo(id).then(setInfo);
-		api.me().then(setAccount, () => setAccount(null));
+		api.me().then(
+			(a) => {
+				setAccount(a);
+				if (a) syncAccountShortcuts();
+			},
+			() => setAccount(null),
+		);
 	}, [id]);
 
 	const authorId = useMemo(() => {

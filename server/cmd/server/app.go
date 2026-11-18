@@ -69,6 +69,8 @@ func (a *app) Handler() http.Handler {
 	mux.HandleFunc("GET /api/me", a.auth.Me)
 	mux.HandleFunc("POST /api/account/password", a.changePassword)
 	mux.HandleFunc("POST /api/account/delete", a.deleteAccount)
+	mux.HandleFunc("GET /api/account/shortcuts", a.getShortcuts)
+	mux.HandleFunc("PUT /api/account/shortcuts", a.putShortcuts)
 	mux.HandleFunc("POST /api/boards", a.createBoard)
 	mux.HandleFunc("GET /api/boards", a.listBoards)
 	mux.HandleFunc("GET /api/boards/{id}", a.getBoard)

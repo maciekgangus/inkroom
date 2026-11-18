@@ -143,6 +143,8 @@ var migrations = []migration{
 	tag TEXT NOT NULL,
 	png BLOB NOT NULL
 )`),
+	// Own keyboard shortcuts of an account, a JSON object tool -> key code (R-086).
+	stmt("ALTER TABLE users ADD COLUMN shortcuts TEXT NOT NULL DEFAULT '{}'"),
 }
 
 // migration changes the schema inside a transaction.
@@ -792,4 +794,19 @@ func (s *Store) Preview(boardID, tag string) ([]byte, error) {
 		return nil, ErrNotFound
 	}
 	return png, err
+}
+
+// Shortcuts returns the account's own keyboard shortcuts as JSON (R-086); "{}" when none.
+func (s *Store) Shortcuts(userID int64) (string, error) {
+	var js string
+	err := s.db.QueryRow("SELECT shortcuts FROM users WHERE id = ?", userID).Scan(&js)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	return js, err
+}
+
+// SetShortcuts replaces the account's own keyboard shortcuts (a JSON object).
+func (s *Store) SetShortcuts(userID int64, js string) error {
+	return s.mustAffect(s.db.Exec("UPDATE users SET shortcuts = ? WHERE id = ?", js, userID))
 }
