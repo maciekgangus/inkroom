@@ -98,7 +98,6 @@ function Home({
 		);
 	return (
 		<Panel
-			username={account.username}
 			account={account}
 			navigate={navigate}
 			onLogout={() => setAccount(null)}

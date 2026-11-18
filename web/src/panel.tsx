@@ -19,15 +19,13 @@ const storedView = (): View => {
 };
 
 interface Props {
-	username: string;
-	/** Used by the account window; without it the window loads it itself. */
-	account?: Account;
+	account: Account;
 	navigate: (to: string) => void;
 	onLogout: () => void;
 }
 
 /** The logged-in user's home: own boards, boards they were invited to, and creating new ones. */
-export function Panel({ username, account, navigate, onLogout }: Props) {
+export function Panel({ account, navigate, onLogout }: Props) {
 	const [accountOpen, setAccountOpen] = useState(false);
 	const [owned, setOwned] = useState<BoardSummary[] | null>(null);
 	const [visited, setVisited] = useState<BoardSummary[]>([]);
@@ -112,7 +110,7 @@ export function Panel({ username, account, navigate, onLogout }: Props) {
 						title="Konto"
 						onClick={() => setAccountOpen(true)}
 					>
-						{username}
+						{account.username}
 					</button>
 					<button type="button" onClick={logout}>
 						Wyloguj
@@ -121,7 +119,7 @@ export function Panel({ username, account, navigate, onLogout }: Props) {
 			</header>
 			{accountOpen && (
 				<AccountDialog
-					account={account ?? { email: "", username }}
+					account={account}
 					onClose={() => setAccountOpen(false)}
 					onDeleted={onLogout}
 				/>
