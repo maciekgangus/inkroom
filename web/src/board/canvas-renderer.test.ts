@@ -426,3 +426,108 @@ describe("the coordinate plane on the canvas (R-084)", () => {
 		);
 	});
 });
+
+describe("function graphs on the canvas (R-092)", () => {
+	const proto = {
+		id: "pf",
+		authorId: "a",
+		color: "#111111",
+		size: 3,
+		z: 1,
+		kind: "plane",
+		numbered: true,
+		fns: [{ id: "f", k: "linear", c: [1, 0], color: "#1976d2", w: 2.5 }],
+		points: [
+			[0, 0, 0.5],
+			[400, 400, 0.5],
+		],
+	} as unknown as Stroke;
+	/** A new object each time: what is drawn is cached per element. */
+	const mk = () => ({ ...proto }) as Stroke;
+	const big = { minX: -1e9, minY: -1e9, maxX: 1e9, maxY: 1e9 };
+	const setup = () => {
+		const lineTos: number[] = [0];
+		vi.stubGlobal(
+			"Path2D",
+			class {
+				moveTo() {}
+				lineTo() {
+					lineTos[0]++;
+				}
+				closePath() {}
+				rect() {}
+			},
+		);
+		const strokes: { width: number; style: string }[] = [];
+		const state: Record<string, unknown> = { lineWidth: 1, globalAlpha: 1 };
+		const ctx = new Proxy(state, {
+			get: (t, k) => {
+				if (k === "stroke")
+					return () =>
+						strokes.push({
+							width: t.lineWidth as number,
+							style: String(t.strokeStyle),
+						});
+				if (k === "getTransform") return () => ({ a: 100, b: 0 });
+				if (k in t) return t[k as string];
+				return () => ctx;
+			},
+			set: (t, k, v) => {
+				t[k as string] = v;
+				return true;
+			},
+		}) as unknown as CanvasRenderingContext2D;
+		return { ctx, strokes, lineTos };
+	};
+
+	test("the curve is drawn in its own colour and width, after the axes", () => {
+		const r = setup();
+		paintElements(r.ctx, [mk()], big, null, false, {});
+		vi.unstubAllGlobals();
+		const curve = r.strokes.findIndex((s) => s.style === "#1976d2");
+		expect(curve).toBeGreaterThan(-1);
+		expect(r.strokes[curve].width).toBe(2.5);
+		expect(curve).toBeGreaterThan(
+			r.strokes.findIndex((s) => s.style === "#111111"),
+		);
+	});
+
+	test("a plane without functions draws none", () => {
+		const r = setup();
+		paintElements(
+			r.ctx,
+			[{ ...mk(), fns: undefined } as Stroke],
+			big,
+			null,
+			false,
+			{},
+		);
+		vi.unstubAllGlobals();
+		expect(r.strokes.some((s) => s.style === "#1976d2")).toBe(false);
+	});
+
+	test("the points are computed once per version of the plane, not on every repaint", () => {
+		const r = setup();
+		const el = mk();
+		paintElements(r.ctx, [el], big, null, false, {});
+		const first = r.lineTos[0];
+		paintElements(r.ctx, [el], big, null, false, {});
+		vi.unstubAllGlobals();
+		// the curve alone is some 800 points; a repaint may only rebuild the small axis path
+		expect(first).toBeGreaterThan(700);
+		expect(r.lineTos[0] - first).toBeLessThan(300);
+	});
+
+	test("a changed coefficient makes a new curve", () => {
+		const r = setup();
+		paintElements(r.ctx, [mk()], big, null, false, {});
+		const first = r.lineTos[0];
+		const changed = {
+			...mk(),
+			fns: [{ ...((proto.fns as unknown[])[0] as object), c: [2, 0] }],
+		} as unknown as Stroke;
+		paintElements(r.ctx, [changed], big, null, false, {});
+		vi.unstubAllGlobals();
+		expect(r.lineTos[0]).toBeGreaterThan(first);
+	});
+});
