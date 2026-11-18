@@ -208,15 +208,12 @@ input::placeholder {
 	height: 100%;
 	box-sizing: border-box;
 	overflow-y: auto;
-	padding: 24px max(16px, calc(50vw - 380px)) 48px;
+	padding: 24px max(16px, calc(50vw - 600px)) 48px;
 	background: var(--bg);
 }
-/* Tiles want more room than a list: the panel is as wide as the screen allows, to 1200px; only
-   the form for a new board keeps the narrower measure. */
-.panel.wide {
-	padding: 24px max(16px, calc(50vw - 600px)) 48px;
-}
-.panel.wide > form {
+/* The panel is the same width for tiles and for the list (R-087), as wide as the screen allows, to
+   1200px; only the form for a new board keeps the narrower measure. */
+.panel > form {
 	max-width: 760px;
 }
 .panel form.row input {
