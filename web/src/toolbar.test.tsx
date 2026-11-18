@@ -71,7 +71,11 @@ describe("Toolbar", () => {
 			expect(q(`color ${MORE_COLORS[0]}`)).toBeNull();
 			act(() => click("more colors"));
 			for (const c of MORE_COLORS) expect(q(`color ${c}`)).not.toBeNull();
-			expect(q("custom color")?.getAttribute("type")).toBe("color");
+			// A round tile that opens our own picker, not the system colour field.
+			const tile = q("custom color") as HTMLElement;
+			expect(tile.tagName).toBe("BUTTON");
+			expect(tile.getAttribute("aria-expanded")).toBe("false");
+			expect(root.querySelector('input[type="color"]')).toBeNull();
 		});
 
 		test("picking an extra colour sets it, closes the palette and marks the palette button", () => {
@@ -118,12 +122,15 @@ describe("Toolbar", () => {
 		test("the picker sets any colour and goes back to the pen from the eraser", () => {
 			click("eraser");
 			act(() => click("more colors"));
-			const input = q("custom color") as HTMLInputElement;
-			input.value = "#123456";
+			act(() => click("custom color"));
+			const before = settings.color;
+			const shade = q("custom color shade") as HTMLInputElement;
+			shade.value = "30";
 			act(() => {
-				input.dispatchEvent(new Event("input", { bubbles: true }));
+				shade.dispatchEvent(new Event("input", { bubbles: true }));
 			});
-			expect(settings.color).toBe("#123456");
+			expect(settings.color).toMatch(/^#[0-9a-f]{6}$/);
+			expect(settings.color).not.toBe(before);
 			expect(settings.tool).toBe("pen");
 		});
 	});

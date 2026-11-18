@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useState } from "preact/hooks";
 import type { Settings } from "./board/controller";
 import { SHAPE_GROUPS, SHAPES, saveShape } from "./board/shapes";
+import { CustomColor } from "./custom-color";
 import { closeOnDismiss } from "./dismiss";
 import { getExtraColor, setExtraColor } from "./extra-color";
 import { Icon } from "./icon";
@@ -141,6 +142,24 @@ export function Toolbar({
 		/>
 	);
 
+	// The tile for any other colour and its picker, in the palette and in the list of settings.
+	const [picking, setPicking] = useState(false);
+	useEffect(() => {
+		if (!paletteOpen && !settingsOpen) setPicking(false);
+	}, [paletteOpen, settingsOpen]);
+	const customColor = (
+		<CustomColor
+			label="custom color"
+			current={settings.color}
+			own={![...COLORS, ...MORE_COLORS].includes(settings.color)}
+			display={(c) => displayColor(c, theme)}
+			open={picking}
+			onToggle={() => setPicking(!picking)}
+			onInput={pick}
+			onChange={pick}
+		/>
+	);
+
 	return (
 		<div class={`toolbar ${layout === "rail" ? "rail" : ""}`}>
 			<div class="group">
@@ -238,17 +257,7 @@ export function Toolbar({
 								<span class="settings-title">Kolor</span>
 								<div class="settings-colors">
 									{[...COLORS, ...MORE_COLORS].map((c) => swatch(c))}
-									<label class="custom">
-										Własny kolor
-										<input
-											type="color"
-											aria-label="custom color"
-											value={custom ? settings.color : "#5b5bf0"}
-											onInput={(e) =>
-												pick((e.currentTarget as HTMLInputElement).value)
-											}
-										/>
-									</label>
+									{customColor}
 								</div>
 								<span class="settings-title">Grubość</span>
 								<StrokeControls settings={settings} onChange={set} inline />
@@ -287,17 +296,7 @@ export function Toolbar({
 								{[...COLORS.slice(3), ...MORE_COLORS].map((c) =>
 									swatch(c, () => setPaletteOpen(false)),
 								)}
-								<label class="custom">
-									Własny kolor
-									<input
-										type="color"
-										aria-label="custom color"
-										value={custom ? settings.color : "#5b5bf0"}
-										onInput={(e) =>
-											pick((e.currentTarget as HTMLInputElement).value)
-										}
-									/>
-								</label>
+								{customColor}
 							</div>
 						)}
 					</div>
