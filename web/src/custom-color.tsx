@@ -1,6 +1,5 @@
 import type { ComponentChildren } from "preact";
 import { useLayoutEffect, useRef, useState } from "preact/hooks";
-import { closeOnDismiss } from "./dismiss";
 import { popoverSpot } from "./floating-panel";
 import { Icon } from "./icon";
 import { Portal } from "./portal";
@@ -177,10 +176,28 @@ function ColorPopover({
 		place();
 		return () => cancelAnimationFrame(frame);
 	}, [tile]);
-	useLayoutEffect(
-		() => closeOnDismiss(".color-popover, .swatch.custom", onClose),
-		[onClose],
-	);
+	// A press outside shuts it (the tile itself toggles it, so it is "inside"); Escape shuts only this
+	// window and not the selection behind it, hence the capture and the stop.
+	useLayoutEffect(() => {
+		const key = (e: KeyboardEvent) => {
+			if (e.key !== "Escape") return;
+			e.stopPropagation();
+			e.preventDefault();
+			onClose();
+		};
+		const outside = (e: Event) => {
+			if (
+				!(e.target as HTMLElement).closest?.(".color-popover, .swatch.custom")
+			)
+				onClose();
+		};
+		addEventListener("keydown", key, true);
+		addEventListener("pointerdown", outside, true);
+		return () => {
+			removeEventListener("keydown", key, true);
+			removeEventListener("pointerdown", outside, true);
+		};
+	}, [onClose]);
 	if (spot === "inside") return <>{children}</>;
 	return (
 		<Portal>

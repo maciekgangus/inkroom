@@ -813,10 +813,15 @@ describe("the picker window beside the menu", () => {
 			).click(),
 		);
 		expect(document.querySelector(".color-popover")).not.toBeNull();
+		const reached = vi.fn();
+		addEventListener("keydown", reached); // what else listens on the page, as the selection does
 		act(() => {
 			dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
 		});
+		removeEventListener("keydown", reached);
 		expect(document.querySelector(".color-popover")).toBeNull();
+		// Escape shut the picker only: the selection behind it did not hear it.
+		expect(reached).not.toHaveBeenCalled();
 		render(null, root);
 		root.remove();
 	});
