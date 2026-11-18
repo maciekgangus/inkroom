@@ -911,12 +911,12 @@ describe("the menu of a coordinate plane", () => {
 		expect(
 			q(root, "prop grid")
 				?.closest(".prop-group")
-				?.classList.contains("center"),
+				?.classList.contains("centered"),
 		).toBe(true);
 		expect(
 			q(root, "prop numbering pi")
 				?.closest(".prop-group")
-				?.classList.contains("center"),
+				?.classList.contains("centered"),
 		).toBe(true);
 	});
 });

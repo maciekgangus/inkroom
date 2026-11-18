@@ -407,7 +407,7 @@ const Group = ({
 	children: ComponentChildren;
 	/** A row of a few switches stands in the middle, not stuck to the left. */
 	center?: boolean;
-}) => <div class={`prop-group${center ? " center" : ""}`}>{children}</div>;
+}) => <div class={`prop-group${center ? " centered" : ""}`}>{children}</div>;
 
 /**
  * A row of round colour tiles, as in the bar: the current one has a ring; the last tile is for any
