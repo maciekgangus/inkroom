@@ -18,6 +18,7 @@ import {
 } from "./board/clipboard";
 import { Controller, type Renderer, type Settings } from "./board/controller";
 import { exportBoard } from "./board/export-file";
+import { FollowState, followStep } from "./board/follow";
 import { TouchGestures } from "./board/gestures";
 import { ImageCache } from "./board/image-cache";
 import { defaultSize, placeCentered } from "./board/image-geometry";
@@ -38,6 +39,7 @@ import { ContextMenu, type MenuItem } from "./context-menu";
 import { assignColors } from "./cursor-colors";
 import { Cursors } from "./cursors";
 import { getExtraColor, setExtraColor } from "./extra-color";
+import { FollowBar } from "./follow-bar";
 import { frameBatch } from "./frame-batch";
 import { Icon } from "./icon";
 import { Minimap } from "./minimap";
@@ -173,6 +175,16 @@ export function BoardView({
 	const [menuOpenFor, setMenuOpenFor] = useState<string | null>(null);
 	const [, setTick] = useState(0); // bumped when the view changes, so the text field follows it
 	const bump = () => setTick((t) => t + 1);
+	/** Does something with the follow state and shows the result (R-093). */
+	const act = (fn: (f: FollowState) => void) => {
+		const f = followRef.current;
+		if (!f) return;
+		fn(f);
+		refreshFollowRef.current();
+	};
+	/** The name of a person on the board, if they are still here. */
+	const peerName = (id?: string) =>
+		id ? peers.find((p) => p.id === id)?.name : undefined;
 	const toolbarLayout = useToolbarLayout();
 	/**
 	 * When the last paste (or duplicate) ended. Copying many elements is heavy, and a held Ctrl+V or
@@ -194,7 +206,14 @@ export function BoardView({
 	const rendererRef = useRef<CanvasRenderer | null>(null);
 	const theme = useTheme();
 	/** Repaints after the view changed (set up by the effect below). */
-	const viewChanged = useRef<() => void>(() => {});
+	const viewChanged = useRef<(programmatic?: boolean) => void>(() => {});
+	/** Following someone's view, or being followed (R-093), and a repaint of what shows it. */
+	const followRef = useRef<FollowState | null>(null);
+	const refreshFollowRef = useRef<() => void>(() => {});
+	const [, setFollowTick] = useState(0);
+	/** A text is being typed: the view of someone we follow waits (R-093). */
+	const textBusy = useRef(false);
+	textBusy.current = !!textAt || !!editingText;
 	/** Until when the view counts as moving, so the menu stays away (R-060). */
 	const viewMovingUntil = useRef(0);
 	const boardRef = useRef<Board | null>(null);
@@ -290,7 +309,11 @@ export function BoardView({
 			self: { authorId, name },
 			onCursors: () => remote.mark(CURSORS),
 			onBackground: setBackground,
-			onPeers: setPeers,
+			onPeers: (p) => {
+				setPeers(p);
+				followRef.current?.peersChanged(p);
+				refreshFollowRef.current();
+			},
 			onName: setTitle,
 			onUpdate: () => remote.mark(BOARD),
 			onLaser: (id, points, start) => laserBridge.current(id, points, start),
@@ -308,6 +331,81 @@ export function BoardView({
 			if (kinds & (BOARD | CURSORS)) bump();
 		});
 		syncRef.current = sync;
+		// Looking where someone else looks, or being looked at (R-093).
+		let penDown = false;
+		const follow = new FollowState({
+			self: authorId,
+			follow: (id) => sync.follow(id),
+			sendView: (r) => sync.sendView(r),
+			invite: () => sync.invite(),
+			rect: () => viewport.worldRect(innerWidth, innerHeight),
+		});
+		followRef.current = follow;
+		let noticeTimer: ReturnType<typeof setTimeout> | undefined;
+		const refreshFollow = () => {
+			if (follow.notice && !noticeTimer)
+				noticeTimer = setTimeout(() => {
+					noticeTimer = undefined;
+					follow.clearNotice();
+					setFollowTick((n) => n + 1);
+				}, 3500);
+			setFollowTick((n) => n + 1);
+		};
+		refreshFollowRef.current = refreshFollow;
+		// The view eases towards the followed one frame by frame; while the pen is down or a text
+		// is edited it waits, and catches up afterwards.
+		let followRaf = 0;
+		let followLast = 0;
+		const followFrame = (now: number) => {
+			const dt = Math.min(now - followLast, 100);
+			followLast = now;
+			if (!follow.following) {
+				followRaf = 0;
+				return;
+			}
+			const next = followStep(
+				follow,
+				viewport,
+				innerWidth,
+				innerHeight,
+				dt,
+				penDown || textBusy.current,
+			);
+			if (next) {
+				viewport.x = next.x;
+				viewport.y = next.y;
+				viewport.scale = next.scale;
+				viewChanged.current(true);
+			}
+			followRaf = requestAnimationFrame(followFrame);
+		};
+		const startFollowLoop = () => {
+			if (followRaf) return;
+			followLast = performance.now();
+			followRaf = requestAnimationFrame(followFrame);
+		};
+		sync.setFollowHandlers({
+			onView: (id, r) => {
+				follow.onView(id, r);
+				startFollowLoop();
+			},
+			onInvite: (id) => {
+				follow.onInvite(id);
+				refreshFollow();
+			},
+			onFollowers: (n) => {
+				follow.onFollowers(n);
+				refreshFollow();
+			},
+			onRefused: (id) => {
+				follow.refused(id);
+				refreshFollow();
+			},
+			onEnded: (id) => {
+				follow.ended(id);
+				refreshFollow();
+			},
+		});
 		const renderer: Renderer = {
 			drawLive: (stroke) => {
 				canvas.drawLive(stroke);
@@ -418,12 +516,25 @@ export function BoardView({
 				bump();
 			}, VIEW_SETTLE_MS);
 		};
-		const changed = () => {
+		// We moved the view ourselves: following ends, and whoever follows us gets the new view.
+		const userMovedView = () => {
+			const was = follow.following;
+			follow.userMoved();
+			if (was) refreshFollow();
+			follow.viewChanged(viewport.worldRect(innerWidth, innerHeight));
+		};
+		const changed = (programmatic = false) => {
 			viewMoving();
 			canvas.moveView(); // the picture is moved, not painted; a sharp one follows when it stops
 			setScale(viewport.scale);
 			bump();
-			if (viewReady)
+			if (programmatic) {
+				// Following someone: the view is theirs, not ours to keep; but our followers get it.
+				follow.viewChanged(viewport.worldRect(innerWidth, innerHeight));
+			} else {
+				userMovedView();
+			}
+			if (viewReady && !programmatic)
 				viewSaver.schedule({
 					x: viewport.x,
 					y: viewport.y,
@@ -569,6 +680,7 @@ export function BoardView({
 		sync.connect();
 
 		const down = (e: PointerEvent) => {
+			penDown = true;
 			if (e.pointerType === "pen") gestures.penSeen();
 			if (e.pointerType === "touch") return gestures.down(e);
 			live.setPointerCapture(e.pointerId);
@@ -588,6 +700,7 @@ export function BoardView({
 				// HTML above the canvas, so they need a render at every step to stay on the content.
 				viewMoving();
 				bump();
+				userMovedView();
 			}
 			setOverTurn.current(controller.overRotate(e.clientX, e.clientY));
 			applyCursor.current(); // a safety net: whichever way the tool changed, it shows
@@ -596,12 +709,14 @@ export function BoardView({
 			if (e.pointerType !== "touch") sync.cursorHide();
 		};
 		const up = (e: PointerEvent) => {
+			penDown = false;
 			if (e.pointerType === "pen") gestures.penSeen();
 			if (e.pointerType === "touch") return gestures.up(e);
 			controller.pointerUp(e);
 			applyCursor.current();
 		};
 		const cancel = (e: PointerEvent) => {
+			penDown = false;
 			if (e.pointerType === "touch") return gestures.cancel(e);
 			controller.pointerCancel(e);
 			applyCursor.current();
@@ -783,6 +898,8 @@ export function BoardView({
 
 		return () => {
 			cancelAnimationFrame(anim.raf);
+			cancelAnimationFrame(followRaf);
+			clearTimeout(noticeTimer);
 			remote.cancel();
 			cancelAnimationFrame(laserRafId.current);
 			sync.close();
@@ -830,7 +947,7 @@ export function BoardView({
 
 	// The ink colours depend on the theme (black and white swap in dark mode).
 	useEffect(() => {
-		if (theme) viewChanged.current();
+		if (theme) viewChanged.current(true);
 	}, [theme]);
 
 	// Expired cursors vanish even if nothing else happens on the board.
@@ -1145,6 +1262,24 @@ export function BoardView({
 							? (peer, at) => setPeerMenu({ peer, x: at.x, y: at.y })
 							: undefined
 					}
+					onFollow={(peer) => act((f) => f.toggle(peer.id))}
+					following={followRef.current?.following}
+				/>
+				<FollowBar
+					following={peerName(followRef.current?.following)}
+					onStop={() => act((f) => f.toggle(f.following))}
+					invite={peerName(followRef.current?.invite)}
+					onJoin={() => act((f) => f.join())}
+					onDismiss={() => act((f) => f.dismissInvite())}
+					lost={peerName(followRef.current?.lost)}
+					onBack={() => act((f) => f.back())}
+					notice={followRef.current?.notice}
+					watchers={followRef.current?.followers ?? 0}
+					onShowMyView={
+						owner && peers.length > 1
+							? () => act((f) => f.showMyView())
+							: undefined
+					}
 				/>
 				<ShareButton boardId={boardId} title={title} />
 				<BoardMenuButton onOpen={setBoardMenu} />
@@ -1175,6 +1310,14 @@ export function BoardView({
 									onSelect: () =>
 										syncRef.current?.setDrawing(peerMenu.peer.id, false),
 								},
+						{
+							label:
+								followRef.current?.following === peerMenu.peer.id
+									? "Przestań śledzić widok"
+									: "Śledź widok",
+							icon: "eye",
+							onSelect: () => act((f) => f.toggle(peerMenu.peer.id)),
+						},
 					]}
 					onClose={() => setPeerMenu(null)}
 				/>
