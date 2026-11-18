@@ -115,6 +115,7 @@ type Room struct {
 type presence struct {
 	live    map[string]struct{} // ids of its unfinished "live" strokes
 	cursors map[string]struct{} // ids under which it published a cursor
+	follows string              // id of the person whose view it follows (R-093), or ""
 }
 
 func newPresence() *presence {
@@ -330,10 +331,68 @@ func (r *Room) Handle(c *Client, raw []byte) error {
 			return err
 		}
 		r.broadcastLocked(msg, c)
+	case "follow":
+		// Watching someone else's view (R-093): remember whom, so their view is sent to us alone.
+		if m.ID != "" {
+			if err := checkID(m.ID); err != nil {
+				return err
+			}
+		}
+		p := r.clients[c]
+		if p == nil || p.follows == m.ID {
+			return nil
+		}
+		was := p.follows
+		p.follows = m.ID
+		r.tellFollowersLocked(was)
+		r.tellFollowersLocked(m.ID)
+	case "view":
+		// The visible rectangle of a presenter: relayed to their followers only, never stored. It
+		// is not drawing, so it needs no right to draw. Nobody following means nothing is sent.
+		if err := checkID(m.ID); err != nil {
+			return err
+		}
+		if m.ID != c.ID {
+			return nil // one may only show their own view
+		}
+		for other, p := range r.clients {
+			if other != c && p.follows == m.ID && !other.trySend(msg) {
+				r.leaveLocked(other)
+			}
+		}
+	case "invite":
+		// The owner asks everyone to share their view; nobody is made to (R-093).
+		if !c.Owner {
+			return nil
+		}
+		if err := checkID(m.ID); err != nil {
+			return err
+		}
+		r.broadcastLocked(msg, c)
 	default:
 		return errors.New("unknown message type")
 	}
 	return nil
+}
+
+// tellFollowersLocked tells the connections of person id how many people follow their view, so
+// they send it only while somebody watches (R-093).
+func (r *Room) tellFollowersLocked(id string) {
+	if id == "" {
+		return
+	}
+	n := 0
+	for _, p := range r.clients {
+		if p.follows == id {
+			n++
+		}
+	}
+	b, _ := json.Marshal(map[string]any{"t": "followers", "n": n})
+	for c := range r.clients {
+		if c.ID == id && !c.trySend(b) {
+			r.leaveLocked(c)
+		}
+	}
 }
 
 // peersLocked is the message that lists who is on the board: the identified clients, once
@@ -397,6 +456,9 @@ func (r *Room) leaveLocked(c *Client) {
 	}
 	delete(r.clients, c)
 	c.drop()
+	if p.follows != "" {
+		r.tellFollowersLocked(p.follows)
+	}
 	if len(p.live) > 0 {
 		r.broadcastLocked(dropMessage("live_drop", p.live), nil)
 	}
