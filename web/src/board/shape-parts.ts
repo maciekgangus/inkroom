@@ -845,17 +845,14 @@ export function shapeParts(
 		const poly = polygonPoints(kind, a, b, parameter(kind, adj));
 		return { lines: [closed(poly)], hidden: [], fill: poly };
 	}
-	const x0 = Math.min(a[0], b[0]);
-	const x1 = Math.max(a[0], b[0]);
-	const y0 = Math.min(a[1], b[1]);
-	const y1 = Math.max(a[1], b[1]);
+	const { x0, x1, y0, y1, w, h, flipX, flipY } = boxOf(a, b);
 	const box: Box = {
 		x0,
 		y0,
 		x1,
 		y1,
-		w: x1 - x0,
-		h: y1 - y0,
+		w,
+		h,
 		cx: (x0 + x1) / 2,
 		cy: (y0 + y1) / 2,
 	};
@@ -866,8 +863,6 @@ export function shapeParts(
 		: direct(kind, box, k, numbered, plane);
 	if (!parts) return null;
 	if (FLIPPABLE.includes(kind)) {
-		const flipX = b[0] < a[0];
-		const flipY = b[1] < a[1];
 		if (flipX || flipY) {
 			parts = map(parts, ([x, y]) => [
 				flipX ? x0 + x1 - x : x,
