@@ -76,6 +76,103 @@ describe("SyncClient", () => {
 
 	afterEach(() => vi.useRealTimers());
 
+	describe("following a view (R-093)", () => {
+		const sentOf = (t: string) => sock().sent.filter((m) => m.t === t);
+		const rect = { minX: 0, minY: 10, maxX: 800, maxY: 610 };
+
+		test("follow and stop are sent as follow messages", () => {
+			connectAndJoin();
+			client.follow("tutor");
+			client.follow("");
+			expect(sentOf("follow")).toEqual([
+				{ t: "follow", id: "tutor" },
+				{ t: "follow", id: "" },
+			]);
+		});
+
+		test("the follow is asked for again after a reconnect", () => {
+			connectAndJoin();
+			client.follow("tutor");
+			sock().drop();
+			vi.advanceTimersByTime(600);
+			connectAndJoin();
+			expect(sentOf("follow")).toEqual([{ t: "follow", id: "tutor" }]);
+		});
+
+		test("a stopped follow is not asked for again after a reconnect", () => {
+			connectAndJoin();
+			client.follow("tutor");
+			client.follow("");
+			sock().drop();
+			vi.advanceTimersByTime(600);
+			connectAndJoin();
+			expect(sentOf("follow")).toEqual([]);
+		});
+
+		test("our view goes out with our id, at most once per interval", () => {
+			connectAndJoin();
+			client.sendView(rect);
+			client.sendView({ ...rect, minX: 5 });
+			client.sendView({ ...rect, minX: 9 });
+			expect(sentOf("view")).toEqual([{ t: "view", id: "me", ...rect }]);
+			clock += 60;
+			client.sendView({ ...rect, minX: 12 });
+			expect(sentOf("view")).toHaveLength(2);
+		});
+
+		test("the latest view held back by the interval goes out once the interval is over", () => {
+			connectAndJoin();
+			client.sendView(rect);
+			client.sendView({ ...rect, minX: 9 });
+			clock += 60;
+			vi.advanceTimersByTime(60);
+			expect(sentOf("view").at(-1)).toMatchObject({ minX: 9 });
+		});
+
+		test("an invite carries our id", () => {
+			connectAndJoin();
+			client.invite();
+			expect(sentOf("invite")).toEqual([{ t: "invite", id: "me" }]);
+		});
+
+		test("views, invites and follower counts reach the callbacks", () => {
+			const onView = vi.fn();
+			const onInvite = vi.fn();
+			const onFollowers = vi.fn();
+			client.setFollowHandlers({ onView, onInvite, onFollowers });
+			connectAndJoin();
+			sock().receive({ t: "view", id: "tutor", ...rect });
+			sock().receive({ t: "invite", id: "tutor" });
+			sock().receive({ t: "followers", n: 2 });
+			expect(onView).toHaveBeenCalledWith("tutor", rect);
+			expect(onInvite).toHaveBeenCalledWith("tutor");
+			expect(onFollowers).toHaveBeenCalledWith(2);
+		});
+
+		test("a view with bad numbers is ignored", () => {
+			const onView = vi.fn();
+			client.setFollowHandlers({ onView });
+			connectAndJoin();
+			sock().receive({
+				t: "view",
+				id: "tutor",
+				minX: "a",
+				minY: 0,
+				maxX: 1,
+				maxY: 1,
+			});
+			sock().receive({
+				t: "view",
+				id: "tutor",
+				minX: 5,
+				minY: 0,
+				maxX: 1,
+				maxY: 1,
+			});
+			expect(onView).not.toHaveBeenCalled();
+		});
+	});
+
 	describe("the laser pointer", () => {
 		const lasersSent = () => sock().sent.filter((m) => m.t === "laser");
 
