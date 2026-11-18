@@ -52,6 +52,16 @@ func (a *app) configureCaptcha(siteKey, secret string) {
 	a.auth.Captcha = auth.Turnstile{Secret: secret}
 }
 
+// configureGoogle turns on signing in with Google (R-063, ADR 0018). Without both the client ID
+// and the secret it stays off. publicURL is the site's address; empty: taken from the request.
+func (a *app) configureGoogle(clientID, secret, publicURL string) {
+	if clientID == "" || secret == "" {
+		a.auth.Google = nil
+		return
+	}
+	a.auth.Google = &auth.Google{ClientID: clientID, ClientSecret: secret, PublicURL: publicURL}
+}
+
 // Close saves pending board changes and disconnects everyone.
 func (a *app) Close() { a.hub.Close() }
 
@@ -101,8 +111,10 @@ func (a *app) Handler() http.Handler {
 	mux.HandleFunc("POST /api/admin/boards/{id}/copy", a.adminChange(a.adminCopyBoard))
 	mux.HandleFunc("POST /api/admin/boards/{id}/enter", a.adminChange(a.adminEnterBoard))
 	mux.HandleFunc("DELETE /api/admin/boards/{id}", a.adminChange(a.adminDeleteBoard))
+	mux.HandleFunc("GET /api/auth/google/start", a.auth.GoogleStart)
+	mux.HandleFunc("GET /api/auth/google/callback", a.auth.GoogleCallback)
 	mux.HandleFunc("GET /api/config", func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]string{"turnstileSiteKey": a.turnstileSiteKey})
+		writeJSON(w, http.StatusOK, map[string]any{"turnstileSiteKey": a.turnstileSiteKey, "google": a.auth.GoogleEnabled()})
 	})
 	mux.HandleFunc("GET /ws/{id}", a.serveWS)
 	mux.HandleFunc("GET /register", func(w http.ResponseWriter, r *http.Request) {
