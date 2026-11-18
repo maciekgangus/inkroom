@@ -5,7 +5,11 @@ import * as api from "./api";
 import { BoardPreview } from "./board-preview";
 import { forgetPreviews, setPreview } from "./preview-cache";
 
-vi.mock("./api", () => ({ boardPreview: vi.fn() }));
+vi.mock("./api", () => ({
+	boardPreview: vi.fn(),
+	boardPreviewPicture: vi.fn(),
+	storePreviewPicture: vi.fn(() => Promise.resolve()),
+}));
 vi.mock("./board/preview", () => ({
 	renderPreview: vi.fn(() => "data:image/png;base64,NEW"),
 }));
@@ -21,6 +25,9 @@ describe("BoardPreview (R-052, R-080)", () => {
 		localStorage.clear();
 		forgetPreviews();
 		vi.mocked(api.boardPreview).mockReset();
+		vi.mocked(api.boardPreviewPicture).mockReset();
+		vi.mocked(api.boardPreviewPicture).mockResolvedValue(null); // none stored by default
+		vi.mocked(api.storePreviewPicture).mockClear();
 		vi.stubGlobal("IntersectionObserver", undefined); // loads at once
 		root = document.createElement("div");
 	});
@@ -81,5 +88,44 @@ describe("BoardPreview (R-052, R-080)", () => {
 		act(() => render(<BoardPreview boardId="new" />, root));
 		await flush();
 		expect(img()?.src).toBe("data:image/png;base64,NEW");
+	});
+
+	test("a picture kept by the server is shown as it is, nothing is fetched or drawn (R-088)", async () => {
+		const { renderPreview } = await import("./board/preview");
+		vi.mocked(renderPreview).mockClear();
+		vi.mocked(api.boardPreviewPicture).mockResolvedValue({
+			etag: '"5"',
+			url: "data:image/png;base64,SERVER",
+		});
+		act(() => render(<BoardPreview boardId="b7" />, root));
+		await flush();
+		expect(img()?.src).toBe("data:image/png;base64,SERVER");
+		expect(api.boardPreview).not.toHaveBeenCalled();
+		expect(renderPreview).not.toHaveBeenCalled();
+	});
+
+	test("without a stored picture the owner's tile draws it and leaves it with the server (R-088)", async () => {
+		vi.mocked(api.boardPreview).mockResolvedValue({
+			etag: '"9"',
+			data: { background: "plain", strokes: [] },
+		});
+		act(() => render(<BoardPreview boardId="b8" mine />, root));
+		await flush();
+		expect(api.storePreviewPicture).toHaveBeenCalledWith(
+			"b8",
+			'"9"',
+			"data:image/png;base64,NEW",
+		);
+	});
+
+	test("somebody else's tile draws it but does not store it (R-088)", async () => {
+		vi.mocked(api.boardPreview).mockResolvedValue({
+			etag: '"9"',
+			data: { background: "plain", strokes: [] },
+		});
+		act(() => render(<BoardPreview boardId="b9" />, root));
+		await flush();
+		expect(img()?.src).toBe("data:image/png;base64,NEW");
+		expect(api.storePreviewPicture).not.toHaveBeenCalled();
 	});
 });

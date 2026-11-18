@@ -137,6 +137,12 @@ var migrations = []migration{
 )`),
 	// Notes the owner has read (R-064).
 	stmt("ALTER TABLE feedback ADD COLUMN read INTEGER NOT NULL DEFAULT 0"),
+	// The picture of each board for its tile, kept with the version it shows (R-088, ADR 0019).
+	stmt(`CREATE TABLE board_previews (
+	board_id TEXT PRIMARY KEY REFERENCES boards(id) ON DELETE CASCADE,
+	tag TEXT NOT NULL,
+	png BLOB NOT NULL
+)`),
 }
 
 // migration changes the schema inside a transaction.
@@ -768,4 +774,22 @@ func (s *Store) SetFeedbackRead(id int64, read bool) error {
 // DeleteFeedback removes a note; ErrNotFound if there is no such note.
 func (s *Store) DeleteFeedback(id int64) error {
 	return s.mustAffect(s.db.Exec(`DELETE FROM feedback WHERE id = ?`, id))
+}
+
+// SetPreview keeps the picture of a board's version `tag`, in place of an older one (R-088).
+func (s *Store) SetPreview(boardID, tag string, png []byte) error {
+	_, err := s.db.Exec(`INSERT INTO board_previews (board_id, tag, png) VALUES (?, ?, ?)
+		ON CONFLICT(board_id) DO UPDATE SET tag = excluded.tag, png = excluded.png`, boardID, tag, png)
+	return err
+}
+
+// Preview returns the stored picture of a board when it is of version `tag`, and ErrNotFound
+// when there is none or it shows an older version (R-088).
+func (s *Store) Preview(boardID, tag string) ([]byte, error) {
+	var png []byte
+	err := s.db.QueryRow("SELECT png FROM board_previews WHERE board_id = ? AND tag = ?", boardID, tag).Scan(&png)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	return png, err
 }

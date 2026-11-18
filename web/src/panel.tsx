@@ -328,7 +328,7 @@ function BoardRow({
 			{tiles && (
 				// The picture and the name are one link: the whole tile opens the board.
 				<a class="open-link" href={`/b/${board.id}`} onClick={open}>
-					<BoardPreview boardId={board.id} />
+					<BoardPreview boardId={board.id} mine={mine} />
 					{!renaming && nameNode}
 				</a>
 			)}

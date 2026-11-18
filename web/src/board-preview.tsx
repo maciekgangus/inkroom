@@ -17,7 +17,14 @@ const RECHECK_MS = 20_000;
  * last picture at once (R-080), and is only checked in the background for a newer one, and not
  * even that when it was checked a moment ago.
  */
-export function BoardPreview({ boardId }: { boardId: string }) {
+export function BoardPreview({
+	boardId,
+	mine,
+}: {
+	boardId: string;
+	/** The owner's tile hands the picture it draws to the server (R-088). */
+	mine?: boolean;
+}) {
 	const box = useRef<HTMLDivElement>(null);
 	const last = peekPreview(boardId);
 	const [src, setSrc] = useState<string | null>(last?.url ?? null);
@@ -29,6 +36,24 @@ export function BoardPreview({ boardId }: { boardId: string }) {
 		setSrc(peekPreview(boardId)?.url ?? null);
 		const load = () => {
 			if (checkedRecently(boardId, RECHECK_MS)) return;
+			// The server's own picture first (R-088): one small image, nothing to draw.
+			api.boardPreviewPicture(boardId).then((stored) => {
+				if (gone) return;
+				if (stored) {
+					const seen = peekPreview(boardId);
+					if (stored.etag && seen?.tag === stored.etag) {
+						markChecked(boardId);
+						setSrc(seen.url);
+						return;
+					}
+					if (stored.etag) setPreview(boardId, stored.etag, stored.url);
+					setSrc(stored.url);
+					return;
+				}
+				drawIt();
+			}, drawIt);
+		};
+		const drawIt = () => {
 			api.boardPreview(boardId).then(
 				({ etag, data }) => {
 					if (gone) return;
@@ -41,6 +66,9 @@ export function BoardPreview({ boardId }: { boardId: string }) {
 					const url = renderPreview(data);
 					if (etag) setPreview(boardId, etag, url);
 					setSrc(url);
+					// A tile that had to draw it leaves the picture with the server for the next one.
+					if (etag && mine)
+						api.storePreviewPicture(boardId, etag, url).catch(() => {});
 				},
 				() => {
 					if (!gone) setFailed(true);
