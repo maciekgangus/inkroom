@@ -1568,3 +1568,15 @@ button.participant {
 	border-color: var(--danger, #c0392b);
 	color: var(--danger, #c0392b);
 }
+
+/* Links to the privacy policy and the terms under the login forms (R-096) */
+.center .legal {
+	width: min(340px, 100%);
+	font-size: 12px;
+	line-height: 1.5;
+	color: var(--muted);
+}
+.center .legal a {
+	color: inherit;
+	text-decoration: underline;
+}

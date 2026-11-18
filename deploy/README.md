@@ -236,6 +236,17 @@ PUBLIC_URL=https://inkroom.lesniakmaciek.dev
 
 Konto Google z e-mailem, który ma już konto z hasłem, **przejmuje** to konto: hasło jest wtedy kasowane, a wszystkie sesje kończone (powód w ADR 0018). Nowe konto z Google dostaje nazwę z początku e-maila i nie ma hasła.
 
+## 9. Strony prawne `/privacy` i `/terms` (R-096)
+
+Google wymaga na ekranie zgody OAuth adresów polityki prywatności i regulaminu. Aplikacja ma je od razu: `https://inkroom.lesniakmaciek.dev/privacy` i `https://inkroom.lesniakmaciek.dev/terms` (publiczne, bez logowania i bez JavaScriptu). Dopisz do `.env`, kto prowadzi usługę (nazwa albo firma i e-mail, na który ludzie mogą pisać w sprawie swoich danych):
+
+```
+OPERATOR_NAME=Imię i nazwisko albo nazwa firmy
+CONTACT_EMAIL=adres@do-kontaktu.pl
+```
+
+Potem `docker compose up -d` (albo następna aktualizacja). Bez tych dwóch zmiennych strony działają, ale zamiast operatora pokazują „Dane operatora nie zostały jeszcze uzupełnione”, a w logu jest ostrzeżenie; Google takiej strony nie przyjmie, więc uzupełnij przed publikacją aplikacji (punkt 8.2). Pola ekranu zgody: *Application home page* `https://inkroom.lesniakmaciek.dev/`, *Privacy policy link* `https://inkroom.lesniakmaciek.dev/privacy`, *Terms of service link* `https://inkroom.lesniakmaciek.dev/terms`, a domena `lesniakmaciek.dev` jako autoryzowana. Teksty są w `server/cmd/server/legal/`; po zmianie podbij `legalUpdated` w `legal.go`.
+
 ## Gdy coś nie działa
 
 | Objaw | Co sprawdzić |

@@ -48,6 +48,7 @@ func main() {
 	if !a.auth.GoogleEnabled() {
 		log.Print("GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is not set: signing in with Google is off")
 	}
+	a.configureLegal(os.Getenv("OPERATOR_NAME"), os.Getenv("CONTACT_EMAIL"))
 	a.configureAdmin(os.Getenv("CF_ACCESS_TEAM_DOMAIN"), os.Getenv("CF_ACCESS_AUD"))
 	if a.admin == nil {
 		log.Print("CF_ACCESS_TEAM_DOMAIN or CF_ACCESS_AUD is not set: the admin page is off")

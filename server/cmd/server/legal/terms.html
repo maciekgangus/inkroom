@@ -1,0 +1,39 @@
+{{define "title"}}Regulamin{{end}}
+{{define "body"}}
+<h1>Regulamin</h1>
+<p class="meta">Inkroom, współdzielona tablica do korepetycji online. Ostatnia zmiana: {{.Updated}}.</p>
+
+<div class="box" lang="en">
+<p><strong>Terms summary (English).</strong> Inkroom is a free shared whiteboard for online tutoring, offered as is, without guarantees. Your drawings stay yours. Be decent: no unlawful or harmful content, no abuse of the service. You can delete your account any time. Polish law applies. Privacy details are in the <a href="/privacy">Privacy Policy</a>.</p>
+</div>
+
+<h2>1. Usługodawca</h2>
+<p>Usługę Inkroom prowadzi operator:</p>
+{{template "operator" .}}
+
+<h2>2. Czym jest usługa</h2>
+<p>Inkroom to bezpłatna, współdzielona tablica internetowa do prowadzenia korepetycji i lekcji online: rysowanie, pisanie, wczytywanie obrazów i dokumentów PDF, wspólna praca na tablicy przez link. Usługa jest we wczesnej fazie rozwoju i może się zmieniać.</p>
+
+<h2>3. Konto</h2>
+<ul>
+<li>Konto zakładasz przez adres e-mail i hasło albo przez konto Google. Podane dane mają być prawdziwe, a hasło i dostęp do konta chronisz sam.</li>
+<li>Osoba poniżej 16 lat może założyć konto tylko za zgodą rodzica lub opiekuna prawnego.</li>
+<li>Gość z linkiem może wejść na tablicę bez konta, a prawo do rysowania zależy od ustawień właściciela tablicy.</li>
+<li>Konto możesz w każdej chwili usunąć w oknie „Konto” w aplikacji. Skutki opisuje <a href="/privacy">Polityka prywatności</a>.</li>
+</ul>
+
+<h2>4. Zasady korzystania</h2>
+<p>Nie wolno: wprowadzać treści niezgodnych z prawem, obraźliwych lub naruszających cudze prawa, w tym prawa autorskie; naruszać prywatności innych osób; prowadzić działań, które zakłócają działanie usługi (masowe żądania, próby obejścia zabezpieczeń, wysyłanie złośliwych plików); podszywać się pod inne osoby. Operator może usunąć treść lub konto, które łamią te zasady.</p>
+
+<h2>5. Twoje treści</h2>
+<p>To, co rysujesz i wczytujesz na tablicę, pozostaje Twoje. Dajesz operatorowi tylko niezbędne prawo do przechowywania tych treści i pokazywania ich osobom, którym udostępnisz link do tablicy, wyłącznie po to, aby usługa działała. Osoby z linkiem do tablicy widzą jej zawartość, więc nie umieszczaj na niej tego, czego nie chcesz pokazać.</p>
+
+<h2>6. Dostępność i odpowiedzialność</h2>
+<p>Usługa jest udostępniana w stanie, w jakim jest, bez gwarancji nieprzerwanego działania i bez gwarancji, że dane nigdy nie zostaną utracone. Robimy kopie zapasowe bazy danych, ale ważne materiały trzymaj także u siebie. W granicach dozwolonych prawem operator nie odpowiada za szkody wynikające z korzystania z bezpłatnej usługi, w tym z utraty danych lub przerw w działaniu; nie wyłącza to odpowiedzialności, której prawo wyłączyć nie pozwala.</p>
+
+<h2>7. Zmiany regulaminu i usługi</h2>
+<p>Możemy zmienić regulamin lub usługę, także zakończyć jej prowadzenie. O istotnych zmianach poinformujemy w aplikacji z odpowiednim wyprzedzeniem. Dalsze korzystanie po zmianie oznacza jej akceptację.</p>
+
+<h2>8. Prawo i kontakt</h2>
+<p>Do usługi stosuje się prawo polskie. Pytania i zgłoszenia kieruj na adres kontaktowy operatora powyżej. Dane osobowe opisuje <a href="/privacy">Polityka prywatności</a>.</p>
+{{end}}

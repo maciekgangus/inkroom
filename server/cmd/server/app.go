@@ -28,6 +28,8 @@ type app struct {
 	adminDevOpen bool
 	// adminSecret signs the tickets that let the admin enter a board as the Administrator (R-065).
 	adminSecret []byte
+	// legal names the operator on /privacy and /terms (R-096).
+	legal legalData
 }
 
 // newApp wires the services together. Call Close before closing the store.
@@ -120,6 +122,8 @@ func (a *app) Handler() http.Handler {
 	index := func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, filepath.Join(a.staticDir, "index.html"))
 	}
+	mux.HandleFunc("GET /privacy", a.legalPage("privacy"))
+	mux.HandleFunc("GET /terms", a.legalPage("terms"))
 	mux.HandleFunc("GET /register", index)
 	mux.HandleFunc("GET /b/{id}", index)
 	mux.Handle("/", http.FileServer(http.Dir(a.staticDir)))
