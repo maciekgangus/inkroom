@@ -48,6 +48,7 @@ import { loadPdf } from "./pdf/loader";
 import { PdfProgress } from "./pdf-progress";
 import { hasFinePointer } from "./pointer";
 import { PropertiesPanel } from "./properties-panel";
+import { loadSnapShapes } from "./shape-snap";
 import { ShareButton } from "./share-button";
 import { applyToolShortcut, colorForKey, dropsSelection } from "./shortcuts";
 import { ShortcutsDialog } from "./shortcuts-dialog";
@@ -127,6 +128,7 @@ export function BoardView({
 			size: SIZES[1],
 			lineStyle: lineStyleFor("pen"), // R-073: the natural pen is the default, R-097: or what the pen had last
 			shape: loadShape(),
+			snapShapes: loadSnapShapes(), // R-095
 		}),
 		[],
 	);

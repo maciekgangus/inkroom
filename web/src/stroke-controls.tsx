@@ -58,6 +58,23 @@ export function StrokeControls({ settings, onChange, inline }: Props) {
 			: chosen;
 	const current = LINE_STYLES.find((s) => s.style === shown) ?? LINE_STYLES[1];
 
+	// Only the pen straightens its strokes into shapes (R-095).
+	const snapToggle =
+		settings.tool === "pen" ? (
+			<button
+				type="button"
+				role="switch"
+				aria-checked={!!settings.snapShapes}
+				aria-label="snap shapes"
+				title="Przytrzymaj rysik na końcu kreski, a zamieni się w równy kształt"
+				class={`snap-toggle ${on(!!settings.snapShapes)}`}
+				onClick={() => onChange({ snapShapes: !settings.snapShapes })}
+			>
+				<span class="snap-check" aria-hidden="true" />
+				Prostowanie kształtów
+			</button>
+		) : null;
+
 	const sizeButtons = SIZES.map((s) => (
 		<button
 			type="button"
@@ -120,6 +137,7 @@ export function StrokeControls({ settings, onChange, inline }: Props) {
 						</button>
 					))}
 				</div>
+				{snapToggle}
 			</>
 		);
 
@@ -174,6 +192,7 @@ export function StrokeControls({ settings, onChange, inline }: Props) {
 							onInput={(v) => onChange({ opacity: v / 100 })}
 							onChange={(v) => onChange({ opacity: v / 100 })}
 						/>
+						{snapToggle}
 					</div>
 				)}
 			</div>
