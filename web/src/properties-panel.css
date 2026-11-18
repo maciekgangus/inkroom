@@ -79,11 +79,14 @@
 	gap: 8px;
 }
 /* The digits and the pi are a symbol in the same square as the icons. */
-.properties button.digits,
-.properties button.icon:not(:has(svg)) {
+.properties button.digits {
 	font-family: var(--mono);
 	font-size: 14px;
 	letter-spacing: -0.04em;
+}
+.properties button.icon:not(.digits):not(:has(svg)) {
+	font-size: 20px;
+	font-weight: 400;
 }
 /* The rule between ready widths and line styles, as between two groups of the bar. */
 .prop-sep {
