@@ -5,7 +5,7 @@ import { getExtraColor, setExtraColor } from "./extra-color";
 import { Icon } from "./icon";
 import { ImageControls, type ImageControlsProps } from "./image-controls";
 import { ShapeIcon } from "./shape-icon";
-import { selectTool, toolKey } from "./shortcuts";
+import { toolKey } from "./shortcuts";
 import { StrokeControls } from "./stroke-controls";
 import { displayColor, useTheme } from "./theme";
 import { useToolbarLayout } from "./toolbar-layout";
@@ -174,10 +174,8 @@ export function Toolbar({
 									setShapesOpen(!shapesOpen);
 									return;
 								}
-								selectTool(settings, tool);
 								setShapesOpen(false);
-								rerender((n) => n + 1);
-								onToolChange?.();
+								set({ tool });
 							}}
 						>
 							{isShapeTool ? (
@@ -206,12 +204,9 @@ export function Toolbar({
 														title={s.label}
 														class={on(s.kind === current.kind)}
 														onClick={() => {
-															settings.shape = s.kind;
 															saveShape(s.kind);
-															selectTool(settings, "shape");
 															setShapesOpen(false);
-															rerender((n) => n + 1);
-															onToolChange?.();
+															set({ shape: s.kind, tool: "shape" });
 														}}
 													>
 														<ShapeIcon kind={s.kind} />
