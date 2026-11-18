@@ -127,7 +127,7 @@ function BoardPage({
 	const [info, setInfo] = useState<
 		{ owner: boolean; name: string } | null | undefined
 	>(undefined);
-	const [account, setAccount] = useAccount(id);
+	const [account] = useAccount(id);
 	const [guestName, setGuestName] = useState(() =>
 		stored(localStorage, NAME_KEY),
 	);
