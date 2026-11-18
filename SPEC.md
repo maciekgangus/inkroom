@@ -245,3 +245,4 @@ Pytania o sposób wczytywania PDF rozstrzygnął użytkownik 2026-11-11; decyzje
 
 - 2026-11-18: uwagi z panelu administratora i prośba użytkownika (bez Buy Me a Coffee): R-085 (okno konta, usuwanie konta, zmiana hasła), R-086 (własne skróty klawiszowe), R-087 (stała szerokość przy kafelkach i liście), R-088 (podglądy tablic na serwerze), `accepted`; R-063 (logowanie Google) do zrobienia teraz, ADR 0018.
 - 2026-11-18: R-089 (kreska na żywo u obserwatora miała inny kształt niż po narysowaniu: brakowało stylu linii i przezroczystości w wiadomości na żywo) na prośbę użytkownika, `accepted`.
+- 2026-11-18: R-063 (logowanie Google) zrobione w kodzie: kod autoryzacji z PKCE, konto po `sub`, e-mail musi być potwierdzony, łączenie z kontem z hasłem kasuje hasło i sesje, przycisk ukryty bez konfiguracji; ADR 0018, kroki w konsoli Google w `deploy/README.md`; czeka na test z prawdziwym kluczem, potem `done`.

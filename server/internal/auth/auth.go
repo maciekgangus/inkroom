@@ -90,6 +90,11 @@ type Service struct {
 	// (503): a missing configuration must not open the door (R-054, ADR 0013).
 	Captcha Captcha
 
+	// Google turns on signing in with Google (R-063); nil: off.
+	Google        *Google
+	googleMu      sync.Mutex
+	googlePending map[string]pendingGoogle
+
 	failMu sync.Mutex
 	fails  map[string][]time.Time
 

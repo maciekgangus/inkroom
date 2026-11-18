@@ -82,9 +82,12 @@ export const register = (r: Registration) =>
 export const login = (login: string, password: string) =>
 	request<Account>("POST", "/api/login", { login, password });
 
-/** Public settings of the server: the site key of the registration captcha ("" when closed). */
+/**
+ * Public settings of the server: the site key of the registration captcha ("" when closed) and
+ * whether signing in with Google is on (R-063).
+ */
 export const config = () =>
-	request<{ turnstileSiteKey: string }>("GET", "/api/config");
+	request<{ turnstileSiteKey: string; google?: boolean }>("GET", "/api/config");
 
 /** Sets a new password after checking the current one (R-085). */
 export const changePassword = (current: string, next: string) =>

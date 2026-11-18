@@ -582,3 +582,64 @@ func TestFeedback(t *testing.T) {
 		t.Fatalf("count = %d, want 1", n)
 	}
 }
+
+func TestGoogleAccounts(t *testing.T) {
+	s := open(t)
+	u, err := s.CreateGoogleUser("ala.kowalska@gmail.com", "sub-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u.Username != "ala.kowalska" || u.Hash != "" {
+		t.Fatalf("got %+v", u)
+	}
+	got, err := s.UserByGoogleSub("sub-1")
+	if err != nil || got.ID != u.ID {
+		t.Fatalf("UserByGoogleSub = %+v, %v", got, err)
+	}
+	if _, err := s.UserByGoogleSub("nobody"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("unknown sub: %v", err)
+	}
+	if _, err := s.UserByGoogleSub(""); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("empty sub must never match: %v", err)
+	}
+	if _, err := s.CreateGoogleUser("ala.kowalska@gmail.com", "sub-2"); !errors.Is(err, ErrEmailTaken) {
+		t.Fatalf("same e-mail: %v", err)
+	}
+	// a second person whose e-mail starts the same gets a free name
+	v, err := s.CreateGoogleUser("ala.kowalska@example.org", "sub-3")
+	if err != nil || v.Username != "ala.kowalska2" {
+		t.Fatalf("got %+v, %v", v, err)
+	}
+}
+
+func TestLinkGoogleClearsPasswordAndSessions(t *testing.T) {
+	s := open(t)
+	u, err := s.CreateAccount("a@b.pl", "ala", "$argon2id$hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CreateSession("tok", u.ID, time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.LinkGoogle(u.ID, "sub-9"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.UserByGoogleSub("sub-9")
+	if err != nil || got.ID != u.ID || got.Hash != "" {
+		t.Fatalf("after link: %+v, %v", got, err)
+	}
+	if _, err := s.SessionUser("tok", time.Now()); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("old session survived the link: %v", err)
+	}
+}
+
+func TestLinkGoogleNeverOverwrites(t *testing.T) {
+	s := open(t)
+	u, _ := s.CreateGoogleUser("a@b.pl", "sub-1")
+	if err := s.LinkGoogle(u.ID, "sub-2"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("relinking: %v", err)
+	}
+	if got, err := s.UserByGoogleSub("sub-1"); err != nil || got.ID != u.ID {
+		t.Fatalf("original link lost: %+v, %v", got, err)
+	}
+}

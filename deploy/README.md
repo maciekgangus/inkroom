@@ -85,7 +85,7 @@ sudo mkdir -p /opt/inkroom && sudo chown "$USER" /opt/inkroom
 scp -r deploy/* uzytkownik@homelab:/opt/inkroom/
 cd /opt/inkroom
 cp env.template .env
-nano .env          # TUNNEL_TOKEN, TURNSTILE_*, R2_* (klucze kopii, punkt 5); INKROOM_TAG tylko do przypięcia wersji
+nano .env          # TUNNEL_TOKEN, TURNSTILE_*, GOOGLE_* (punkt 8), R2_* (klucze kopii, punkt 5); INKROOM_TAG tylko do przypięcia wersji
 chmod 600 .env
 docker compose up -d
 ```
@@ -214,6 +214,28 @@ CF_ACCESS_AUD=<AUD Tag>
 
 **Sprawdzenie:** wejdź na `https://inkroom.lesniakmaciek.dev/admin`: najpierw strona logowania Cloudflare, po kodzie z e-maila lista uwag. W oknie prywatnym bez logowania nie ma dostępu. Nie działa? W logu aplikacji (`docker compose logs app`) przy starcie powinno nie być wiersza „the admin page is off”; zły AUD albo zespół daje 404 mimo zalogowania.
 
+## 8. Logowanie przez Google (R-063, ADR 0018)
+
+Raz, w przeglądarce (konto Google, które ma być właścicielem aplikacji):
+
+1. <https://console.cloud.google.com/> → utwórz projekt (np. „Inkroom”).
+2. **APIs & Services → OAuth consent screen** (w nowym panelu: **Google Auth Platform → Branding / Audience**): typ **External**, nazwa aplikacji „Inkroom”, e-mail pomocy i kontaktowy, domena `lesniakmaciek.dev` jako autoryzowana. Zakresy tylko podstawowe (`openid`, `email`, `profile`), nie wymagają weryfikacji. **Publish app** (z „Testing” na „In production”); w trybie Testing mogą się logować tylko wpisani testerzy.
+3. **Clients → Create client** (albo **Credentials → Create credentials → OAuth client ID**): typ **Web application**, nazwa „Inkroom”.
+   - Authorized JavaScript origins: nic (przepływ idzie przez serwer).
+   - **Authorized redirect URIs:** `https://inkroom.lesniakmaciek.dev/api/auth/google/callback`
+   - Do testów lokalnych można dodać też `http://localhost:8099/api/auth/google/callback`.
+4. Skopiuj **Client ID** i **Client secret** do `.env` na homelabie (`chmod 600`, nigdy do repo ani czatu):
+
+```
+GOOGLE_CLIENT_ID=...apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=...
+PUBLIC_URL=https://inkroom.lesniakmaciek.dev
+```
+
+5. `docker compose up -d` (albo następna aktualizacja z punktu 4). W logach znika „signing in with Google is off”, a na stronach logowania i rejestracji pojawia się „Kontynuuj z Google”.
+
+Konto Google z e-mailem, który ma już konto z hasłem, **przejmuje** to konto: hasło jest wtedy kasowane, a wszystkie sesje kończone (powód w ADR 0018). Nowe konto z Google dostaje nazwę z początku e-maila i nie ma hasła.
+
 ## Gdy coś nie działa
 
 | Objaw | Co sprawdzić |
@@ -222,6 +244,9 @@ CF_ACCESS_AUD=<AUD Tag>
 | Cloudflare pokazuje 502 | trasa w tunelu ma zły adres usługi; musi być `http://app:8080`; `docker compose ps` czy `app` działa |
 | `cloudflared` w logach: "Unauthorized" albo "failed to connect" | zły lub unieważniony token; wygeneruj nowy w panelu tunelu |
 | Strona się otwiera, ale rejestracja nie działa | brak `TURNSTILE_SECRET` (rejestracja jest wtedy zamknięta) albo klucze dla innej domeny |
+| Google: „Błąd 400: redirect_uri_mismatch” | adres w konsoli Google musi być dokładnie `PUBLIC_URL` + `/api/auth/google/callback` (https, bez ukośnika na końcu) |
+| Google: „Access blocked” albo logują się tylko testerzy | ekran zgody nadal w trybie „Testing”; opublikuj aplikację (punkt 8.2) |
+| Przycisk Google się nie pojawia | brak `GOOGLE_CLIENT_ID` lub `GOOGLE_CLIENT_SECRET` w `.env` (sprawdź `docker compose logs app`) |
 | Rysowanie nie synchronizuje się | WebSocket: sprawdź w konsoli przeglądarki `/ws/...`; tunel wspiera WebSocket, więc zwykle to zła trasa |
 | `unauthorized` albo `denied` przy pobieraniu obrazu | Docker nie jest zalogowany do `ghcr.io` (dla użytkownika, który to uruchamia, a timer to root) albo token wygasł lub nie ma `read:packages`; powtórz "Logowanie do rejestru" |
 | `update.sh` kończy się błędem | `docker compose logs app`; skrypt sam wraca do poprzedniego obrazu, a log mówi, który nie wstał |

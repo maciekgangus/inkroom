@@ -145,6 +145,20 @@ var migrations = []migration{
 )`),
 	// Own keyboard shortcuts of an account, a JSON object tool -> key code (R-086).
 	stmt("ALTER TABLE users ADD COLUMN shortcuts TEXT NOT NULL DEFAULT '{}'"),
+	// The Google account an account is signed in with (R-063, ADR 0018); '' for none.
+	addGoogleSub,
+}
+
+func addGoogleSub(tx *sql.Tx) error {
+	for _, q := range []string{
+		"ALTER TABLE users ADD COLUMN google_sub TEXT NOT NULL DEFAULT ''",
+		"CREATE UNIQUE INDEX users_google_sub ON users(google_sub) WHERE google_sub != ''",
+	} {
+		if _, err := tx.Exec(q); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // migration changes the schema inside a transaction.
@@ -299,6 +313,20 @@ func unix(t time.Time) int64 { return t.Unix() }
 // CreateUser adds an account whose username is made from the e-mail (see usernameFromEmail).
 // The e-mail must already be normalized. Registration uses CreateAccount with a chosen name.
 func (s *Store) CreateUser(email, hash string) (User, error) {
+	return s.createNamed(email, hash, "")
+}
+
+// CreateGoogleUser adds an account that signs in with Google only (no password, so its hash is
+// empty and never matches). The username is made from the e-mail, like for CreateUser (R-063).
+func (s *Store) CreateGoogleUser(email, sub string) (User, error) {
+	if sub == "" {
+		return User{}, errors.New("empty google sub")
+	}
+	return s.createNamed(email, "", sub)
+}
+
+// createNamed creates an account named after its e-mail, retrying when a name is taken meanwhile.
+func (s *Store) createNamed(email, hash, sub string) (User, error) {
 	for attempt := 0; attempt < 5; attempt++ {
 		name := usernameFromEmail(email, func(key string) bool {
 			if IsReservedName(key) {
@@ -308,11 +336,45 @@ func (s *Store) CreateUser(email, hash string) (User, error) {
 			return s.db.QueryRow("SELECT 1 FROM users WHERE username_key = ?", key).Scan(&one) == nil
 		})
 		u, err := s.CreateAccount(email, name, hash)
-		if !errors.Is(err, ErrUsernameTaken) {
-			return u, err
+		if errors.Is(err, ErrUsernameTaken) {
+			continue
 		}
+		if err == nil && sub != "" {
+			if _, err = s.db.Exec("UPDATE users SET google_sub = ? WHERE id = ?", sub, u.ID); err != nil {
+				_, _ = s.db.Exec("DELETE FROM users WHERE id = ?", u.ID)
+				return User{}, err
+			}
+		}
+		return u, err
 	}
 	return User{}, ErrUsernameTaken
+}
+
+// UserByGoogleSub finds the account signed in with the Google account sub. ErrNotFound for none.
+func (s *Store) UserByGoogleSub(sub string) (User, error) {
+	if sub == "" {
+		return User{}, ErrNotFound
+	}
+	return scanUser(s.db.QueryRow("SELECT "+userCols+" FROM users WHERE google_sub = ?", sub))
+}
+
+// LinkGoogle ties an existing account to a Google account (ErrNotFound if it already has one). The password is dropped and every
+// session ended: the e-mail of a password account was never confirmed, so whoever registered it
+// first (and knows the password) must not keep the account once its real owner proves the
+// address with Google (ADR 0018).
+func (s *Store) LinkGoogle(userID int64, sub string) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := s.mustAffect(tx.Exec("UPDATE users SET google_sub = ?, hash = '' WHERE id = ? AND google_sub = ''", sub, userID)); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM sessions WHERE user_id = ?", userID); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // CreateAccount adds an account with the given username. The e-mail must already be normalized.

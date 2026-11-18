@@ -3,15 +3,67 @@ import * as api from "./api";
 import { Captcha } from "./captcha";
 import { Logo } from "./logo";
 
+/** What the server answered after a visit to Google: `?google=denied` or `?google=error` (R-063). */
+const GOOGLE_NOTICES: Record<string, string> = {
+	denied: "Logowanie przez Google zostało anulowane.",
+	error: "Nie udało się zalogować przez Google. Spróbuj jeszcze raz.",
+};
+
+/** The link that starts signing in with Google; shown only when the server has it (R-063). */
+function GoogleLink({ enabled }: { enabled: boolean }) {
+	if (!enabled) return null;
+	return (
+		<a class="google-link" href="/api/auth/google/start">
+			<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+				<title>Google</title>
+				<path
+					fill="#4285F4"
+					d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.8z"
+				/>
+				<path
+					fill="#34A853"
+					d="M12 24c3.2 0 6-1.1 7.9-2.9l-3.9-3c-1.1.7-2.5 1.2-4 1.2-3.1 0-5.7-2.1-6.7-4.9H1.3v3.1A12 12 0 0 0 12 24z"
+				/>
+				<path
+					fill="#FBBC05"
+					d="M5.3 14.4a7.2 7.2 0 0 1 0-4.8V6.5H1.3a12 12 0 0 0 0 10.9l4-3z"
+				/>
+				<path
+					fill="#EA4335"
+					d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A12 12 0 0 0 1.3 6.5l4 3.1C6.3 6.9 8.9 4.8 12 4.8z"
+				/>
+			</svg>
+			Kontynuuj z Google
+		</a>
+	);
+}
+
+/** Asks the server whether Google sign-in is on; a failed answer means off. */
+function useGoogle(): boolean {
+	const [on, setOn] = useState(false);
+	useEffect(() => {
+		api.config().then(
+			(c) => setOn(c.google === true),
+			() => setOn(false),
+		);
+	}, []);
+	return on;
+}
+
 interface LoginProps {
 	onAuth: (account: api.Account) => void;
 	navigate: (to: string) => void;
+	/** The query string of the page, for the notice after a visit to Google. */
+	search?: string;
 }
 
 /** The login page: an e-mail or a username and a password (R-055). */
-export function AuthForms({ onAuth, navigate }: LoginProps) {
-	const [error, setError] = useState("");
+export function AuthForms({ onAuth, navigate, search = "" }: LoginProps) {
+	const notice =
+		GOOGLE_NOTICES[new URLSearchParams(search).get("google") ?? ""];
+	const [error, setError] = useState(notice ?? "");
 	const [busy, setBusy] = useState(false);
+	const google = useGoogle();
 
 	const run = async (form: HTMLFormElement) => {
 		const data = new FormData(form);
@@ -69,6 +121,7 @@ export function AuthForms({ onAuth, navigate }: LoginProps) {
 						Załóż konto
 					</button>
 				</div>
+				<GoogleLink enabled={google} />
 			</form>
 		</main>
 	);
@@ -86,10 +139,14 @@ export function RegisterPage({ navigate }: RegisterProps) {
 	const [attempt, setAttempt] = useState(0);
 	const [error, setError] = useState("");
 	const [busy, setBusy] = useState(false);
+	const [google, setGoogle] = useState(false);
 
 	useEffect(() => {
 		api.config().then(
-			(c) => setSiteKey(c.turnstileSiteKey),
+			(c) => {
+				setSiteKey(c.turnstileSiteKey);
+				setGoogle(c.google === true);
+			},
 			() => setSiteKey(""),
 		);
 	}, []);
@@ -122,7 +179,12 @@ export function RegisterPage({ navigate }: RegisterProps) {
 				<h1 class="brand">
 					<Logo height={44} />
 				</h1>
-				<p class="muted">Rejestracja jest chwilowo niedostępna.</p>
+				<p class="muted">
+					{google
+						? "Rejestracja e-mailem jest chwilowo niedostępna."
+						: "Rejestracja jest chwilowo niedostępna."}
+				</p>
+				<GoogleLink enabled={google} />
 				<button type="button" onClick={() => navigate("/")}>
 					Mam już konto
 				</button>
@@ -180,6 +242,7 @@ export function RegisterPage({ navigate }: RegisterProps) {
 						Mam już konto
 					</button>
 				</div>
+				<GoogleLink enabled={google} />
 			</form>
 		</main>
 	);
