@@ -46,14 +46,16 @@ test.describe("a panel with a great many boards", () => {
 	test("only what is on the screen (and a little more) gets a picture", async ({
 		page,
 	}) => {
-		let previews = 0;
+		// A tile may ask for its picture, its data and store the picture again (R-088), so count boards.
+		const boards = new Set<string>();
 		page.on("request", (r) => {
-			if (r.url().includes("/preview")) previews++;
+			const id = r.url().match(/\/api\/boards\/([^/]+)\/preview/)?.[1];
+			if (id) boards.add(id);
 		});
 		await page.goto("/");
 		await page.waitForSelector(".boards.tiles .board");
 		await page.waitForTimeout(1000);
-		const first = previews;
+		const first = boards.size;
 		expect(first).toBeGreaterThan(0);
 		expect(first).toBeLessThan(40); // a hundred boards do not mean a hundred requests
 
@@ -62,7 +64,7 @@ test.describe("a panel with a great many boards", () => {
 			const panel = document.querySelector(".panel") as HTMLElement;
 			panel.scrollTop = panel.scrollHeight;
 		});
-		await expect.poll(() => previews).toBeGreaterThan(first);
+		await expect.poll(() => boards.size).toBeGreaterThan(first);
 		await expect
 			.poll(() =>
 				page.evaluate(() => {
