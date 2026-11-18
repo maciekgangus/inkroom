@@ -1,6 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import type { Settings } from "./board/controller";
 import type { Dash } from "./board/style";
+import { closeOnDismiss } from "./dismiss";
 import { Icon } from "./icon";
 import { Slider } from "./slider";
 
@@ -45,17 +46,7 @@ export function StrokeControls({ settings, onChange, inline }: Props) {
 	// Escape or a press outside closes whichever is open; opening one closes the other.
 	useEffect(() => {
 		if (!open) return;
-		const close = () => setOpen(null);
-		const key = (e: KeyboardEvent) => e.key === "Escape" && close();
-		const outside = (e: Event) => {
-			if (!(e.target as HTMLElement).closest?.(".flyout-wrap")) close();
-		};
-		addEventListener("keydown", key);
-		addEventListener("pointerdown", outside, true);
-		return () => {
-			removeEventListener("keydown", key);
-			removeEventListener("pointerdown", outside, true);
-		};
+		return closeOnDismiss(".flyout-wrap", () => setOpen(null));
 	}, [open]);
 
 	// Lines and shapes have no natural pen: they draw the classic style, and show it (R-073).
