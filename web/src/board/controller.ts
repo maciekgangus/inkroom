@@ -34,6 +34,7 @@ import {
 	softSnapAngle,
 	toLocal,
 	translateEl,
+	unionRect,
 	worldBounds,
 } from "./transform";
 import type { Rect, Viewport } from "./viewport";
@@ -585,17 +586,7 @@ export class Controller {
 		const c = this.selectedCache;
 		if (c?.list === sel && c.bounds !== undefined) return c.bounds;
 		let box: Rect | null = null;
-		for (const s of sel) {
-			const b = worldBounds(s);
-			box = box
-				? {
-						minX: Math.min(box.minX, b.minX),
-						minY: Math.min(box.minY, b.minY),
-						maxX: Math.max(box.maxX, b.maxX),
-						maxY: Math.max(box.maxY, b.maxY),
-					}
-				: b;
-		}
+		for (const s of sel) box = unionRect(box, worldBounds(s));
 		if (c?.list === sel) c.bounds = box;
 		return box;
 	}
@@ -758,8 +749,9 @@ export class Controller {
 
 	private addCopies(source: Stroke[], at?: [number, number]): string[] {
 		if (source.length === 0) return [];
-		const left = Math.min(...source.map((s) => worldBounds(s).minX));
-		const top = Math.min(...source.map((s) => worldBounds(s).minY));
+		let box: Rect | null = null;
+		for (const s of source) box = unionRect(box, worldBounds(s));
+		const { minX: left, minY: top } = box as Rect;
 		const [dx, dy] = at ? [at[0] - left, at[1] - top] : [20, 20];
 		const copies = source.map((s) => ({
 			...translateEl(s, dx, dy),

@@ -1,6 +1,13 @@
 import type { Stroke } from "./board";
 import { isPolygonKind } from "./shapes";
-import { elementCorners, geomBox, rotatePoint, worldBounds } from "./transform";
+import {
+	elementCorners,
+	geomBox,
+	rotatePoint,
+	unionRect,
+	worldBounds,
+} from "./transform";
+import type { Rect } from "./viewport";
 
 type Vec = [number, number];
 
@@ -38,17 +45,9 @@ export function frameOf(els: Stroke[], groupRot = 0): Frame | null {
 			rot: els[0].rot ?? 0,
 		};
 	}
-	let minX = Number.POSITIVE_INFINITY;
-	let minY = Number.POSITIVE_INFINITY;
-	let maxX = Number.NEGATIVE_INFINITY;
-	let maxY = Number.NEGATIVE_INFINITY;
-	for (const el of els) {
-		const b = worldBounds(el);
-		minX = Math.min(minX, b.minX);
-		minY = Math.min(minY, b.minY);
-		maxX = Math.max(maxX, b.maxX);
-		maxY = Math.max(maxY, b.maxY);
-	}
+	let box: Rect | null = null;
+	for (const el of els) box = unionRect(box, worldBounds(el));
+	const { minX, minY, maxX, maxY } = box as Rect;
 	return {
 		cx: (minX + maxX) / 2,
 		cy: (minY + maxY) / 2,
