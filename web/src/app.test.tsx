@@ -118,6 +118,73 @@ describe("App", () => {
 	});
 
 	describe("home page, logged out", () => {
+		describe("Google (R-063)", () => {
+			const googleLink = () =>
+				root.querySelector('a[href="/api/auth/google/start"]');
+
+			test("the login page offers Google when the server has it", async () => {
+				mockApi({
+					"GET /api/me": LOGGED_OUT,
+					"GET /api/config": {
+						body: { turnstileSiteKey: "k", google: true },
+					},
+				});
+				await mount({ path: "/" });
+				await vi.waitFor(() => expect(googleLink()).not.toBeNull());
+				expect(googleLink()?.textContent).toContain("Google");
+			});
+
+			test("the login page has no Google link when the server lacks it", async () => {
+				const api = mockApi({
+					"GET /api/me": LOGGED_OUT,
+					"GET /api/config": {
+						body: { turnstileSiteKey: "k", google: false },
+					},
+				});
+				await mount({ path: "/" });
+				await vi.waitFor(() =>
+					expect(api.called("GET /api/config").length).toBe(1),
+				);
+				await waitText("Zaloguj");
+				expect(googleLink()).toBeNull();
+			});
+
+			test("an unreachable config does not break the login page", async () => {
+				mockApi({ "GET /api/me": LOGGED_OUT });
+				await mount({ path: "/" });
+				await waitText("Zaloguj");
+				expect(googleLink()).toBeNull();
+			});
+
+			test("the registration page offers Google, even where the captcha is off", async () => {
+				mockApi({
+					"GET /api/me": LOGGED_OUT,
+					"GET /api/config": {
+						body: { turnstileSiteKey: "", google: true },
+					},
+				});
+				await mount({ path: "/register" });
+				await vi.waitFor(() => expect(googleLink()).not.toBeNull());
+			});
+
+			test("coming back from a refused sign-in explains it", async () => {
+				mockApi({ "GET /api/me": LOGGED_OUT, "GET /api/config": { body: {} } });
+				await mount({ path: "/", search: "?google=denied" });
+				await waitText("Google");
+				expect(root.querySelector('[role="alert"]')?.textContent).toContain(
+					"Google",
+				);
+			});
+
+			test("an error from Google is reported", async () => {
+				mockApi({ "GET /api/me": LOGGED_OUT, "GET /api/config": { body: {} } });
+				await mount({ path: "/", search: "?google=error" });
+				await vi.waitFor(() =>
+					expect(root.querySelector('[role="alert"]')).not.toBeNull(),
+				);
+			});
+		});
+
 		test("logging in with a username shows the panel with that name", async () => {
 			const api = mockApi({
 				"GET /api/me": LOGGED_OUT,

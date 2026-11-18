@@ -203,6 +203,30 @@ input::placeholder {
 	text-align: left;
 }
 
+/* "Continue with Google" under the login and registration forms (R-063) */
+.google-link {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	margin-top: 14px;
+	padding: 10px 14px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--surface);
+	color: var(--text);
+	text-decoration: none;
+	font: inherit;
+	min-height: 44px;
+	box-sizing: border-box;
+}
+.google-link:hover {
+	background: var(--surface-hover);
+}
+.center > .google-link {
+	margin-top: 0;
+}
+
 /* Board list */
 .panel {
 	height: 100%;

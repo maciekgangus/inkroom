@@ -61,7 +61,7 @@ export function App({
 			) : path === REGISTER_PATH ? (
 				<RegisterPage navigate={navigate} />
 			) : (
-				<Home navigate={navigate} />
+				<Home navigate={navigate} search={search} />
 			)}
 			<div class="corner">
 				<FeedbackButton />
@@ -71,7 +71,13 @@ export function App({
 	);
 }
 
-function Home({ navigate }: { navigate: (to: string) => void }) {
+function Home({
+	navigate,
+	search,
+}: {
+	navigate: (to: string) => void;
+	search: string;
+}) {
 	const [account, setAccount] = useState<api.Account | null | undefined>(
 		undefined, // undefined: still asking the server
 	);
@@ -87,7 +93,9 @@ function Home({ navigate }: { navigate: (to: string) => void }) {
 
 	if (account === undefined) return null;
 	if (account === null)
-		return <AuthForms onAuth={setAccount} navigate={navigate} />;
+		return (
+			<AuthForms onAuth={setAccount} navigate={navigate} search={search} />
+		);
 	return (
 		<Panel
 			username={account.username}
