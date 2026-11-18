@@ -55,6 +55,7 @@ import { type Peer, type SocketLike, SyncClient } from "./sync/sync";
 import { TextEditor } from "./text-editor";
 import { currentTheme, displayColor, useTheme } from "./theme";
 import { toolCursor } from "./tool-cursor";
+import { lineStyleFor, switchTool } from "./tool-style";
 import { COLORS, QUICK_COLORS, SIZES, Toolbar } from "./toolbar";
 import { useToolbarLayout } from "./toolbar-layout";
 import { ZoomControls } from "./zoom-controls";
@@ -124,7 +125,7 @@ export function BoardView({
 			tool: "pen",
 			color: COLORS[0],
 			size: SIZES[1],
-			lineStyle: "natural", // R-073: the natural pen is the default
+			lineStyle: lineStyleFor("pen"), // R-073: the natural pen is the default, R-097: or what the pen had last
 			shape: loadShape(),
 		}),
 		[],
@@ -726,7 +727,7 @@ export function BoardView({
 					if (
 						!["pen", "line", "shape", "text", "plane"].includes(settings.tool)
 					)
-						settings.tool = "pen";
+						switchTool(settings, "pen");
 				}
 				e.preventDefault();
 				bump();

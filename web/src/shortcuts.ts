@@ -1,4 +1,5 @@
 import type { Settings } from "./board/controller";
+import { switchTool } from "./tool-style";
 
 type Tool = Settings["tool"];
 
@@ -163,7 +164,7 @@ export const dropsSelection = (tool: Tool): boolean =>
 
 /** Switches the tool. */
 export function selectTool(settings: Settings, tool: Tool): void {
-	settings.tool = tool;
+	switchTool(settings, tool);
 }
 
 /**
