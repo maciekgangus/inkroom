@@ -210,12 +210,37 @@ describe("PropertiesPanel", () => {
 
 		test("each function shows its formula and its coefficients in fields and sliders", () => {
 			mount([withFns(f1, f2)]);
-			expect(root.textContent).toContain("y = 2x − 1");
-			expect(root.textContent).toContain("y = x² − 4");
+			// Every coefficient is written with its value, so a change in any of them is seen.
+			expect(root.textContent).toContain("y = 2·x − 1");
+			expect(root.textContent).toContain("y = 1·x² + 0·x − 4");
 			expect(input("fn f1 coef 0")?.value).toBe("2");
 			expect(input("fn f1 coef 1")?.value).toBe("-1");
 			expect(input("fn f2 coef 2")?.value).toBe("-4");
 			expect(slider("fn f1 slider 0")).not.toBeNull();
+		});
+
+		test("the formula follows the coefficients while a slider moves", () => {
+			mount([withFns(f1)]);
+			expect(root.querySelector(".fn-formula")?.textContent).toBe(
+				"y = 2·x − 1",
+			);
+			act(() => move(slider("fn f1 slider 1") as HTMLInputElement, 5, "input"));
+			expect(lastPatch(onPreview).fns?.[0].c).toEqual([2, 5]);
+		});
+
+		test("the colour of a curve is behind its dot: the row is closed until the dot is pressed", () => {
+			mount([withFns(f1)]);
+			expect(root.querySelector(".fn-colors-wrap.open")).toBeNull();
+			act(() => btn("fn f1 colors")?.click());
+			expect(root.querySelector(".fn-colors-wrap.open")).not.toBeNull();
+		});
+
+		test("a coordinate plane has a wide menu, the others not", () => {
+			mount([withFns(f1)]);
+			expect(root.querySelector(".properties.wide")).not.toBeNull();
+			render(null, root);
+			mount([freehand]);
+			expect(root.querySelector(".properties.wide")).toBeNull();
 		});
 
 		test("typing a coefficient changes only that function and that number", () => {

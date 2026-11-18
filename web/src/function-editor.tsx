@@ -3,7 +3,7 @@ import {
 	COEF_LIMIT,
 	FN_KINDS,
 	FN_PRESETS,
-	fnLabel,
+	fnFormula,
 	MAX_FNS,
 	newFn,
 	type PlaneFn,
@@ -114,16 +114,7 @@ export function FunctionEditor({
 			{fns.map((f) => (
 				<div class="fn" key={f.id} data-fn={f.id}>
 					<div class="fn-title">
-						<button
-							type="button"
-							class="swatch"
-							style={{ "--swatch": display(f.color) }}
-							aria-label={`fn ${f.id} colors`}
-							aria-expanded={colorsOf === f.id}
-							title="Kolor wykresu"
-							onClick={() => setColorsOf(colorsOf === f.id ? null : f.id)}
-						/>
-						<span class="fn-formula">{fnLabel(f)}</span>
+						<span class="fn-formula">{fnFormula(f)}</span>
 						<button
 							type="button"
 							class="icon fn-remove"
@@ -136,12 +127,25 @@ export function FunctionEditor({
 							<Icon name="trash" />
 						</button>
 					</div>
-					{colorsOf === f.id && (
+					<div class="fn-row fn-color-row">
+						<button
+							type="button"
+							class="swatch"
+							style={{ "--swatch": display(f.color) }}
+							aria-label={`fn ${f.id} colors`}
+							aria-expanded={colorsOf === f.id}
+							title="Kolor wykresu"
+							onClick={() => setColorsOf(colorsOf === f.id ? null : f.id)}
+						/>
+						<span class="fn-row-label">Kolor wykresu</span>
+					</div>
+					<div class={`fn-colors-wrap${colorsOf === f.id ? " open" : ""}`}>
 						<div class="palette-grid fn-colors">
 							{FN_COLORS.map((c) => (
 								<button
 									type="button"
 									key={c}
+									tabIndex={colorsOf === f.id ? 0 : -1}
 									class={`swatch${f.color === c ? " active" : ""}`}
 									style={{ "--swatch": display(c) }}
 									aria-label={`fn ${f.id} color ${c}`}
@@ -153,7 +157,7 @@ export function FunctionEditor({
 								/>
 							))}
 						</div>
-					)}
+					</div>
 					{f.k === "quad" && (
 						<button
 							type="button"

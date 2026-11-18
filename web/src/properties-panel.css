@@ -325,9 +325,10 @@
 	border-bottom-color: currentColor;
 	opacity: 0.55;
 }
+/* Ready formulas: two columns where the menu is wide, one where it is narrow; a formula is never broken. */
 .fn-presets {
 	display: grid;
-	grid-template-columns: 1fr 1fr;
+	grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
 	gap: 4px;
 	padding: 2px 0 6px;
 }
@@ -343,38 +344,79 @@
 	color: var(--text);
 	font-size: 13px;
 	text-align: left;
+	white-space: nowrap;
 }
 .fn-presets small {
 	font-family: var(--mono);
 	font-size: 11px;
 	color: var(--muted);
 }
+
+/*
+ * One curve, in one column from the top: the formula with the values now (and the bin), the colour,
+ * the coefficients, the width. Every row has the same 40px first cell, so the icons, the colour dot and
+ * the names stand on one line, and nothing moves when another function is picked.
+ */
 .fn {
 	display: flex;
 	flex-direction: column;
 	gap: 2px;
-	padding-top: 4px;
+	padding: 6px 0 4px;
 	border-top: 1px solid var(--border);
 }
 .fn-title {
 	display: flex;
-	align-items: center;
+	align-items: flex-start;
+	justify-content: space-between;
 	gap: 4px;
+	padding-left: 8px;
 }
 .fn-formula {
 	flex: 1;
 	min-width: 0;
+	padding: 9px 0;
 	overflow-wrap: anywhere;
+	font-family: var(--mono);
 	font-size: 14px;
+	line-height: 1.35;
 	font-weight: 600;
 	color: var(--text);
 }
-.palette-grid.fn-colors {
-	grid-template-columns: repeat(8, 30px);
+.fn-row {
+	display: grid;
+	grid-template-columns: 40px 1fr;
+	align-items: center;
 }
-.properties .fn-colors button.swatch {
-	width: 30px;
-	min-width: 30px;
+.fn-row-label {
+	font-size: 13px;
+	color: var(--muted);
+}
+/* The colours unfold under the dot: the row grows from nothing, smoothly, and the ring of the chosen
+   one has room all round (the padding), so it is never cut off. */
+.fn-colors-wrap {
+	display: grid;
+	grid-template-rows: 0fr;
+	visibility: hidden;
+	transition:
+		grid-template-rows 0.18s ease,
+		visibility 0s linear 0.18s;
+}
+.fn-colors-wrap.open {
+	grid-template-rows: 1fr;
+	visibility: visible;
+	transition: grid-template-rows 0.18s ease;
+}
+.fn-colors-wrap > .fn-colors {
+	min-height: 0;
+	overflow: hidden;
+	padding: 0 4px;
+}
+.fn-colors-wrap.open > .fn-colors {
+	padding: 4px 4px 6px;
+}
+.palette-grid.fn-colors {
+	grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+	justify-items: center;
 }
 .properties button.fn-canon {
 	justify-content: flex-start;
@@ -382,7 +424,7 @@
 }
 .fn-coef {
 	display: grid;
-	grid-template-columns: 20px 72px 1fr;
+	grid-template-columns: 40px 76px 1fr;
 	align-items: center;
 	gap: 8px;
 }
@@ -414,8 +456,25 @@
 .fn-coef .slider .value {
 	display: none;
 }
+/* The width slider: its icon in the same 40px first cell as the colour dot and the names. */
 .fn .slider {
 	padding: 0;
+	gap: 0;
+}
+.fn .slider-icon {
+	display: grid;
+	place-items: center;
+	flex: none;
+	width: 40px;
+}
+.fn .slider input {
+	min-width: 0;
+	margin-right: 10px;
+}
+
+/* A coordinate plane has much to show: its menu is wider, as wide as the screen allows. */
+.properties.wide {
+	width: min(400px, calc(100vw - 24px));
 }
 
 /* A touch screen: every target at least 44px (tablets, R-082), larger slider thumbs, and 16px text
@@ -423,6 +482,9 @@
 @media (pointer: coarse) {
 	.properties {
 		width: 278px;
+	}
+	.properties.wide {
+		width: min(400px, calc(100vw - 24px));
 	}
 	.panel-title,
 	.fns-head {
@@ -449,12 +511,17 @@
 		width: 28px;
 		height: 28px;
 	}
-	/* Eight curve colours in two rows of four wide cells. */
 	.palette-grid.fn-colors {
-		grid-template-columns: repeat(4, 1fr);
+		grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
 	}
-	.properties .fn-colors button.swatch {
-		width: 100%;
+	.fn-row {
+		grid-template-columns: 44px 1fr;
+	}
+	.fn-coef {
+		grid-template-columns: 44px 76px 1fr;
+	}
+	.fn .slider-icon {
+		width: 44px;
 	}
 	.properties .slider {
 		min-height: 44px;

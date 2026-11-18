@@ -3,6 +3,7 @@ import type { Stroke } from "./board";
 import {
 	evalFn,
 	type Frame,
+	fnFormula,
 	fnLabel,
 	MAX_FNS,
 	newFn,
@@ -126,6 +127,37 @@ describe("fnLabel", () => {
 		expect(fnLabel(fn("linear", [2, -1]))).toBe("y = 2x − 1");
 		expect(fnLabel(fn("quad", [1, 0, -4]))).toBe("y = x² − 4");
 		expect(fnLabel(fn("sin", [1, 2, 0, 0]))).toBe("y = sin(2x)");
+	});
+});
+
+describe("fnFormula", () => {
+	test("shows every coefficient with its value, so that a change in any of them is seen", () => {
+		expect(fnFormula(fn("linear", [2, -1]))).toBe("y = 2·x − 1");
+		expect(fnFormula(fn("linear", [1, 0]))).toBe("y = 1·x + 0");
+		expect(fnFormula(fn("quad", [1, 0, 0]))).toBe("y = 1·x² + 0·x + 0");
+		expect(fnFormula(fn("quad", [-2, 3, -4]))).toBe("y = −2·x² + 3·x − 4");
+		expect(fnFormula(fn("cubic", [1, 0, -1, 2]))).toBe(
+			"y = 1·x³ + 0·x² − 1·x + 2",
+		);
+	});
+
+	test("writes the shifted forms with the shift as it is added", () => {
+		expect(fnFormula(fn("quad", [1, 2, -3], { canon: true }))).toBe(
+			"y = 1·(x − 2)² − 3",
+		);
+		expect(fnFormula(fn("quad", [1, -2, 3], { canon: true }))).toBe(
+			"y = 1·(x + 2)² + 3",
+		);
+		expect(fnFormula(fn("abs", [1, 2, 3]))).toBe("y = 1·|x − 2| + 3");
+		expect(fnFormula(fn("sqrt", [2, -1, 0]))).toBe("y = 2·√(x + 1) + 0");
+		expect(fnFormula(fn("hom", [1, 2, 3]))).toBe("y = 1/(x − 2) + 3");
+	});
+
+	test("writes the other kinds", () => {
+		expect(fnFormula(fn("exp", [2, 3]))).toBe("y = 2·3ˣ");
+		expect(fnFormula(fn("log", [1, 2]))).toBe("y = 1·log_2(x)");
+		expect(fnFormula(fn("sin", [1, 2, 0, 0]))).toBe("y = 1·sin(2·x + 0) + 0");
+		expect(fnFormula(fn("tan", [1, 1, -1, 2]))).toBe("y = 1·tg(1·x − 1) + 2");
 	});
 });
 
