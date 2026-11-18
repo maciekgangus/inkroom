@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/maciekgangus/inkroom/server/internal/store"
 )
@@ -109,14 +110,21 @@ type Room struct {
 	pending []store.Op
 	flushMu sync.Mutex // serializes flushes so batches reach the store in order
 	closed  bool
+
+	now func() time.Time // the clock; tests replace it
 }
 
 // presence is what a connected client has shown to the others and must be taken back on leaving.
 type presence struct {
-	live    map[string]struct{} // ids of its unfinished "live" strokes
-	cursors map[string]struct{} // ids under which it published a cursor
-	follows string              // id of the person whose view it follows (R-093), or ""
+	live     map[string]struct{} // ids of its unfinished "live" strokes
+	cursors  map[string]struct{} // ids under which it published a cursor
+	follows  string              // id of the person whose view it follows (R-093), or ""
+	lastView time.Time           // when it last showed its view, to keep floods out
 }
+
+// minViewGap is the shortest time between two views of one client that are passed on. The
+// clients send at most every 50 ms; this only keeps a misbehaving one from flooding (R-093).
+const minViewGap = 25 * time.Millisecond
 
 func newPresence() *presence {
 	return &presence{live: map[string]struct{}{}, cursors: map[string]struct{}{}}
@@ -124,7 +132,7 @@ func newPresence() *presence {
 
 // New returns an empty room that is not persisted.
 func New() *Room {
-	return &Room{strokes: map[string]entry{}, clients: map[*Client]*presence{}, background: store.DefaultBackground, revoked: map[string]bool{}}
+	return &Room{strokes: map[string]entry{}, clients: map[*Client]*presence{}, background: store.DefaultBackground, revoked: map[string]bool{}, now: time.Now}
 }
 
 // newPersisted returns a room holding the saved strokes and background, recording further
@@ -333,6 +341,7 @@ func (r *Room) Handle(c *Client, raw []byte) error {
 		r.broadcastLocked(msg, c)
 	case "follow":
 		// Watching someone else's view (R-093): remember whom, so their view is sent to us alone.
+		// Anyone may follow anyone, but never in a circle, or the views would chase each other.
 		if m.ID != "" {
 			if err := checkID(m.ID); err != nil {
 				return err
@@ -343,9 +352,18 @@ func (r *Room) Handle(c *Client, raw []byte) error {
 			return nil
 		}
 		was := p.follows
+		if m.ID != "" && (!r.presentLocked(m.ID) || (c.ID != "" && (c.ID == m.ID || r.wouldCycleLocked(c.ID, m.ID)))) {
+			p.follows = "" // the refusal ends what we followed before, as the client does
+			r.tellFollowersLocked(was)
+			r.followChangedLocked(c)
+			b, _ := json.Marshal(map[string]string{"t": "follow_refused", "id": m.ID})
+			c.trySend(b)
+			return nil
+		}
 		p.follows = m.ID
 		r.tellFollowersLocked(was)
 		r.tellFollowersLocked(m.ID)
+		r.followChangedLocked(c)
 	case "view":
 		// The visible rectangle of a presenter: relayed to their followers only, never stored. It
 		// is not drawing, so it needs no right to draw. Nobody following means nothing is sent.
@@ -354,6 +372,13 @@ func (r *Room) Handle(c *Client, raw []byte) error {
 		}
 		if m.ID != c.ID {
 			return nil // one may only show their own view
+		}
+		if p := r.clients[c]; p != nil {
+			now := r.now()
+			if now.Sub(p.lastView) < minViewGap {
+				return nil
+			}
+			p.lastView = now
 		}
 		for other, p := range r.clients {
 			if other != c && p.follows == m.ID && !other.trySend(msg) {
@@ -373,6 +398,48 @@ func (r *Room) Handle(c *Client, raw []byte) error {
 		return errors.New("unknown message type")
 	}
 	return nil
+}
+
+// presentLocked says whether anyone with this id is on the board.
+func (r *Room) presentLocked(id string) bool {
+	for c := range r.clients {
+		if c.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+// followsOfLocked is whom the person with this id follows, or "".
+func (r *Room) followsOfLocked(id string) string {
+	for c, p := range r.clients {
+		if c.ID == id && p.follows != "" {
+			return p.follows
+		}
+	}
+	return ""
+}
+
+// wouldCycleLocked says whether `from` following `to` would close a circle: to follows from,
+// directly or through others.
+func (r *Room) wouldCycleLocked(from, to string) bool {
+	cur := to
+	for i := 0; i <= len(r.clients); i++ {
+		if cur == from {
+			return true
+		}
+		if cur = r.followsOfLocked(cur); cur == "" {
+			return false
+		}
+	}
+	return true // a circle that was already there: do not add to it
+}
+
+// followChangedLocked tells everyone whom the identified c now follows (the peers list carries it).
+func (r *Room) followChangedLocked(c *Client) {
+	if c.ID != "" {
+		r.broadcastLocked(r.peersLocked(), nil)
+	}
 }
 
 // tellFollowersLocked tells the connections of person id how many people follow their view, so
@@ -402,6 +469,8 @@ func (r *Room) peersLocked() []byte {
 		ID    string `json:"id"`
 		Name  string `json:"name"`
 		Muted bool   `json:"muted,omitempty"`
+		// Follows is the id of the person whose view this one follows (R-093).
+		Follows string `json:"follows,omitempty"`
 	}
 	seen := map[string]bool{}
 	peers := []peer{}
@@ -410,7 +479,7 @@ func (r *Room) peersLocked() []byte {
 			continue
 		}
 		seen[c.ID] = true
-		peers = append(peers, peer{ID: c.ID, Name: c.Name, Muted: !r.canDraw(c)})
+		peers = append(peers, peer{ID: c.ID, Name: c.Name, Muted: !r.canDraw(c), Follows: r.followsOfLocked(c.ID)})
 	}
 	sort.Slice(peers, func(i, j int) bool {
 		if peers[i].Name != peers[j].Name {
@@ -458,6 +527,17 @@ func (r *Room) leaveLocked(c *Client) {
 	c.drop()
 	if p.follows != "" {
 		r.tellFollowersLocked(p.follows)
+	}
+	if c.ID != "" && !r.presentLocked(c.ID) {
+		// Their last connection is gone: those who followed them stop, and do not start again
+		// when they come back.
+		end, _ := json.Marshal(map[string]string{"t": "follow_end", "id": c.ID})
+		for other, op := range r.clients {
+			if op.follows == c.ID {
+				op.follows = ""
+				other.trySend(end)
+			}
+		}
 	}
 	if len(p.live) > 0 {
 		r.broadcastLocked(dropMessage("live_drop", p.live), nil)
