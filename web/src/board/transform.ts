@@ -88,13 +88,25 @@ export function elementCorners(el: Stroke): [Vec, Vec, Vec, Vec] {
 
 /** The axis-aligned box around the element as it appears on the board. */
 export function worldBounds(el: Stroke): Rect {
-	const xs = elementCorners(el).map((p) => p[0]);
-	const ys = elementCorners(el).map((p) => p[1]);
+	const corners = elementCorners(el);
+	const xs = corners.map((p) => p[0]);
+	const ys = corners.map((p) => p[1]);
 	return {
 		minX: Math.min(...xs),
 		minY: Math.min(...ys),
 		maxX: Math.max(...xs),
 		maxY: Math.max(...ys),
+	};
+}
+
+/** The smallest rect holding both `a` (when there is one yet) and `b`. */
+export function unionRect(a: Rect | null, b: Rect): Rect {
+	if (!a) return b;
+	return {
+		minX: Math.min(a.minX, b.minX),
+		minY: Math.min(a.minY, b.minY),
+		maxX: Math.max(a.maxX, b.maxX),
+		maxY: Math.max(a.maxY, b.maxY),
 	};
 }
 

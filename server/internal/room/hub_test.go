@@ -166,7 +166,7 @@ func TestDeleteKicksClientsAndDiscardsPendingWrites(t *testing.T) {
 	recv(t, c)
 
 	h.Delete("b1")
-	if !c.Dropped() {
+	if !closed(c) {
 		t.Fatal("client should be dropped")
 	}
 	h.Flush()

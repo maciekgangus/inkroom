@@ -1,5 +1,5 @@
 import type { Stroke } from "./board";
-import { worldBounds } from "./transform";
+import { unionRect, worldBounds } from "./transform";
 import { clampScale, type Rect } from "./viewport";
 
 /** How the mini map maps the board onto its box: map = (board - origin) * scale + offset. */
@@ -17,17 +17,7 @@ const MARGIN = 0.08;
 /** The bounds of everything on the board, or null when it is empty. */
 export function contentBounds(strokes: Stroke[]): Rect | null {
 	let out: Rect | null = null;
-	for (const s of strokes) {
-		const b = worldBounds(s);
-		out = out
-			? {
-					minX: Math.min(out.minX, b.minX),
-					minY: Math.min(out.minY, b.minY),
-					maxX: Math.max(out.maxX, b.maxX),
-					maxY: Math.max(out.maxY, b.maxY),
-				}
-			: b;
-	}
+	for (const s of strokes) out = unionRect(out, worldBounds(s));
 	return out;
 }
 

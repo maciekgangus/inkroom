@@ -24,6 +24,20 @@ func recv(t *testing.T, c *Client) map[string]any {
 	}
 }
 
+// closed reports whether c's queue has been closed, i.e. the client was dropped.
+func closed(c *Client) bool {
+	for {
+		select {
+		case _, ok := <-c.Send:
+			if !ok {
+				return true
+			}
+		default:
+			return false
+		}
+	}
+}
+
 func none(t *testing.T, c *Client) {
 	t.Helper()
 	select {
@@ -174,7 +188,7 @@ func TestSlowClientIsDroppedWithoutBlockingOthers(t *testing.T) {
 	r.Join(slow) // the snapshot fills its buffer
 	recv(t, fast)
 	_ = r.Handle(fast, []byte(add1))
-	if !slow.Dropped() {
+	if !closed(slow) {
 		t.Fatal("slow client should be dropped")
 	}
 	if m := recv(t, fast); m["t"] != "add" {

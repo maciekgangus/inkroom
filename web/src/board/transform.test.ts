@@ -11,6 +11,7 @@ import {
 	softSnapAngle,
 	toLocal,
 	translateEl,
+	unionRect,
 	worldBounds,
 } from "./transform";
 
@@ -402,5 +403,18 @@ describe("scaling a text area (R-044)", () => {
 		const out = scaleElBy(point, [100, 80], 1.5, 1, 0);
 		expect(out.width).toBeUndefined();
 		expect(out.fontSize).toBeCloseTo(20 * Math.sqrt(1.5));
+	});
+});
+
+describe("unionRect", () => {
+	test("starts from the first rect and grows to hold the next", () => {
+		const a = { minX: 0, minY: 0, maxX: 10, maxY: 10 };
+		expect(unionRect(null, a)).toBe(a);
+		expect(unionRect(a, { minX: -5, minY: 2, maxX: 4, maxY: 30 })).toEqual({
+			minX: -5,
+			minY: 0,
+			maxX: 10,
+			maxY: 30,
+		});
 	});
 });
