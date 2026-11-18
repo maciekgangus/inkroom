@@ -10,6 +10,10 @@ class ApiError extends Error {
 	}
 }
 
+/** The message of a failed call, for showing to the user. */
+export const errorMessage = (e: unknown) =>
+	e instanceof Error ? e.message : "Błąd";
+
 export interface BoardSummary {
 	id: string;
 	name: string;

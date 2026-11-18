@@ -1,4 +1,5 @@
 import { useEffect } from "preact/hooks";
+import { closeOnDismiss } from "./dismiss";
 import { Icon } from "./icon";
 
 export interface MenuItem {
@@ -22,16 +23,10 @@ const ROW = 40;
 /** The right-click menu: a list of actions that closes after one, on Escape or outside click. */
 export function ContextMenu({ x, y, items, onClose }: Props) {
 	useEffect(() => {
-		const key = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-		const outside = (e: Event) => {
-			if (!(e.target as HTMLElement).closest?.(".context-menu")) onClose();
-		};
-		addEventListener("keydown", key);
-		addEventListener("pointerdown", outside, true);
+		const stop = closeOnDismiss(".context-menu", onClose);
 		addEventListener("wheel", onClose, { passive: true });
 		return () => {
-			removeEventListener("keydown", key);
-			removeEventListener("pointerdown", outside, true);
+			stop();
 			removeEventListener("wheel", onClose);
 		};
 	}, [onClose]);

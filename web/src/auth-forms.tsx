@@ -77,7 +77,7 @@ export function AuthForms({ onAuth, navigate, search = "" }: LoginProps) {
 				),
 			);
 		} catch (e) {
-			setError(e instanceof Error ? e.message : "Błąd");
+			setError(api.errorMessage(e));
 			setBusy(false);
 		}
 	};
@@ -165,7 +165,7 @@ export function RegisterPage({ navigate }: RegisterProps) {
 			});
 			navigate("/"); // the server has logged the new account in
 		} catch (e) {
-			setError(e instanceof Error ? e.message : "Błąd");
+			setError(api.errorMessage(e));
 			setToken(""); // a token works once: the widget starts over
 			setAttempt((a) => a + 1);
 			setBusy(false);

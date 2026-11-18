@@ -6,7 +6,6 @@ import {
 	geomBox,
 	rotateEl,
 	rotatePoint,
-	scaleEl,
 	scaleElBy,
 	snapAngle,
 	softSnapAngle,
@@ -14,6 +13,10 @@ import {
 	translateEl,
 	worldBounds,
 } from "./transform";
+
+/** The element scaled by the same factor on both axes about `anchor`. */
+const scaleUniform = (el: Stroke, anchor: [number, number], k: number) =>
+	scaleElBy(el, anchor, k, k, 0);
 
 const base = { id: "e", authorId: "a", color: "#000", size: 4, z: 0 };
 const pts = (...p: [number, number][]) =>
@@ -112,7 +115,7 @@ describe("ellipse transforms", () => {
 	});
 
 	test("scaling about a corner scales the box", () => {
-		expect(geomBox(scaleEl(ellipse, [10, 20], 2))).toEqual({
+		expect(geomBox(scaleUniform(ellipse, [10, 20], 2))).toEqual({
 			minX: 10,
 			minY: 20,
 			maxX: 210,
@@ -187,14 +190,14 @@ describe("translateEl", () => {
 	});
 });
 
-describe("scaleEl", () => {
+describe("scaleElBy, uniform", () => {
 	test("scales a rectangle about an anchor point", () => {
-		const s = scaleEl(rect([100, 100], [200, 150]), [100, 100], 2);
+		const s = scaleUniform(rect([100, 100], [200, 150]), [100, 100], 2);
 		expect(geomBox(s)).toEqual({ minX: 100, minY: 100, maxX: 300, maxY: 200 });
 	});
 
 	test("scales a circle's radius and keeps its centre on the right place", () => {
-		const s = scaleEl(circle([100, 100], [150, 100]), [0, 0], 2);
+		const s = scaleUniform(circle([100, 100], [150, 100]), [0, 0], 2);
 		close(s.points[0].slice(0, 2), [200, 200]);
 		expect(
 			Math.hypot(
@@ -205,7 +208,7 @@ describe("scaleEl", () => {
 	});
 
 	test("scales a freehand stroke's points but not its line width", () => {
-		const s = scaleEl(stroke([0, 0], [10, 20]), [0, 0], 3);
+		const s = scaleUniform(stroke([0, 0], [10, 20]), [0, 0], 3);
 		expect(s.points.map((p) => [p[0], p[1]])).toEqual([
 			[0, 0],
 			[30, 60],
@@ -215,7 +218,7 @@ describe("scaleEl", () => {
 
 	test("scales a text's font size and keeps it in proportion", () => {
 		const t = text([10, 10], "abcd", { fontSize: 20 });
-		const s = scaleEl(t, [10, 10], 2);
+		const s = scaleUniform(t, [10, 10], 2);
 		expect(s.fontSize).toBe(40);
 		const a = geomBox(t);
 		const b = geomBox(s);
@@ -226,7 +229,7 @@ describe("scaleEl", () => {
 	test("a rotated element scales as a whole: its corners move away from the anchor by the factor", () => {
 		const el = { ...rect([0, 0], [100, 50]), rot: 0.7 };
 		const anchor: [number, number] = [-20, 30];
-		const s = scaleEl(el, anchor, 1.5);
+		const s = scaleUniform(el, anchor, 1.5);
 		expect(s.rot).toBe(0.7);
 		const before = elementCorners(el);
 		const after = elementCorners(s);
@@ -240,7 +243,7 @@ describe("scaleEl", () => {
 
 	test("does not change the original", () => {
 		const el = rect([0, 0], [10, 10]);
-		scaleEl(el, [0, 0], 5);
+		scaleUniform(el, [0, 0], 5);
 		expect(el.points[1][0]).toBe(10);
 	});
 });
@@ -311,7 +314,7 @@ describe("scaleElBy (free scaling)", () => {
 	test("with equal factors it is the uniform scale", () => {
 		const r = { ...rect([100, 100], [300, 200]), rot: 0.4 };
 		expect(scaleElBy(r, [50, 50], 1.5, 1.5, 0.9)).toEqual(
-			scaleEl(r, [50, 50], 1.5),
+			scaleUniform(r, [50, 50], 1.5),
 		);
 	});
 

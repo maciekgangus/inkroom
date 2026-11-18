@@ -6,7 +6,6 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/maciekgangus/inkroom/server/internal/cfaccess"
 	"github.com/maciekgangus/inkroom/server/internal/store"
@@ -107,7 +106,7 @@ func (a *app) adminListFeedback(w http.ResponseWriter, _ *http.Request) {
 	out := make([]feedbackJSON, 0, len(all))
 	for _, f := range all {
 		out = append(out, feedbackJSON{
-			ID: f.ID, At: f.At.UTC().Format(time.RFC3339), Name: f.Name, Account: f.UserID != 0,
+			ID: f.ID, At: iso(f.At), Name: f.Name, Account: f.UserID != 0,
 			Message: f.Message, Page: f.Page, Screen: f.Screen, UserAgent: f.UserAgent, Read: f.Read,
 		})
 	}

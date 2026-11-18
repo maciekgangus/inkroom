@@ -17,14 +17,14 @@ import (
 
 func iso(t time.Time) string { return t.UTC().Format(time.RFC3339) }
 
-// serverError and the helpers below answer a failed store call the way the rest of the API does.
-func (a *app) adminFail(w http.ResponseWriter, err error, missing string) {
-	switch {
-	case errors.Is(err, store.ErrNotFound):
+// storeFail answers a failed store call the way the rest of the API does: 404 with the given
+// message when the row is missing, 500 otherwise.
+func storeFail(w http.ResponseWriter, err error, missing string) {
+	if errors.Is(err, store.ErrNotFound) {
 		writeError(w, http.StatusNotFound, missing)
-	default:
-		writeError(w, http.StatusInternalServerError, "Błąd serwera")
+		return
 	}
+	writeError(w, http.StatusInternalServerError, "Błąd serwera")
 }
 
 // pathID reads a numeric id from the URL; a bad one is answered with 400.
@@ -149,18 +149,8 @@ func (a *app) adminDeleteUser(w http.ResponseWriter, r *http.Request) {
 	a.adminDone(w, a.st.DeleteUser(id))
 }
 
-// adminBoard loads the board named in the URL (404 when there is none).
-func (a *app) adminBoard(w http.ResponseWriter, r *http.Request) (store.Board, bool) {
-	b, err := a.st.Board(r.PathValue("id"))
-	if err != nil {
-		a.adminFail(w, err, "Nie ma takiej tablicy")
-		return store.Board{}, false
-	}
-	return b, true
-}
-
 func (a *app) adminRenameBoard(w http.ResponseWriter, r *http.Request) {
-	b, ok := a.adminBoard(w, r)
+	b, ok := a.boardFromURL(w, r)
 	if !ok {
 		return
 	}
@@ -176,7 +166,7 @@ func (a *app) adminRenameBoard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := a.st.RenameBoard(b.ID, name); err != nil {
-		a.adminFail(w, err, "Nie ma takiej tablicy")
+		storeFail(w, err, "Nie ma takiej tablicy")
 		return
 	}
 	a.hub.SetName(b.ID, name) // everyone on the board sees the new name at once
@@ -184,7 +174,7 @@ func (a *app) adminRenameBoard(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) adminSetOwner(w http.ResponseWriter, r *http.Request) {
-	b, ok := a.adminBoard(w, r)
+	b, ok := a.boardFromURL(w, r)
 	var body struct {
 		UserID int64 `json:"userId"`
 	}
@@ -196,7 +186,7 @@ func (a *app) adminSetOwner(w http.ResponseWriter, r *http.Request) {
 
 // adminCopyBoard makes a copy of the board for the same owner (R-020).
 func (a *app) adminCopyBoard(w http.ResponseWriter, r *http.Request) {
-	b, ok := a.adminBoard(w, r)
+	b, ok := a.boardFromURL(w, r)
 	if !ok {
 		return
 	}
@@ -204,7 +194,7 @@ func (a *app) adminCopyBoard(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) adminDeleteBoard(w http.ResponseWriter, r *http.Request) {
-	b, ok := a.adminBoard(w, r)
+	b, ok := a.boardFromURL(w, r)
 	if !ok {
 		return
 	}
@@ -215,7 +205,7 @@ func (a *app) adminDeleteBoard(w http.ResponseWriter, r *http.Request) {
 // adminEnterBoard gives the address to open the board as the Administrator: the board's own link
 // with a signed ticket, which lets the page appear under the reserved name.
 func (a *app) adminEnterBoard(w http.ResponseWriter, r *http.Request) {
-	b, ok := a.adminBoard(w, r)
+	b, ok := a.boardFromURL(w, r)
 	if !ok {
 		return
 	}

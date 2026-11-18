@@ -111,7 +111,7 @@ function write(): void {
 }
 
 /** The key as a short text for a button or a tooltip ("KeyF" is F, "Digit3" is 3). */
-export function codeLabel(code: string): string {
+function codeLabel(code: string): string {
 	if (/^Key[A-Z]$/.test(code)) return code.slice(3);
 	if (/^Digit[0-9]$/.test(code)) return code.slice(5);
 	if (/^Numpad[0-9]$/.test(code)) return `Num ${code.slice(6)}`;

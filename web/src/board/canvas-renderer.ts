@@ -10,6 +10,7 @@ import { type Frame, HANDLE_PX, ROT_OFFSET_PX } from "./selection-frame";
 import { LABEL_PX, type PlaneLook, partsOf } from "./shape-parts";
 import { isPolygonKind } from "./shapes";
 import { strokeOptions } from "./stroke-style";
+import { isFreehand } from "./style";
 import { fontSizeOf, LINE_HEIGHT, textLines } from "./text";
 import { TEXT_FONT_FAMILY, textFont } from "./text-wrap";
 import { centerOf } from "./transform";
@@ -68,8 +69,6 @@ function overdraw(): { mx: number; my: number } {
 const MOVE_MAX_MS = 350;
 /** The ink colour of the Inkroom brand, for the handles that edit the selection. */
 const HANDLE_INK = "#5b5bf0";
-
-const isFreehand = (s: Stroke) => !s.kind || s.kind === "stroke";
 
 /**
  * Freehand strokes are filled outlines (the pen's width follows the hand); a dashed or dotted one
@@ -142,27 +141,17 @@ function extraPaths(s: Stroke): Extras | null {
 	let e = extras.get(s);
 	if (!e) {
 		const parts = partsOf(s);
-		let fill: Path2D | null = null;
-		let hidden: Path2D | null = null;
-		if (parts && parts.fill.length >= 3) {
-			fill = new Path2D();
-			addPolyline(fill, [...parts.fill, parts.fill[0]]);
-		}
-		if (parts && parts.hidden.length > 0) {
-			hidden = new Path2D();
-			for (const line of parts.hidden) addPolyline(hidden, line);
-		}
-		let fine: Path2D | null = null;
-		if (parts?.fine?.length) {
-			fine = new Path2D();
-			for (const line of parts.fine) addPolyline(fine, line);
-		}
 		const lined = (lines: [number, number][][] | undefined): Path2D | null => {
 			if (!lines?.length) return null;
 			const p = new Path2D();
 			for (const line of lines) addPolyline(p, line);
 			return p;
 		};
+		let fill: Path2D | null = null;
+		if (parts && parts.fill.length >= 3) {
+			fill = new Path2D();
+			addPolyline(fill, [...parts.fill, parts.fill[0]]);
+		}
 		const look = parts?.plane ?? null;
 		let paper: Path2D | null = null;
 		if (look) {
@@ -173,8 +162,8 @@ function extraPaths(s: Stroke): Extras | null {
 		}
 		e = {
 			fill,
-			hidden,
-			fine,
+			hidden: lined(parts?.hidden),
+			fine: lined(parts?.fine),
 			grid: lined(parts?.grid),
 			cluster: lined(parts?.cluster),
 			paper,

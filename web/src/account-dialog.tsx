@@ -2,8 +2,6 @@ import { useState } from "preact/hooks";
 import type { Account } from "./api";
 import * as api from "./api";
 
-const msg = (e: unknown) => (e instanceof Error ? e.message : "Błąd");
-
 /**
  * The account window (R-085): who is logged in, how they sign in, a new password (for accounts
  * that have one) and deleting the account, which asks for the username and cannot be undone.
@@ -35,7 +33,7 @@ export function AccountDialog({
 			setNext("");
 			setNote("Hasło zmienione");
 		} catch (e) {
-			setError(msg(e));
+			setError(api.errorMessage(e));
 		}
 	};
 	const remove = async () => {
@@ -44,7 +42,7 @@ export function AccountDialog({
 			await api.deleteAccount(confirm.trim());
 			onDeleted();
 		} catch (e) {
-			setError(msg(e));
+			setError(api.errorMessage(e));
 		}
 	};
 	const matches =

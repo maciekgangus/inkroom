@@ -65,9 +65,4 @@ export class LaserTrails {
 		}
 		return out;
 	}
-
-	/** Whether anything is still visible at `now` (so the screen must go on being drawn). */
-	active(now: number): boolean {
-		return this.visible(now).length > 0;
-	}
 }

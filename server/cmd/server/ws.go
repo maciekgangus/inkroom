@@ -63,8 +63,8 @@ func (a *app) serveWS(w http.ResponseWriter, r *http.Request) {
 	}
 	defer a.hub.Leave(boardID, rm, client)
 
-	if u, ok := a.auth.User(r); ok {
-		if err := a.st.RecordVisit(u.ID, boardID, time.Now()); err != nil {
+	if loggedIn {
+		if err := a.st.RecordVisit(user.ID, boardID, time.Now()); err != nil {
 			log.Printf("recording visit: %v", err)
 		}
 	}

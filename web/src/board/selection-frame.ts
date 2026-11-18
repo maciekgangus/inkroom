@@ -22,27 +22,6 @@ export type Edge = "n" | "e" | "s" | "w";
 export type Handle = Corner | Edge | "rot";
 
 /**
- * Whether the selection frame is drawn as an outline box (R-034): images, shapes and several
- * elements get one, and so does a line (its end dots come in addition, R-041); a lone stroke or
- * text shows only its handles and glows, so no big
- * box covers what was selected. The handles work the same either way.
- */
-export function showsBox(els: Stroke[]): boolean {
-	if (els.length === 0) return false;
-	if (els.length > 1) return true;
-	const kind = els[0].kind;
-	return (
-		kind === "image" ||
-		kind === "line" ||
-		(kind === "text" && els[0].width !== undefined) ||
-		kind === "rect" ||
-		kind === "circle" ||
-		kind === "ellipse" ||
-		isPolygonKind(kind)
-	);
-}
-
-/**
  * The frame around the selected elements: a lone element gets its own (possibly rotated) box,
  * several get the upright box around all of them as they appear on the board.
  */

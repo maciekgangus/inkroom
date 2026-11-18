@@ -21,15 +21,6 @@ const read = (key: string): Entry | null => {
 	}
 };
 
-/**
- * The picture kept for this version of a board (`tag` is the server's ETag: it changes when the
- * board does), or null. Storage may be unavailable, so nothing here ever throws.
- */
-export function getPreview(boardId: string, tag: string): string | null {
-	const e = read(PREFIX + boardId);
-	return e && e.tag === tag ? e.url : null;
-}
-
 /** Keeps the picture of a board's current version, in place of its older one, and tidies up. */
 export function setPreview(boardId: string, tag: string, url: string): void {
 	memory.delete(boardId); // so the newest is last

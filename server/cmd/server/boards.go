@@ -34,7 +34,7 @@ type boardJSON struct {
 func toJSON(boards []store.Board) []boardJSON {
 	out := make([]boardJSON, 0, len(boards))
 	for _, b := range boards {
-		out = append(out, boardJSON{ID: b.ID, Name: b.Name, UpdatedAt: b.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z"), Owner: b.OwnerName})
+		out = append(out, boardJSON{ID: b.ID, Name: b.Name, UpdatedAt: iso(b.UpdatedAt), Owner: b.OwnerName})
 	}
 	return out
 }
@@ -106,18 +106,23 @@ func (a *app) listBoards(w http.ResponseWriter, r *http.Request) {
 
 // getBoard tells whether a board exists and whether the caller owns it (anyone with the link may ask).
 func (a *app) getBoard(w http.ResponseWriter, r *http.Request) {
-	b, err := a.st.Board(r.PathValue("id"))
-	if errors.Is(err, store.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "Nie ma takiej tablicy")
-		return
-	}
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Błąd serwera")
+	b, ok := a.boardFromURL(w, r)
+	if !ok {
 		return
 	}
 	a.ensureGuestCookie(w, r)
 	u, loggedIn := a.auth.User(r)
 	writeJSON(w, http.StatusOK, map[string]any{"id": b.ID, "name": b.Name, "owner": loggedIn && u.ID == b.OwnerID})
+}
+
+// boardFromURL loads the board named in the URL; when it cannot, it has already answered (404 or 500).
+func (a *app) boardFromURL(w http.ResponseWriter, r *http.Request) (store.Board, bool) {
+	b, err := a.st.Board(r.PathValue("id"))
+	if err != nil {
+		storeFail(w, err, "Nie ma takiej tablicy")
+		return store.Board{}, false
+	}
+	return b, true
 }
 
 // ownedBoard loads the board named in the URL and checks that the caller owns it.
@@ -127,13 +132,8 @@ func (a *app) ownedBoard(w http.ResponseWriter, r *http.Request) (store.Board, b
 		writeError(w, http.StatusUnauthorized, "Nie jesteś zalogowany")
 		return store.Board{}, false
 	}
-	b, err := a.st.Board(r.PathValue("id"))
-	if errors.Is(err, store.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "Nie ma takiej tablicy")
-		return store.Board{}, false
-	}
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Błąd serwera")
+	b, ok := a.boardFromURL(w, r)
+	if !ok {
 		return store.Board{}, false
 	}
 	if b.OwnerID != u.ID {
@@ -214,8 +214,7 @@ func (a *app) copyBoard(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	u, _ := a.auth.User(r)
-	a.copyTo(w, b, u.ID)
+	a.copyTo(w, b, b.OwnerID)
 }
 
 // copyTo copies a board for the given owner and answers with the new board's id and name.
@@ -229,25 +228,29 @@ func (a *app) copyTo(w http.ResponseWriter, b store.Board, ownerID int64) {
 	writeJSON(w, http.StatusCreated, map[string]string{"id": cp.ID, "name": cp.Name})
 }
 
+// notModified sets the ETag and Cache-Control headers and, when the client already has that
+// version, answers 304 and reports true.
+func notModified(w http.ResponseWriter, r *http.Request, tag string) bool {
+	w.Header().Set("ETag", tag)
+	w.Header().Set("Cache-Control", "private, no-cache")
+	if r.Header.Get("If-None-Match") != tag {
+		return false
+	}
+	w.WriteHeader(http.StatusNotModified)
+	return true
+}
+
 // boardPreview gives what a client needs to draw a small picture of a board (R-052): its
 // background and its strokes, as saved. Like the board itself it is open to whoever has the link.
 // The answer carries an ETag made of the board's last change, so a client that already has the
 // picture of this version is told "not modified" and nothing is sent again.
 func (a *app) boardPreview(w http.ResponseWriter, r *http.Request) {
-	b, err := a.st.Board(r.PathValue("id"))
-	if errors.Is(err, store.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "Nie ma takiej tablicy")
-		return
-	}
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Błąd serwera")
+	b, ok := a.boardFromURL(w, r)
+	if !ok {
 		return
 	}
 	etag := previewTag(b)
-	w.Header().Set("ETag", etag)
-	w.Header().Set("Cache-Control", "private, no-cache")
-	if r.Header.Get("If-None-Match") == etag {
-		w.WriteHeader(http.StatusNotModified)
+	if notModified(w, r, etag) {
 		return
 	}
 	raw, err := a.st.LoadStrokes(b.ID)
@@ -276,13 +279,8 @@ var pngSignature = []byte("\x89PNG\r\n\x1a\n")
 // there is none for the board's current version; the client then draws it from the strokes.
 // Open to whoever has the link, like the preview data; the ETag is the board's version.
 func (a *app) boardPreviewPicture(w http.ResponseWriter, r *http.Request) {
-	b, err := a.st.Board(r.PathValue("id"))
-	if errors.Is(err, store.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "Nie ma takiej tablicy")
-		return
-	}
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Błąd serwera")
+	b, ok := a.boardFromURL(w, r)
+	if !ok {
 		return
 	}
 	tag := previewTag(b)
@@ -295,10 +293,7 @@ func (a *app) boardPreviewPicture(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Błąd serwera")
 		return
 	}
-	w.Header().Set("ETag", tag)
-	w.Header().Set("Cache-Control", "private, no-cache")
-	if r.Header.Get("If-None-Match") == tag {
-		w.WriteHeader(http.StatusNotModified)
+	if notModified(w, r, tag) {
 		return
 	}
 	w.Header().Set("Content-Type", "image/png")
@@ -341,12 +336,8 @@ func (a *app) setBoardPreviewPicture(w http.ResponseWriter, r *http.Request) {
 // forgetBoard takes a board off the caller's list of boards they were invited to (R-051). The
 // board stays as it is, and opening its link again lists it again.
 func (a *app) forgetBoard(w http.ResponseWriter, r *http.Request) {
-	if !auth.RequireJSON(w, r) {
-		return
-	}
-	u, ok := a.auth.User(r)
+	u, ok := a.accountUser(w, r)
 	if !ok {
-		writeError(w, http.StatusUnauthorized, "Nie jesteś zalogowany")
 		return
 	}
 	if err := a.st.RemoveVisit(u.ID, r.PathValue("id")); err != nil {
@@ -398,13 +389,8 @@ func (a *app) setView(w http.ResponseWriter, r *http.Request) {
 	if !auth.RequireJSON(w, r) {
 		return
 	}
-	id := r.PathValue("id")
-	if _, err := a.st.Board(id); err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "Nie ma takiej tablicy")
-		} else {
-			writeError(w, http.StatusInternalServerError, "Błąd serwera")
-		}
+	board, ok := a.boardFromURL(w, r)
+	if !ok {
 		return
 	}
 	var v store.View
@@ -422,7 +408,7 @@ func (a *app) setView(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Nieprawidłowy widok")
 		return
 	}
-	if err := a.st.SetView(u.ID, id, v); err != nil {
+	if err := a.st.SetView(u.ID, board.ID, v); err != nil {
 		writeError(w, http.StatusInternalServerError, "Błąd serwera")
 		return
 	}

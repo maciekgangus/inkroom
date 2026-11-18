@@ -3,8 +3,6 @@ package main
 import (
 	"encoding/json"
 	"net/http"
-
-	"github.com/maciekgangus/inkroom/server/internal/auth"
 )
 
 const (
@@ -31,12 +29,8 @@ func (a *app) getShortcuts(w http.ResponseWriter, r *http.Request) {
 
 // putShortcuts replaces them (an empty object brings the defaults back).
 func (a *app) putShortcuts(w http.ResponseWriter, r *http.Request) {
-	if !auth.RequireJSON(w, r) {
-		return
-	}
-	u, ok := a.auth.User(r)
+	u, ok := a.accountUser(w, r)
 	if !ok {
-		writeError(w, http.StatusUnauthorized, "Nie jesteś zalogowany")
 		return
 	}
 	var body struct {

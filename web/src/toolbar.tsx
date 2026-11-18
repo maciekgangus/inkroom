@@ -1,11 +1,12 @@
 import { useEffect, useLayoutEffect, useState } from "preact/hooks";
 import type { Settings } from "./board/controller";
 import { SHAPE_GROUPS, SHAPES, saveShape } from "./board/shapes";
+import { closeOnDismiss } from "./dismiss";
 import { getExtraColor, setExtraColor } from "./extra-color";
 import { Icon } from "./icon";
 import { ImageControls, type ImageControlsProps } from "./image-controls";
 import { ShapeIcon } from "./shape-icon";
-import { selectTool, toolKey } from "./shortcuts";
+import { toolKey } from "./shortcuts";
 import { StrokeControls } from "./stroke-controls";
 import { displayColor, useTheme } from "./theme";
 import { useToolbarLayout } from "./toolbar-layout";
@@ -85,17 +86,7 @@ export function Toolbar({
 	// at once (not after the next paint), so a key pressed right after it opens already counts.
 	useLayoutEffect(() => {
 		if (!compact || !settingsOpen) return;
-		const close = () => setSettingsOpen(false);
-		const key = (e: KeyboardEvent) => e.key === "Escape" && close();
-		const outside = (e: Event) => {
-			if (!(e.target as HTMLElement).closest?.(".settings-wrap")) close();
-		};
-		addEventListener("keydown", key);
-		addEventListener("pointerdown", outside, true);
-		return () => {
-			removeEventListener("keydown", key);
-			removeEventListener("pointerdown", outside, true);
-		};
+		return closeOnDismiss(".settings-wrap", () => setSettingsOpen(false));
 	}, [compact, settingsOpen]);
 	const [paletteOpen, setPaletteOpen] = useState(false);
 	const [shapesOpen, setShapesOpen] = useState(false);
@@ -103,17 +94,7 @@ export function Toolbar({
 	const listOpen = shapesOpen && settings.tool === "shape";
 	useEffect(() => {
 		if (!listOpen) return;
-		const close = () => setShapesOpen(false);
-		const key = (e: KeyboardEvent) => e.key === "Escape" && close();
-		const outside = (e: Event) => {
-			if (!(e.target as HTMLElement).closest?.(".shape-wrap")) close();
-		};
-		addEventListener("keydown", key);
-		addEventListener("pointerdown", outside, true);
-		return () => {
-			removeEventListener("keydown", key);
-			removeEventListener("pointerdown", outside, true);
-		};
+		return closeOnDismiss(".shape-wrap", () => setShapesOpen(false));
 	}, [listOpen]);
 	const theme = useTheme();
 	const on = (active: boolean) => (active ? "active" : "");
@@ -174,10 +155,8 @@ export function Toolbar({
 									setShapesOpen(!shapesOpen);
 									return;
 								}
-								selectTool(settings, tool);
 								setShapesOpen(false);
-								rerender((n) => n + 1);
-								onToolChange?.();
+								set({ tool });
 							}}
 						>
 							{isShapeTool ? (
@@ -206,12 +185,9 @@ export function Toolbar({
 														title={s.label}
 														class={on(s.kind === current.kind)}
 														onClick={() => {
-															settings.shape = s.kind;
 															saveShape(s.kind);
-															selectTool(settings, "shape");
 															setShapesOpen(false);
-															rerender((n) => n + 1);
-															onToolChange?.();
+															set({ shape: s.kind, tool: "shape" });
 														}}
 													>
 														<ShapeIcon kind={s.kind} />

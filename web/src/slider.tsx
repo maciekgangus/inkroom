@@ -1,7 +1,5 @@
 import { clamp } from "./board/clamp";
 import { Icon, type IconName } from "./icon";
-/** Width of the slider's thumb in px; the CSS draws it this size and the fill follows its middle. */
-export const THUMB_PX = 16;
 
 /** A slider with its value next to it: `input` while moving, `change` on release. */
 export function Slider({

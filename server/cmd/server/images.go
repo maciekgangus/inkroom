@@ -23,13 +23,8 @@ var allowedImageTypes = map[string]bool{
 // uploadImage stores an image for a board and returns its id. Like drawing, it needs only the
 // board's link.
 func (a *app) uploadImage(w http.ResponseWriter, r *http.Request) {
-	boardID := r.PathValue("id")
-	if _, err := a.st.Board(boardID); err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "Nie ma takiej tablicy")
-		} else {
-			writeError(w, http.StatusInternalServerError, "Błąd serwera")
-		}
+	board, ok := a.boardFromURL(w, r)
+	if !ok {
 		return
 	}
 	data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxImageBytes))
@@ -48,7 +43,7 @@ func (a *app) uploadImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := newBoardID() // 128 random bits, also fine as an image id
-	if err := a.st.SaveImage(id, boardID, mime, data); err != nil {
+	if err := a.st.SaveImage(id, board.ID, mime, data); err != nil {
 		writeError(w, http.StatusInternalServerError, "Błąd serwera")
 		return
 	}
