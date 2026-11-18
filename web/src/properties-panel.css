@@ -11,7 +11,8 @@
 	position: fixed;
 	right: 12px;
 	top: 64px;
-	z-index: 1;
+	/* Above the mini map and the zoom controls, which it may overlap when tall. */
+	z-index: 2;
 	box-sizing: border-box;
 	display: flex;
 	flex-direction: column;
@@ -58,6 +59,7 @@
 	max-height: calc(100dvh - 96px);
 	margin: 0 -6px -6px;
 	padding: 0 6px 6px;
+	overflow-x: hidden;
 	overflow-y: auto;
 	overscroll-behavior: contain;
 	-webkit-overflow-scrolling: touch;
@@ -194,7 +196,7 @@
 	position: fixed;
 	right: 12px;
 	top: 64px;
-	z-index: 1;
+	z-index: 2;
 	width: 40px;
 	height: 40px;
 	padding: 0;
@@ -358,7 +360,6 @@
 	display: flex;
 	align-items: center;
 	gap: 4px;
-	margin-right: -8px;
 }
 .fn-formula {
 	flex: 1;

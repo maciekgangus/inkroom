@@ -92,7 +92,7 @@ export function CustomColor({
 			{open && (
 				<ColorPicker
 					label={label}
-					start={current}
+					start={current === null ? null : display(current)}
 					onInput={onInput}
 					onChange={onChange}
 				/>
