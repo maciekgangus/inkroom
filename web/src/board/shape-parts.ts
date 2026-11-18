@@ -17,7 +17,31 @@ export interface ShapeParts {
 	fine?: Vec[][];
 	/** Numbers written beside the marks, centred on the given point. */
 	labels?: { text: string; x: number; y: number }[];
+	/** The lines of a coordinate plane's cells, very light (R-084). */
+	grid?: Vec[][];
+	/** Every second line of the plane's cells, a little stronger. */
+	cluster?: Vec[][];
+	/** The sheet, the arrow heads and the text of a coordinate plane (R-084). */
+	plane?: PlaneLook;
 }
+
+/** What a coordinate plane is made of (R-084); each has a default when the element has none. */
+export interface PlaneOptions {
+	cell: number;
+	grid: boolean;
+	axes: boolean;
+	/** The width of the axes, from which the heads and the gaps to the numbers follow. */
+	axisWidth: number;
+	/** The x axis is in multiples of π, its cells a twelfth of π (R-084). */
+	pi?: boolean;
+}
+
+/** The size of a cell of a coordinate plane, in board units. */
+export const PLANE_CELL = 40;
+/** The least side of a new coordinate plane, so that a graph on it makes sense (R-084). */
+export const PLANE_MIN_SIDE = 240;
+/** The side of the plane a click gives. */
+export const PLANE_DEFAULT_SIDE = 480;
 
 /** Distance (board units) between the marks of the coordinate system's axes (R-040). */
 export const AXES_STEP = 24;
@@ -427,6 +451,7 @@ function direct(
 	b: Box,
 	adj: number,
 	numbered = false,
+	plane?: PlaneOptions,
 ): ShapeParts | null {
 	const n = 96; // the quarters of a period (peaks and zeros of sine and cosine) fall on samples
 	const along = (f: (u: number) => number): Vec[] =>
@@ -530,9 +555,264 @@ function direct(
 			}
 			return { ...solid(...lines), fine, ...(numbered ? { labels } : {}) };
 		}
+		case "plane":
+			return planeParts(b, numbered, plane);
 		default:
 			return null;
 	}
+}
+
+/** The look of a coordinate plane that is not just lines: the sheet, the arrow heads, the text (R-084). */
+export interface PlaneLook {
+	x0: number;
+	y0: number;
+	w: number;
+	h: number;
+	/** The radius of the sheet's corners. */
+	r: number;
+	cell: number;
+	/** The size of the numbers, in board units. */
+	px: number;
+	/** The filled arrow heads. */
+	heads: Vec[][];
+	/** The numbers and the letters x and y, each with where it stands and how it is aligned. */
+	text: {
+		t: string;
+		x: number;
+		y: number;
+		align: "left" | "right" | "center";
+		base: "top" | "middle" | "bottom";
+		letter?: boolean;
+		/** The size of this text as a part of the usual one; missing means 1. */
+		scale?: number;
+	}[];
+}
+
+/** A number as it is written on an axis: with a real minus sign. */
+const planeNumber = (n: number): string => (n < 0 ? `\u2212${-n}` : String(n));
+
+/**
+ * A coordinate plane (R-084), a sheet of graph paper: a grid of cells from the middle with every
+ * second line a little stronger, axes with filled arrow heads and numbers through the middle, and
+ * the x and y at their tips. Stretching the box adds cells; their size stays. The sheet itself
+ * (its frame, the heads, the text) is in `plane`; the renderer paints it.
+ */
+function planeParts(
+	b: Box,
+	numbered: boolean,
+	options: PlaneOptions = {
+		cell: PLANE_CELL,
+		grid: true,
+		axes: true,
+		axisWidth: 3,
+	},
+): ShapeParts {
+	const step = options.cell > 0 ? options.cell : PLANE_CELL;
+	const lines: Vec[][] = [];
+	const fine: Vec[][] = [];
+	const grid: Vec[][] = [];
+	const cluster: Vec[][] = [];
+	// In π mode the cells along x are a twelfth of π and every sixth line, a half π, is stronger.
+	const dx = options.pi ? (Math.PI * step) / 12 : step;
+	if (options.grid) {
+		const across = Math.floor(b.w / 2 / dx);
+		for (let i = -across; i <= across; i++) {
+			if (i === 0 && options.axes) continue; // the axis is drawn there
+			const x = b.cx + i * dx;
+			((options.pi ? i % 6 === 0 : i % 2 === 0) ? cluster : grid).push([
+				[x, b.y0],
+				[x, b.y1],
+			]);
+		}
+		const up = Math.floor(b.h / 2 / step);
+		for (let i = -up; i <= up; i++) {
+			if (i === 0 && options.axes) continue;
+			const y = b.cy + i * step;
+			(i % 2 === 0 ? cluster : grid).push([
+				[b.x0, y],
+				[b.x1, y],
+			]);
+		}
+	}
+	const px = clamp(step * 0.3, 10, 15);
+	const heads: Vec[][] = [];
+	const text: PlaneLook["text"] = [];
+	if (options.axes) {
+		// The heads sit a little in from the edge; the axes stop under them.
+		const a = Math.min(
+			clamp(6 + 2 * options.axisWidth, 8, 18),
+			b.w / 6,
+			b.h / 6,
+		);
+		const xt = b.x1 - 3;
+		const yt = b.y0 + 3;
+		const gap = 3 + options.axisWidth / 2;
+		lines.push(
+			[
+				[b.x0, b.cy],
+				[xt - a * 0.7, b.cy],
+			],
+			[
+				[b.cx, b.y1],
+				[b.cx, yt + a * 0.7],
+			],
+		);
+		heads.push(
+			closed([
+				[xt, b.cy],
+				[xt - a, b.cy - a * 0.42],
+				[xt - a * 0.8, b.cy],
+				[xt - a, b.cy + a * 0.42],
+			]),
+			closed([
+				[b.cx, yt],
+				[b.cx - a * 0.42, yt + a],
+				[b.cx, yt + a * 0.8],
+				[b.cx + a * 0.42, yt + a],
+			]),
+		);
+		if (!options.grid && !options.pi) {
+			// Without the grid the units are marked on the axes.
+			for (let i = 1; i <= Math.floor((b.w / 2 - a - px) / step); i++)
+				for (const s of [-1, 1])
+					fine.push([
+						[b.cx + s * i * step, b.cy - 4],
+						[b.cx + s * i * step, b.cy + 4],
+					]);
+			for (let i = 1; i <= Math.floor((b.h / 2 - a - px) / step); i++)
+				for (const s of [-1, 1])
+					fine.push([
+						[b.cx - 4, b.cy + s * i * step],
+						[b.cx + 4, b.cy + s * i * step],
+					]);
+		}
+		if (numbered) {
+			// A narrow cell has room for a number only at every k-th line.
+			const every =
+				[1, 2, 5, 10, 20, 50].find((n) => step * n >= 2.6 * px) ?? 100;
+			const nx = Math.floor((b.w / 2 - a - px) / step);
+			const ny = Math.floor((b.h / 2 - a - px) / step);
+			if (!options.pi)
+				for (let i = every; i <= nx; i += every)
+					for (const s of [-1, 1])
+						text.push({
+							t: planeNumber(s * i),
+							x: b.cx + s * i * step,
+							y: b.cy + gap,
+							align: "center",
+							base: "top",
+						});
+			// up is up on the screen: the positive numbers are above the middle
+			for (let i = every; i <= ny; i += every)
+				for (const s of [-1, 1])
+					text.push({
+						t: planeNumber(-s * i),
+						x: b.cx - gap,
+						y: b.cy + s * i * step,
+						align: "right",
+						base: "middle",
+					});
+			if (options.pi) {
+				// The x axis in π: every full π, every half π, and the small fractions of the first
+				// quarter (π/6, π/4, π/3) on both sides. Where the cells are narrow, the fractions go.
+				const reach = b.w / 2 - a - px;
+				const room = Math.PI * step; // the length of π along x
+				const small = px * 0.62;
+				for (let k = 6; k * dx <= reach; k += 6) {
+					const n = k / 6; // halves of π
+					if (n % 2 === 1 && room < 50) continue;
+					const half = n % 2 === 1;
+					const name = half
+						? `${n === 1 ? "" : n}\u03c0/2`
+						: `${n / 2 === 1 ? "" : n / 2}\u03c0`;
+					for (const s of [-1, 1]) {
+						const x = b.cx + s * k * dx;
+						text.push({
+							t: s < 0 ? `\u2212${name}` : name,
+							x,
+							y: b.cy + gap,
+							align: "center",
+							base: "top",
+							...(half ? { scale: 0.85 } : {}),
+						});
+						fine.push([
+							[x, b.cy - (half ? 4.5 : 6)],
+							[x, b.cy + (half ? 4.5 : 6)],
+						]);
+					}
+				}
+				if (room >= 100)
+					for (const [k, name, row] of [
+						[2, "\u03c0/6", 0],
+						[3, "\u03c0/4", 1],
+						[4, "\u03c0/3", 0],
+					] as const) {
+						if (k * dx > reach) continue;
+						for (const s of [-1, 1]) {
+							const x = b.cx + s * k * dx;
+							text.push({
+								t: s < 0 ? `\u2212${name}` : name,
+								x,
+								y: b.cy + gap + row * small * 1.15,
+								align: "center",
+								base: "top",
+								scale: 0.62,
+							});
+							fine.push([
+								[x, b.cy - 3],
+								[x, b.cy + 3],
+							]);
+						}
+					}
+			}
+			text.push(
+				// In π mode the fractions crowd the place under the origin, so the 0 stands above.
+				options.pi
+					? {
+							t: "0",
+							x: b.cx - gap,
+							y: b.cy - gap,
+							align: "right",
+							base: "bottom",
+						}
+					: {
+							t: "0",
+							x: b.cx - gap,
+							y: b.cy + gap,
+							align: "right",
+							base: "top",
+						},
+				{
+					t: "x",
+					x: xt,
+					y: b.cy - gap - a * 0.42,
+					align: "right",
+					base: "bottom",
+					letter: true,
+				},
+				{
+					t: "y",
+					x: b.cx + gap + a * 0.42,
+					y: yt,
+					align: "left",
+					base: "top",
+					letter: true,
+				},
+			);
+		}
+	}
+	const look: PlaneLook = {
+		x0: b.x0,
+		y0: b.y0,
+		w: b.w,
+		h: b.h,
+		r: clamp(Math.min(b.w, b.h) * 0.015, 4, 10),
+		cell: Math.min(step, dx),
+		px,
+		heads,
+		text,
+	};
+	return { ...solid(...lines), fine, grid, cluster, plane: look };
 }
 
 /**
@@ -550,6 +830,8 @@ export function shapeParts(
 	plain = false,
 	/** A coordinate system numbered along its marks. */
 	numbered = false,
+	/** What a coordinate plane is made of (R-084). */
+	plane?: PlaneOptions,
 ): ShapeParts | null {
 	if (!kind || !isPolygonKind(kind)) return null;
 	if (POLYHEDRA.includes(kind) && !plain)
@@ -579,7 +861,9 @@ export function shapeParts(
 	};
 	const make = FIT[kind];
 	const k = parameter(kind, adj);
-	let parts = make ? fitted(make(k), box) : direct(kind, box, k, numbered);
+	let parts = make
+		? fitted(make(k), box)
+		: direct(kind, box, k, numbered, plane);
 	if (!parts) return null;
 	if (FLIPPABLE.includes(kind)) {
 		const flipX = b[0] < a[0];
@@ -610,6 +894,15 @@ export function partsOf(s: Stroke): ShapeParts | null {
 					s.verts,
 					false,
 					s.numbered,
+					s.kind === "plane"
+						? {
+								cell: s.cell ?? PLANE_CELL,
+								grid: s.grid !== false,
+								axes: s.showAxes !== false,
+								axisWidth: s.size,
+								pi: s.pi === true,
+							}
+						: undefined,
 				)
 			: null;
 	cache.set(s, parts);

@@ -91,6 +91,69 @@ describe("PropertiesPanel", () => {
 		expect(root.querySelector('[aria-label="prop numbers"]')).toBeNull();
 	});
 
+	describe("a coordinate plane (R-084)", () => {
+		const plane = {
+			...rect,
+			kind: "plane",
+			numbered: true,
+			points: pts([0, 0], [400, 400]),
+		} as Stroke;
+
+		test("offers the grid, the axes and the numbers, and the size of a cell", () => {
+			mount([plane]);
+			expect(has("prop grid")).toBe(true);
+			expect(has("prop axes")).toBe(true);
+			expect(has("prop numbering numbers")).toBe(true);
+			expect(has("prop numbering pi")).toBe(true);
+			expect(has("prop numbering none")).toBe(true);
+			expect(has("prop numbers")).toBe(false); // the plane has its own three
+			expect(slider("prop cell")).not.toBeNull();
+			expect(btn("prop grid")?.getAttribute("aria-pressed")).toBe("true");
+			expect(btn("prop numbering numbers")?.getAttribute("aria-pressed")).toBe(
+				"true",
+			);
+		});
+
+		test("switching the grid and the axes off asks for exactly that", () => {
+			mount([plane]);
+			act(() => btn("prop grid")?.click());
+			expect(onChange).toHaveBeenLastCalledWith({ grid: false });
+			act(() => btn("prop axes")?.click());
+			expect(onChange).toHaveBeenLastCalledWith({ showAxes: false });
+		});
+
+		test("the numbering is chosen from numbers, π and none", () => {
+			mount([plane]);
+			act(() => btn("prop numbering pi")?.click());
+			expect(onChange).toHaveBeenLastCalledWith({ numbering: "pi" });
+			act(() => btn("prop numbering none")?.click());
+			expect(onChange).toHaveBeenLastCalledWith({ numbering: "none" });
+		});
+
+		test("the one that is on is marked", () => {
+			mount([{ ...plane, pi: true }]);
+			expect(btn("prop numbering pi")?.getAttribute("aria-pressed")).toBe(
+				"true",
+			);
+			expect(btn("prop numbering numbers")?.getAttribute("aria-pressed")).toBe(
+				"false",
+			);
+		});
+
+		test("the size of a cell is a slider", () => {
+			mount([plane]);
+			const s = slider("prop cell") as HTMLInputElement;
+			act(() => move(s, 80, "change"));
+			expect(onChange).toHaveBeenLastCalledWith({ cell: 80 });
+		});
+
+		test("an ordinary shape has none of it", () => {
+			mount([rect]);
+			expect(has("prop grid")).toBe(false);
+			expect(slider("prop cell")).toBeNull();
+		});
+	});
+
 	describe("the menu of an object (R-060)", () => {
 		const anchor = { minX: 300, minY: 200, maxX: 500, maxY: 300 };
 		const mountWith = (extra: Record<string, unknown>) =>

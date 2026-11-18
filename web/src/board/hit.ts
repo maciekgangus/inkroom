@@ -1,6 +1,6 @@
 import type { Stroke } from "./board";
 import { partsOf } from "./shape-parts";
-import { isPolygonKind, pointInPolygon } from "./shapes";
+import { isBlockKind, isPolygonKind, pointInPolygon } from "./shapes";
 import { textBox } from "./text";
 import { geomBox, toLocal, worldBounds } from "./transform";
 
@@ -64,9 +64,9 @@ export function objectHit(
 ): boolean {
 	const [lx, ly] = toLocal(stroke, [x, y]);
 	const reach = radius + stroke.size / 2;
-	if (stroke.kind === "image" || (stroke.kind === "rect" && stroke.fill)) {
+	if (isBlockKind(stroke.kind) || (stroke.kind === "rect" && stroke.fill)) {
 		const b = geomBox(stroke);
-		const slack = stroke.kind === "image" ? radius : reach;
+		const slack = isBlockKind(stroke.kind) ? radius : reach;
 		if (
 			lx >= b.minX - slack &&
 			lx <= b.maxX + slack &&
@@ -121,6 +121,8 @@ function hitLocal(
 ): boolean {
 	const reach = radius + stroke.size / 2;
 	const pts = stroke.points;
+	// A coordinate plane is like a picture: the eraser passes over it (R-084).
+	if (stroke.kind === "plane") return false;
 	if (isPolygonKind(stroke.kind)) {
 		// A shape made of lines (R-039): near any of its lines, hidden edges included.
 		const parts = partsOf(stroke);
@@ -199,7 +201,7 @@ export function loopTouches(
 ): boolean {
 	if (loop.length < 3) return false;
 	const b = worldBounds(stroke);
-	if (stroke.kind === "image") {
+	if (isBlockKind(stroke.kind)) {
 		return [
 			[b.minX, b.minY],
 			[b.maxX, b.minY],

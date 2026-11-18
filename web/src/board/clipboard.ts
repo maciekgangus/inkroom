@@ -52,6 +52,7 @@ const KINDS: ElementKind[] = [
 	"scurve",
 	"parabola",
 	"axes",
+	"plane",
 	"text",
 	"image",
 ];
@@ -120,6 +121,23 @@ function cleanElement(raw: unknown): ClipElement | null {
 	if (raw.numbered !== undefined) {
 		if (typeof raw.numbered !== "boolean") return null;
 		if (raw.numbered) out.numbered = true;
+	}
+	// A coordinate plane's own settings (R-084).
+	if (raw.cell !== undefined) {
+		if (!isNum(raw.cell) || raw.cell < 1 || raw.cell > 1000) return null;
+		out.cell = raw.cell;
+	}
+	if (raw.grid !== undefined) {
+		if (typeof raw.grid !== "boolean") return null;
+		out.grid = raw.grid;
+	}
+	if (raw.pi !== undefined) {
+		if (typeof raw.pi !== "boolean") return null;
+		if (raw.pi) out.pi = true;
+	}
+	if (raw.showAxes !== undefined) {
+		if (typeof raw.showAxes !== "boolean") return null;
+		out.showAxes = raw.showAxes;
 	}
 	if (raw.verts !== undefined) {
 		const v = raw.verts;

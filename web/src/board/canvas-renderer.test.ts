@@ -74,6 +74,68 @@ describe("CanvasRenderer selection glow (R-058)", () => {
 	});
 });
 
+describe("the glow of a selected coordinate plane (R-084)", () => {
+	test("only the edge of the sheet glows, not its grid, axes or numbers", () => {
+		vi.stubGlobal("requestAnimationFrame", undefined);
+		vi.stubGlobal(
+			"Path2D",
+			class {
+				moveTo() {}
+				lineTo() {}
+				quadraticCurveTo() {}
+				closePath() {}
+				rect() {}
+				ellipse() {}
+				arc() {}
+			},
+		);
+		const calls: string[] = [];
+		const ctx = new Proxy(
+			{},
+			{
+				get: (_t, k) =>
+					k === "canvas"
+						? {}
+						: (..._a: unknown[]) => {
+								calls.push(String(k));
+								return ctx;
+							},
+				set: () => true,
+			},
+		) as unknown as CanvasRenderingContext2D;
+		const canvas = () =>
+			({
+				getContext: () => ctx,
+				style: {},
+				width: 100,
+				height: 100,
+			}) as unknown as HTMLCanvasElement;
+		const renderer = new CanvasRenderer(canvas(), canvas(), new Viewport());
+		renderer.setHighlight([
+			{
+				id: "pl",
+				authorId: "a",
+				color: "#111",
+				size: 3,
+				z: 1,
+				kind: "plane",
+				numbered: true,
+				points: [
+					[0, 0, 0.5],
+					[400, 400, 0.5],
+				],
+			} as Stroke,
+		]);
+		vi.unstubAllGlobals();
+		expect(calls).not.toContain("fillText");
+		expect(calls).not.toContain("strokeText");
+		expect(calls).not.toContain("fill");
+		// one stroke of the edge for each pass of the glow
+		expect(calls.filter((c) => c === "stroke").length).toBeLessThanOrEqual(2);
+		expect(calls.filter((c) => c === "stroke").length).toBeGreaterThan(0);
+	});
+});
+
 describe("the coordinate system on the canvas", () => {
 	const record = () => {
 		const widths: number[] = [];
@@ -263,5 +325,104 @@ describe("text sits where a text field puts it, in every browser (R-081)", () =>
 		const [first] = draw();
 		expect(first.base).toBe("top");
 		expect(first.y).toBeCloseTo(50 + 2.5);
+	});
+});
+
+describe("the coordinate plane on the canvas (R-084)", () => {
+	const plane = {
+		id: "pl",
+		authorId: "a",
+		color: "#d32f2f",
+		size: 4,
+		z: 1,
+		kind: "plane",
+		numbered: true,
+		points: [
+			[0, 0, 0.5],
+			[400, 400, 0.5],
+		],
+	} as Stroke;
+	const big = { minX: -1e9, minY: -1e9, maxX: 1e9, maxY: 1e9 };
+	const record = () => {
+		const strokes: { width: number; style: string }[] = [];
+		const fills: string[] = [];
+		const texts: string[] = [];
+		const state: Record<string, unknown> = { lineWidth: 1, globalAlpha: 1 };
+		const ctx = new Proxy(state, {
+			get: (t, k) => {
+				if (k === "stroke")
+					return () =>
+						strokes.push({
+							width: t.lineWidth as number,
+							style: String(t.strokeStyle),
+						});
+				if (k === "fill") return () => fills.push(String(t.fillStyle));
+				// zoomed in: 100 device pixels to a board unit, so no line is held up to a pixel
+				if (k === "getTransform") return () => ({ a: 100, b: 0 });
+				if (k === "fillText") return (text: string) => texts.push(text);
+				if (k in t) return t[k as string];
+				return () => ctx;
+			},
+			set: (t, k, v) => {
+				t[k as string] = v;
+				return true;
+			},
+		}) as unknown as CanvasRenderingContext2D;
+		return { ctx, strokes, fills, texts };
+	};
+	const stub = () =>
+		vi.stubGlobal(
+			"Path2D",
+			class {
+				moveTo() {}
+				lineTo() {}
+				closePath() {}
+				rect() {}
+			},
+		);
+	const paint = (ink?: (c: string) => string) => {
+		stub();
+		const r = record();
+		paintElements(r.ctx, [plane], big, null, false, ink ? { ink } : {});
+		vi.unstubAllGlobals();
+		return r;
+	};
+
+	test("it is an opaque white sheet, so the board's own background does not show through", () => {
+		const r = paint();
+		expect(r.fills).toContain("#ffffff");
+		// the sheet is painted before anything else of it
+		expect(r.fills.indexOf("#ffffff")).toBeLessThanOrEqual(1);
+	});
+
+	test("in dark mode the sheet is a dark one, a little lighter than the board", () => {
+		const dark = paint((c) =>
+			c === "#ffffff" ? "#111111" : c === "#111111" ? "#8f8fff" : c,
+		);
+		expect(dark.fills).toContain("#1c1e26");
+		expect(dark.fills).not.toContain("#ffffff");
+	});
+
+	test("the cells are in a quiet colour, never the colour of the axes, thin, with the axes drawn last and strongest", () => {
+		const r = paint();
+		const cells = r.strokes.find((s) => s.style === "#e4e9f2");
+		const major = r.strokes.find((s) => s.style === "#c5d0e2");
+		const axes = r.strokes.filter((s) => s.style === "#d32f2f");
+		expect(cells).toBeDefined();
+		expect(major).toBeDefined();
+		expect(cells?.width).toBeLessThan(major?.width ?? 0);
+		expect(major?.width).toBeLessThan(axes[0].width);
+		expect(axes[0].width).toBe(4);
+		// the axes come after the cells
+		expect(r.strokes.findIndex((s) => s.style === "#d32f2f")).toBeGreaterThan(
+			r.strokes.findIndex((s) => s.style === "#c5d0e2"),
+		);
+	});
+
+	test("the numbers, with a real minus, and the letters x and y are written", () => {
+		const r = paint();
+		expect(r.texts).toEqual(
+			expect.arrayContaining(["1", "\u22121", "4", "\u22124", "0", "x", "y"]),
+		);
 	});
 });

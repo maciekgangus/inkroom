@@ -173,3 +173,20 @@ export const pen = (page: Page, from: Pt, to: Pt) =>
 /** One or more fingers moving together from `from` to `to` (one point per finger). */
 export const fingers = (page: Page, from: Pt[], to: Pt[]) =>
 	pointers(page, "touch", from, to);
+
+/**
+ * How many dark pixels the board canvas has: a coordinate plane is an opaque sheet, so painted
+ * pixels cannot tell a stroke on it from the sheet; dark ones can (light theme, black ink).
+ */
+export const darkInk = (page: Page) =>
+	page.evaluate(() => {
+		const c = document.querySelector<HTMLCanvasElement>("canvas#board");
+		const ctx = c?.getContext("2d");
+		if (!c || !ctx) return 0;
+		const d = ctx.getImageData(0, 0, c.width, c.height).data;
+		let dark = 0;
+		for (let i = 0; i < d.length; i += 4)
+			if (d[i] < 100 && d[i + 1] < 100 && d[i + 2] < 100 && d[i + 3] > 200)
+				dark++;
+		return dark;
+	});

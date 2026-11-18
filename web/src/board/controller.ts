@@ -13,8 +13,15 @@ import {
 	pointInFrame,
 	ROT_OFFSET_PX,
 } from "./selection-frame";
-import { adjustFromPoint, adjustHandle, outlineOf } from "./shape-parts";
-import type { ShapeChoice } from "./shapes";
+import {
+	adjustFromPoint,
+	adjustHandle,
+	outlineOf,
+	PLANE_CELL,
+	PLANE_DEFAULT_SIDE,
+	PLANE_MIN_SIDE,
+} from "./shape-parts";
+import { isBlockKind, type ShapeChoice } from "./shapes";
 import { applyStyle, type Dash, type StylePatch } from "./style";
 import {
 	bakeRotation,
@@ -92,7 +99,8 @@ export interface Settings {
 		| "shape"
 		| "text"
 		| "select"
-		| "laser";
+		| "laser"
+		| "plane";
 	/** Which shape the shape tool draws (R-033); a rectangle if none was chosen. */
 	shape?: ShapeChoice;
 	/** The line style of new elements (R-038): what fits the tool is used, the rest is ignored. */
@@ -110,6 +118,8 @@ const MIN_SHAPE_PX = 2;
 const HIT_PX = 8;
 /** The smallest a selection can be scaled down to, in screen pixels. */
 const MIN_SELECTION_PX = 24;
+/** The least side a coordinate plane is scaled down to, in board units: four cells (R-084). */
+const PLANE_MIN_SCALE_SIDE = 160;
 const SNAP_STEP = Math.PI / 12; // 15 degrees, with Shift
 const SOFT_SNAP = (3 * Math.PI) / 180; // pulls onto right angles
 
@@ -189,9 +199,9 @@ const LINE_FRAME_PAD_PX = 16;
 /** How far (px) the right button may move and still count as a click, not a pan. */
 const RIGHT_CLICK_SLOP = 4;
 
-/** The tools that drag out an element from two corners: the line and the shape tool (R-033). */
+/** The tools that drag out an element from two corners: line, shape and plane (R-033, R-084). */
 const isShapeTool = (t: Settings["tool"]): boolean =>
-	t === "line" || t === "shape";
+	t === "line" || t === "shape" || t === "plane";
 
 /** Turns pointer input into board changes: draws with pen/mouse, ignores touch (palm rejection). */
 export class Controller {
@@ -331,7 +341,7 @@ export class Controller {
 			return;
 		}
 		// Anything that draws starts clean: what was selected before is let go of.
-		if (["pen", "line", "shape", "text"].includes(this.settings.tool))
+		if (["pen", "line", "shape", "text", "plane"].includes(this.settings.tool))
 			this.select(null);
 		if (this.settings.tool === "eraser") {
 			this.erase(e);
@@ -355,7 +365,14 @@ export class Controller {
 			size: this.settings.size,
 			z: this.nextZ(),
 			...(isShapeTool(tool)
-				? { kind: tool === "shape" ? (this.settings.shape ?? "rect") : "line" }
+				? {
+						kind:
+							tool === "shape"
+								? (this.settings.shape ?? "rect")
+								: tool === "plane"
+									? "plane"
+									: "line",
+					}
 				: {}),
 			...this.newLook(tool),
 			points: isShapeTool(tool) ? [start, [...start]] : [start],
@@ -406,7 +423,12 @@ export class Controller {
 			const [a] = this.current.points;
 			this.current = {
 				...this.current,
-				points: [a, this.shapeEnd(e, this.current)],
+				points: [
+					a,
+					this.current.kind === "plane"
+						? this.planeEnd(a, this.point(e))
+						: this.shapeEnd(e, this.current),
+				],
 			};
 			this.renderer.drawLive(this.current);
 			return;
@@ -458,6 +480,10 @@ export class Controller {
 			return;
 		}
 		if (!this.current) return;
+		if (this.current.kind === "plane") {
+			this.finishPlane(e);
+			return;
+		}
 		if (this.current.kind) {
 			const [a] = this.current.points; // Shift as it is on release
 			this.current = {
@@ -1121,10 +1147,18 @@ export class Controller {
 				const local = rotatePoint(p, c, -frame.rot);
 				p = rotatePoint([local[0] - pad[0], local[1] - pad[1]], c, frame.rot);
 			}
-			const kMinX =
-				MIN_SELECTION_PX / (this.viewport.scale * Math.max(frame.w, 1));
-			const kMinY =
-				MIN_SELECTION_PX / (this.viewport.scale * Math.max(frame.h, 1));
+			// A coordinate plane keeps at least four cells a side (R-084), the others a few pixels.
+			const floor = edit.originals.some((o) => o.kind === "plane")
+				? PLANE_MIN_SCALE_SIDE
+				: 0;
+			const kMinX = Math.max(
+				MIN_SELECTION_PX / (this.viewport.scale * Math.max(frame.w, 1)),
+				floor / Math.max(frame.w, 1),
+			);
+			const kMinY = Math.max(
+				MIN_SELECTION_PX / (this.viewport.scale * Math.max(frame.h, 1)),
+				floor / Math.max(frame.h, 1),
+			);
 			let kx: number;
 			let ky: number;
 			if (e.shiftKey) {
@@ -1195,7 +1229,7 @@ export class Controller {
 				// Touching is enough, but an image (a PDF page is one) must be wholly inside: it is big
 				// and easily caught by a frame meant for something else (R-072).
 				.filter((s) =>
-					s.kind === "image"
+					isBlockKind(s.kind)
 						? contains(r, worldBounds(s))
 						: intersects(worldBounds(s), r),
 				)
@@ -1262,6 +1296,53 @@ export class Controller {
 			!!e.shiftKey,
 		);
 		return [x, y, p[2]];
+	}
+
+	/** The far corner of a coordinate plane dragged from `a` to the pointer: a square, not too small (R-084). */
+	private planeEnd(a: Point, p: Point): Point {
+		const dx = p[0] - a[0];
+		const dy = p[1] - a[1];
+		const side = Math.max(Math.abs(dx), Math.abs(dy), PLANE_MIN_SIDE);
+		return [
+			a[0] + (dx < 0 ? -side : side),
+			a[1] + (dy < 0 ? -side : side),
+			p[2],
+		];
+	}
+
+	/**
+	 * Puts the coordinate plane dragged out so far on the board: a click gives the usual square
+	 * centred on the click, a drag the square of the drag; then it is selected and the tool is
+	 * Zaznacz, so it can be moved or set at once (R-084).
+	 */
+	private finishPlane(e: PointerInput): void {
+		const plane = this.current;
+		if (!plane) return;
+		const [a] = plane.points;
+		const p = this.point(e);
+		const dragged =
+			Math.hypot(p[0] - a[0], p[1] - a[1]) * this.viewport.scale >=
+			MIN_SHAPE_PX * 3;
+		const half = PLANE_DEFAULT_SIDE / 2;
+		const done: Stroke = {
+			...plane,
+			cell: PLANE_CELL,
+			grid: true,
+			showAxes: true,
+			numbered: true,
+			points: dragged
+				? [a, this.planeEnd(a, p)]
+				: [
+						[a[0] - half, a[1] - half, a[2]],
+						[a[0] + half, a[1] + half, a[2]],
+					],
+		};
+		this.board.addStroke(done);
+		this.current = null;
+		this.renderer.drawLive(null);
+		this.settings.tool = "select";
+		this.select(done.id);
+		this.renderer.redraw(this.board.strokes);
 	}
 
 	private tooSmall(shape: Stroke): boolean {

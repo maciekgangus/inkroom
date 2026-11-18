@@ -436,3 +436,59 @@ describe("loopTouches: a lasso takes what it really touches (R-071)", () => {
 		expect(loopTouches(pic, square(50, 50, 350, 250), 1)).toBe(true);
 	});
 });
+
+describe("a coordinate plane behaves like a picture (R-084)", () => {
+	const plane: Stroke = {
+		...line("pl", [
+			[100, 100],
+			[500, 500],
+		]),
+		kind: "plane",
+		numbered: true,
+	};
+
+	test("the eraser never takes it, not on its axes, its grid or its frame", () => {
+		for (const [x, y] of [
+			[300, 300], // the middle, where the axes cross
+			[300, 150], // on the vertical axis
+			[100, 300], // on the frame
+			[220, 300], // on a line of the grid
+			[240, 240],
+		])
+			expect(strokeHit(plane, x, y, 20)).toBe(false);
+	});
+
+	test("it is grabbed by a click anywhere inside, like a picture", () => {
+		expect(objectHit(plane, 240, 410, 8)).toBe(true);
+		expect(objectHit(plane, 300, 300, 8)).toBe(true);
+	});
+
+	test("it is not grabbed from far outside", () => {
+		expect(objectHit(plane, 40, 40, 8)).toBe(false);
+	});
+
+	test("the eraser's find skips it and finds the stroke drawn on it", () => {
+		const ink = line("ink", [
+			[200, 300],
+			[400, 300],
+		]);
+		expect(findHit([plane, ink], 300, 300, 10)?.id).toBe("ink");
+		expect(findHit([plane], 300, 300, 10)).toBeUndefined();
+	});
+
+	test("a lasso takes it only when it holds it whole", () => {
+		const square = (
+			x0: number,
+			y0: number,
+			x1: number,
+			y1: number,
+		): [number, number][] => [
+			[x0, y0],
+			[x1, y0],
+			[x1, y1],
+			[x0, y1],
+		];
+		expect(loopTouches(plane, square(50, 50, 300, 300), 1)).toBe(false);
+		expect(loopTouches(plane, square(50, 50, 550, 550), 1)).toBe(true);
+	});
+});

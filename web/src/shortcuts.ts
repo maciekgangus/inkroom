@@ -12,6 +12,7 @@ const DEFAULT_KEYS: Partial<Record<Tool, string>> = {
 	line: "KeyL",
 	shape: "KeyK",
 	laser: "KeyP",
+	plane: "KeyU",
 };
 
 /** The tools that have a key, in the order they are listed, with the name shown. */
@@ -24,6 +25,7 @@ export const KEYED_TOOLS: { tool: Tool; name: string }[] = [
 	{ tool: "line", name: "Linia" },
 	{ tool: "shape", name: "Kształty" },
 	{ tool: "laser", name: "Wskaźnik" },
+	{ tool: "plane", name: "Układ współrzędnych" },
 ];
 
 /** Keys that already do something else on the board or in the browser: no tool can have them. */
@@ -121,7 +123,11 @@ export function resetShortcuts(memoryOnly = false): void {
 
 /** The tools that start a new drawing: choosing one lets go of what was selected. */
 export const dropsSelection = (tool: Tool): boolean =>
-	tool === "pen" || tool === "line" || tool === "shape" || tool === "text";
+	tool === "pen" ||
+	tool === "line" ||
+	tool === "shape" ||
+	tool === "text" ||
+	tool === "plane";
 
 /** Switches the tool. */
 export function selectTool(settings: Settings, tool: Tool): void {
