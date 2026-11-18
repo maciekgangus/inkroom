@@ -1694,12 +1694,20 @@ button.participant {
 .follow-chip .chip-button {
 	width: 28px;
 	height: 28px;
-	border-radius: 50%;
+	border-radius: 999px;
+}
+/* A chip that is one button: the hover fills the whole pill evenly, icon and text inside it. */
+.follow-chip:has(> .chip-text:only-child) {
+	padding: 4px;
 }
 .follow-chip .chip-text {
 	height: 28px;
-	padding: 0 12px 0 0;
-	border-radius: var(--radius);
+	padding: 0 12px;
+	border-radius: 999px;
+	line-height: 1;
+}
+.follow-chip .chip-text svg {
+	display: block;
 }
 .follow-chip .chip-primary {
 	height: 28px;
