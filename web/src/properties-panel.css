@@ -74,14 +74,52 @@
 	border-top: 1px solid var(--border);
 }
 /* A row of a few switches (grid, axes, numbering) stands in the middle, the buttons evenly apart. */
+/* Two equal halves with the rule exactly in the middle: the left cluster by the left edge, the right by the right. */
 .prop-group.split {
-	flex-wrap: nowrap;
-	justify-content: space-between;
+	display: grid;
+	grid-template-columns: 1fr 1px 1fr;
+	column-gap: 8px;
+	align-items: center;
+}
+.prop-group.split > .prop-sep {
+	align-self: stretch;
+	margin: 6px 0;
 }
 .prop-cluster {
 	display: flex;
 	align-items: center;
 	gap: 2px;
+}
+.prop-group.split > .prop-cluster:first-child {
+	justify-self: start;
+}
+.prop-group.split > .prop-cluster:last-child {
+	justify-self: end;
+}
+/* Sliders one under another on one grid: icon, track and value in columns of the same widths. */
+.prop-group.sliders {
+	display: grid;
+	grid-template-columns: 40px 1fr 56px;
+	column-gap: 0;
+	row-gap: 0;
+	align-items: center;
+}
+.prop-group.sliders .slider {
+	display: contents;
+}
+.prop-group.sliders .slider-icon {
+	display: grid;
+	place-items: center;
+	height: 40px;
+}
+.prop-group.sliders .slider input {
+	min-width: 0;
+	margin: 0 6px;
+}
+.prop-group.sliders .slider .value {
+	min-width: 0;
+	text-align: right;
+	padding-right: 6px;
 }
 /* The digits and the pi are a symbol in the same square as the icons. */
 .properties button.digits {
@@ -140,9 +178,29 @@
 }
 
 /* Colour tiles: a 24px dot in a 40px cell (the whole cell is the target), a ring on the chosen one. */
+/* The colours in one row across the menu: the ends stand on the edges of the other rows. The least
+   important ones are left out when the menu is narrow, so the row never wraps. */
+.prop-group {
+	container-type: inline-size;
+}
 .palette-grid {
-	display: grid;
-	grid-template-columns: repeat(6, 40px);
+	display: flex;
+	flex-wrap: nowrap;
+	justify-content: space-between;
+	width: 100%;
+}
+.palette-grid:not(.fn-colors) > * {
+	flex: none;
+}
+@container (max-width: 319px) {
+	.palette-grid .swatch.opt2 {
+		display: none;
+	}
+}
+@container (max-width: 279px) {
+	.palette-grid .swatch.opt {
+		display: none;
+	}
 }
 .properties button.swatch,
 .properties button.swatch:hover:not(:disabled),
@@ -436,6 +494,8 @@
 }
 /* The cells are the 40px of the dot above, so the first colour stands under that dot. */
 .palette-grid.fn-colors {
+	display: grid;
+	width: auto;
 	grid-template-columns: repeat(auto-fill, 40px);
 }
 .properties button.fn-canon {
@@ -517,8 +577,22 @@
 	.properties button.icon {
 		width: 44px;
 	}
-	.palette-grid {
-		grid-template-columns: repeat(6, 44px);
+	/* Wider cells: the least important colours go sooner. */
+	@container (max-width: 351px) {
+		.palette-grid .swatch.opt2 {
+			display: none;
+		}
+	}
+	@container (max-width: 307px) {
+		.palette-grid .swatch.opt {
+			display: none;
+		}
+	}
+	.prop-group.sliders {
+		grid-template-columns: 44px 1fr 56px;
+	}
+	.prop-group.sliders .slider-icon {
+		height: 44px;
 	}
 	.properties button.swatch,
 	.properties button.swatch:hover:not(:disabled),

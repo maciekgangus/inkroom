@@ -36,8 +36,8 @@ describe("Toolbar", () => {
 		expect(SIZES).toHaveLength(3);
 	});
 
-	test("the object menu offers eleven colours, all of the palette, and the tile for any other: two rows of six", () => {
-		expect(MENU_COLORS).toHaveLength(11);
+	test("the object menu offers the colours of the bar and two more, for one row with the tile for any other", () => {
+		expect(MENU_COLORS).toHaveLength(7);
 		expect(MENU_COLORS.slice(0, COLORS.length)).toEqual(COLORS);
 		for (const c of MENU_COLORS.slice(COLORS.length))
 			expect(MORE_COLORS).toContain(c);

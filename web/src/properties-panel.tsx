@@ -150,6 +150,45 @@ export function PropertiesPanel({
 	const now = styleOf(elements);
 	const plane = planeOf(elements);
 	const on = (active: boolean) => (active ? "active" : "");
+	const sizeAndOpacity = (
+		<>
+			{can.size &&
+				(can.textOnly ? (
+					<Slider
+						icon="text"
+						label="prop font size"
+						min={8}
+						max={200}
+						value={now.fontSize}
+						unit=" px"
+						onInput={(v) => onPreview({ fontSize: v })}
+						onChange={(v) => onChange({ fontSize: v })}
+					/>
+				) : (
+					<Slider
+						icon="width"
+						label="prop size"
+						min={0.25 * WIDTH_SHOWN}
+						max={50 * WIDTH_SHOWN}
+						step={0.25 * WIDTH_SHOWN}
+						value={now.size * WIDTH_SHOWN}
+						unit=" px"
+						onInput={(v) => onPreview({ size: v / WIDTH_SHOWN })}
+						onChange={(v) => onChange({ size: v / WIDTH_SHOWN })}
+					/>
+				))}
+			<Slider
+				icon="opacity"
+				label="prop opacity"
+				min={1}
+				max={100}
+				value={Math.round(now.opacity * 100)}
+				unit="%"
+				onInput={(v) => onPreview({ opacity: v / 100 })}
+				onChange={(v) => onChange({ opacity: v / 100 })}
+			/>
+		</>
+	);
 
 	return (
 		// biome-ignore lint/a11y/noStaticElementInteractions: the handler only keeps the focus where it is
@@ -208,7 +247,7 @@ export function PropertiesPanel({
 			</div>
 			<div class="panel-body">
 				{can.plane && (
-					<Group>
+					<Group sliders>
 						<Slider
 							icon="grid"
 							label="prop cell"
@@ -220,6 +259,7 @@ export function PropertiesPanel({
 							onInput={(v) => onPreview({ cell: v })}
 							onChange={(v) => onChange({ cell: v })}
 						/>
+						{sizeAndOpacity}
 					</Group>
 				)}
 				{can.color && (
@@ -292,43 +332,7 @@ export function PropertiesPanel({
 							))}
 					</Group>
 				)}
-				<Group>
-					{can.size &&
-						(can.textOnly ? (
-							<Slider
-								icon="text"
-								label="prop font size"
-								min={8}
-								max={200}
-								value={now.fontSize}
-								unit=" px"
-								onInput={(v) => onPreview({ fontSize: v })}
-								onChange={(v) => onChange({ fontSize: v })}
-							/>
-						) : (
-							<Slider
-								icon="width"
-								label="prop size"
-								min={0.25 * WIDTH_SHOWN}
-								max={50 * WIDTH_SHOWN}
-								step={0.25 * WIDTH_SHOWN}
-								value={now.size * WIDTH_SHOWN}
-								unit=" px"
-								onInput={(v) => onPreview({ size: v / WIDTH_SHOWN })}
-								onChange={(v) => onChange({ size: v / WIDTH_SHOWN })}
-							/>
-						))}
-					<Slider
-						icon="opacity"
-						label="prop opacity"
-						min={1}
-						max={100}
-						value={Math.round(now.opacity * 100)}
-						unit="%"
-						onInput={(v) => onPreview({ opacity: v / 100 })}
-						onChange={(v) => onChange({ opacity: v / 100 })}
-					/>
-				</Group>
+				{!can.plane && <Group sliders>{sizeAndOpacity}</Group>}
 				{can.numbers && !can.plane && (
 					<Group>
 						<button
@@ -408,11 +412,18 @@ export function PropertiesPanel({
 const Group = ({
 	children,
 	split = false,
+	sliders = false,
 }: {
 	children: ComponentChildren;
 	/** Two clusters of switches on one line: one by the left edge, one by the right, a rule between. */
 	split?: boolean;
-}) => <div class={`prop-group${split ? " split" : ""}`}>{children}</div>;
+	/** Sliders one under another on one grid: icon, track and value in columns of the same widths. */
+	sliders?: boolean;
+}) => (
+	<div class={`prop-group${split ? " split" : ""}${sliders ? " sliders" : ""}`}>
+		{children}
+	</div>
+);
 
 /**
  * A row of round colour tiles, as in the bar: the current one has a ring; the last tile is for any
@@ -456,13 +467,14 @@ function ColorRow({
 					<Icon name="no-fill" />
 				</button>
 			)}
-			{shown.map((c) => (
+			{shown.map((c, i) => (
 				<button
 					type="button"
 					key={c}
 					aria-label={`${prefix} ${c}`}
 					aria-pressed={current === c}
-					class={`swatch${current === c ? " active" : ""}`}
+					// The last ones are left out first when the row is too narrow (CSS container query).
+					class={`swatch${current === c ? " active" : ""}${i >= 6 ? " opt2" : i >= 5 ? " opt" : ""}`}
 					style={{ "--swatch": display(c) }}
 					onClick={() => choose(c)}
 				/>
