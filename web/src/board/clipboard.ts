@@ -1,4 +1,5 @@
 import type { ElementKind, Point, Stroke } from "./board";
+import { sanitizeFns } from "./functions";
 
 /** The format of the system clipboard text: plain JSON, so other tools can read and write it. */
 const CLIPBOARD_VERSION = 1;
@@ -134,6 +135,11 @@ function cleanElement(raw: unknown): ClipElement | null {
 	if (raw.pi !== undefined) {
 		if (typeof raw.pi !== "boolean") return null;
 		if (raw.pi) out.pi = true;
+	}
+	if (raw.fns !== undefined) {
+		const fns = sanitizeFns(raw.fns);
+		if (!fns) return null;
+		if (fns.length > 0) out.fns = fns;
 	}
 	if (raw.showAxes !== undefined) {
 		if (typeof raw.showAxes !== "boolean") return null;

@@ -356,3 +356,35 @@ describe("a coordinate plane in the clipboard (R-084)", () => {
 		).toBeNull();
 	});
 });
+
+describe("functions of a coordinate plane in the clipboard (R-092)", () => {
+	const fns = [
+		{ id: "f1", k: "quad", c: [1, 0, -4], color: "#1976d2", w: 2, canon: true },
+	];
+	const plane = {
+		id: "p",
+		authorId: "a",
+		color: "#111",
+		size: 2,
+		z: 1,
+		kind: "plane",
+		fns,
+		points: [
+			[0, 0, 0.5],
+			[480, 480, 0.5],
+		],
+	} as unknown as Stroke;
+
+	test("the functions survive a copy and a paste", () => {
+		const clip = parseClipboard(serializeSelection([plane], "b"));
+		expect(clip?.elements[0]).toMatchObject({ fns });
+	});
+
+	test("a malformed list or an unknown formula is refused", () => {
+		const bad = (v: unknown) =>
+			parseClipboard(serializeSelection([{ ...plane, fns: v } as never], "b"));
+		expect(bad("x")).toBeNull();
+		expect(bad([{ ...fns[0], k: "evil" }])).toBeNull();
+		expect(bad([{ ...fns[0], c: [1, 2] }])).toBeNull();
+	});
+});

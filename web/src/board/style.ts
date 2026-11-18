@@ -1,5 +1,6 @@
 import type { Stroke } from "./board";
 import { clamp } from "./clamp";
+import { type PlaneFn, sanitizeFns } from "./functions";
 import { hasInside, isPolygonKind } from "./shapes";
 import { fontSizeFor, fontSizeOf } from "./text";
 
@@ -24,6 +25,8 @@ export interface StylePatch {
 	cell?: number;
 	/** For a coordinate plane: the numbers 1 2 3, the multiples of π, or none (R-084). */
 	numbering?: "numbers" | "pi" | "none";
+	/** For a coordinate plane (R-092): the whole list of its function graphs, replacing the old one. */
+	fns?: PlaneFn[];
 }
 
 const isShape = (el: Stroke) =>
@@ -84,6 +87,11 @@ export function applyStyle(el: Stroke, patch: StylePatch): Stroke {
 			else out.showAxes = false;
 		}
 		if (patch.cell !== undefined) out.cell = clamp(patch.cell, 10, 200);
+		if (patch.fns !== undefined) {
+			const fns = sanitizeFns(patch.fns);
+			if (fns?.length === 0) delete out.fns;
+			else if (fns) out.fns = fns;
+		}
 		if (patch.numbering !== undefined) {
 			if (patch.numbering === "none") delete out.numbered;
 			else out.numbered = true;
@@ -151,6 +159,7 @@ export function planeOf(els: Stroke[]): {
 	grid: boolean;
 	showAxes: boolean;
 	numbering: "numbers" | "pi" | "none";
+	fns: PlaneFn[];
 } {
 	const e = els.find((x) => x.kind === "plane");
 	return {
@@ -158,5 +167,6 @@ export function planeOf(els: Stroke[]): {
 		grid: e?.grid !== false,
 		showAxes: e?.showAxes !== false,
 		numbering: !e?.numbered ? "none" : e.pi ? "pi" : "numbers",
+		fns: e?.fns ?? [],
 	};
 }
