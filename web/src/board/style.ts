@@ -32,7 +32,7 @@ const isShape = (el: Stroke) =>
 	el.kind === "ellipse" ||
 	isPolygonKind(el.kind);
 /** A freehand stroke: no kind, or the explicit stroke kind. */
-const isFreehand = (el: Stroke) => !el.kind || el.kind === "stroke";
+export const isFreehand = (el: Stroke) => !el.kind || el.kind === "stroke";
 const isDashable = (el: Stroke) =>
 	el.kind === "line" || (isShape(el) && el.kind !== "plane");
 

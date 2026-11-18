@@ -650,10 +650,7 @@ func (s *Store) View(userID int64, boardID string) (View, error) {
 	var v View
 	err := s.db.QueryRow(`SELECT x, y, scale FROM views WHERE user_id = ? AND board_id = ?`,
 		userID, boardID).Scan(&v.X, &v.Y, &v.Scale)
-	if errors.Is(err, sql.ErrNoRows) {
-		return View{}, ErrNotFound
-	}
-	return v, err
+	return v, notFound(err)
 }
 
 // SetRevoked records that person may not draw on boardID (or, with revoked false, may again).
@@ -852,20 +849,14 @@ func (s *Store) SetPreview(boardID, tag string, png []byte) error {
 func (s *Store) Preview(boardID, tag string) ([]byte, error) {
 	var png []byte
 	err := s.db.QueryRow("SELECT png FROM board_previews WHERE board_id = ? AND tag = ?", boardID, tag).Scan(&png)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, ErrNotFound
-	}
-	return png, err
+	return png, notFound(err)
 }
 
 // Shortcuts returns the account's own keyboard shortcuts as JSON (R-086); "{}" when none.
 func (s *Store) Shortcuts(userID int64) (string, error) {
 	var js string
 	err := s.db.QueryRow("SELECT shortcuts FROM users WHERE id = ?", userID).Scan(&js)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", ErrNotFound
-	}
-	return js, err
+	return js, notFound(err)
 }
 
 // SetShortcuts replaces the account's own keyboard shortcuts (a JSON object).
