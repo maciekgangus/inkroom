@@ -857,3 +857,66 @@ describe("the object menu in the language of the wide bar", () => {
 		expect(close.textContent).toBe("");
 	});
 });
+
+describe("the menu of a coordinate plane", () => {
+	const plane = {
+		...base,
+		kind: "plane",
+		points: pts([0, 0], [5, 5]),
+	} as Stroke;
+	const show = () => {
+		const root = document.createElement("div");
+		render(
+			<PropertiesPanel
+				elements={[plane]}
+				colors={COLORS}
+				onChange={() => {}}
+			/>,
+			root,
+		);
+		return root;
+	};
+	const q = (root: HTMLElement, label: string) =>
+		root.querySelector(`[aria-label="${label}"]`) as HTMLElement | null;
+
+	test("is titled Wykres and has no ready widths, only the slider", () => {
+		const root = show();
+		expect(root.querySelector(".panel-title span")?.textContent).toBe("Wykres");
+		for (const s of [1, 2, 4]) expect(q(root, `prop size ${s}`)).toBeNull();
+		expect(root.querySelector('input[aria-label="prop size"]')).not.toBeNull();
+	});
+
+	test("the grid, the axes and the numbering are icon buttons of one size with titles, in rows centred", () => {
+		const root = show();
+		const labels = [
+			"prop grid",
+			"prop axes",
+			"prop numbering numbers",
+			"prop numbering pi",
+			"prop numbering none",
+		];
+		for (const l of labels) {
+			const b = q(root, l) as HTMLElement;
+			expect(b.classList.contains("icon")).toBe(true);
+			expect(b.title).not.toBe("");
+			expect(b.getAttribute("aria-pressed")).not.toBeNull();
+		}
+		// Words are gone from the buttons: an icon, the digits or the symbol.
+		expect(q(root, "prop grid")?.querySelector("svg")).not.toBeNull();
+		expect(q(root, "prop axes")?.querySelector("svg")).not.toBeNull();
+		expect(q(root, "prop numbering none")?.querySelector("svg")).not.toBeNull();
+		expect(q(root, "prop numbering pi")?.textContent).toBe("π");
+		expect(q(root, "prop numbering numbers")?.textContent).toBe("123");
+		expect(root.textContent).not.toMatch(/Siatka|Osie|Bez/);
+		expect(
+			q(root, "prop grid")
+				?.closest(".prop-group")
+				?.classList.contains("center"),
+		).toBe(true);
+		expect(
+			q(root, "prop numbering pi")
+				?.closest(".prop-group")
+				?.classList.contains("center"),
+		).toBe(true);
+	});
+});

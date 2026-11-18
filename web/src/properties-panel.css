@@ -73,6 +73,18 @@
 	padding: 4px 0;
 	border-top: 1px solid var(--border);
 }
+/* A row of a few switches (grid, axes, numbering) stands in the middle, the buttons evenly apart. */
+.prop-group.center {
+	justify-content: center;
+	gap: 8px;
+}
+/* The digits and the pi are a symbol in the same square as the icons. */
+.properties button.digits,
+.properties button.icon:not(:has(svg)) {
+	font-family: var(--mono);
+	font-size: 14px;
+	letter-spacing: -0.04em;
+}
 /* The rule between ready widths and line styles, as between two groups of the bar. */
 .prop-sep {
 	align-self: stretch;

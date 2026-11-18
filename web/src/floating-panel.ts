@@ -74,9 +74,11 @@ export function panelTitle(els: Stroke[]): string {
 				? "Linia"
 				: e.kind === "image"
 					? "Obraz"
-					: !e.kind || e.kind === "stroke"
-						? "Rysunek"
-						: "Kształt";
+					: e.kind === "plane"
+						? "Wykres"
+						: !e.kind || e.kind === "stroke"
+							? "Rysunek"
+							: "Kształt";
 	const classes = new Set(els.map(classOf));
 	if (classes.size > 1) return `Zaznaczenie (${els.length})`;
 	const [name] = classes;

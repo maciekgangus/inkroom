@@ -232,10 +232,11 @@ export function PropertiesPanel({
 						/>
 					</Group>
 				)}
-				{((can.size && !can.textOnly) || can.dash) && (
+				{((can.size && !can.textOnly && !can.plane) || can.dash) && (
 					<Group>
 						{can.size &&
 							!can.textOnly &&
+							!can.plane &&
 							SIZES.map((s) => (
 								<button
 									type="button"
@@ -255,7 +256,9 @@ export function PropertiesPanel({
 									/>
 								</button>
 							))}
-						{can.size && !can.textOnly && can.dash && <span class="prop-sep" />}
+						{can.size && !can.textOnly && !can.plane && can.dash && (
+							<span class="prop-sep" />
+						)}
 						{can.dash &&
 							LINE_STYLES.filter((s) =>
 								dashOptions(elements).includes(s.style),
@@ -312,38 +315,41 @@ export function PropertiesPanel({
 					/>
 				</Group>
 				{can.numbers && !can.plane && (
-					<Group>
+					<Group center>
 						<button
 							type="button"
 							aria-label="prop numbers"
 							aria-pressed={now.numbered}
-							class={on(now.numbered)}
+							title="Numeracja 1 2 3"
+							class={`icon digits ${on(now.numbered)}`}
 							onClick={() => onChange({ numbered: !now.numbered })}
 						>
-							1 2 3
+							123
 						</button>
 					</Group>
 				)}
 				{can.plane && (
 					<>
-						<Group>
+						<Group center>
 							<button
 								type="button"
 								aria-label="prop grid"
 								aria-pressed={plane.grid}
-								class={on(plane.grid)}
+								title="Siatka"
+								class={`icon ${on(plane.grid)}`}
 								onClick={() => onChange({ grid: !plane.grid })}
 							>
-								Siatka
+								<Icon name="grid" />
 							</button>
 							<button
 								type="button"
 								aria-label="prop axes"
 								aria-pressed={plane.showAxes}
-								class={on(plane.showAxes)}
+								title="Osie"
+								class={`icon ${on(plane.showAxes)}`}
 								onClick={() => onChange({ showAxes: !plane.showAxes })}
 							>
-								Osie
+								<Icon name="axes" />
 							</button>
 						</Group>
 						<Group>
@@ -359,23 +365,24 @@ export function PropertiesPanel({
 								onChange={(v) => onChange({ cell: v })}
 							/>
 						</Group>
-						<Group>
+						<Group center>
 							{(
 								[
-									["numbers", "1 2 3"],
-									["pi", "π"],
-									["none", "Bez"],
+									["numbers", "123", "Numeracja 1 2 3"],
+									["pi", "π", "Numeracja w π"],
+									["none", null, "Bez numeracji"],
 								] as const
-							).map(([how, label]) => (
+							).map(([how, label, title]) => (
 								<button
 									type="button"
 									key={how}
 									aria-label={`prop numbering ${how}`}
 									aria-pressed={plane.numbering === how}
-									class={on(plane.numbering === how)}
+									title={title}
+									class={`icon ${label === "123" ? "digits " : ""}${on(plane.numbering === how)}`}
 									onClick={() => onChange({ numbering: how })}
 								>
-									{label}
+									{label ?? <Icon name="empty-square" />}
 								</button>
 							))}
 						</Group>
@@ -393,9 +400,14 @@ export function PropertiesPanel({
 }
 
 /** One group of controls, split from the next by a rule, as the groups of the wide bar. */
-const Group = ({ children }: { children: ComponentChildren }) => (
-	<div class="prop-group">{children}</div>
-);
+const Group = ({
+	children,
+	center = false,
+}: {
+	children: ComponentChildren;
+	/** A row of a few switches stands in the middle, not stuck to the left. */
+	center?: boolean;
+}) => <div class={`prop-group${center ? " center" : ""}`}>{children}</div>;
 
 /**
  * A row of round colour tiles, as in the bar: the current one has a ring; the last tile is for any

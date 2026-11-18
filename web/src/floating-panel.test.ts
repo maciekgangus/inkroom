@@ -83,6 +83,11 @@ describe("panelTitle", () => {
 		],
 	});
 
+	test("a coordinate plane is a graph (Wykres), not a shape", () => {
+		expect(panelTitle([el("plane")])).toBe("Wykres");
+		expect(panelTitle([el("plane"), el("plane")])).toBe("Wykres (2)");
+	});
+
 	test("names the class of a single object", () => {
 		expect(panelTitle([el("text")])).toBe("Tekst");
 		expect(panelTitle([el("line")])).toBe("Linia");
