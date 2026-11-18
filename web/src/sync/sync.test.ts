@@ -302,6 +302,32 @@ describe("SyncClient", () => {
 			});
 		});
 
+		test("a live stroke carries its line style and opacity to the others (R-089)", () => {
+			connectAndJoin();
+			const s = { ...stroke("8"), dash: "natural" as const, opacity: 0.4 };
+			client.liveUpdate(s);
+			flush();
+			const [first] = sock().sent.filter((m) => m.t === "live");
+			expect(first).toMatchObject({ dash: "natural", opacity: 0.4 });
+			sock().receive({ ...first, id: "r", authorId: "o" });
+			const [seen] = client.liveStrokes();
+			expect(seen.dash).toBe("natural");
+			expect(seen.opacity).toBe(0.4);
+		});
+
+		test("style fields go out once, with the first chunk only", () => {
+			connectAndJoin();
+			const s = { ...stroke("9"), dash: "dashed" as const };
+			client.liveUpdate(s);
+			flush();
+			s.points.push([1, 1, 0.5]);
+			client.liveUpdate(s);
+			flush();
+			const live = sock().sent.filter((m) => m.t === "live");
+			expect(live[0].dash).toBe("dashed");
+			expect(live[1].dash).toBeUndefined();
+		});
+
 		test("remote live chunks accumulate into one stroke", () => {
 			connectAndJoin();
 			const base = {

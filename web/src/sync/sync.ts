@@ -255,6 +255,16 @@ export class SyncClient {
 		for (const entry of this.liveOut.values()) {
 			const { stroke } = entry;
 			if (stroke.points.length <= entry.sent) continue;
+			// Style fields go with the first chunk only; the receiver keeps them (R-089).
+			const style =
+				entry.sent === 0
+					? {
+							...(stroke.dash ? { dash: stroke.dash } : {}),
+							...(stroke.opacity !== undefined
+								? { opacity: stroke.opacity }
+								: {}),
+						}
+					: {};
 			this.send({
 				t: "live",
 				id: stroke.id,
@@ -262,6 +272,7 @@ export class SyncClient {
 				color: stroke.color,
 				size: stroke.size,
 				z: stroke.z,
+				...style,
 				points: stroke.points.slice(entry.sent),
 			});
 			entry.sent = stroke.points.length;
@@ -406,6 +417,8 @@ export class SyncClient {
 				color: m.color ?? "#111",
 				size: m.size ?? 4,
 				z: m.z ?? 0,
+				...(m.dash ? { dash: m.dash } : {}),
+				...(m.opacity !== undefined ? { opacity: m.opacity } : {}),
 				points: [...m.points],
 			});
 		}
