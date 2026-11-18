@@ -42,8 +42,34 @@ export function stepView(cur: View, target: View, dtMs: number): View {
 	return close ? { ...target } : { x, y, scale };
 }
 
+/** Said to the person who tries to follow someone who follows them. */
+const CYCLE_NOTICE = "Ta osoba właśnie śledzi Ciebie";
+
+/**
+ * One frame of following: the view eased towards the followed one for a window of this size, or
+ * null when there is nothing to do: not following, no view yet, arrived, or `frozen` (the pen is
+ * down or a text is being edited, so the picture is not moved under the hand; it catches up
+ * once the hand is up) (R-093).
+ */
+export function followStep(
+	st: FollowState,
+	cur: View,
+	screenW: number,
+	screenH: number,
+	dtMs: number,
+	frozen: boolean,
+): View | null {
+	if (!st.following || !st.target || frozen) return null;
+	const target = fitRect(st.target, screenW, screenH);
+	if (cur.x === target.x && cur.y === target.y && cur.scale === target.scale)
+		return null;
+	return stepView(cur, target, dtMs);
+}
+
 /** What the follow state needs from the connection and the viewport. */
 export interface FollowIo {
+	/** Our own id, to see a circle coming back to us. */
+	self: string;
 	follow(id: string): void;
 	sendView(rect: Rect): void;
 	invite(): void;
@@ -66,13 +92,52 @@ export class FollowState {
 	target: Rect | null = null;
 	/** How many people follow our view. */
 	followers = 0;
+	/** A short word for the person when something was not allowed (shown for a moment). */
+	notice = "";
+	/** Whom each person on the board follows, from the presence list. */
+	private follows = new Map<string, string>();
 
 	constructor(private io: FollowIo) {}
 
 	/** A person's chip was pressed: follow them, or stop when we already do. */
 	toggle(id: string): void {
-		if (this.following === id) this.stop();
-		else this.start(id);
+		if (this.following === id) {
+			this.stop();
+		} else if (this.wouldCycle(id)) {
+			this.notice = CYCLE_NOTICE;
+		} else {
+			this.start(id);
+		}
+	}
+
+	/** Whether following `to` would close a circle: `to` follows us, directly or through others. */
+	private wouldCycle(to: string): boolean {
+		let cur: string | undefined = to;
+		for (let i = 0; cur && i <= this.follows.size; i++) {
+			if (cur === this.io.self) return true;
+			cur = this.follows.get(cur);
+		}
+		return cur !== undefined && cur !== ""; // a circle that does not end: do not join it
+	}
+
+	/** The server would not let us follow this person. */
+	refused(id: string): void {
+		if (this.following !== id) return;
+		this.following = "";
+		this.target = null;
+		this.notice = CYCLE_NOTICE;
+	}
+
+	/** The person we followed left the board. */
+	ended(id: string): void {
+		if (this.following !== id) return;
+		this.following = "";
+		this.target = null;
+		this.lost = "";
+	}
+
+	clearNotice(): void {
+		this.notice = "";
 	}
 
 	private start(id: string): void {
@@ -136,7 +201,11 @@ export class FollowState {
 	}
 
 	/** Who is on the board now: whoever we follow or who invited us may have left. */
-	peersChanged(ids: string[]): void {
+	peersChanged(peers: { id: string; follows?: string }[]): void {
+		const ids = peers.map((p) => p.id);
+		this.follows = new Map(
+			peers.flatMap((p) => (p.follows ? [[p.id, p.follows] as const] : [])),
+		);
 		if (this.following && !ids.includes(this.following)) {
 			this.lost = "";
 			this.stop();

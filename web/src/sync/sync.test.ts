@@ -149,6 +149,60 @@ describe("SyncClient", () => {
 			expect(onFollowers).toHaveBeenCalledWith(2);
 		});
 
+		test("peers carry whom they follow", () => {
+			const onPeers = vi.fn();
+			const c = new SyncClient(board, {
+				createSocket: () => {
+					const s = new FakeSocket();
+					sockets.push(s);
+					return s;
+				},
+				onUpdate,
+				onPeers,
+				self: { authorId: "me", name: "Ola" },
+			});
+			c.connect();
+			connectAndJoin();
+			sock().receive({
+				t: "peers",
+				peers: [
+					{ id: "a", name: "A", follows: "b" },
+					{ id: "b", name: "B", follows: "" },
+				],
+			});
+			expect(onPeers).toHaveBeenLastCalledWith([
+				{ id: "a", name: "A", follows: "b" },
+				{ id: "b", name: "B" },
+			]);
+		});
+
+		test("a refusal or an end calls back and is not asked for again after a reconnect", () => {
+			const onRefused = vi.fn();
+			const onEnded = vi.fn();
+			client.setFollowHandlers({ onRefused, onEnded });
+			connectAndJoin();
+			client.follow("a");
+			sock().receive({ t: "follow_refused", id: "a" });
+			client.follow("b");
+			sock().receive({ t: "follow_end", id: "b" });
+			expect(onRefused).toHaveBeenCalledWith("a");
+			expect(onEnded).toHaveBeenCalledWith("b");
+			sock().drop();
+			vi.advanceTimersByTime(600);
+			connectAndJoin();
+			expect(sentOf("follow")).toEqual([]);
+		});
+
+		test("a view that did not change is not sent again", () => {
+			connectAndJoin();
+			client.sendView(rect);
+			clock += 60;
+			client.sendView({ ...rect, minX: 0.2 });
+			clock += 60;
+			client.sendView({ ...rect, minX: 40 });
+			expect(sentOf("view")).toHaveLength(2);
+		});
+
 		test("a view with bad numbers is ignored", () => {
 			const onView = vi.fn();
 			client.setFollowHandlers({ onView });

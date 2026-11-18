@@ -18,6 +18,8 @@ export interface Peer {
 	name: string;
 	/** The owner took away this person's right to draw (R-016). */
 	muted?: boolean;
+	/** The id of the person whose view this one follows (R-093). */
+	follows?: string;
 }
 
 export interface RemoteCursor {
@@ -59,6 +61,10 @@ export interface FollowHandlers {
 	onInvite?: (id: string) => void;
 	/** How many people follow our view (the server counts them). */
 	onFollowers?: (n: number) => void;
+	/** The server refused to let us follow this person (it would make a circle, or they left). */
+	onRefused?: (id: string) => void;
+	/** The person we followed left the board: following has ended. */
+	onEnded?: (id: string) => void;
 }
 
 interface LiveOut {
@@ -103,6 +109,7 @@ export class SyncClient {
 	private following = ""; // id of the person whose view we follow (R-093)
 	private viewOut: Rect | null = null; // our latest view not yet sent
 	private viewLastSent = Number.NEGATIVE_INFINITY;
+	private viewSent: Rect | null = null; // what we last sent: an unchanged view is not sent again
 	private viewTimer: ReturnType<typeof setTimeout> | null = null;
 	private followHandlers: FollowHandlers = {};
 	private schedule: (fn: () => void) => void;
@@ -179,14 +186,21 @@ export class SyncClient {
 	private setPeers(raw: unknown[]): void {
 		this.peersIn = raw.flatMap((p) => {
 			if (typeof p !== "object" || p === null) return [];
-			const { id, name, muted } = p as {
+			const { id, name, muted, follows } = p as {
 				id?: unknown;
 				name?: unknown;
 				muted?: unknown;
+				follows?: unknown;
 			};
-			return typeof id === "string" && typeof name === "string"
-				? [muted === true ? { id, name, muted } : { id, name }]
-				: [];
+			if (typeof id !== "string" || typeof name !== "string") return [];
+			return [
+				{
+					id,
+					name,
+					...(muted === true ? { muted } : {}),
+					...(typeof follows === "string" && follows ? { follows } : {}),
+				},
+			];
 		});
 		this.opts.onPeers?.(this.peersIn);
 	}
@@ -275,7 +289,18 @@ export class SyncClient {
 		this.viewTimer = null;
 		const r = this.viewOut;
 		this.viewOut = null;
-		if (!r || !this.isOpen) return;
+		const s = this.viewSent;
+		if (
+			!r ||
+			!this.isOpen ||
+			(s &&
+				Math.abs(s.minX - r.minX) < 0.5 &&
+				Math.abs(s.minY - r.minY) < 0.5 &&
+				Math.abs(s.maxX - r.maxX) < 0.5 &&
+				Math.abs(s.maxY - r.maxY) < 0.5)
+		)
+			return;
+		this.viewSent = r;
 		this.viewLastSent = this.now();
 		this.send({
 			t: "view",
@@ -474,6 +499,14 @@ export class SyncClient {
 				});
 				return; // a view, not the board
 			}
+			case "follow_refused":
+			case "follow_end":
+				if (typeof m.id === "string" && m.id) {
+					this.following = ""; // not to be asked for again after a reconnect
+					if (m.t === "follow_end") this.followHandlers.onEnded?.(m.id);
+					else this.followHandlers.onRefused?.(m.id);
+				}
+				return;
 			case "invite":
 				if (typeof m.id === "string" && m.id)
 					this.followHandlers.onInvite?.(m.id);
@@ -534,6 +567,7 @@ export class SyncClient {
 
 	private dropped(): void {
 		this.isOpen = false;
+		this.viewSent = null; // after a reconnect the followers need our view again
 		this.setPeers([]); // the server lists everyone again when we are back
 		this.cursorSent = null;
 		this.cursorsIn.clear();

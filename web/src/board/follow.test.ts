@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
-import { FollowState, fitRect, stepView } from "./follow";
+import { FollowState, fitRect, followStep, stepView } from "./follow";
 
 describe("fitRect", () => {
 	test("shows the whole rectangle, centred, with a margin, whatever the window", () => {
@@ -65,6 +65,7 @@ describe("FollowState", () => {
 	const rect = { minX: 0, minY: 0, maxX: 800, maxY: 600 };
 	const make = () => {
 		const io = {
+			self: "me",
 			follow: vi.fn(),
 			sendView: vi.fn(),
 			invite: vi.fn(),
@@ -162,12 +163,124 @@ describe("FollowState", () => {
 	test("when the followed person leaves, following ends quietly", () => {
 		const { io, st } = make();
 		st.toggle("tutor");
-		st.peersChanged(["me", "x"]);
+		st.peersChanged([{ id: "me" }, { id: "x" }]);
 		expect(st.following).toBe("");
 		expect(st.lost).toBe("");
 		expect(io.follow).toHaveBeenLastCalledWith("");
 		st.onInvite("tutor");
-		st.peersChanged(["me"]); // the inviter is gone: the banner goes too
+		st.peersChanged([{ id: "me" }]); // the inviter is gone: the banner goes too
 		expect(st.invite).toBe("");
+	});
+
+	describe("circles and chains", () => {
+		const peers = (...p: [string, string?][]) =>
+			p.map(([id, follows]) => (follows ? { id, follows } : { id }));
+
+		test("a chain is fine: I follow b, who follows c", () => {
+			const { st } = make();
+			st.peersChanged(peers(["me"], ["b", "c"], ["c"]));
+			st.toggle("b");
+			expect(st.following).toBe("b");
+			expect(st.notice).toBe("");
+		});
+
+		test("following someone who follows me is refused, with a word", () => {
+			const { io, st } = make();
+			st.peersChanged(peers(["me"], ["b", "me"]));
+			st.toggle("b");
+			expect(st.following).toBe("");
+			expect(st.notice).toBe("Ta osoba właśnie śledzi Ciebie");
+			expect(io.follow).not.toHaveBeenCalled();
+		});
+
+		test("so is following someone who follows me through others", () => {
+			const { io, st } = make();
+			st.peersChanged(peers(["me"], ["a", "b"], ["b", "c"], ["c", "me"]));
+			st.toggle("a");
+			expect(st.following).toBe("");
+			expect(st.notice).not.toBe("");
+			expect(io.follow).not.toHaveBeenCalled();
+		});
+
+		test("a circle among others that does not include me does not hang it", () => {
+			const { st } = make();
+			st.peersChanged(peers(["me"], ["a", "b"], ["b", "a"]));
+			st.toggle("a"); // cannot happen on the server; must not loop forever here
+			expect(st.following).toBe("");
+		});
+
+		test("the server's refusal ends what we asked for and says why", () => {
+			const { st } = make();
+			st.toggle("b");
+			st.refused("b");
+			expect(st.following).toBe("");
+			expect(st.notice).toBe("Ta osoba właśnie śledzi Ciebie");
+			st.clearNotice();
+			expect(st.notice).toBe("");
+		});
+
+		test("the end sent by the server leaves no way back", () => {
+			const { st } = make();
+			st.toggle("b");
+			st.ended("b");
+			expect(st.following).toBe("");
+			expect(st.lost).toBe("");
+		});
+
+		test("the follows of the people are kept up to date", () => {
+			const { st } = make();
+			st.peersChanged(peers(["me"], ["b", "me"]));
+			st.peersChanged(peers(["me"], ["b"])); // b stopped
+			st.toggle("b");
+			expect(st.following).toBe("b");
+		});
+	});
+});
+
+describe("followStep", () => {
+	const rect = { minX: 0, minY: 0, maxX: 800, maxY: 600 };
+	const make = () => {
+		const st = new FollowState({
+			self: "me",
+			follow: () => {},
+			sendView: () => {},
+			invite: () => {},
+			rect: () => rect,
+		});
+		st.toggle("tutor");
+		st.onView("tutor", rect);
+		return st;
+	};
+	const cur = { x: 5000, y: 5000, scale: 1 };
+
+	test("moves towards the followed view", () => {
+		const v = followStep(make(), cur, 1000, 700, 16, false);
+		expect(v).not.toBeNull();
+		expect(v?.x).toBeLessThan(5000);
+	});
+
+	test("stands still while the pen is down or a text is edited, then catches up", () => {
+		const st = make();
+		expect(followStep(st, cur, 1000, 700, 16, true)).toBeNull();
+		expect(followStep(st, cur, 1000, 700, 16, false)).not.toBeNull();
+	});
+
+	test("does nothing when not following or without a view yet", () => {
+		const st = new FollowState({
+			self: "me",
+			follow: () => {},
+			sendView: () => {},
+			invite: () => {},
+			rect: () => rect,
+		});
+		expect(followStep(st, cur, 1000, 700, 16, false)).toBeNull();
+		st.toggle("tutor");
+		expect(followStep(st, cur, 1000, 700, 16, false)).toBeNull();
+	});
+
+	test("is done once the view has arrived", () => {
+		const st = make();
+		const arrived = fitRect(rect, 1000, 700);
+		expect(followStep(st, arrived, 1000, 700, 16, false)).toBeNull();
 	});
 });
