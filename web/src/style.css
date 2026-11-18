@@ -1497,3 +1497,19 @@ button.participant {
 .topbar.compact .board-title {
 	width: 200px;
 }
+
+/* The account window (R-085) reuses the shortcuts window's frame. */
+.account-dialog h3 {
+	margin: 8px 0 0;
+	font-size: 15px;
+}
+.account-dialog form,
+.account-dialog .delete-confirm {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+.account-dialog .danger {
+	border-color: var(--danger, #c0392b);
+	color: var(--danger, #c0392b);
+}

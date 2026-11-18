@@ -53,6 +53,8 @@ async function request<T>(
 export interface Account {
 	email: string;
 	username: string;
+	/** False for an account that signs in only with Google (R-063, R-085). */
+	hasPassword?: boolean;
 }
 
 /** The logged-in account, or null when logged out. */
@@ -83,6 +85,14 @@ export const login = (login: string, password: string) =>
 /** Public settings of the server: the site key of the registration captcha ("" when closed). */
 export const config = () =>
 	request<{ turnstileSiteKey: string }>("GET", "/api/config");
+
+/** Sets a new password after checking the current one (R-085). */
+export const changePassword = (current: string, next: string) =>
+	request<void>("POST", "/api/account/password", { current, new: next });
+
+/** Deletes the logged-in account with its boards; `confirm` is its username (R-085). */
+export const deleteAccount = (confirm: string) =>
+	request<void>("POST", "/api/account/delete", { confirm });
 
 export const logout = () => request<void>("POST", "/api/logout", {});
 
