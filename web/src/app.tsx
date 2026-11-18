@@ -71,15 +71,13 @@ export function App({
 	);
 }
 
-function Home({
-	navigate,
-	search,
-}: {
-	navigate: (to: string) => void;
-	search: string;
-}) {
+/**
+ * The logged-in account, null for a guest, undefined while the server is still asked; it is
+ * asked again when `key` changes. Own shortcuts are fetched along with it.
+ */
+function useAccount(key?: string) {
 	const [account, setAccount] = useState<api.Account | null | undefined>(
-		undefined, // undefined: still asking the server
+		undefined,
 	);
 	useEffect(() => {
 		api.me().then(
@@ -89,7 +87,18 @@ function Home({
 			},
 			() => setAccount(null),
 		);
-	}, []);
+	}, [key]);
+	return [account, setAccount] as const;
+}
+
+function Home({
+	navigate,
+	search,
+}: {
+	navigate: (to: string) => void;
+	search: string;
+}) {
+	const [account, setAccount] = useAccount();
 
 	if (account === undefined) return null;
 	if (account === null)
@@ -118,21 +127,12 @@ function BoardPage({
 	const [info, setInfo] = useState<
 		{ owner: boolean; name: string } | null | undefined
 	>(undefined);
-	const [account, setAccount] = useState<api.Account | null | undefined>(
-		undefined,
-	);
+	const [account, setAccount] = useAccount(id);
 	const [guestName, setGuestName] = useState(() =>
 		stored(localStorage, NAME_KEY),
 	);
 	useEffect(() => {
 		api.boardInfo(id).then(setInfo);
-		api.me().then(
-			(a) => {
-				setAccount(a);
-				if (a) syncAccountShortcuts();
-			},
-			() => setAccount(null),
-		);
 	}, [id]);
 
 	const authorId = useMemo(() => {
