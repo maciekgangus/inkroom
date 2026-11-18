@@ -273,8 +273,12 @@ export class SyncClient {
 		this.send({ t: "follow", id });
 	}
 
-	/** Reports the board rectangle we look at; sent at most about 20 times a second (R-093). */
-	sendView(rect: Rect): void {
+	/**
+	 * Reports the board rectangle we look at; sent at most about 20 times a second, and not again
+	 * while it does not change unless `force` (R-093).
+	 */
+	sendView(rect: Rect, force = false): void {
+		if (force) this.viewSent = null; // a new follower has not seen it yet
 		this.viewOut = rect;
 		const wait = VIEW_INTERVAL_MS - (this.now() - this.viewLastSent);
 		if (wait <= 0) {

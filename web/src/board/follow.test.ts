@@ -146,7 +146,8 @@ describe("FollowState", () => {
 		st.viewChanged(rect);
 		expect(io.sendView).not.toHaveBeenCalled();
 		st.onFollowers(1);
-		expect(io.sendView).toHaveBeenCalledWith(rect);
+		// even if it is the same view as before: the new follower has not seen it
+		expect(io.sendView).toHaveBeenCalledWith(rect, true);
 		st.viewChanged({ ...rect, minX: 5 });
 		expect(io.sendView).toHaveBeenCalledTimes(2);
 		st.onFollowers(0);

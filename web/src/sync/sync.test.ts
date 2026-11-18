@@ -120,6 +120,14 @@ describe("SyncClient", () => {
 			expect(sentOf("view")).toHaveLength(2);
 		});
 
+		test("a view is sent again on demand even if it did not change (a new follower)", () => {
+			connectAndJoin();
+			client.sendView(rect);
+			clock += 60;
+			client.sendView(rect, true);
+			expect(sentOf("view")).toHaveLength(2);
+		});
+
 		test("the latest view held back by the interval goes out once the interval is over", () => {
 			connectAndJoin();
 			client.sendView(rect);

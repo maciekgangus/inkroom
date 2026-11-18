@@ -71,7 +71,7 @@ export interface FollowIo {
 	/** Our own id, to see a circle coming back to us. */
 	self: string;
 	follow(id: string): void;
-	sendView(rect: Rect): void;
+	sendView(rect: Rect, force?: boolean): void;
 	invite(): void;
 	/** The rectangle of the board we look at now. */
 	rect(): Rect;
@@ -192,7 +192,7 @@ export class FollowState {
 	onFollowers(n: number): void {
 		const grew = n > this.followers;
 		this.followers = n;
-		if (grew) this.io.sendView(this.io.rect());
+		if (grew) this.io.sendView(this.io.rect(), true);
 	}
 
 	/** Our own view changed (we may be the one followed). */

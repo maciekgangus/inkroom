@@ -336,7 +336,7 @@ export function BoardView({
 		const follow = new FollowState({
 			self: authorId,
 			follow: (id) => sync.follow(id),
-			sendView: (r) => sync.sendView(r),
+			sendView: (r, force) => sync.sendView(r, force),
 			invite: () => sync.invite(),
 			rect: () => viewport.worldRect(innerWidth, innerHeight),
 		});
