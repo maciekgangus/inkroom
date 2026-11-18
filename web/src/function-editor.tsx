@@ -9,6 +9,7 @@ import {
 	type PlaneFn,
 } from "./board/functions";
 import type { StylePatch } from "./board/style";
+import { ColorRow } from "./color-row";
 import { Icon } from "./icon";
 import { Slider } from "./slider";
 
@@ -140,22 +141,21 @@ export function FunctionEditor({
 						<span class="fn-row-label">Kolor wykresu</span>
 					</div>
 					<div class={`fn-colors-wrap${colorsOf === f.id ? " open" : ""}`}>
-						<div class="palette-grid fn-colors">
-							{FN_COLORS.map((c) => (
-								<button
-									type="button"
-									key={c}
-									tabIndex={colorsOf === f.id ? 0 : -1}
-									class={`swatch${f.color === c ? " active" : ""}`}
-									style={{ "--swatch": display(c) }}
-									aria-label={`fn ${f.id} color ${c}`}
-									aria-pressed={f.color === c}
-									onClick={() => {
-										onChange({ fns: replace(f.id, { ...f, color: c }) });
-										setColorsOf(null);
-									}}
-								/>
-							))}
+						<div class="fn-colors">
+							<ColorRow
+								prefix={`fn ${f.id} color`}
+								current={f.color}
+								colors={FN_COLORS.slice(0, 7)}
+								display={display}
+								onPreview={(c) =>
+									onPreview({ fns: replace(f.id, { ...f, color: c }) })
+								}
+								onPick={(c) =>
+									c !== null &&
+									onChange({ fns: replace(f.id, { ...f, color: c }) })
+								}
+								onChosen={() => setColorsOf(null)}
+							/>
 						</div>
 					</div>
 					{f.k === "quad" && (

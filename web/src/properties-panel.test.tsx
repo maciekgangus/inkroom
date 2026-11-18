@@ -235,6 +235,29 @@ describe("PropertiesPanel", () => {
 			expect(root.querySelector(".fn-colors-wrap.open")).not.toBeNull();
 		});
 
+		test("the colours of a curve are the same row as the colours of the plane: seven tiles and the tile for any other colour", () => {
+			mount([withFns(f1)]);
+			const curve = root.querySelector(".fn .palette-grid") as HTMLElement;
+			const top = root.querySelector(
+				".panel-body > .prop-group .palette-grid",
+			) as HTMLElement;
+			expect(curve.querySelectorAll(".swatch:not(.custom)")).toHaveLength(7);
+			expect(curve.querySelectorAll(".swatch.custom")).toHaveLength(1);
+			// The same row as at the top (ColorRow), only with the colours of curves.
+			expect(curve.className).toBe(top.className);
+			expect(btn("fn f1 color custom")).not.toBeNull();
+		});
+
+		test("pressing a colour of the curve shuts the row; the picker of its own colour does not", () => {
+			mount([withFns(f1)]);
+			act(() => btn("fn f1 colors")?.click());
+			expect(root.querySelector(".fn-colors-wrap.open")).not.toBeNull();
+			act(() => btn("fn f1 color custom")?.click());
+			expect(root.querySelector(".fn-colors-wrap.open")).not.toBeNull();
+			act(() => btn("fn f1 color #388e3c")?.click());
+			expect(root.querySelector(".fn-colors-wrap.open")).toBeNull();
+		});
+
 		test("a coordinate plane has a wide menu, the others not", () => {
 			mount([withFns(f1)]);
 			expect(root.querySelector(".properties.wide")).not.toBeNull();

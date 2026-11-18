@@ -484,19 +484,16 @@
 	visibility: visible;
 	transition: grid-template-rows 0.18s ease;
 }
+/* The row of colours is the very row of the top of the menu (ColorRow): a container of its own, so that
+   its least important colours go when it is narrow. */
 .fn-colors-wrap > .fn-colors {
 	min-height: 0;
 	overflow: hidden;
 	padding: 0;
+	container-type: inline-size;
 }
 .fn-colors-wrap.open > .fn-colors {
 	padding: 4px 0 6px;
-}
-/* The cells are the 40px of the dot above, so the first colour stands under that dot. */
-.palette-grid.fn-colors {
-	display: grid;
-	width: auto;
-	grid-template-columns: repeat(auto-fill, 40px);
 }
 .properties button.fn-canon {
 	justify-content: flex-start;
@@ -604,9 +601,6 @@
 	.properties .swatch::before {
 		width: 28px;
 		height: 28px;
-	}
-	.palette-grid.fn-colors {
-		grid-template-columns: repeat(auto-fill, 44px);
 	}
 	.fn-row {
 		grid-template-columns: 44px 1fr;
