@@ -157,8 +157,8 @@ export function evalFn(f: PlaneFn, x: number): number {
 
 /**
  * Where a plane's sheet is and how its units map to board units: the origin (cx, cy), the sheet's
- * edges, and the board units per unit of x and of y (in π numbering a unit of x is a radian, so
- * `ux` is twelve cells over π).
+ * edges, and the board units per unit of x and of y (in π numbering a unit of x is a radian and
+ * is as long as a cell of y: the cells along x are π/12 of it, so twelve of them make π).
  */
 export interface Frame {
 	cx: number;
@@ -169,6 +169,25 @@ export interface Frame {
 	y1: number;
 	ux: number;
 	uy: number;
+}
+
+/** The frame of a plane's sheet (its origin is the middle) for a cell of `cell` board units. */
+export function planeFrame(
+	look: { x0: number; y0: number; w: number; h: number },
+	cell: number,
+): Frame {
+	return {
+		cx: look.x0 + look.w / 2,
+		cy: look.y0 + look.h / 2,
+		x0: look.x0,
+		y0: look.y0,
+		x1: look.x0 + look.w,
+		y1: look.y0 + look.h,
+		// A radian is one cell of y long (π ≈ 3.14 cells), so the x axis in π is exact; the grid
+		// lines along x are every π/12 of it (shape-parts.ts).
+		ux: cell,
+		uy: cell,
+	};
 }
 
 /** Board units between two sampled points along x; fine enough to look smooth at high zoom. */

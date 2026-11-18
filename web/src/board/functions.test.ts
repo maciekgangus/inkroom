@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import type { Stroke } from "./board";
 import {
 	evalFn,
 	type Frame,
@@ -6,9 +7,11 @@ import {
 	MAX_FNS,
 	newFn,
 	type PlaneFn,
+	planeFrame,
 	sampleFn,
 	sanitizeFns,
 } from "./functions";
+import { PLANE_CELL, partsOf } from "./shape-parts";
 
 const fn = (k: PlaneFn["k"], c: number[], extra: Partial<PlaneFn> = {}) =>
 	({ id: "f", k, c, color: "#d32f2f", w: 2, ...extra }) as PlaneFn;
@@ -100,7 +103,7 @@ describe("sampleFn", () => {
 	});
 
 	test("in π numbering one x unit is a radian: sin has its period of 2π", () => {
-		const pi: Frame = { ...frame, ux: (40 * 12) / Math.PI };
+		const pi: Frame = { ...frame, ux: 40 };
 		const lines = sampleFn(fn("sin", [1, 1, 0, 0]), pi);
 		const pts = lines.flat();
 		// at x = π/2 radians from the middle the curve is at y = 1 unit above the axis
@@ -154,5 +157,55 @@ describe("sanitizeFns", () => {
 			id: `f${i}`,
 		}));
 		expect(sanitizeFns(many)).toBeNull();
+	});
+});
+
+describe("planeFrame: the curve lines up with the axes the plane draws", () => {
+	const plane = (pi: boolean): Stroke => ({
+		id: "p",
+		authorId: "a",
+		color: "#111",
+		size: 3,
+		z: 1,
+		kind: "plane",
+		numbered: true,
+		pi,
+		points: [
+			[0, 0, 0.5],
+			[800, 400, 0.5],
+		],
+	});
+	const look = (s: Stroke) => {
+		const l = partsOf(s)?.plane;
+		if (!l) throw new Error("no plane");
+		return l;
+	};
+
+	test("in π numbering the tick labelled π stands one π of x units from the origin", () => {
+		const s = plane(true);
+		const l = look(s);
+		const fr = planeFrame(l, s.cell ?? PLANE_CELL);
+		const tick = l.text.find((t) => t.t === "\u03c0" && t.x > fr.cx);
+		expect(tick).toBeDefined();
+		expect(fr.cx + Math.PI * fr.ux).toBeCloseTo(tick?.x ?? 0, 3);
+	});
+
+	test("sin(x) has its peak above π/2 and is back on the axis at π", () => {
+		const s = plane(true);
+		const l = look(s);
+		const fr = planeFrame(l, PLANE_CELL);
+		const pts = sampleFn(fn("sin", [1, 1, 0, 0]), fr).flat();
+		const at = (x: number) =>
+			pts.reduce((a, b) => (Math.abs(b[0] - x) < Math.abs(a[0] - x) ? b : a));
+		expect(at(fr.cx + (Math.PI / 2) * fr.ux)[1]).toBeCloseTo(fr.cy - fr.uy, 0);
+		expect(at(fr.cx + Math.PI * fr.ux)[1]).toBeCloseTo(fr.cy, 0);
+	});
+
+	test("with plain numbering one unit of x is one cell, as on y", () => {
+		const s = plane(false);
+		const l = look(s);
+		const fr = planeFrame(l, PLANE_CELL);
+		expect(fr.ux).toBe(PLANE_CELL);
+		expect(fr.uy).toBe(PLANE_CELL);
 	});
 });

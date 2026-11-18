@@ -3,7 +3,7 @@ import { type Background, drawBackground } from "./background";
 import type { Stroke } from "./board";
 import { intersects, strokeBounds } from "./bounds";
 import type { Renderer } from "./controller";
-import { sampleFn } from "./functions";
+import { planeFrame, sampleFn } from "./functions";
 import type { ImageCache } from "./image-cache";
 import { imageRect } from "./image-geometry";
 import type { LaserLine } from "./laser";
@@ -148,17 +148,7 @@ const extras = new WeakMap<Stroke, Extras>();
 function curvesOf(s: Stroke, look: PlaneLook): Extras["curves"] {
 	if (!s.fns?.length) return [];
 	const cell = s.cell ?? PLANE_CELL;
-	const frame = {
-		cx: look.x0 + look.w / 2,
-		cy: look.y0 + look.h / 2,
-		x0: look.x0,
-		y0: look.y0,
-		x1: look.x0 + look.w,
-		y1: look.y0 + look.h,
-		// In π numbering a unit of x is a radian: twelve cells make π.
-		ux: s.pi ? (cell * 12) / Math.PI : cell,
-		uy: cell,
-	};
+	const frame = planeFrame(look, cell);
 	return s.fns.map((f) => {
 		const path = new Path2D();
 		for (const line of sampleFn(f, frame)) addPolyline(path, line);
