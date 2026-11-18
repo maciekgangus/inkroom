@@ -158,4 +158,23 @@ describe("StrokeControls (R-038)", () => {
 			expect(root.querySelector(".style-list")).not.toBeNull();
 		});
 	});
+
+	describe("snapping strokes to shapes (R-095)", () => {
+		test("the pen offers the switch, which shows and flips the setting", () => {
+			press("stroke settings");
+			expect(el("snap shapes")).not.toBeNull();
+			expect(el("snap shapes")?.textContent).toBe("Idealne kształty");
+			expect(el("snap shapes")?.getAttribute("aria-checked")).toBe("false");
+			press("snap shapes");
+			expect(onChange).toHaveBeenCalledWith({ snapShapes: true });
+			expect(el("snap shapes")?.getAttribute("aria-checked")).toBe("true");
+		});
+
+		test("the line and the shapes do not offer it", () => {
+			settings.tool = "line";
+			mount();
+			press("stroke settings");
+			expect(el("snap shapes")).toBeNull();
+		});
+	});
 });

@@ -1580,3 +1580,49 @@ button.participant {
 	color: inherit;
 	text-decoration: underline;
 }
+
+/* The switch that straightens strokes into shapes (R-095). */
+.toolbar .snap-toggle {
+	display: flex;
+	align-items: center;
+	justify-content: flex-start;
+	gap: 10px;
+	width: 100%;
+	height: 40px;
+	margin-top: 4px;
+	padding: 0 10px;
+	border-radius: var(--radius);
+	color: var(--text);
+	font: inherit;
+	font-size: 14px;
+	text-align: left;
+}
+.toolbar .snap-toggle:hover {
+	background: var(--surface-hover);
+}
+.snap-check {
+	flex: none;
+	width: 32px;
+	height: 18px;
+	border-radius: 9px;
+	background: var(--border);
+	position: relative;
+	transition: background 0.15s;
+}
+.snap-check::after {
+	content: "";
+	position: absolute;
+	top: 2px;
+	left: 2px;
+	width: 14px;
+	height: 14px;
+	border-radius: 50%;
+	background: var(--surface);
+	transition: transform 0.15s;
+}
+.snap-toggle.active .snap-check {
+	background: var(--accent);
+}
+.snap-toggle.active .snap-check::after {
+	transform: translateX(14px);
+}

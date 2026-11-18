@@ -6,6 +6,7 @@ import { getExtraColor, setExtraColor } from "./extra-color";
 import { Icon } from "./icon";
 import { ImageControls, type ImageControlsProps } from "./image-controls";
 import { ShapeIcon } from "./shape-icon";
+import { saveSnapShapes } from "./shape-snap";
 import { toolKey } from "./shortcuts";
 import { StrokeControls } from "./stroke-controls";
 import { displayColor, useTheme } from "./theme";
@@ -80,6 +81,7 @@ export function Toolbar({
 		Object.assign(settings, rest);
 		if (tool) switchTool(settings, tool);
 		if (patch.lineStyle) rememberLineStyle(settings.tool, patch.lineStyle);
+		if (patch.snapShapes !== undefined) saveSnapShapes(patch.snapShapes);
 		rerender((n) => n + 1);
 		if (patch.tool) onToolChange?.();
 	};
