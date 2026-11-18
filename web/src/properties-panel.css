@@ -409,14 +409,14 @@
 .fn-colors-wrap > .fn-colors {
 	min-height: 0;
 	overflow: hidden;
-	padding: 0 4px;
+	padding: 0;
 }
 .fn-colors-wrap.open > .fn-colors {
-	padding: 4px 4px 6px;
+	padding: 4px 0 6px;
 }
+/* The cells are the 40px of the dot above, so the first colour stands under that dot. */
 .palette-grid.fn-colors {
-	grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
-	justify-items: center;
+	grid-template-columns: repeat(auto-fill, 40px);
 }
 .properties button.fn-canon {
 	justify-content: flex-start;
@@ -512,7 +512,7 @@
 		height: 28px;
 	}
 	.palette-grid.fn-colors {
-		grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+		grid-template-columns: repeat(auto-fill, 44px);
 	}
 	.fn-row {
 		grid-template-columns: 44px 1fr;
