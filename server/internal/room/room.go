@@ -32,9 +32,7 @@ type Client struct {
 	Person string
 	Owner  bool
 
-	once    sync.Once
-	mu      sync.Mutex
-	dropped bool
+	once sync.Once
 }
 
 // Identify says who the client is. The name is trimmed and cut to maxNameLen characters; a
@@ -74,20 +72,8 @@ func NewClient(buffer int) *Client {
 	return &Client{Send: make(chan []byte, buffer)}
 }
 
-// Dropped reports whether the client was removed (too slow or left).
-func (c *Client) Dropped() bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.dropped
-}
-
 func (c *Client) drop() {
-	c.once.Do(func() {
-		c.mu.Lock()
-		c.dropped = true
-		c.mu.Unlock()
-		close(c.Send)
-	})
+	c.once.Do(func() { close(c.Send) })
 }
 
 // trySend queues msg without blocking; it reports false if the queue is full.
@@ -220,13 +206,14 @@ func (r *Room) SetName(value string) {
 	r.broadcastLocked(b, nil)
 }
 
-// Handle applies one message from c. An error means the client misbehaved.
+// Handle applies one message from c. An error means the client misbehaved. It takes ownership
+// of raw: the same bytes are queued for the other clients, so the caller must not reuse them.
 func (r *Room) Handle(c *Client, raw []byte) error {
 	var m message
 	if err := json.Unmarshal(raw, &m); err != nil {
 		return err
 	}
-	msg := append([]byte(nil), raw...)
+	msg := raw
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
