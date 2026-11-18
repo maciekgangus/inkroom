@@ -40,6 +40,8 @@ type Board struct {
 	UpdatedAt  time.Time
 	// OwnerName is the owner's username, filled in only for boards listed as visited (R-051).
 	OwnerName string
+	// Bytes is what the board's strokes and images take; filled in only by the lists of boards (R-091).
+	Bytes int64
 }
 
 // Op is one change to a board's strokes: add a stroke if it is not there yet, replace an
@@ -471,6 +473,11 @@ func scanBoard(sc interface{ Scan(...any) error }) (Board, error) {
 
 const boardCols = "b.id, b.owner_id, b.name, b.background, b.created_at, b.updated_at"
 
+// sizeCol is the size of a board's strokes and images in bytes, counted as the admin page does,
+// in sub-queries so a list stays one query (R-091).
+const sizeCol = `COALESCE((SELECT SUM(LENGTH(st.data)) FROM strokes st WHERE st.board_id = b.id), 0)
+	+ COALESCE((SELECT SUM(LENGTH(i.data)) FROM images i WHERE i.board_id = b.id), 0)`
+
 // Board returns a board by id.
 func (s *Store) Board(id string) (Board, error) {
 	b, err := scanBoard(s.db.QueryRow("SELECT "+boardCols+" FROM boards b WHERE b.id = ?", id))
@@ -500,14 +507,19 @@ func (s *Store) DeleteBoard(id string) error {
 
 // BoardsOwnedBy lists a user's boards, most recently changed first.
 func (s *Store) BoardsOwnedBy(userID int64) ([]Board, error) {
-	return s.boards("SELECT "+boardCols+" FROM boards b WHERE b.owner_id = ? ORDER BY b.updated_at DESC, b.id", userID)
+	return s.listBoards("SELECT "+boardCols+", "+sizeCol+", '' FROM boards b WHERE b.owner_id = ? ORDER BY b.updated_at DESC, b.id", userID)
 }
 
 // BoardsVisitedBy lists other people's boards the user opened, most recently opened first.
 func (s *Store) BoardsVisitedBy(userID int64) ([]Board, error) {
-	rows, err := s.db.Query("SELECT "+boardCols+`, o.username FROM visits v
+	return s.listBoards("SELECT "+boardCols+", "+sizeCol+`, o.username FROM visits v
 		JOIN boards b ON b.id = v.board_id JOIN users o ON o.id = b.owner_id
 		WHERE v.user_id = ? AND b.owner_id != ? ORDER BY v.last_opened DESC, b.id`, userID, userID)
+}
+
+// listBoards runs a query of boardCols, the size and the owner's name for a list of boards.
+func (s *Store) listBoards(query string, args ...any) ([]Board, error) {
+	rows, err := s.db.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -516,7 +528,7 @@ func (s *Store) BoardsVisitedBy(userID int64) ([]Board, error) {
 	for rows.Next() {
 		var b Board
 		var created, updated int64
-		if err := rows.Scan(&b.ID, &b.OwnerID, &b.Name, &b.Background, &created, &updated, &b.OwnerName); err != nil {
+		if err := rows.Scan(&b.ID, &b.OwnerID, &b.Name, &b.Background, &created, &updated, &b.Bytes, &b.OwnerName); err != nil {
 			return nil, err
 		}
 		b.CreatedAt, b.UpdatedAt = time.Unix(created, 0), time.Unix(updated, 0)
@@ -530,23 +542,6 @@ func (s *Store) BoardsVisitedBy(userID int64) ([]Board, error) {
 func (s *Store) RemoveVisit(userID int64, boardID string) error {
 	_, err := s.db.Exec("DELETE FROM visits WHERE user_id = ? AND board_id = ?", userID, boardID)
 	return err
-}
-
-func (s *Store) boards(query string, args ...any) ([]Board, error) {
-	rows, err := s.db.Query(query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []Board
-	for rows.Next() {
-		b, err := scanBoard(rows)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, b)
-	}
-	return out, rows.Err()
 }
 
 // RecordVisit remembers that userID opened boardID (no-op for the owner's own board).

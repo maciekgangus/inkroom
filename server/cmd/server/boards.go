@@ -29,12 +29,14 @@ type boardJSON struct {
 	UpdatedAt string `json:"updatedAt"`
 	// Owner is the owner's username, given for boards of other people only (R-051).
 	Owner string `json:"owner,omitempty"`
+	// Bytes is the size of the board's strokes and images (R-091).
+	Bytes int64 `json:"bytes"`
 }
 
 func toJSON(boards []store.Board) []boardJSON {
 	out := make([]boardJSON, 0, len(boards))
 	for _, b := range boards {
-		out = append(out, boardJSON{ID: b.ID, Name: b.Name, UpdatedAt: iso(b.UpdatedAt), Owner: b.OwnerName})
+		out = append(out, boardJSON{ID: b.ID, Name: b.Name, UpdatedAt: iso(b.UpdatedAt), Owner: b.OwnerName, Bytes: b.Bytes})
 	}
 	return out
 }

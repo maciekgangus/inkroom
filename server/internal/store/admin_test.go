@@ -199,3 +199,27 @@ func TestSetBoardOwner(t *testing.T) {
 		t.Fatalf("a missing user = %v", err)
 	}
 }
+
+// The lists of a person's boards carry each board's size, as the admin page counts it (R-091).
+func TestBoardListsCarryBytes(t *testing.T) {
+	s := open(t)
+	ann, bob := seedAdmin(t, s)
+	want := int64(len(`{"id":"s1"}`)*2 + len("12345678"))
+	owned, err := s.BoardsOwnedBy(ann.ID)
+	if err != nil || len(owned) != 2 {
+		t.Fatalf("owned = %v, %v", owned, err)
+	}
+	for _, b := range owned {
+		exp := int64(0)
+		if b.ID == "b1" {
+			exp = want
+		}
+		if b.Bytes != exp {
+			t.Fatalf("owned %s: %d bytes, want %d", b.ID, b.Bytes, exp)
+		}
+	}
+	visited, err := s.BoardsVisitedBy(bob.ID)
+	if err != nil || len(visited) != 1 || visited[0].Bytes != want {
+		t.Fatalf("visited = %+v, %v (want %d bytes)", visited, err, want)
+	}
+}
