@@ -69,7 +69,38 @@ function load(): Partial<Record<Tool, string>> {
 	return custom;
 }
 
+/** Told the whole set of own keys after every change, so the account can keep them (R-086). */
+let onChange: ((keys: Record<string, string>) => void) | null = null;
+
+/** Sets (or, with null, removes) the listener of changes; there is one at a time. */
+export function setShortcutSync(
+	fn: ((keys: Record<string, string>) => void) | null,
+): void {
+	onChange = fn;
+}
+
+/** The own keys now, by tool name (only those that differ from the defaults). */
+export function exportShortcuts(): Record<string, string> {
+	return { ...load() } as Record<string, string>;
+}
+
+/** Replaces the own keys with a set read elsewhere (the account); unknown tools and reserved keys are dropped. Not echoed to the listener. */
+export function importShortcuts(keys: Record<string, string>): void {
+	custom = {};
+	for (const { tool } of KEYED_TOOLS) {
+		const code = keys[tool];
+		if (typeof code === "string" && code && !RESERVED.has(code))
+			custom[tool] = code;
+	}
+	write();
+}
+
 function save(): void {
+	write();
+	onChange?.(exportShortcuts());
+}
+
+function write(): void {
 	try {
 		if (Object.keys(custom ?? {}).length === 0)
 			localStorage.removeItem(STORE_KEY);
@@ -119,6 +150,7 @@ export function resetShortcuts(memoryOnly = false): void {
 	} catch {
 		// nothing to remove
 	}
+	onChange?.({});
 }
 
 /** The tools that start a new drawing: choosing one lets go of what was selected. */

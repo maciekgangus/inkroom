@@ -65,7 +65,7 @@ export function ShortcutsDialog({
 				<h2>Skróty klawiszowe</h2>
 				<p class="muted">
 					Kliknij klawisz narzędzia i naciśnij nowy. Esc zdejmuje zaznaczenie
-					zawsze. Zapisuje się na tym urządzeniu.
+					zawsze. Zapisuje się na tym urządzeniu, a po zalogowaniu także na koncie.
 				</p>
 				{KEYED_TOOLS.map(({ tool, name }) => (
 					<div class="shortcut-row" key={tool}>

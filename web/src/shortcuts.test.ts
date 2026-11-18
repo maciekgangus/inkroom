@@ -221,3 +221,41 @@ describe("colour keys (R-079)", () => {
 		).toBeNull();
 	});
 });
+
+describe("shortcuts kept on the account (R-086)", () => {
+	test("a change or a reset tells the sync listener the whole set", async () => {
+		const { setShortcutSync } = await import("./shortcuts");
+		const seen: Record<string, string>[] = [];
+		setShortcutSync((m) => seen.push(m));
+		setShortcut("pen", "KeyB");
+		setShortcut("eraser", "KeyX");
+		resetShortcuts();
+		setShortcutSync(null);
+		expect(seen).toEqual([
+			{ pen: "KeyB" },
+			{ pen: "KeyB", eraser: "KeyX" },
+			{},
+		]);
+	});
+
+	test("importing replaces the keys, drops reserved and unknown ones, and does not echo back", async () => {
+		const { importShortcuts, exportShortcuts, setShortcutSync } = await import(
+			"./shortcuts"
+		);
+		const seen: unknown[] = [];
+		setShortcutSync((m) => seen.push(m));
+		setShortcut("pen", "KeyB");
+		seen.length = 0;
+		importShortcuts({ eraser: "KeyX", pen: "Escape", nonsense: "KeyZ" });
+		setShortcutSync(null);
+		expect(exportShortcuts()).toEqual({ eraser: "KeyX" });
+		expect(toolKey("pen")?.code).toBe("KeyF");
+		expect(toolKey("eraser")?.code).toBe("KeyX");
+		expect(seen).toEqual([]);
+		expect(
+			JSON.parse(localStorage.getItem("inkroom.shortcuts") ?? "{}"),
+		).toEqual({
+			eraser: "KeyX",
+		});
+	});
+});

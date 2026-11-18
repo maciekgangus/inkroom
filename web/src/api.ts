@@ -94,6 +94,16 @@ export const changePassword = (current: string, next: string) =>
 export const deleteAccount = (confirm: string) =>
 	request<void>("POST", "/api/account/delete", { confirm });
 
+/** The account's own keyboard shortcuts, by tool name (R-086). */
+export const getShortcuts = () =>
+	request<{ shortcuts: Record<string, string> }>(
+		"GET",
+		"/api/account/shortcuts",
+	);
+
+export const putShortcuts = (shortcuts: Record<string, string>) =>
+	request<void>("PUT", "/api/account/shortcuts", { shortcuts });
+
 export const logout = () => request<void>("POST", "/api/logout", {});
 
 export const listBoards = () => request<BoardList>("GET", "/api/boards");
