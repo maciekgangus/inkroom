@@ -2,6 +2,12 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { AccountDialog } from "./account-dialog";
 import type { Account, BoardSummary } from "./api";
 import * as api from "./api";
+import {
+	type BoardFilter,
+	DEFAULT_FILTER,
+	filterBoards,
+	isFiltering,
+} from "./board-filter";
 import { BoardPreview } from "./board-preview";
 import { Icon, type IconName } from "./icon";
 import { Logo } from "./logo";
@@ -31,6 +37,10 @@ export function Panel({ account, navigate, onLogout }: Props) {
 	const [visited, setVisited] = useState<BoardSummary[]>([]);
 	const [error, setError] = useState("");
 	const [view, setViewState] = useState<View>(storedView);
+	// The search and filter (R-091): folded by default, kept while the panel is open.
+	const [filter, setFilter] = useState<BoardFilter>(DEFAULT_FILTER);
+	const [filterOpen, setFilterOpen] = useState(false);
+	const patch = (p: Partial<BoardFilter>) => setFilter({ ...filter, ...p });
 	const setView = (v: View) => {
 		setViewState(v);
 		try {
@@ -97,6 +107,17 @@ export function Panel({ account, navigate, onLogout }: Props) {
 		onLogout();
 	};
 
+	// What the filter lets through; a scope that excludes a list hides it altogether.
+	const ownedShown =
+		owned && filter.scope !== "shared" ? filterBoards(owned, filter) : [];
+	const visitedShown =
+		filter.scope !== "mine" ? filterBoards(visited, filter) : [];
+	const totalCount = (owned?.length ?? 0) + visited.length;
+	const shownCount = isFiltering(filter)
+		? ownedShown.length + visitedShown.length
+		: null;
+	const noMatch = <p class="muted">Żadna tablica nie pasuje do filtra.</p>;
+
 	return (
 		<main class="panel">
 			<header class="row between">
@@ -148,6 +169,17 @@ export function Panel({ account, navigate, onLogout }: Props) {
 				<button
 					type="button"
 					class="icon-btn"
+					aria-label="Filtr"
+					title="Szukaj i filtruj"
+					aria-expanded={filterOpen}
+					aria-pressed={isFiltering(filter)}
+					onClick={() => setFilterOpen(!filterOpen)}
+				>
+					<Icon name="search" />
+				</button>
+				<button
+					type="button"
+					class="icon-btn"
 					aria-label="Lista"
 					title="Lista"
 					aria-pressed={view === "list"}
@@ -166,14 +198,79 @@ export function Panel({ account, navigate, onLogout }: Props) {
 					<Icon name="tiles" />
 				</button>
 			</fieldset>
-			<h2>Moje tablice</h2>
-			{owned === null ? (
+			{filterOpen && (
+				<div class="filter-menu">
+					<input
+						name="search"
+						type="search"
+						placeholder="Nazwa, właściciel lub data (np. 17.11)"
+						value={filter.query}
+						onInput={(e) => patch({ query: e.currentTarget.value })}
+					/>
+					<label>
+						Czyje
+						<select
+							name="scope"
+							value={filter.scope}
+							onChange={(e) =>
+								patch({ scope: e.currentTarget.value as BoardFilter["scope"] })
+							}
+						>
+							<option value="all">Wszystkie</option>
+							<option value="mine">Moje</option>
+							<option value="shared">Udostępnione mi</option>
+						</select>
+					</label>
+					<label>
+						Zmieniona
+						<select
+							name="range"
+							value={filter.range}
+							onChange={(e) =>
+								patch({ range: e.currentTarget.value as BoardFilter["range"] })
+							}
+						>
+							<option value="any">kiedykolwiek</option>
+							<option value="today">dziś</option>
+							<option value="7">w ostatnich 7 dniach</option>
+							<option value="30">w ostatnich 30 dniach</option>
+						</select>
+					</label>
+					<label>
+						Kolejność
+						<select
+							name="sort"
+							value={filter.sort}
+							onChange={(e) =>
+								patch({ sort: e.currentTarget.value as BoardFilter["sort"] })
+							}
+						>
+							<option value="changed">od ostatnio zmienionych</option>
+							<option value="name">po nazwie</option>
+						</select>
+					</label>
+					{isFiltering(filter) && (
+						<button type="button" onClick={() => setFilter(DEFAULT_FILTER)}>
+							Wyczyść
+						</button>
+					)}
+					{shownCount !== null && (
+						<p class="muted filter-count">
+							Pokazano {shownCount} z {totalCount} tablic
+						</p>
+					)}
+				</div>
+			)}
+			{filter.scope !== "shared" && <h2>Moje tablice</h2>}
+			{filter.scope === "shared" ? null : owned === null ? (
 				<p>Wczytywanie…</p>
 			) : owned.length === 0 ? (
 				<p class="muted">Nie masz jeszcze tablic.</p>
+			) : ownedShown.length === 0 ? (
+				noMatch
 			) : (
 				<ul class={`boards${view === "tiles" ? " tiles" : ""}`}>
-					{owned.map((b) => (
+					{ownedShown.map((b) => (
 						<BoardRow
 							key={b.id}
 							board={b}
@@ -195,11 +292,12 @@ export function Panel({ account, navigate, onLogout }: Props) {
 				</ul>
 			)}
 
-			{visited.length > 0 && (
+			{visited.length > 0 && filter.scope !== "mine" && (
 				<>
 					<h2>Tablice, do których mam dostęp</h2>
+					{visitedShown.length === 0 && noMatch}
 					<ul class={`boards${view === "tiles" ? " tiles" : ""}`}>
-						{visited.map((b) => (
+						{visitedShown.map((b) => (
 							<BoardRow
 								key={b.id}
 								board={b}

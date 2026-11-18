@@ -586,6 +586,79 @@ describe("App", () => {
 			expect(button("Usuń")).toBeDefined();
 		});
 
+		describe("search and filter of the boards (R-091)", () => {
+			const open = async () => {
+				mockApi({
+					"GET /api/me": LOGGED_IN,
+					"GET /api/boards": { body: boards },
+				});
+				await mount({ path: "/" });
+				await waitText("Matma");
+			};
+			const search = async (q: string) => {
+				await act(async () => {
+					const el = root.querySelector(
+						'input[name="search"]',
+					) as HTMLInputElement;
+					el.value = q;
+					el.dispatchEvent(new Event("input", { bubbles: true }));
+				});
+			};
+
+			test("the menu is folded until the filter button opens it", async () => {
+				await open();
+				expect(root.querySelector('input[name="search"]')).toBeNull();
+				await click("Filtr");
+				expect(root.querySelector('input[name="search"]')).not.toBeNull();
+				await click("Filtr");
+				expect(root.querySelector('input[name="search"]')).toBeNull();
+			});
+
+			test("searching by owner leaves only that person's boards, and a name search the matching one", async () => {
+				await open();
+				await click("Filtr");
+				await search("anna");
+				expect(text()).toContain("Cudza");
+				expect(text()).not.toContain("Matma");
+				await search("matm");
+				expect(text()).toContain("Matma");
+				expect(text()).not.toContain("Cudza");
+			});
+
+			test("a date typed as 08.11 finds the board changed that day", async () => {
+				await open();
+				await click("Filtr");
+				await search("08.11");
+				expect(text()).toContain("Cudza");
+				expect(text()).not.toContain("Matma");
+			});
+
+			test("says so when nothing matches, and Wyczyść brings everything back", async () => {
+				await open();
+				await click("Filtr");
+				await search("zzz");
+				expect(text()).toContain("Żadna tablica nie pasuje");
+				await click("Wyczyść");
+				expect(text()).toContain("Matma");
+				expect(text()).toContain("Cudza");
+				expect(text()).not.toContain("Żadna tablica nie pasuje");
+			});
+
+			test("'Udostępnione' hides my own boards", async () => {
+				await open();
+				await click("Filtr");
+				await act(async () => {
+					const sel = root.querySelector(
+						'select[name="scope"]',
+					) as HTMLSelectElement;
+					sel.value = "shared";
+					sel.dispatchEvent(new Event("change", { bubbles: true }));
+				});
+				expect(text()).toContain("Cudza");
+				expect(text()).not.toContain("Matma");
+			});
+		});
+
 		describe("list or tiles with previews (R-052)", () => {
 			const FID = "f".repeat(32);
 			const preview = (id: string, etag = '"1-plain"') => ({
