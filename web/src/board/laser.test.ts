@@ -14,7 +14,7 @@ describe("LaserTrails: the red pointer whose trail fades", () => {
 		expect(half).toBeGreaterThan(0.4);
 		expect(half).toBeLessThan(0.6);
 		expect(l.visible(1000 + LASER_TTL_MS + 1)).toEqual([]);
-		expect(l.active(1000 + LASER_TTL_MS + 1)).toBe(false);
+		expect(l.visible(1000 + LASER_TTL_MS + 1)).toHaveLength(0);
 	});
 
 	test("older points of the same trail are fainter than newer ones", () => {
@@ -82,7 +82,7 @@ describe("LaserTrails: the red pointer whose trail fades", () => {
 	test("nothing visible, nothing active; points that are not numbers are ignored", () => {
 		const l = new LaserTrails();
 		expect(l.visible(0)).toEqual([]);
-		expect(l.active(0)).toBe(false);
+		expect(l.visible(0)).toHaveLength(0);
 		l.add(
 			"a",
 			[
@@ -92,6 +92,6 @@ describe("LaserTrails: the red pointer whose trail fades", () => {
 			true,
 			0,
 		);
-		expect(l.active(0)).toBe(false);
+		expect(l.visible(0)).toHaveLength(0);
 	});
 });

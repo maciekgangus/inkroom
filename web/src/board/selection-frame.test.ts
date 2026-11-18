@@ -9,7 +9,6 @@ import {
 	oppositeEdge,
 	pointInFrame,
 	rotationHandlePos,
-	showsBox,
 } from "./selection-frame";
 import { rotateEl } from "./transform";
 
@@ -129,43 +128,6 @@ describe("oppositeCorner", () => {
 			oppositeCorner("se"),
 			oppositeCorner("sw"),
 		]).toEqual(["se", "sw", "nw", "ne"]);
-	});
-});
-
-describe("showsBox (R-034)", () => {
-	const pt = (x: number, y: number) => [x, y, 0.5] as [number, number, number];
-	const el = (kind?: Stroke["kind"]): Stroke => ({
-		...base,
-		...(kind ? { kind } : {}),
-		points: [pt(0, 0), pt(10, 10)],
-	});
-
-	test("a lone stroke or text has handles but no outline box, it glows", () => {
-		expect(showsBox([el()])).toBe(false);
-		expect(showsBox([el("text")])).toBe(false);
-	});
-
-	test("a text area keeps its box, a text at a point does not (R-044)", () => {
-		expect(showsBox([{ ...el("text"), width: 200 }])).toBe(true);
-		expect(showsBox([el("text")])).toBe(false);
-	});
-
-	test("a line keeps its box: the dots at its ends come in addition to it (R-041)", () => {
-		expect(showsBox([el("line")])).toBe(true);
-	});
-
-	test("images and shapes keep the outline box", () => {
-		expect(showsBox([el("image")])).toBe(true);
-		expect(showsBox([el("rect")])).toBe(true);
-		expect(showsBox([el("circle")])).toBe(true);
-		expect(showsBox([el("ellipse")])).toBe(true);
-		for (const k of ["trapezoid", "rhombus", "parallelogram"] as const)
-			expect(showsBox([el(k)])).toBe(true);
-	});
-
-	test("several elements get the outline box, and nothing selected shows none", () => {
-		expect(showsBox([el(), el("line")])).toBe(true);
-		expect(showsBox([])).toBe(false);
 	});
 });
 

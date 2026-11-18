@@ -1,6 +1,6 @@
 import { render } from "preact";
 import { describe, expect, test, vi } from "vitest";
-import { Slider, THUMB_PX } from "./slider";
+import { Slider } from "./slider";
 
 const mount = (value: number, min = 1, max = 100) => {
 	const root = document.createElement("div");
@@ -23,10 +23,6 @@ const along = (el: HTMLInputElement) =>
 	Number(el.style.getPropertyValue("--p"));
 
 describe("Slider fill", () => {
-	test("the thumb is 16 px wide, and the fill is measured to the middle of it", () => {
-		expect(THUMB_PX).toBe(16);
-	});
-
 	test("the position is 0 at the minimum and 1 at the maximum", () => {
 		expect(along(mount(100))).toBe(1);
 		expect(along(mount(1))).toBe(0);

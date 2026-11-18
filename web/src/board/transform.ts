@@ -132,11 +132,6 @@ export function translateEl(el: Stroke, dx: number, dy: number): Stroke {
 	return mapPoints(el, (p) => [p[0] + dx, p[1] + dy, p[2]]);
 }
 
-/** The element scaled uniformly by `k` about a board point. */
-export function scaleEl(el: Stroke, anchor: Vec, k: number): Stroke {
-	return scaleElBy(el, anchor, k, k, 0);
-}
-
 /**
  * The element scaled about a board point by `kx` and `ky` along the axes of a frame turned by
  * `angle`, so a corner handle can stretch width and height independently. Line width stays.

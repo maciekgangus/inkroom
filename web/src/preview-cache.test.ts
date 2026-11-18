@@ -2,10 +2,16 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import {
 	checkedRecently,
 	forgetPreviews,
-	getPreview,
 	peekPreview,
 	setPreview,
 } from "./preview-cache";
+
+/** The picture kept in storage (not memory) for this version of a board, or null. */
+const stored = (boardId: string, tag: string): string | null => {
+	forgetPreviews(true);
+	const p = peekPreview(boardId);
+	return p && p.tag === tag ? p.url : null;
+};
 
 describe("the preview cache (R-052)", () => {
 	beforeEach(() => {
@@ -15,26 +21,26 @@ describe("the preview cache (R-052)", () => {
 
 	test("gives back a picture of the same version of a board", () => {
 		setPreview("b1", '"7-plain"', "data:image/png;base64,AAA");
-		expect(getPreview("b1", '"7-plain"')).toBe("data:image/png;base64,AAA");
+		expect(stored("b1", '"7-plain"')).toBe("data:image/png;base64,AAA");
 	});
 
 	test("knows nothing of another version or another board", () => {
 		setPreview("b1", '"7-plain"', "data:x");
-		expect(getPreview("b1", '"8-plain"')).toBeNull();
-		expect(getPreview("b2", '"7-plain"')).toBeNull();
+		expect(stored("b1", '"8-plain"')).toBeNull();
+		expect(stored("b2", '"7-plain"')).toBeNull();
 	});
 
 	test("a new version replaces the old picture of the same board", () => {
 		setPreview("b1", '"7-plain"', "data:old");
 		setPreview("b1", '"8-plain"', "data:new");
-		expect(getPreview("b1", '"7-plain"')).toBeNull();
-		expect(getPreview("b1", '"8-plain"')).toBe("data:new");
+		expect(stored("b1", '"7-plain"')).toBeNull();
+		expect(stored("b1", '"8-plain"')).toBe("data:new");
 	});
 
 	test("keeps only the most recent boards", () => {
 		for (let i = 0; i < 80; i++) setPreview(`b${i}`, "v", `data:${i}`);
-		expect(getPreview("b79", "v")).toBe("data:79");
-		expect(getPreview("b0", "v")).toBeNull();
+		expect(stored("b79", "v")).toBe("data:79");
+		expect(stored("b0", "v")).toBeNull();
 		const kept = Object.keys(localStorage).filter((k) =>
 			k.startsWith("inkroom.preview."),
 		);
@@ -54,7 +60,7 @@ describe("the preview cache (R-052)", () => {
 			.mockImplementation(() => {
 				throw new Error("denied");
 			});
-		expect(getPreview("b1", "v")).toBeNull();
+		expect(stored("b1", "v")).toBeNull();
 		noRead.mockRestore();
 	});
 });
