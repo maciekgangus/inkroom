@@ -1,5 +1,9 @@
-import { useState } from "preact/hooks";
+import type { ComponentChildren } from "preact";
+import { useLayoutEffect, useRef, useState } from "preact/hooks";
+import { closeOnDismiss } from "./dismiss";
+import { popoverSpot } from "./floating-panel";
 import { Icon } from "./icon";
+import { Portal } from "./portal";
 import { Slider } from "./slider";
 
 type Hsl = [number, number, number];
@@ -62,6 +66,7 @@ export function CustomColor({
 	onToggle,
 	onInput,
 	onChange,
+	popover = false,
 }: {
 	/** aria-label of the tile; the sliders get " hue" and " shade" after it. */
 	label: string;
@@ -70,15 +75,31 @@ export function CustomColor({
 	own: boolean;
 	display: (color: string) => string;
 	open: boolean;
+	/** Pressed on the tile; with `popover`, also a click outside the picker or Escape (shuts it). */
 	onToggle: () => void;
 	/** While a slider moves. */
 	onInput: (color: string) => void;
 	/** When a slider is released. */
 	onChange: (color: string) => void;
+	/**
+	 * The picker is a little window of its own beside the menu the tile is in, pinned to the tile, so
+	 * that it does not push the menu's contents down; inside the menu only if there is no room beside.
+	 */
+	popover?: boolean;
 }) {
+	const tile = useRef<HTMLButtonElement>(null);
+	const picker = (
+		<ColorPicker
+			label={label}
+			start={current === null ? null : display(current)}
+			onInput={onInput}
+			onChange={onChange}
+		/>
+	);
 	return (
 		<>
 			<button
+				ref={tile}
 				type="button"
 				aria-label={label}
 				aria-expanded={open}
@@ -89,15 +110,92 @@ export function CustomColor({
 			>
 				{!own && <Icon name="plus" />}
 			</button>
-			{open && (
-				<ColorPicker
-					label={label}
-					start={current === null ? null : display(current)}
-					onInput={onInput}
-					onChange={onChange}
-				/>
-			)}
+			{open &&
+				(popover ? (
+					<ColorPopover tile={tile} onClose={onToggle}>
+						{picker}
+					</ColorPopover>
+				) : (
+					picker
+				))}
 		</>
+	);
+}
+
+const rectOf = (el: Element) => {
+	const r = el.getBoundingClientRect();
+	return { minX: r.left, minY: r.top, maxX: r.right, maxY: r.bottom };
+};
+
+/**
+ * A picker in a window of its own, outside the menu: beside it, level with the tile, kept on the
+ * screen, following the tile if the menu is moved or scrolled. It shuts on a click or touch
+ * outside it and on Escape. With no room beside the menu it stays inside, under the row.
+ */
+function ColorPopover({
+	tile,
+	onClose,
+	children,
+}: {
+	tile: { current: HTMLButtonElement | null };
+	onClose: () => void;
+	children: ComponentChildren;
+}) {
+	const box = useRef<HTMLDivElement>(null);
+	/** null: not measured yet; "inside": no room beside the menu. */
+	const [spot, setSpot] = useState<
+		{ left: number; top: number } | "inside" | null
+	>(null);
+	useLayoutEffect(() => {
+		let frame = 0;
+		const place = () => {
+			const t = tile.current;
+			const menu = t?.closest(".properties");
+			const b = box.current;
+			if (t && menu && b) {
+				const next = popoverSpot(
+					rectOf(t),
+					rectOf(menu),
+					{ w: b.offsetWidth, h: b.offsetHeight },
+					{ w: innerWidth, h: innerHeight },
+				);
+				setSpot((prev) =>
+					next === null
+						? prev === "inside"
+							? prev
+							: "inside"
+						: typeof prev === "object" &&
+								prev !== null &&
+								prev.left === next.left &&
+								prev.top === next.top
+							? prev
+							: next,
+				);
+			}
+			frame = requestAnimationFrame(place);
+		};
+		place();
+		return () => cancelAnimationFrame(frame);
+	}, [tile]);
+	useLayoutEffect(
+		() => closeOnDismiss(".color-popover, .swatch.custom", onClose),
+		[onClose],
+	);
+	if (spot === "inside") return <>{children}</>;
+	return (
+		<Portal>
+			<div
+				ref={box}
+				class="color-popover"
+				style={
+					spot
+						? { left: `${spot.left}px`, top: `${spot.top}px` }
+						: { visibility: "hidden" }
+				}
+			>
+				{children}
+			</div>
+		</Portal>
 	);
 }
 

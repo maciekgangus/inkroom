@@ -74,9 +74,14 @@
 	border-top: 1px solid var(--border);
 }
 /* A row of a few switches (grid, axes, numbering) stands in the middle, the buttons evenly apart. */
-.prop-group.centered {
-	justify-content: center;
-	gap: 8px;
+.prop-group.split {
+	flex-wrap: nowrap;
+	justify-content: space-between;
+}
+.prop-cluster {
+	display: flex;
+	align-items: center;
+	gap: 2px;
 }
 /* The digits and the pi are a symbol in the same square as the icons. */
 .properties button.digits {

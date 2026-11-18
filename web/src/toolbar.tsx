@@ -32,6 +32,18 @@ export const MORE_COLORS = [
 	"#eab308",
 	"#ff7043",
 ];
+/**
+ * The colours the object menu offers in its row: those of the palette in the bar that are most used,
+ * a dozen with the tile for any other, in two rows of six (so a fill row, with "none", has twelve too).
+ */
+export const MENU_COLORS = [
+	...COLORS,
+	...MORE_COLORS.filter((c) =>
+		["#6b7280", "#8d5a2b", "#e91e63", "#7c3aed", "#0d9488", "#0ea5e9"].includes(
+			c,
+		),
+	),
+];
 export { SIZES } from "./stroke-controls";
 
 interface Props {

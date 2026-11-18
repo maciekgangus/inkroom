@@ -84,3 +84,37 @@ export function panelTitle(els: Stroke[]): string {
 	const [name] = classes;
 	return els.length > 1 ? `${name} (${els.length})` : name;
 }
+
+/**
+ * Where the popover of a colour picker stands (in screen px): outside the menu, beside it and level
+ * with the tile that opened it, so that it does not push the menu's contents down. On the left of a
+ * menu in the right half of the screen, else on the right; if that side has no room it takes the
+ * other, and with room on neither it is null and the picker stays inside the menu.
+ */
+export function popoverSpot(
+	tile: Rect,
+	menu: Rect,
+	size: { w: number; h: number },
+	view: { w: number; h: number },
+): { left: number; top: number } | null {
+	const gap = 8;
+	const leftEdge = menu.minX - gap - size.w;
+	const rightEdge = menu.maxX + gap;
+	const fitsLeft = leftEdge >= MARGIN;
+	const fitsRight = rightEdge + size.w <= view.w - MARGIN;
+	const preferLeft = (menu.minX + menu.maxX) / 2 > view.w / 2;
+	const left =
+		preferLeft && fitsLeft
+			? leftEdge
+			: fitsRight
+				? rightEdge
+				: fitsLeft
+					? leftEdge
+					: null;
+	if (left === null) return null;
+	const top = Math.max(
+		MARGIN,
+		Math.min(tile.minY - gap, view.h - size.h - MARGIN),
+	);
+	return { left, top };
+}

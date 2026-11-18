@@ -758,7 +758,9 @@ describe("the colour windows of the panel", () => {
 				root.querySelector('[aria-label="prop color custom"]') as HTMLElement
 			).click(),
 		);
-		const shade = root.querySelector(
+		// The picker is a window of its own on the page, not part of the menu: it does not push it.
+		expect(root.querySelector(".color-picker")).toBeNull();
+		const shade = document.querySelector(
 			'input[aria-label="prop color custom shade"]',
 		) as HTMLInputElement;
 		shade.value = "30";
@@ -773,6 +775,57 @@ describe("the colour windows of the panel", () => {
 			shade.dispatchEvent(new Event("change", { bubbles: true }));
 		});
 		expect(onChange).toHaveBeenCalledOnce();
+	});
+});
+
+describe("the picker window beside the menu", () => {
+	const open = () => {
+		const root = document.createElement("div");
+		document.body.appendChild(root);
+		render(
+			<PropertiesPanel elements={[rect]} colors={COLORS} onChange={() => {}} />,
+			root,
+		);
+		act(() =>
+			(
+				root.querySelector('[aria-label="prop color custom"]') as HTMLElement
+			).click(),
+		);
+		return root;
+	};
+
+	test("shuts on Escape and on a press outside it, but not on a press inside", () => {
+		const root = open();
+		expect(document.querySelector(".color-popover")).not.toBeNull();
+		act(() => {
+			document
+				.querySelector(".color-popover")
+				?.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+		});
+		expect(document.querySelector(".color-popover")).not.toBeNull();
+		act(() => {
+			document.body.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+		});
+		expect(document.querySelector(".color-popover")).toBeNull();
+		act(() =>
+			(
+				root.querySelector('[aria-label="prop color custom"]') as HTMLElement
+			).click(),
+		);
+		expect(document.querySelector(".color-popover")).not.toBeNull();
+		act(() => {
+			dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+		});
+		expect(document.querySelector(".color-popover")).toBeNull();
+		render(null, root);
+		root.remove();
+	});
+
+	test("goes away with the menu", () => {
+		const root = open();
+		act(() => render(null, root));
+		expect(document.querySelector(".color-popover")).toBeNull();
+		root.remove();
 	});
 });
 
@@ -886,7 +939,7 @@ describe("the menu of a coordinate plane", () => {
 		expect(root.querySelector('input[aria-label="prop size"]')).not.toBeNull();
 	});
 
-	test("the grid, the axes and the numbering are icon buttons of one size with titles, in rows centred", () => {
+	test("the grid, the axes and the numbering are icon buttons of one size with titles, on one line split by a rule", () => {
 		const root = show();
 		const labels = [
 			"prop grid",
@@ -908,15 +961,19 @@ describe("the menu of a coordinate plane", () => {
 		expect(q(root, "prop numbering pi")?.textContent).toBe("π");
 		expect(q(root, "prop numbering numbers")?.textContent).toBe("123");
 		expect(root.textContent).not.toMatch(/Siatka|Osie|Bez/);
+		// One group: grid and axes in one cluster, numbering in the other, a rule between.
+		const row = q(root, "prop grid")?.closest(".prop-group") as HTMLElement;
+		expect(row.classList.contains("split")).toBe(true);
+		expect(row.contains(q(root, "prop numbering pi"))).toBe(true);
+		expect(row.querySelectorAll(".prop-cluster")).toHaveLength(2);
+		expect(row.querySelectorAll(":scope > .prop-sep")).toHaveLength(1);
+	});
+
+	test("the size of a cell is the first thing under the title", () => {
+		const root = show();
+		const first = root.querySelector(".panel-body > .prop-group");
 		expect(
-			q(root, "prop grid")
-				?.closest(".prop-group")
-				?.classList.contains("centered"),
-		).toBe(true);
-		expect(
-			q(root, "prop numbering pi")
-				?.closest(".prop-group")
-				?.classList.contains("centered"),
-		).toBe(true);
+			first?.querySelector('input[aria-label="prop cell"]'),
+		).not.toBeNull();
 	});
 });

@@ -207,6 +207,21 @@ export function PropertiesPanel({
 				)}
 			</div>
 			<div class="panel-body">
+				{can.plane && (
+					<Group>
+						<Slider
+							icon="grid"
+							label="prop cell"
+							min={10}
+							max={200}
+							step={5}
+							value={plane.cell}
+							unit=" j."
+							onInput={(v) => onPreview({ cell: v })}
+							onChange={(v) => onChange({ cell: v })}
+						/>
+					</Group>
+				)}
 				{can.color && (
 					<Group>
 						<ColorRow
@@ -315,7 +330,7 @@ export function PropertiesPanel({
 					/>
 				</Group>
 				{can.numbers && !can.plane && (
-					<Group center>
+					<Group>
 						<button
 							type="button"
 							aria-label="prop numbers"
@@ -330,61 +345,51 @@ export function PropertiesPanel({
 				)}
 				{can.plane && (
 					<>
-						<Group center>
-							<button
-								type="button"
-								aria-label="prop grid"
-								aria-pressed={plane.grid}
-								title="Siatka"
-								class={`icon ${on(plane.grid)}`}
-								onClick={() => onChange({ grid: !plane.grid })}
-							>
-								<Icon name="grid" />
-							</button>
-							<button
-								type="button"
-								aria-label="prop axes"
-								aria-pressed={plane.showAxes}
-								title="Osie"
-								class={`icon ${on(plane.showAxes)}`}
-								onClick={() => onChange({ showAxes: !plane.showAxes })}
-							>
-								<Icon name="axes" />
-							</button>
-						</Group>
-						<Group>
-							<Slider
-								icon="grid"
-								label="prop cell"
-								min={10}
-								max={200}
-								step={5}
-								value={plane.cell}
-								unit=" j."
-								onInput={(v) => onPreview({ cell: v })}
-								onChange={(v) => onChange({ cell: v })}
-							/>
-						</Group>
-						<Group center>
-							{(
-								[
-									["numbers", "123", "Numeracja 1 2 3"],
-									["pi", "π", "Numeracja w π"],
-									["none", null, "Bez numeracji"],
-								] as const
-							).map(([how, label, title]) => (
+						<Group split>
+							<div class="prop-cluster">
 								<button
 									type="button"
-									key={how}
-									aria-label={`prop numbering ${how}`}
-									aria-pressed={plane.numbering === how}
-									title={title}
-									class={`icon ${label === "123" ? "digits " : ""}${on(plane.numbering === how)}`}
-									onClick={() => onChange({ numbering: how })}
+									aria-label="prop grid"
+									aria-pressed={plane.grid}
+									title="Siatka"
+									class={`icon ${on(plane.grid)}`}
+									onClick={() => onChange({ grid: !plane.grid })}
 								>
-									{label ?? <Icon name="empty-square" />}
+									<Icon name="grid" />
 								</button>
-							))}
+								<button
+									type="button"
+									aria-label="prop axes"
+									aria-pressed={plane.showAxes}
+									title="Osie"
+									class={`icon ${on(plane.showAxes)}`}
+									onClick={() => onChange({ showAxes: !plane.showAxes })}
+								>
+									<Icon name="axes" />
+								</button>
+							</div>
+							<span class="prop-sep" />
+							<div class="prop-cluster">
+								{(
+									[
+										["numbers", "123", "Numeracja 1 2 3"],
+										["pi", "π", "Numeracja w π"],
+										["none", null, "Bez numeracji"],
+									] as const
+								).map(([how, label, title]) => (
+									<button
+										type="button"
+										key={how}
+										aria-label={`prop numbering ${how}`}
+										aria-pressed={plane.numbering === how}
+										title={title}
+										class={`icon ${label === "123" ? "digits " : ""}${on(plane.numbering === how)}`}
+										onClick={() => onChange({ numbering: how })}
+									>
+										{label ?? <Icon name="empty-square" />}
+									</button>
+								))}
+							</div>
 						</Group>
 						<FunctionEditor
 							fns={plane.fns}
@@ -402,12 +407,12 @@ export function PropertiesPanel({
 /** One group of controls, split from the next by a rule, as the groups of the wide bar. */
 const Group = ({
 	children,
-	center = false,
+	split = false,
 }: {
 	children: ComponentChildren;
-	/** A row of a few switches stands in the middle, not stuck to the left. */
-	center?: boolean;
-}) => <div class={`prop-group${center ? " centered" : ""}`}>{children}</div>;
+	/** Two clusters of switches on one line: one by the left edge, one by the right, a rule between. */
+	split?: boolean;
+}) => <div class={`prop-group${split ? " split" : ""}`}>{children}</div>;
 
 /**
  * A row of round colour tiles, as in the bar: the current one has a ring; the last tile is for any
@@ -468,6 +473,7 @@ function ColorRow({
 				own={current !== null && !shown.includes(current)}
 				display={display}
 				open={picking}
+				popover
 				onToggle={() => setPicking(!picking)}
 				onInput={onPreview}
 				onChange={onPick}

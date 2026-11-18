@@ -600,6 +600,26 @@ canvas {
 	border-radius: var(--radius);
 	background: var(--surface-hover);
 }
+/* The picker as a window of its own beside the object menu (R-060): the card of the menu's glass. */
+.color-popover {
+	position: fixed;
+	z-index: 5;
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	width: 240px;
+	padding: 4px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: color-mix(in srgb, var(--surface) 92%, transparent);
+	-webkit-backdrop-filter: blur(12px);
+	backdrop-filter: blur(12px);
+	box-shadow: var(--shadow);
+}
+.color-popover .color-picker {
+	margin: 0;
+	background: none;
+}
 .color-picker .slider {
 	min-height: 40px;
 	padding: 0;

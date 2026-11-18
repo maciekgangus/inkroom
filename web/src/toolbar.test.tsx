@@ -5,7 +5,7 @@ import type { Settings } from "./board/controller";
 import { resetExtraColor } from "./extra-color";
 import { setTheme } from "./theme";
 import { resetToolStyles } from "./tool-style";
-import { COLORS, MORE_COLORS, SIZES, Toolbar } from "./toolbar";
+import { COLORS, MENU_COLORS, MORE_COLORS, SIZES, Toolbar } from "./toolbar";
 
 describe("Toolbar", () => {
 	let root: HTMLElement;
@@ -34,6 +34,13 @@ describe("Toolbar", () => {
 	test("has 5 colors and 3 sizes", () => {
 		expect(COLORS).toHaveLength(5);
 		expect(SIZES).toHaveLength(3);
+	});
+
+	test("the object menu offers eleven colours, all of the palette, and the tile for any other: two rows of six", () => {
+		expect(MENU_COLORS).toHaveLength(11);
+		expect(MENU_COLORS.slice(0, COLORS.length)).toEqual(COLORS);
+		for (const c of MENU_COLORS.slice(COLORS.length))
+			expect(MORE_COLORS).toContain(c);
 	});
 
 	test("the ready widths: 1, 2 and 4 px drawn, shown as 2, 4 and 8", () => {
