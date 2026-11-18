@@ -344,7 +344,14 @@ describe("App", () => {
 
 	describe("home page, logged in", () => {
 		const boards = {
-			owned: [{ id: ID, name: "Matma", updatedAt: "2026-11-09T10:00:00Z" }],
+			owned: [
+				{
+					id: ID,
+					name: "Matma",
+					updatedAt: "2026-11-09T10:00:00Z",
+					bytes: 419430,
+				},
+			],
 			visited: [
 				{
 					id: "f".repeat(32),
@@ -623,6 +630,14 @@ describe("App", () => {
 				await search("matm");
 				expect(text()).toContain("Matma");
 				expect(text()).not.toContain("Cudza");
+			});
+
+			test("a tile shows the board's size beside its date", async () => {
+				await open();
+				const tile = [...root.querySelectorAll(".boards .board")].find((r) =>
+					r.textContent?.includes("Matma"),
+				);
+				expect(tile?.querySelector(".size")?.textContent).toBe("0,4 MB");
 			});
 
 			test("a date typed as 08.11 finds the board changed that day", async () => {

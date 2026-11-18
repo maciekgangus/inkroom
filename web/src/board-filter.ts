@@ -8,7 +8,7 @@ export interface BoardFilter {
 	scope: "all" | "mine" | "shared";
 	/** Only boards changed within this long: today, 7 or 30 days. */
 	range: "any" | "today" | "7" | "30";
-	sort: "changed" | "name";
+	sort: "changed" | "name" | "size";
 }
 
 export const DEFAULT_FILTER: BoardFilter = {
@@ -57,9 +57,22 @@ export function filterBoards(
 		const h = haystack(b);
 		return words.every((w) => h.includes(w));
 	});
-	return out.sort(
-		f.sort === "name"
-			? (a, b) => a.name.localeCompare(b.name, "pl", { sensitivity: "base" })
-			: (a, b) => b.updatedAt.localeCompare(a.updatedAt),
-	);
+	const order = {
+		name: (a: BoardSummary, b: BoardSummary) =>
+			a.name.localeCompare(b.name, "pl", { sensitivity: "base" }),
+		size: (a: BoardSummary, b: BoardSummary) => (b.bytes ?? 0) - (a.bytes ?? 0),
+		changed: (a: BoardSummary, b: BoardSummary) =>
+			b.updatedAt.localeCompare(a.updatedAt),
+	}[f.sort];
+	return out.sort(order);
+}
+
+/** A board's size for a tile: "0,4 MB", "12 MB", "<0,1 MB" for a tiny one; nothing if unknown. */
+export function formatSize(bytes: number | undefined): string {
+	if (bytes === undefined) return "";
+	const mb = bytes / (1024 * 1024);
+	if (mb < 0.1) return "<0,1 MB";
+	const text =
+		mb < 9.95 ? mb.toFixed(1).replace(".", ",") : String(Math.round(mb));
+	return `${text} MB`;
 }

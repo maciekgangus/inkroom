@@ -289,6 +289,9 @@ input::placeholder {
 	background: var(--accent-soft);
 	color: var(--accent);
 }
+.board .size {
+	font-size: 12px;
+}
 /* The folded search and filter of the boards (R-091). */
 .filter-menu {
 	display: flex;

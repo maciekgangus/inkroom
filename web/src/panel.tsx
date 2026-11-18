@@ -6,6 +6,7 @@ import {
 	type BoardFilter,
 	DEFAULT_FILTER,
 	filterBoards,
+	formatSize,
 	isFiltering,
 } from "./board-filter";
 import { BoardPreview } from "./board-preview";
@@ -247,6 +248,7 @@ export function Panel({ account, navigate, onLogout }: Props) {
 						>
 							<option value="changed">od ostatnio zmienionych</option>
 							<option value="name">po nazwie</option>
+							<option value="size">od największych</option>
 						</select>
 					</label>
 					{isFiltering(filter) && (
@@ -450,6 +452,9 @@ function BoardRow({
 				<span class="sep"> · </span>
 				<span class="time">{when.time}</span>
 			</time>
+			{board.bytes !== undefined && (
+				<span class="size muted">{formatSize(board.bytes)}</span>
+			)}
 			<span class="row actions">
 				{action("Kopiuj link", "link", () =>
 					navigator.clipboard?.writeText(link),

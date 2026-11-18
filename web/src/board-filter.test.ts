@@ -1,6 +1,11 @@
 import { describe, expect, test } from "vitest";
 import type { BoardSummary } from "./api";
-import { DEFAULT_FILTER, filterBoards, isFiltering } from "./board-filter";
+import {
+	DEFAULT_FILTER,
+	filterBoards,
+	formatSize,
+	isFiltering,
+} from "./board-filter";
 
 const at = (iso: string) => new Date(iso).toISOString();
 const NOW = new Date("2026-11-18T12:00:00");
@@ -102,5 +107,30 @@ describe("filterBoards (R-091)", () => {
 		expect(isFiltering(f({ scope: "mine" }))).toBe(true);
 		expect(isFiltering(f({ range: "7" }))).toBe(true);
 		expect(isFiltering(f({ sort: "name" }))).toBe(true);
+	});
+});
+
+describe("size of a board (R-091)", () => {
+	const MB = 1024 * 1024;
+	test("formats as 0,4 MB below 10 MB, whole MB above, and <0,1 MB for a tiny one", () => {
+		expect(formatSize(0.4 * MB)).toBe("0,4 MB");
+		expect(formatSize(9.96 * MB)).toBe("10 MB");
+		expect(formatSize(12.4 * MB)).toBe("12 MB");
+		expect(formatSize(3000)).toBe("<0,1 MB");
+		expect(formatSize(0)).toBe("<0,1 MB");
+		expect(formatSize(undefined)).toBe("");
+	});
+
+	test("sorts the biggest first by size", () => {
+		const sized = [
+			{ id: "a", name: "A", updatedAt: at("2026-11-17T10:00:00"), bytes: 100 },
+			{ id: "b", name: "B", updatedAt: at("2026-11-16T10:00:00"), bytes: 900 },
+			{ id: "c", name: "C", updatedAt: at("2026-11-15T10:00:00") },
+		];
+		expect(ids(filterBoards(sized, f({ sort: "size" }), NOW))).toEqual([
+			"b",
+			"a",
+			"c",
+		]);
 	});
 });

@@ -20,6 +20,8 @@ export interface BoardSummary {
 	updatedAt: string;
 	/** The owner's username; given for other people's boards only (R-051). */
 	owner?: string;
+	/** What the board's strokes and images take, in bytes (R-091). */
+	bytes?: number;
 }
 
 export interface BoardList {
