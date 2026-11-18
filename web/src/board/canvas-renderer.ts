@@ -32,11 +32,38 @@ const MOVE_SETTLE_MS = 120;
  */
 const OVERDRAW = 0.25;
 
-/** The overdraw in CSS px, left/right and top/bottom. */
-const overdraw = () => ({
-	mx: Math.round(innerWidth * OVERDRAW),
-	my: Math.round(innerHeight * OVERDRAW),
-});
+/**
+ * The most pixels the board layer may have (R-077). A tablet with a dense screen cannot hold a
+ * layer 2.25 times its screen: the page is killed for lack of memory. The overdraw shrinks to fit,
+ * and is none where the screen alone is that big.
+ */
+const MAX_LAYER_PIXELS = 10_000_000;
+/** A layer painted for one scale may be stretched by the CSS this far (or squeezed this far) before it is painted again. */
+const MAX_STRETCH = 2;
+
+/** The overdraw in CSS px, left/right and top/bottom, for the window and pixel ratio now. */
+function overdraw(): { mx: number; my: number } {
+	const dpr = window.devicePixelRatio || 1;
+	const fits = (f: number) =>
+		innerWidth *
+			(1 + 2 * f * OVERDRAW) *
+			dpr *
+			(innerHeight * (1 + 2 * f * OVERDRAW) * dpr) <=
+		MAX_LAYER_PIXELS;
+	let lo = 0;
+	let hi = 1;
+	if (fits(1)) lo = 1;
+	else
+		for (let i = 0; i < 12; i++) {
+			const mid = (lo + hi) / 2;
+			if (fits(mid)) lo = mid;
+			else hi = mid;
+		}
+	return {
+		mx: Math.floor(innerWidth * OVERDRAW * lo),
+		my: Math.floor(innerHeight * OVERDRAW * lo),
+	};
+}
 /** The longest the bitmaps are only moved, however long the view keeps moving. */
 const MOVE_MAX_MS = 350;
 /** The ink colour of the Inkroom brand, for the handles that edit the selection. */
@@ -501,6 +528,8 @@ export class CanvasRenderer implements Renderer {
 	private selection: Frame | null = null;
 	private marquee: Rect | null = null;
 	private lasso: [number, number][] | null = null;
+	/** The overdraw the board layer was sized with at the last resize, in CSS px. */
+	private margin = { mx: 0, my: 0 };
 	private highlight: Stroke[] = [];
 	private lasers: LaserLine[] = [];
 	/** Elements being dragged: drawn on the live layer, left out of the committed one (performance). */
@@ -546,6 +575,7 @@ export class CanvasRenderer implements Renderer {
 	resize(): void {
 		const dpr = window.devicePixelRatio || 1;
 		const { mx, my } = overdraw();
+		this.margin = { mx, my };
 		this.committedCanvas.width = (innerWidth + 2 * mx) * dpr;
 		this.committedCanvas.height = (innerHeight + 2 * my) * dpr;
 		const css = this.committedCanvas.style;
@@ -721,10 +751,15 @@ export class CanvasRenderer implements Renderer {
 		] as const) {
 			const from = this.shown[name];
 			// The screen's corner: the board layer starts beyond it (overdraw).
-			const { mx, my } = name === "committed" ? overdraw() : { mx: 0, my: 0 };
+			const { mx, my } = name === "committed" ? this.margin : { mx: 0, my: 0 };
 			canvas.style.transformOrigin = `${mx}px ${my}px`;
 			canvas.style.transform = `translate(${(from.x - v.x) * v.scale}px, ${(from.y - v.y) * v.scale}px) scale(${v.scale / from.k})`;
 		}
+		// Stretched or squeezed too far, the bitmap costs the graphics card ever more memory (a page
+		// killed on a tablet): paint it sharp now instead of when the hand stops (R-077).
+		const stretch = v.scale / this.shown.committed.k;
+		if (stretch > MAX_STRETCH || stretch < 1 / MAX_STRETCH)
+			this.schedule(true, true);
 		if (this.settleTimer) clearTimeout(this.settleTimer);
 		const wait = Math.max(
 			0,
@@ -773,7 +808,7 @@ export class CanvasRenderer implements Renderer {
 	private paintCommitted(): void {
 		const ctx = this.committed;
 		if (!ctx) return;
-		const { mx, my } = overdraw();
+		const { mx, my } = this.margin;
 		this.begin(ctx, mx, my);
 		const w = innerWidth + 2 * mx;
 		const h = innerHeight + 2 * my;

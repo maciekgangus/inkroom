@@ -62,6 +62,37 @@ describe("CanvasRenderer overdraw: the board is painted a little beyond the scre
 	});
 });
 
+describe("CanvasRenderer buffer limit: a big screen does not get a bigger layer than a device can hold (R-077)", () => {
+	beforeEach(() => vi.stubGlobal("requestAnimationFrame", undefined));
+	afterEach(() => vi.unstubAllGlobals());
+	const size = (w: number, h: number, dpr: number) => {
+		vi.stubGlobal("innerWidth", w);
+		vi.stubGlobal("innerHeight", h);
+		vi.stubGlobal("devicePixelRatio", dpr);
+		const a = layer();
+		new CanvasRenderer(a.canvas, layer().canvas, new Viewport()).resize();
+		return a.canvas;
+	};
+
+	test("a tablet with a dense screen gets no overdraw beyond the limit", () => {
+		const c = size(1600, 1000, 2); // full overdraw would be 4800 x 3000 pixels
+		expect(c.width * c.height).toBeLessThanOrEqual(10_000_000);
+	});
+
+	test("a desktop window keeps the full overdraw", () => {
+		const c = size(1920, 1080, 1);
+		expect(c.width).toBe(2880);
+		expect(c.height).toBe(1620);
+	});
+
+	test("the overdraw shrinks smoothly, never below the window", () => {
+		const c = size(1400, 900, 2); // full overdraw would be 4200 x 2700 = 11M pixels
+		expect(c.width).toBeGreaterThanOrEqual(1400 * 2);
+		expect(c.height).toBeGreaterThanOrEqual(900 * 2);
+		expect(c.width * c.height).toBeLessThanOrEqual(10_000_000);
+	});
+});
+
 describe("CanvasRenderer.moveView: the view moves without painting every frame", () => {
 	beforeEach(() => {
 		vi.useFakeTimers();
@@ -86,13 +117,33 @@ describe("CanvasRenderer.moveView: the view moves without painting every frame",
 		const t = a.canvas.style.transform;
 		expect(t).toBe("translate(-100px, -50px) scale(2)");
 		expect(b.canvas.style.transform).toBe(t);
-		v.setScaleAt(100, 50, 4); // another frame of the zoom: still from the same picture
+		v.setScaleAt(100, 50, 1.5); // another frame of the zoom: still from the same picture
 		r.moveView();
 		expect(a.ctx.clears).toBe(painted);
-		expect(a.canvas.style.transform).toBe("translate(-300px, -150px) scale(4)");
+		expect(a.canvas.style.transform).toMatch(/scale\(1\.5\)$/);
 		vi.advanceTimersByTime(200); // the view settled
 		expect(a.ctx.clears).toBeGreaterThan(painted); // painted sharp
 		expect(a.canvas.style.transform).toBe(""); // and the bitmap is back as it is
+	});
+
+	test("a zoom that stretches the bitmap too far is painted at once, not when the hand stops (R-077)", () => {
+		const a = layer();
+		const v = new Viewport();
+		const r = new CanvasRenderer(a.canvas, layer().canvas, v);
+		r.redraw([]);
+		const painted = a.ctx.clears;
+		v.setScaleAt(100, 50, 1.9);
+		r.moveView();
+		expect(a.ctx.clears).toBe(painted); // within the limit: still the CSS-scaled picture
+		v.setScaleAt(100, 50, 2.5); // stretched more than twice
+		r.moveView();
+		expect(a.ctx.clears).toBeGreaterThan(painted);
+		const again = a.ctx.clears;
+		v.setScaleAt(100, 50, 1.1); // and squeezed to less than half of the painted scale
+		r.moveView();
+		v.setScaleAt(100, 50, 0.5);
+		r.moveView();
+		expect(a.ctx.clears).toBeGreaterThan(again);
 	});
 
 	test("a view that never stops moving is still painted from time to time", () => {
