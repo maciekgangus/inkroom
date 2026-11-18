@@ -57,6 +57,25 @@ interface LoginProps {
 	search?: string;
 }
 
+/** Small links to the legal pages under the login and registration forms (R-096). */
+function LegalLinks({ consent = false }: { consent?: boolean }) {
+	return (
+		<p class="legal">
+			{consent ? (
+				<>
+					Rejestrując się, akceptujesz <a href="/terms">Regulamin</a> i{" "}
+					<a href="/privacy">Politykę prywatności</a>.
+				</>
+			) : (
+				<>
+					<a href="/privacy">Polityka prywatności</a> ·{" "}
+					<a href="/terms">Regulamin</a>
+				</>
+			)}
+		</p>
+	);
+}
+
 /** The login page: an e-mail or a username and a password (R-055). */
 export function AuthForms({ onAuth, navigate, search = "" }: LoginProps) {
 	const notice =
@@ -123,6 +142,7 @@ export function AuthForms({ onAuth, navigate, search = "" }: LoginProps) {
 				</div>
 				<GoogleLink enabled={google} />
 			</form>
+			<LegalLinks />
 		</main>
 	);
 }
@@ -188,6 +208,7 @@ export function RegisterPage({ navigate }: RegisterProps) {
 				<button type="button" onClick={() => navigate("/")}>
 					Mam już konto
 				</button>
+				<LegalLinks consent={google} />
 			</main>
 		);
 	}
@@ -244,6 +265,7 @@ export function RegisterPage({ navigate }: RegisterProps) {
 				</div>
 				<GoogleLink enabled={google} />
 			</form>
+			<LegalLinks consent />
 		</main>
 	);
 }

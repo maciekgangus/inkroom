@@ -118,6 +118,30 @@ describe("App", () => {
 	});
 
 	describe("home page, logged out", () => {
+		describe("legal pages (R-096)", () => {
+			const legalLinks = () =>
+				[...root.querySelectorAll("a")]
+					.map((a) => a.getAttribute("href"))
+					.filter((h) => h === "/privacy" || h === "/terms");
+
+			test("the login page links to the privacy policy and the terms", async () => {
+				mockApi({ "GET /api/me": LOGGED_OUT, "GET /api/config": { body: {} } });
+				await mount({ path: "/" });
+				await waitText("Zaloguj");
+				expect(legalLinks()).toEqual(["/privacy", "/terms"]);
+			});
+
+			test("the registration page says that signing up accepts both", async () => {
+				mockApi({
+					"GET /api/me": LOGGED_OUT,
+					"GET /api/config": { body: { turnstileSiteKey: "k" } },
+				});
+				await mount({ path: "/register" });
+				await waitText("Rejestrując się, akceptujesz");
+				expect(legalLinks()).toEqual(["/terms", "/privacy"]);
+			});
+		});
+
 		describe("Google (R-063)", () => {
 			const googleLink = () =>
 				root.querySelector('a[href="/api/auth/google/start"]');
