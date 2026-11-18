@@ -228,6 +228,18 @@ func (a *app) copyTo(w http.ResponseWriter, b store.Board, ownerID int64) {
 	writeJSON(w, http.StatusCreated, map[string]string{"id": cp.ID, "name": cp.Name})
 }
 
+// notModified sets the ETag and Cache-Control headers and, when the client already has that
+// version, answers 304 and reports true.
+func notModified(w http.ResponseWriter, r *http.Request, tag string) bool {
+	w.Header().Set("ETag", tag)
+	w.Header().Set("Cache-Control", "private, no-cache")
+	if r.Header.Get("If-None-Match") != tag {
+		return false
+	}
+	w.WriteHeader(http.StatusNotModified)
+	return true
+}
+
 // boardPreview gives what a client needs to draw a small picture of a board (R-052): its
 // background and its strokes, as saved. Like the board itself it is open to whoever has the link.
 // The answer carries an ETag made of the board's last change, so a client that already has the
@@ -238,10 +250,7 @@ func (a *app) boardPreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	etag := previewTag(b)
-	w.Header().Set("ETag", etag)
-	w.Header().Set("Cache-Control", "private, no-cache")
-	if r.Header.Get("If-None-Match") == etag {
-		w.WriteHeader(http.StatusNotModified)
+	if notModified(w, r, etag) {
 		return
 	}
 	raw, err := a.st.LoadStrokes(b.ID)
@@ -284,10 +293,7 @@ func (a *app) boardPreviewPicture(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Błąd serwera")
 		return
 	}
-	w.Header().Set("ETag", tag)
-	w.Header().Set("Cache-Control", "private, no-cache")
-	if r.Header.Get("If-None-Match") == tag {
-		w.WriteHeader(http.StatusNotModified)
+	if notModified(w, r, tag) {
 		return
 	}
 	w.Header().Set("Content-Type", "image/png")
@@ -330,12 +336,8 @@ func (a *app) setBoardPreviewPicture(w http.ResponseWriter, r *http.Request) {
 // forgetBoard takes a board off the caller's list of boards they were invited to (R-051). The
 // board stays as it is, and opening its link again lists it again.
 func (a *app) forgetBoard(w http.ResponseWriter, r *http.Request) {
-	if !auth.RequireJSON(w, r) {
-		return
-	}
-	u, ok := a.auth.User(r)
+	u, ok := a.accountUser(w, r)
 	if !ok {
-		writeError(w, http.StatusUnauthorized, "Nie jesteś zalogowany")
 		return
 	}
 	if err := a.st.RemoveVisit(u.ID, r.PathValue("id")); err != nil {

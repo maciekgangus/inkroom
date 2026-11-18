@@ -117,12 +117,11 @@ func (a *app) Handler() http.Handler {
 		writeJSON(w, http.StatusOK, map[string]any{"turnstileSiteKey": a.turnstileSiteKey, "google": a.auth.GoogleEnabled()})
 	})
 	mux.HandleFunc("GET /ws/{id}", a.serveWS)
-	mux.HandleFunc("GET /register", func(w http.ResponseWriter, r *http.Request) {
+	index := func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, filepath.Join(a.staticDir, "index.html"))
-	})
-	mux.HandleFunc("GET /b/{id}", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, filepath.Join(a.staticDir, "index.html"))
-	})
+	}
+	mux.HandleFunc("GET /register", index)
+	mux.HandleFunc("GET /b/{id}", index)
 	mux.Handle("/", http.FileServer(http.Dir(a.staticDir)))
 	return mux
 }
