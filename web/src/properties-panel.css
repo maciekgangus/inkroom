@@ -74,7 +74,7 @@
 	border-top: 1px solid var(--border);
 }
 /* A row of a few switches (grid, axes, numbering) stands in the middle, the buttons evenly apart. */
-/* Two equal halves with the rule exactly in the middle: the left cluster by the left edge, the right by the right. */
+/* Two equal halves with the rule exactly in the middle, each cluster in the middle of its half. */
 .prop-group.split {
 	display: grid;
 	grid-template-columns: 1fr 1px 1fr;
@@ -90,11 +90,8 @@
 	align-items: center;
 	gap: 2px;
 }
-.prop-group.split > .prop-cluster:first-child {
-	justify-self: start;
-}
-.prop-group.split > .prop-cluster:last-child {
-	justify-self: end;
+.prop-group.split > .prop-cluster {
+	justify-self: center;
 }
 /* Sliders one under another on one grid: icon, track and value in columns of the same widths. */
 .prop-group.sliders {

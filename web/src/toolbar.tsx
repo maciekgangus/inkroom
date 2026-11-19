@@ -264,7 +264,9 @@ export function Toolbar({
 							<div class="settings-list">
 								<span class="settings-title">Kolor</span>
 								<div class="settings-colors">
-									{[...COLORS, ...MORE_COLORS].map((c) => swatch(c))}
+									{[...COLORS, ...MORE_COLORS].map((c) =>
+										swatch(c, () => setSettingsOpen(false)),
+									)}
 									{customColor}
 								</div>
 								<span class="settings-title">Grubość</span>
@@ -282,12 +284,13 @@ export function Toolbar({
 							aria-label="more colors"
 							aria-pressed={drawing && custom}
 							aria-expanded={paletteOpen}
+							aria-haspopup="true"
 							title={
 								extra
-									? "Ostatni dodatkowy kolor (klawisz 4); jeszcze raz otwiera paletę"
+									? "Więcej kolorów: ostatni dodatkowy kolor (klawisz 4); jeszcze raz otwiera paletę"
 									: "Więcej kolorów"
 							}
-							class={`swatch more ${on(drawing && custom)}`}
+							class={`swatch more has-list ${on(drawing && custom)}`}
 							style={
 								extra ? { background: displayColor(extra, theme) } : undefined
 							}

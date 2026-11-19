@@ -969,6 +969,17 @@ canvas {
 	border-bottom-color: currentColor;
 	opacity: 0.55;
 }
+/* The fourth colour place holds more than one colour (R-079): a small corner on the dot, as on the
+   buttons that open a list, white with a shadow so that it reads on any colour. */
+.toolbar .swatch.more.has-list::after {
+	right: 1px;
+	bottom: 1px;
+	border-width: 4px;
+	border-right-color: #fff;
+	border-bottom-color: #fff;
+	opacity: 1;
+	filter: drop-shadow(0 0 1px #0009);
+}
 .shape-list,
 .style-list,
 .stroke-popover {

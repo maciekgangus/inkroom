@@ -73,6 +73,33 @@ describe("Toolbar", () => {
 		const q = (label: string) =>
 			root.querySelector(`[aria-label="${label}"]`) as HTMLElement | null;
 
+		test("the fourth place says it holds more than one colour: a list marker, a title and a popup hint", () => {
+			const more = q("more colors") as HTMLElement;
+			expect(more.classList.contains("has-list")).toBe(true);
+			expect(more.getAttribute("aria-haspopup")).toBe("true");
+			expect(more.title).toMatch(/Więcej kolorów/);
+			act(() => click("more colors"));
+			act(() => click(`color ${MORE_COLORS[3]}`));
+			act(() => click(`color ${COLORS[1]}`));
+			// With a colour kept there, it still says so.
+			expect(more.classList.contains("has-list")).toBe(true);
+			expect(more.title).toMatch(/Więcej kolorów/);
+		});
+
+		test("the palette shuts after a colour is picked, not while the picker's sliders move", () => {
+			act(() => click("more colors"));
+			act(() => click("custom color"));
+			const shade = q("custom color shade") as HTMLInputElement;
+			shade.value = "30";
+			act(() => {
+				shade.dispatchEvent(new Event("input", { bubbles: true }));
+				shade.dispatchEvent(new Event("change", { bubbles: true }));
+			});
+			expect(root.querySelector(".palette")).not.toBeNull();
+			act(() => click(`color ${MORE_COLORS[2]}`));
+			expect(root.querySelector(".palette")).toBeNull();
+		});
+
 		test("the extra colours stay hidden until the palette is opened", () => {
 			expect(MORE_COLORS).toHaveLength(12);
 			expect(q(`color ${MORE_COLORS[0]}`)).toBeNull();
@@ -516,17 +543,27 @@ describe("Toolbar on a narrow screen: one button for colour, width and style (R-
 			expect(q(`line style ${s}`)).not.toBeNull();
 	});
 
-	test("choosing a colour or a width works from the list and leaves it open", () => {
+	test("a width and a style work from the list and leave it open; a colour works and shuts it", () => {
 		screen("compact");
 		show();
 		act(() => (q("pen settings") as HTMLElement).click());
-		act(() => (q(`color ${COLORS[1]}`) as HTMLElement).click());
-		expect(settings.color).toBe(COLORS[1]);
 		act(() => (q(`size ${SIZES[2]}`) as HTMLElement).click());
 		expect(settings.size).toBe(SIZES[2]);
 		act(() => (q("line style dashed") as HTMLElement).click());
 		expect(settings.lineStyle).toBe("dashed");
 		expect(root.querySelector(".settings-list")).not.toBeNull();
+		// The picker's sliders do not shut it either.
+		act(() => (q("custom color") as HTMLElement).click());
+		const shade = q("custom color shade") as HTMLInputElement;
+		shade.value = "30";
+		act(() => {
+			shade.dispatchEvent(new Event("input", { bubbles: true }));
+			shade.dispatchEvent(new Event("change", { bubbles: true }));
+		});
+		expect(root.querySelector(".settings-list")).not.toBeNull();
+		act(() => (q(`color ${COLORS[1]}`) as HTMLElement).click());
+		expect(settings.color).toBe(COLORS[1]);
+		expect(root.querySelector(".settings-list")).toBeNull();
 	});
 
 	test("Escape closes the list", () => {
