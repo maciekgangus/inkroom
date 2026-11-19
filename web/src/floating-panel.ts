@@ -118,3 +118,18 @@ export function popoverSpot(
 	);
 	return { left, top };
 }
+
+/**
+ * How far a card (the palette under the fourth colour place) must be moved sideways to stay on the
+ * screen, in px: 0 when it fits. Its arrow moves the other way, so it still points at the place.
+ */
+export function cardShift(
+	left: number,
+	right: number,
+	viewWidth: number,
+	margin = MARGIN,
+): number {
+	if (left < margin) return margin - left;
+	if (right > viewWidth - margin) return viewWidth - margin - right;
+	return 0;
+}

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import type { Stroke } from "./board/board";
 import {
+	cardShift,
 	isVisible,
 	panelTitle,
 	pickSide,
@@ -160,5 +161,15 @@ describe("popoverSpot", () => {
 		expect(popoverSpot(low, menu, size, view)?.top).toBe(view.h - size.h - 8);
 		const high = { minX: 900, minY: 0, maxX: 940, maxY: 20 };
 		expect(popoverSpot(high, menu, size, view)?.top).toBe(8);
+	});
+});
+
+describe("cardShift", () => {
+	test("is 0 while the card fits", () => {
+		expect(cardShift(100, 420, 1000)).toBe(0);
+	});
+	test("moves a card that sticks out on the left or on the right back to the margin", () => {
+		expect(cardShift(-30, 290, 1000)).toBe(38);
+		expect(cardShift(700, 1020, 1000)).toBe(-28);
 	});
 });
