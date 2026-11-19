@@ -78,7 +78,7 @@
 .prop-group.split {
 	display: grid;
 	grid-template-columns: 1fr 1px 1fr;
-	column-gap: 8px;
+	column-gap: 0;
 	align-items: center;
 }
 .prop-group.split > .prop-sep {
