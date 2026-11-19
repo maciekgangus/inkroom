@@ -9,8 +9,9 @@ Wymagania z `SPEC.md` są zrobione poza: R-005 (Android z rysikiem i tablet graf
 ## Priorytety (w tej kolejności)
 1. Responsywność: kreska pojawia się natychmiast lokalnie, u drugiej osoby bez zauważalnego opóźnienia. Wygoda użytkownika ponad wszystko.
 2. Działa na iPadach i innych tabletach z rysikiem, nie tylko na PC (korepetytor pracuje na PC, uczniowie często na tabletach).
-3. Oszczędność CPU na serwerze. RAMu jest dużo, procesora mało.
-4. Jeśli istnieje warta uwagi gotowa biblioteka tablicy, użyj jej zamiast pisać własną.
+3. Jeśli istnieje warta uwagi gotowa biblioteka tablicy, użyj jej zamiast pisać własną.
+
+Serwer prawie nie zużywa CPU (obliczenia są po stronie klienta), a maszyna ma 100 GB dysku i 8 GB RAM (do 16 GB), więc zasoby serwera nie ograniczają wyboru narzędzi (logi, metryki, mikroserwisy).
 
 ## Zasady pracy
 1. Najpierw myśl: wypisz założenia, a przy niejasności zapytaj zamiast zgadywać.
