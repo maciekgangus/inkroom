@@ -109,6 +109,13 @@ export function Toolbar({
 		return closeOnDismiss(".settings-wrap", () => setSettingsOpen(false));
 	}, [compact, settingsOpen]);
 	const [paletteOpen, setPaletteOpen] = useState(false);
+	// The palette shuts on Escape and on a press outside it (the fourth place toggles it itself).
+	useLayoutEffect(() => {
+		if (!paletteOpen) return;
+		return closeOnDismiss(".palette, .swatch.more", () =>
+			setPaletteOpen(false),
+		);
+	}, [paletteOpen]);
 	const [shapesOpen, setShapesOpen] = useState(false);
 	// The list belongs to the shape tool: leaving it closes the list.
 	const listOpen = shapesOpen && settings.tool === "shape";
@@ -278,7 +285,7 @@ export function Toolbar({
 			) : (
 				<>
 					<div class={`group${hasSelection ? " dimmed" : ""}`}>
-						{QUICK_COLORS.map((c) => swatch(c))}
+						{QUICK_COLORS.map((c) => swatch(c, () => setPaletteOpen(false)))}
 						<button
 							type="button"
 							aria-label="more colors"
@@ -296,8 +303,10 @@ export function Toolbar({
 							}
 							onClick={() => {
 								// The kept colour is picked first; pressed again, it opens the palette.
-								if (!custom && extra) pick(extra);
-								else setPaletteOpen(!paletteOpen);
+								if (!custom && extra) {
+									pick(extra);
+									setPaletteOpen(false);
+								} else setPaletteOpen(!paletteOpen);
 							}}
 						>
 							{!extra && <Icon name="plus" />}

@@ -83,6 +83,33 @@ test("a wide window keeps the full bar as it is (R-082)", async ({ page }) => {
 	expect(Math.abs(tb.y - title.y)).toBeLessThan(20);
 });
 
+test("on a wide window the palette shuts after a colour from the bar, from the fourth place and from itself", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 1700, height: 900 });
+	const palette = page.locator(".palette");
+	await page.locator("[aria-label='more colors']").click();
+	await expect(palette).toBeVisible();
+	await page.locator("[aria-label='color #1976d2']").first().click(); // a quick colour of the bar
+	await expect(palette).toHaveCount(0);
+	await page.locator("[aria-label='more colors']").click();
+	await palette.locator("[aria-label^='color #e91e63']").click(); // the grid
+	await expect(palette).toHaveCount(0);
+	await page.locator("[aria-label='color #d32f2f']").first().click();
+	await page.locator("[aria-label='more colors']").click(); // the kept colour is picked
+	await expect(palette).toHaveCount(0);
+	await page.locator("[aria-label='more colors']").click(); // again: the palette opens
+	await expect(palette).toBeVisible();
+	await page
+		.locator("[aria-label='color #d32f2f']")
+		.first()
+		.click({ force: true });
+	await expect(palette).toHaveCount(0);
+	await page.locator("[aria-label='more colors']").click();
+	await page.keyboard.press("Escape");
+	await expect(palette).toHaveCount(0);
+});
+
 test("the share button is on the top bar, an icon only (R-083)", async ({
 	page,
 }) => {

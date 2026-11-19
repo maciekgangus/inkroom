@@ -86,6 +86,49 @@ describe("Toolbar", () => {
 			expect(more.title).toMatch(/Więcej kolorów/);
 		});
 
+		test("the palette shuts after a colour from anywhere: the grid, a quick colour or the fourth place", () => {
+			const open = () => {
+				act(() => click("more colors"));
+				expect(root.querySelector(".palette")).not.toBeNull();
+			};
+			open();
+			act(() => click(`color ${MORE_COLORS[2]}`)); // from the grid
+			expect(root.querySelector(".palette")).toBeNull();
+			act(() => click(`color ${COLORS[1]}`)); // a quick colour, palette shut
+			act(() => click("more colors")); // the colour kept in the fourth place is picked first
+			expect(settings.color).toBe(MORE_COLORS[2]);
+			expect(root.querySelector(".palette")).toBeNull();
+			open(); // pressed again, the fourth place opens the palette
+			act(() => click(`color ${COLORS[1]}`)); // a quick colour of the bar, palette open
+			expect(root.querySelector(".palette")).toBeNull();
+			act(() => click("more colors")); // the kept colour is picked, palette shut
+			open(); // and pressed once more it opens
+			act(() => click("more colors")); // the fourth place itself, with the palette open
+			expect(root.querySelector(".palette")).toBeNull();
+		});
+
+		test("the palette shuts on Escape and on a press outside it, not on a press inside it", () => {
+			act(() => click("more colors"));
+			act(() => {
+				(root.querySelector(".palette") as HTMLElement).dispatchEvent(
+					new Event("pointerdown", { bubbles: true }),
+				);
+			});
+			expect(root.querySelector(".palette")).not.toBeNull();
+			act(() => {
+				document.body.dispatchEvent(
+					new Event("pointerdown", { bubbles: true }),
+				);
+			});
+			expect(root.querySelector(".palette")).toBeNull();
+			act(() => click("more colors"));
+			expect(root.querySelector(".palette")).not.toBeNull();
+			act(() => {
+				dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+			});
+			expect(root.querySelector(".palette")).toBeNull();
+		});
+
 		test("the palette shuts after a colour is picked, not while the picker's sliders move", () => {
 			act(() => click("more colors"));
 			act(() => click("custom color"));
