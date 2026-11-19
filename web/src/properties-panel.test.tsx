@@ -258,9 +258,9 @@ describe("PropertiesPanel", () => {
 			expect(root.querySelector(".fn-colors-wrap.open")).toBeNull();
 		});
 
-		test("every object has the same wide menu: there is no narrow one beside the wide one", () => {
+		test("a coordinate plane has a wide menu for its formulas, the other objects a narrower one", () => {
 			mount([withFns(f1)]);
-			expect(root.querySelector(".properties.wide")).toBeNull();
+			expect(root.querySelector(".properties.wide")).not.toBeNull();
 			render(null, root);
 			mount([freehand]);
 			expect(root.querySelector(".properties.wide")).toBeNull();
@@ -469,7 +469,7 @@ describe("PropertiesPanel", () => {
 					maxY: 300,
 				}),
 			);
-			expect(spot(".properties").left).toBeGreaterThan(innerWidth - 20 - 420);
+			expect(spot(".properties").left).toBeGreaterThan(innerWidth - 20 - 340);
 		});
 	});
 
@@ -640,7 +640,7 @@ describe("PropertiesPanel", () => {
 		const box = { minX: 400, minY: 200, maxX: 600, maxY: 300 };
 
 		test("is placed near the object it edits", () => {
-			// room for the wide menu on the right of the object
+			// room for the menu on the right of the object
 			const panel = mountAt([rect], {
 				minX: 100,
 				minY: 200,

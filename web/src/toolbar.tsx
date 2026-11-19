@@ -34,14 +34,6 @@ export const MORE_COLORS = [
 	"#eab308",
 	"#ff7043",
 ];
-/**
- * The colours the object menu offers in its one row: those of the bar, a violet and a grey, with
- * the tile for any other colour after them; on a narrow menu the last ones are left out (CSS).
- */
-export const MENU_COLORS = [
-	...COLORS,
-	...MORE_COLORS.filter((c) => ["#7c3aed", "#6b7280"].includes(c)),
-];
 export { SIZES } from "./stroke-controls";
 
 interface Props {

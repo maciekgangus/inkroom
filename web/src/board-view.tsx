@@ -64,7 +64,7 @@ import {
 	rememberColor,
 	switchTool,
 } from "./tool-style";
-import { COLORS, MENU_COLORS, QUICK_COLORS, SIZES, Toolbar } from "./toolbar";
+import { COLORS, QUICK_COLORS, SIZES, Toolbar } from "./toolbar";
 import { useToolbarLayout } from "./toolbar-layout";
 import { ZoomControls } from "./zoom-controls";
 
@@ -1180,7 +1180,7 @@ export function BoardView({
 			)}
 			<PropertiesPanel
 				elements={panelElements}
-				colors={MENU_COLORS}
+				colors={COLORS}
 				anchor={panelAnchor}
 				onClose={typing ? undefined : () => setMenuOpenFor(null)}
 				collapsed={!typing && !editingText && menuOpenFor !== selectionKey}

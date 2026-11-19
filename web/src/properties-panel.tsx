@@ -23,8 +23,10 @@ import "./properties-panel.css";
 import { useLayoutEffect, useRef, useState } from "preact/hooks";
 import { LINE_STYLES, SIZES, WIDTH_SHOWN } from "./stroke-controls";
 
-/** The menu's width (up to 400px, the same for every object) with room to spare, for choosing its side. */
-const MENU_WIDTH = 420;
+/** The menu's width (up to 320px) with room to spare, for choosing its side. */
+const MENU_WIDTH = 340;
+/** The same for a coordinate plane, whose menu is wider (up to 400px) for its formulas. */
+const WIDE_MENU_WIDTH = 420;
 /** The side of the tile that opens the menu again (44px on a touch screen). */
 const TILE = 44;
 
@@ -104,7 +106,11 @@ export function PropertiesPanel({
 	if (anchor && sideOf.current?.key !== ids)
 		sideOf.current = {
 			key: ids,
-			side: pickSide(anchor, MENU_WIDTH, view),
+			side: pickSide(
+				anchor,
+				capabilities(elements).plane ? WIDE_MENU_WIDTH : MENU_WIDTH,
+				view,
+			),
 		};
 	const side = sideOf.current?.side ?? "right";
 	// An object that is off the screen takes its menu and tile with it.
@@ -188,7 +194,7 @@ export function PropertiesPanel({
 		// biome-ignore lint/a11y/noStaticElementInteractions: the handler only keeps the focus where it is
 		<div
 			ref={ref}
-			class={`properties${at ? " floating" : ""}`}
+			class={`properties${can.plane ? " wide" : ""}${at ? " floating" : ""}`}
 			style={
 				at
 					? {
@@ -284,7 +290,7 @@ export function PropertiesPanel({
 					</Group>
 				)}
 				{((can.size && !can.textOnly && !can.plane) || can.dash) && (
-					<Group>
+					<Group options>
 						{can.size &&
 							!can.textOnly &&
 							!can.plane &&
@@ -409,14 +415,19 @@ const Group = ({
 	children,
 	split = false,
 	sliders = false,
+	options = false,
 }: {
+	/** The ready widths and the line styles, two clusters with a rule, the whole row in the middle. */
+	options?: boolean;
 	children: ComponentChildren;
 	/** Two clusters of switches on one line: one by the left edge, one by the right, a rule between. */
 	split?: boolean;
 	/** Sliders one under another on one grid: icon, track and value in columns of the same widths. */
 	sliders?: boolean;
 }) => (
-	<div class={`prop-group${split ? " split" : ""}${sliders ? " sliders" : ""}`}>
+	<div
+		class={`prop-group${split ? " split" : ""}${sliders ? " sliders" : ""}${options ? " options" : ""}`}
+	>
 		{children}
 	</div>
 );
