@@ -103,12 +103,24 @@ export function AccountDialog({
 		return () => before?.focus?.();
 	}, []);
 
+	// Escape works wherever the focus is (it may be on the page when a button it was on went away).
+	useEffect(() => {
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === "Escape") onClose();
+		};
+		document.addEventListener("keydown", onKey);
+		return () => document.removeEventListener("keydown", onKey);
+	}, [onClose]);
+
+	// Opening the danger zone puts the cursor in the name field, so typing starts at once.
+	useEffect(() => {
+		if (deleting)
+			dialog.current
+				?.querySelector<HTMLInputElement>("input[name=confirm]")
+				?.focus();
+	}, [deleting]);
+
 	const keys = (e: KeyboardEvent) => {
-		if (e.key === "Escape") {
-			e.stopPropagation();
-			onClose();
-			return;
-		}
 		if (e.key !== "Tab" || !dialog.current) return;
 		const items = [...dialog.current.querySelectorAll<HTMLElement>(FOCUSABLE)];
 		if (items.length === 0) return;

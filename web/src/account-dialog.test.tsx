@@ -129,12 +129,10 @@ describe("AccountDialog (R-085)", () => {
 		expect(onClose).toHaveBeenCalled();
 	});
 
-	test("Escape closes the window", async () => {
+	test("Escape closes the window wherever the focus is", async () => {
 		await show();
 		await act(async () => {
-			q<HTMLElement>(".account-dialog")?.dispatchEvent(
-				new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
-			);
+			document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
 		});
 		expect(onClose).toHaveBeenCalled();
 	});
