@@ -83,5 +83,123 @@ services:
       - app
     restart: unless-stopped
 
+  # ------------------------------------------------------------------------------------------
+  # Logs, metrics and alerts (R-098, ADR 0023). Off until COMPOSE_PROFILES=observability is set
+  # in .env, so the app never depends on any of it and a mistake here cannot touch the nightly
+  # update. Nothing below is published to the internet; Grafana is reached through the tunnel
+  # (a second hostname behind Cloudflare Access) or, on this machine, at 127.0.0.1:3000.
+  # The four services share a budget of about 1.5 GB of memory; the app and Litestream come first.
+  # ------------------------------------------------------------------------------------------
+
+  # Keeps the logs of every container for 30 days (Alloy sends them here).
+  loki:
+    image: grafana/loki:3.6.22
+    profiles: ["observability"]
+    command: -config.file=/etc/loki/loki.yml
+    volumes:
+      - loki_data:/loki
+      - ./observability/loki.yml:/etc/loki/loki.yml:ro,z
+    mem_limit: 384m
+    logging: &obs-logging
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+
+  # Reads the logs of the containers through the Docker socket and sends them to Loki; also
+  # collects the metrics of the host and of the containers and sends them to Prometheus.
+  # The socket gives root on the host to whoever controls this container: it is the pinned
+  # official image, with no published port, on the internal network (ADR 0023).
+  alloy:
+    image: grafana/alloy:v1.21.3
+    profiles: ["observability"]
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    user: "0:0"
+    pid: host
+    environment:
+      LOG_PROJECT_FILTER: com.docker.compose.project=${COMPOSE_PROJECT_NAME}
+    volumes:
+      - alloy_data:/var/lib/alloy/data
+      - ./observability/config.alloy:/etc/alloy/config.alloy:ro,z
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /:/host:ro,rslave
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    depends_on:
+      - loki
+      - prometheus
+    mem_limit: 384m
+    logging: *obs-logging
+    restart: unless-stopped
+
+  # Keeps the metrics for 30 days (at most 10 GB) and evaluates nothing itself: the alerts are
+  # Grafana's.
+  prometheus:
+    image: prom/prometheus:v3.15.1
+    profiles: ["observability"]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+      - --storage.tsdb.retention.size=10GB
+      - --web.enable-remote-write-receiver
+    volumes:
+      - prometheus_data:/prometheus
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro,z
+    mem_limit: 384m
+    logging: *obs-logging
+    restart: unless-stopped
+
+  # The one place to look: dashboard "Inkroom", Explore for the logs, and the alerts, sent to
+  # Telegram. The login is the admin account below; Cloudflare Access stands in front of it.
+  grafana:
+    image: grafana/grafana:12.4.15
+    profiles: ["observability"]
+    # Refuses to start without a password rather than starting with Grafana's default one.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - '[ -n "$$GF_SECURITY_ADMIN_PASSWORD" ] || { echo "set GF_SECURITY_ADMIN_PASSWORD in .env (deploy/README.md, Logi i alerty)" >&2; exit 1; }; exec /run.sh'
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GF_SECURITY_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:-}
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3000}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      # No plugins fetched from the internet at start (Grafana 12 preinstalls a few by default).
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/inkroom.json
+      # The Telegram bot of the alerts; the placeholders let Grafana start before it exists.
+      TELEGRAM_API_URL: ${TELEGRAM_API_URL:-https://api.telegram.org}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-unset}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-0}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro,z
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro,z
+    depends_on:
+      - loki
+      - prometheus
+    mem_limit: 384m
+    logging: *obs-logging
+    restart: unless-stopped
+
 volumes:
   data:
+  loki_data:
+  prometheus_data:
+  alloy_data:
+  grafana_data:

@@ -1,0 +1,124 @@
+// Alloy: collects the logs of every container of the compose project and the metrics of the host
+// and of the containers (ADR 0023). Logs go to Loki, metrics to Prometheus (remote write).
+
+logging {
+  level  = "warn"
+  format = "logfmt"
+}
+
+// ---------------------------------------------------------------- logs
+
+discovery.docker "containers" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "10s"
+  // Only the containers of this compose project (the app, litestream, cloudflared, and this
+  // stack), so other things running on the machine are not read. LOG_PROJECT_FILTER is set by the
+  // compose file; without it every compose container is read.
+  filter {
+    name   = "label"
+    values = [coalesce(sys.env("LOG_PROJECT_FILTER"), "com.docker.compose.project")]
+  }
+}
+
+discovery.relabel "containers" {
+  targets = []
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+  // `service` is the compose service ("app", "litestream"); a JSON line with its own `service`
+  // field (the app also relays the browser's errors as service "client") replaces it below.
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    target_label  = "compose_project"
+  }
+}
+
+loki.source.docker "containers" {
+  host          = "unix:///var/run/docker.sock"
+  targets       = discovery.docker.containers.targets
+  relabel_rules = discovery.relabel.containers.rules
+  forward_to    = [loki.process.logs.receiver]
+}
+
+// Labels stay few (service, container, level); request_id, path and the like remain in the line
+// and are read with `| json` in a query, so Loki's index stays small.
+loki.process "logs" {
+  // The app and the services written after it: one JSON object per line (R-098, ADR 0022).
+  stage.json {
+    expressions = {
+      level        = "level",
+      json_service = "service",
+    }
+  }
+  // Litestream writes logfmt (`level=INFO`); a JSON line gives no `level` here, so this only helps it.
+  stage.logfmt {
+    mapping = { logfmt_level = "level" }
+  }
+  // cloudflared writes `2026-11-19T10:00:00Z ERR message`.
+  stage.regex {
+    expression = "^\\S+\\s+(?P<cf_level>INF|ERR|WRN|DBG|FTL)\\s"
+  }
+  // One spelling of the level whatever the source wrote.
+  stage.template {
+    source   = "level"
+    template = "{{ $v := \"\" }}{{ if .Value }}{{ $v = ToUpper .Value }}{{ else if .logfmt_level }}{{ $v = ToUpper .logfmt_level }}{{ else if .cf_level }}{{ $v = .cf_level }}{{ end }}{{ if eq $v \"ERR\" }}ERROR{{ else if eq $v \"FTL\" }}ERROR{{ else if eq $v \"FATAL\" }}ERROR{{ else if eq $v \"PANIC\" }}ERROR{{ else if eq $v \"WRN\" }}WARN{{ else if eq $v \"WARNING\" }}WARN{{ else if eq $v \"INF\" }}INFO{{ else if eq $v \"DBG\" }}DEBUG{{ else }}{{ $v }}{{ end }}"
+  }
+  stage.labels {
+    values = {
+      level   = "level",
+      service = "json_service",
+    }
+  }
+  forward_to = [loki.write.local.receiver]
+}
+
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
+
+// ---------------------------------------------------------------- metrics
+
+// The host: CPU, memory, disk, network (the disk alert reads these).
+prometheus.exporter.unix "host" {
+  rootfs_path = "/host"
+  procfs_path = "/host/proc"
+  sysfs_path  = "/host/sys"
+  set_collectors = ["cpu", "diskstats", "filesystem", "loadavg", "meminfo", "netdev", "uname", "pressure"]
+  filesystem {
+    fs_types_exclude   = "^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs|tmpfs)$"
+    mount_points_exclude = "^/(dev|proc|run/credentials/.+|sys|var/lib/docker/.+)($|/)"
+  }
+}
+
+// The containers: memory, CPU, start time (the restart-loop alert reads container_start_time_seconds).
+prometheus.exporter.cadvisor "docker" {
+  docker_only = true
+}
+
+prometheus.scrape "host" {
+  job_name        = "node"
+  targets         = prometheus.exporter.unix.host.targets
+  scrape_interval = "30s"
+  forward_to      = [prometheus.remote_write.local.receiver]
+}
+
+prometheus.scrape "containers" {
+  job_name        = "cadvisor"
+  targets         = prometheus.exporter.cadvisor.docker.targets
+  scrape_interval = "30s"
+  forward_to      = [prometheus.remote_write.local.receiver]
+}
+
+prometheus.remote_write "local" {
+  endpoint {
+    url = "http://prometheus:9090/api/v1/write"
+  }
+}
