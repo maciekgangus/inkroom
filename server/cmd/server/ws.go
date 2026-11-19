@@ -3,11 +3,12 @@ package main
 import (
 	"context"
 	"errors"
-	"log"
 	"net/http"
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/maciekgangus/inkroom/server/internal/logx"
+	"github.com/maciekgangus/inkroom/server/internal/metrics"
 	"github.com/maciekgangus/inkroom/server/internal/room"
 	"github.com/maciekgangus/inkroom/server/internal/store"
 )
@@ -40,6 +41,9 @@ func (a *app) serveWS(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
+	defer conn.CloseNow() // also when a panic unwinds this handler
+	metrics.WSConnections.Inc()
+	defer metrics.WSConnections.Dec()
 	conn.SetReadLimit(maxMessageBytes)
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
@@ -57,7 +61,7 @@ func (a *app) serveWS(w http.ResponseWriter, r *http.Request) {
 	client.SetPerson(a.person(r, user, loggedIn, client.ID), loggedIn && user.ID == board.OwnerID)
 	rm, err := a.hub.Join(boardID, client)
 	if err != nil {
-		log.Printf("joining board %s: %v", boardID, err)
+		logx.From(r.Context()).Error("joining board", "board", logx.Ref(boardID), "err", err)
 		conn.Close(websocket.StatusInternalError, "cannot load board")
 		return
 	}
@@ -65,13 +69,15 @@ func (a *app) serveWS(w http.ResponseWriter, r *http.Request) {
 
 	if loggedIn {
 		if err := a.st.RecordVisit(user.ID, boardID, time.Now()); err != nil {
-			log.Printf("recording visit: %v", err)
+			logx.From(r.Context()).Error("recording visit", "board", logx.Ref(boardID), "err", err)
 		}
 	}
 
 	go func() {
 		defer cancel()
+		defer logx.Recover("ws-writer") // a panic here would otherwise take the whole process down
 		for msg := range client.Send {
+			metrics.WSMessage(metrics.DirOut, msg) // counted when handed to the socket
 			wctx, wcancel := context.WithTimeout(ctx, writeTimeout)
 			err := conn.Write(wctx, websocket.MessageText, msg)
 			wcancel()
@@ -89,6 +95,7 @@ func (a *app) serveWS(w http.ResponseWriter, r *http.Request) {
 			conn.Close(websocket.StatusNormalClosure, "")
 			return
 		}
+		metrics.WSMessage(metrics.DirIn, msg) // before Handle, which takes ownership of msg
 		if err := rm.Handle(client, msg); err != nil {
 			conn.Close(websocket.StatusPolicyViolation, "invalid message")
 			return

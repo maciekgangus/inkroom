@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/maciekgangus/inkroom/server/internal/metrics"
 )
 
 func newBoard(t *testing.T, srv *httptest.Server) string {
@@ -303,5 +304,41 @@ func TestWebSocketCompressesBigMessages(t *testing.T) {
 	t.Cleanup(func() { c.CloseNow() })
 	if ext := resp.Header.Get("Sec-WebSocket-Extensions"); !strings.Contains(ext, "permessage-deflate") {
 		t.Fatalf("compression was not negotiated: %q", ext)
+	}
+}
+
+func TestWebSocketsAreCountedInTheMetrics(t *testing.T) {
+	srv, _, _ := testApp(t)
+	id := newBoard(t, srv)
+	conns := metrics.WSConnections.Value()
+	in, out := metrics.WSMessageCount("add", "in"), metrics.WSMessageCount("add", "out")
+	snaps := metrics.WSMessageCount("snapshot", "out")
+
+	a := dial(t, srv, id)
+	b := dial(t, srv, id)
+	read(t, a)
+	read(t, b)
+	if got := metrics.WSConnections.Value() - conns; got != 2 {
+		t.Errorf("connections +%d, want +2", got)
+	}
+	if got := metrics.WSMessageCount("snapshot", "out") - snaps; got != 2 {
+		t.Errorf("snapshots out +%d, want +2", got)
+	}
+	write(t, a, stroke)
+	read(t, b)
+	if got := metrics.WSMessageCount("add", "in") - in; got != 1 {
+		t.Errorf("add in +%d, want +1", got)
+	}
+	if got := metrics.WSMessageCount("add", "out") - out; got != 2 {
+		t.Errorf("add out +%d, want +2 (every client gets it, the sender too)", got)
+	}
+	a.CloseNow()
+	b.CloseNow()
+	deadline := time.Now().Add(2 * time.Second)
+	for metrics.WSConnections.Value() != conns && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if got := metrics.WSConnections.Value(); got != conns {
+		t.Errorf("connections gauge = %d after both left, want %d", got, conns)
 	}
 }

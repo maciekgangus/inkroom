@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/maciekgangus/inkroom/server/internal/metrics"
 	"github.com/maciekgangus/inkroom/server/internal/store"
 )
 
@@ -306,5 +307,47 @@ func TestHubSavesAndRestoresRevokedDrawing(t *testing.T) {
 	_ = r2.Handle(ann2, []byte(`{"t":"add","stroke":{"id":"s1","authorId":"x","color":"#111","size":4,"points":[[1,1,0.5]]}}`))
 	if len(owner2.Send) != 0 {
 		t.Fatal("the saved revocation was not applied after a reload")
+	}
+}
+
+func TestRoomsActiveGaugeFollowsJoinAndLeave(t *testing.T) {
+	h := NewHub(newFake(), time.Hour)
+	defer h.Close()
+	before := metrics.RoomsActive.Value()
+	c1, c2 := NewClient(4), NewClient(4)
+	r, err := h.Join("b1", c1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.Join("b1", c2); err != nil {
+		t.Fatal(err)
+	}
+	if got := metrics.RoomsActive.Value() - before; got != 1 {
+		t.Errorf("two people in one board: gauge +%d, want +1", got)
+	}
+	h.Leave("b1", r, c1)
+	h.Leave("b1", r, c2)
+	if got := metrics.RoomsActive.Value() - before; got != 0 {
+		t.Errorf("empty: gauge +%d, want +0", got)
+	}
+}
+
+// panickyStore panics when asked to save, as a bug in the persistence code would.
+type panickyStore struct{ *fakeStore }
+
+func (panickyStore) Apply(string, []store.Op, time.Time) error { panic("disk on fire") }
+
+func TestAPanicWhileSavingIsRecoveredAndTheBatchIsKeptForARetry(t *testing.T) {
+	before := metrics.Panics.Value()
+	h := NewHub(panickyStore{newFake()}, 5*time.Millisecond)
+	r, c := joinHub(t, h, "b1")
+	recv(t, c)
+	_ = r.Handle(c, []byte(add1))
+	deadline := time.Now().Add(2 * time.Second)
+	for metrics.Panics.Value() < before+2 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond) // two panics in a row: the batch was kept and tried again
+	}
+	if got := metrics.Panics.Value() - before; got < 2 {
+		t.Fatalf("panics = %d, want the batch to be retried after the first panic", got)
 	}
 }

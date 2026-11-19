@@ -2,12 +2,14 @@ package main
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"path/filepath"
 	"time"
 
 	"github.com/maciekgangus/inkroom/server/internal/auth"
 	"github.com/maciekgangus/inkroom/server/internal/cfaccess"
+	"github.com/maciekgangus/inkroom/server/internal/logx"
 	"github.com/maciekgangus/inkroom/server/internal/room"
 	"github.com/maciekgangus/inkroom/server/internal/store"
 )
@@ -30,16 +32,23 @@ type app struct {
 	adminSecret []byte
 	// legal names the operator on /privacy and /terms (R-096).
 	legal legalData
+	// clientLog writes the errors browsers report (service "client"), and the two limiters keep a
+	// person and an address from flooding it (R-098).
+	clientLog                  *slog.Logger
+	clientLimit, clientIPLimit *rateLimiter
 }
 
 // newApp wires the services together. Call Close before closing the store.
 func newApp(staticDir string, st *store.Store) *app {
 	return &app{
-		st:          st,
-		auth:        auth.New(st),
-		hub:         room.NewHub(st, flushEvery),
-		staticDir:   staticDir,
-		adminSecret: newAdminSecret(),
+		st:            st,
+		auth:          auth.New(st),
+		hub:           room.NewHub(st, flushEvery),
+		staticDir:     staticDir,
+		adminSecret:   newAdminSecret(),
+		clientLog:     logx.For("client"),
+		clientLimit:   newRateLimiter(time.Now, clientErrorsPerHour, time.Hour, clientLimiterKeys),
+		clientIPLimit: newRateLimiter(time.Now, clientIPsPerHour, time.Hour, clientLimiterKeys),
 	}
 }
 
@@ -68,7 +77,8 @@ func (a *app) configureGoogle(clientID, secret, publicURL string) {
 func (a *app) Close() { a.hub.Close() }
 
 // Handler returns the HTTP handler: health check, accounts, boards, board WebSocket and
-// static files (index.html also serves /b/<id>, the client route).
+// static files (index.html also serves /b/<id>, the client route), inside the logging and
+// metrics middleware (ADR 0022).
 func (a *app) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -99,6 +109,7 @@ func (a *app) Handler() http.Handler {
 	mux.HandleFunc("POST /api/boards/{id}/images", a.uploadImage)
 	mux.HandleFunc("GET /api/boards/{id}/images/{image}", a.getImage)
 	mux.HandleFunc("POST /api/feedback", a.sendFeedback)
+	mux.HandleFunc("POST /api/client-error", a.clientError)
 	mux.HandleFunc("GET /admin", a.adminOnly(a.adminPage))
 	mux.HandleFunc("GET /api/admin/feedback", a.adminOnly(a.adminListFeedback))
 	mux.HandleFunc("POST /api/admin/feedback/{id}/read", a.adminChange(a.adminMarkFeedback))
@@ -127,7 +138,7 @@ func (a *app) Handler() http.Handler {
 	mux.HandleFunc("GET /register", index)
 	mux.HandleFunc("GET /b/{id}", index)
 	mux.Handle("/", http.FileServer(http.Dir(a.staticDir)))
-	return mux
+	return logx.Middleware(mux, logx.Options{})
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

@@ -4,7 +4,7 @@ package main
 import (
 	"context"
 	"errors"
-	"log"
+	"log/slog"
 	"mime"
 	"net/http"
 	"os"
@@ -13,6 +13,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/maciekgangus/inkroom/server/internal/logx"
+	"github.com/maciekgangus/inkroom/server/internal/metrics"
 	"github.com/maciekgangus/inkroom/server/internal/store"
 )
 
@@ -28,37 +30,44 @@ func init() {
 	_ = mime.AddExtensionType(".webmanifest", "application/manifest+json")
 }
 
+// fatal logs the error and stops the process (slog has no Fatal of its own).
+func fatal(msg string, err error) {
+	slog.Error(msg, "err", err)
+	os.Exit(1)
+}
+
 func main() {
+	logx.Setup("app") // JSON lines on stdout, LOG_LEVEL and LOG_FORMAT from the environment (ADR 0022)
 	dataDir := getenv("DATA_DIR", "./data")
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
-		log.Fatal(err)
+		fatal("creating the data directory", err)
 	}
 	st, err := store.Open(filepath.Join(dataDir, "inkroom.db"))
 	if err != nil {
-		log.Fatal(err)
+		fatal("opening the database", err)
 	}
 	defer st.Close()
 
 	a := newApp(getenv("STATIC_DIR", "../web/dist"), st)
 	a.configureCaptcha(os.Getenv("TURNSTILE_SITE_KEY"), os.Getenv("TURNSTILE_SECRET"))
 	if os.Getenv("TURNSTILE_SECRET") == "" {
-		log.Print("TURNSTILE_SECRET is not set: registration is closed")
+		slog.Warn("TURNSTILE_SECRET is not set: registration is closed")
 	}
 	a.configureGoogle(os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"), os.Getenv("PUBLIC_URL"))
 	if !a.auth.GoogleEnabled() {
-		log.Print("GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is not set: signing in with Google is off")
+		slog.Warn("GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is not set: signing in with Google is off")
 	}
 	a.configureLegal(os.Getenv("OPERATOR_NAME"), os.Getenv("CONTACT_EMAIL"))
 	a.configureAdmin(os.Getenv("CF_ACCESS_TEAM_DOMAIN"), os.Getenv("CF_ACCESS_AUD"))
 	if a.admin == nil {
-		log.Print("CF_ACCESS_TEAM_DOMAIN or CF_ACCESS_AUD is not set: the admin page is off")
+		slog.Warn("CF_ACCESS_TEAM_DOMAIN or CF_ACCESS_AUD is not set: the admin page is off")
 	}
 	if os.Getenv("ADMIN_DEV_OPEN") == "1" {
 		if a.admin != nil {
-			log.Print("ADMIN_DEV_OPEN is ignored: Cloudflare Access is configured")
+			slog.Warn("ADMIN_DEV_OPEN is ignored: Cloudflare Access is configured")
 		} else {
 			a.configureAdminDev(true)
-			log.Print("ADMIN_DEV_OPEN: the admin page is open to direct requests (development only)")
+			slog.Warn("ADMIN_DEV_OPEN: the admin page is open to direct requests (development only)")
 		}
 	}
 	seedDevUser(a)
@@ -66,19 +75,49 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	metricsSrv := startMetrics()
 	go func() {
 		<-ctx.Done()
 		shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		_ = srv.Shutdown(shutdown)
+		if metricsSrv != nil {
+			_ = metricsSrv.Shutdown(shutdown)
+		}
 	}()
 
-	log.Printf("listening on %s", srv.Addr)
+	slog.Info("listening", "addr", srv.Addr)
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Fatal(err)
+		fatal("serving", err)
 	}
 	a.Close() // save pending board changes before the store closes
-	log.Print("stopped")
+	slog.Info("stopped")
+}
+
+// startMetrics serves /metrics (Prometheus text format) on METRICS_ADDR, a listener of its own:
+// never the public port and never behind the tunnel, only reachable on the machine or the
+// compose network (ADR 0022). Default :9100; set it empty to turn the endpoint off. A port that
+// is taken is a warning, not a reason to stop the app.
+func startMetrics() *http.Server {
+	addr, set := os.LookupEnv("METRICS_ADDR")
+	if !set {
+		addr = ":9100"
+	}
+	if addr == "" {
+		slog.Info("METRICS_ADDR is empty: /metrics is off")
+		return nil
+	}
+	mux := http.NewServeMux()
+	mux.Handle("GET /metrics", metrics.Default.Handler())
+	srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
+	go func() {
+		defer logx.Recover("metrics-server")
+		slog.Info("serving metrics", "addr", addr)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			slog.Warn("the metrics endpoint could not start", "addr", addr, "err", err)
+		}
+	}()
+	return srv
 }
 
 // seedDevUser creates the account named by SEED_USER_EMAIL and SEED_USER_PASSWORD, if both
@@ -89,8 +128,8 @@ func seedDevUser(a *app) {
 		return
 	}
 	if err := a.auth.Seed(email, password); err != nil {
-		log.Printf("seeding the dev user failed: %v", err)
+		slog.Error("seeding the dev user failed", "err", err)
 		return
 	}
-	log.Printf("dev user %s is available (seeded from SEED_USER_EMAIL)", email)
+	slog.Info("a dev user is available (seeded from SEED_USER_EMAIL)")
 }
