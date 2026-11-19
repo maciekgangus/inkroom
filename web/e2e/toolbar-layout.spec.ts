@@ -90,6 +90,13 @@ test("on a wide window the palette shuts after a colour from the bar, from the f
 	const palette = page.locator(".palette");
 	await page.locator("[aria-label='more colors']").click();
 	await expect(palette).toBeVisible();
+	// The palette hangs from the fourth place: its middle is level with the middle of that place.
+	const slot = await box(page, "[aria-label='more colors']");
+	const card = await box(page, ".palette");
+	expect(
+		Math.abs(card.x + card.width / 2 - (slot.x + slot.width / 2)),
+	).toBeLessThanOrEqual(2);
+	expect(card.y).toBeGreaterThan(slot.y + slot.height);
 	await page.locator("[aria-label='color #1976d2']").first().click(); // a quick colour of the bar
 	await expect(palette).toHaveCount(0);
 	await page.locator("[aria-label='more colors']").click();

@@ -109,7 +109,7 @@ export function Toolbar({
 		return closeOnDismiss(".settings-wrap", () => setSettingsOpen(false));
 	}, [compact, settingsOpen]);
 	const [paletteOpen, setPaletteOpen] = useState(false);
-	// The palette shuts on Escape and on a press outside it (the fourth place toggles it itself).
+	// The palette shuts on Escape and on a press outside it and its fourth place (which toggles it).
 	useLayoutEffect(() => {
 		if (!paletteOpen) return;
 		return closeOnDismiss(".palette, .swatch.more", () =>
@@ -286,39 +286,42 @@ export function Toolbar({
 				<>
 					<div class={`group${hasSelection ? " dimmed" : ""}`}>
 						{QUICK_COLORS.map((c) => swatch(c, () => setPaletteOpen(false)))}
-						<button
-							type="button"
-							aria-label="more colors"
-							aria-pressed={drawing && custom}
-							aria-expanded={paletteOpen}
-							aria-haspopup="true"
-							title={
-								extra
-									? "Więcej kolorów: ostatni dodatkowy kolor (klawisz 4); jeszcze raz otwiera paletę"
-									: "Więcej kolorów"
-							}
-							class={`swatch more has-list ${on(drawing && custom)}`}
-							style={
-								extra ? { background: displayColor(extra, theme) } : undefined
-							}
-							onClick={() => {
-								// The kept colour is picked first; pressed again, it opens the palette.
-								if (!custom && extra) {
-									pick(extra);
-									setPaletteOpen(false);
-								} else setPaletteOpen(!paletteOpen);
-							}}
-						>
-							{!extra && <Icon name="plus" />}
-						</button>
-						{paletteOpen && (
-							<div class="palette">
-								{[...COLORS.slice(3), ...MORE_COLORS].map((c) =>
-									swatch(c, () => setPaletteOpen(false)),
-								)}
-								{customColor}
-							</div>
-						)}
+						<div class="flyout-wrap palette-wrap">
+							<button
+								type="button"
+								aria-label="more colors"
+								aria-pressed={drawing && custom}
+								aria-expanded={paletteOpen}
+								aria-haspopup="true"
+								title={
+									extra
+										? "Więcej kolorów: ostatni dodatkowy kolor (klawisz 4); jeszcze raz otwiera paletę"
+										: "Więcej kolorów"
+								}
+								class={`swatch more has-list ${on(drawing && custom)}`}
+								style={
+									extra ? { "--well": displayColor(extra, theme) } : undefined
+								}
+								onClick={() => {
+									// The kept colour is picked first; pressed again, it opens the palette.
+									if (!custom && extra) {
+										pick(extra);
+										setPaletteOpen(false);
+									} else setPaletteOpen(!paletteOpen);
+								}}
+							>
+								{!extra && <Icon name="plus" />}
+							</button>
+							{paletteOpen && (
+								<div class="palette" role="group" aria-label="Więcej kolorów">
+									{[...COLORS.slice(3), ...MORE_COLORS].map((c) =>
+										swatch(c, () => setPaletteOpen(false)),
+									)}
+									<span class="palette-rule" aria-hidden="true" />
+									{customColor}
+								</div>
+							)}
+						</div>
 					</div>
 					<div class={`group${hasSelection ? " dimmed" : ""}`}>
 						<StrokeControls settings={settings} onChange={set} />

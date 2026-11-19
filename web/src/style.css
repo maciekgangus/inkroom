@@ -15,6 +15,20 @@
 	--radius: 12px;
 	--radius-lg: 18px;
 	--shadow: 0 1px 2px #10122008, 0 8px 24px #10122014;
+	/* The rainbow ring of a colour well (R-079, R-060): the iPadOS/macOS sign for "any colour". */
+	--well-ring: conic-gradient(
+		from 200deg,
+		#f43f5e,
+		#f59e0b,
+		#eab308,
+		#22c55e,
+		#06b6d4,
+		#3b82f6,
+		#8b5cf6,
+		#d946ef,
+		#f43f5e
+	);
+	--swatch-edge: color-mix(in srgb, var(--text) 12%, transparent);
 	--sans: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
 	/* The font of every text on the board: bundled, so it looks the same everywhere. */
 	--text-font: "Inter", system-ui, sans-serif;
@@ -35,6 +49,19 @@
 	--grid: #2c2e39;
 	--grid-strong: #4a4d5e;
 	--shadow: 0 1px 2px #0006, 0 8px 24px #0009;
+	--well-ring: conic-gradient(
+		from 200deg,
+		#fb7185,
+		#fbbf24,
+		#facc15,
+		#4ade80,
+		#22d3ee,
+		#60a5fa,
+		#a78bfa,
+		#e879f9,
+		#fb7185
+	);
+	--swatch-edge: color-mix(in srgb, var(--text) 16%, transparent);
 }
 html,
 body {
@@ -560,34 +587,196 @@ canvas {
 		0 0 0 3px var(--surface),
 		0 0 0 5px var(--accent);
 }
-.toolbar .swatch.more {
-	border: 1px dashed var(--muted);
-	color: var(--muted);
-}
-.more svg {
-	width: 14px;
-	height: 14px;
-}
-.toolbar .swatch.more[style] {
-	border-color: transparent;
-}
-/* The tile for any other colour (R-060, R-082): a dashed ring with a plus, or that colour. */
-.toolbar .swatch.custom {
-	border: 1px dashed var(--muted);
-	background: var(--swatch, transparent);
-	color: var(--muted);
-}
-.toolbar .swatch.custom.own {
-	border-color: transparent;
-}
-.toolbar .swatch.custom svg {
-	width: 14px;
-	height: 14px;
-}
 .toolbar .swatch[aria-expanded="true"] {
 	box-shadow:
 		0 0 0 3px var(--surface),
 		0 0 0 5px var(--accent);
+}
+
+/* A colour well (R-079, R-060): the colour inside a thin rainbow ring, the system sign for "any
+   colour". The fourth place of the bar and the tile for one's own colour look alike: both hold a
+   colour from beyond the quick ones. The ring is outside the colour, so it reads on white and black. */
+.toolbar .swatch.more,
+.toolbar .swatch.custom {
+	--well: transparent;
+	position: relative;
+	display: grid;
+	place-items: center;
+	min-width: 28px;
+	width: 28px;
+	height: 28px;
+	margin: 6px;
+	border: 0;
+	background: none;
+	color: var(--muted);
+}
+.toolbar .swatch.custom.own {
+	--well: var(--swatch);
+}
+.toolbar .swatch.more::before,
+.toolbar .swatch.custom::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border-radius: 50%;
+	background: var(--well-ring);
+	-webkit-mask: radial-gradient(
+		farthest-side,
+		transparent calc(100% - 2.5px),
+		#000 calc(100% - 2px)
+	);
+	mask: radial-gradient(
+		farthest-side,
+		transparent calc(100% - 2.5px),
+		#000 calc(100% - 2px)
+	);
+	transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+/* The colour itself; this also replaces the corner mark of `.has-list` on the fourth place. */
+.toolbar .swatch.more::after,
+.toolbar .swatch.custom::after {
+	content: "";
+	position: absolute;
+	inset: 4.5px;
+	border: 0;
+	border-radius: 50%;
+	background: var(--well);
+	box-shadow: inset 0 0 0 1px var(--swatch-edge);
+	opacity: 1;
+	filter: none;
+}
+.toolbar .swatch.more svg,
+.toolbar .swatch.custom svg {
+	position: relative;
+	z-index: 1;
+	width: 12px;
+	height: 12px;
+}
+@media (hover: hover) {
+	.toolbar .swatch.more:hover::before,
+	.toolbar .swatch.custom:hover::before {
+		transform: rotate(60deg);
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.toolbar .swatch.more::before,
+	.toolbar .swatch.custom::before {
+		transition: none;
+	}
+}
+
+/* The palette of more colours (R-025, R-079), hanging from the fourth place with a small arrow:
+   the fixed colours, a hairline, then the well for one's own colour; its picker opens below. */
+.palette-wrap {
+	position: relative;
+	display: flex;
+}
+.palette {
+	position: absolute;
+	top: calc(100% + 14px);
+	left: 50%;
+	z-index: 3;
+	display: grid;
+	grid-template-columns: repeat(7, 36px) 13px 36px;
+	grid-template-rows: 36px 36px;
+	padding: 8px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--surface);
+	box-shadow: var(--shadow);
+	transform: translateX(-50%);
+	transform-origin: 50% -6px;
+	animation: palette-in 0.14s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+/* The arrow to the fourth place: a square turned on its corner, over the card's border. */
+.palette::before {
+	content: "";
+	position: absolute;
+	top: -5px;
+	left: 50%;
+	width: 8px;
+	height: 8px;
+	border: 1px solid var(--border);
+	border-right: 0;
+	border-bottom: 0;
+	border-top-left-radius: 2px;
+	background: var(--surface);
+	transform: translateX(-50%) rotate(45deg);
+}
+@keyframes palette-in {
+	from {
+		opacity: 0;
+		transform: translateX(-50%) translateY(-4px) scale(0.97);
+	}
+}
+.toolbar .palette .swatch {
+	min-width: 26px;
+	width: 26px;
+	height: 26px;
+	margin: 5px;
+	box-shadow: inset 0 0 0 1px var(--swatch-edge);
+	transition: transform 0.12s ease;
+}
+.toolbar .palette .swatch.active {
+	box-shadow:
+		inset 0 0 0 1px var(--swatch-edge),
+		0 0 0 2px var(--surface),
+		0 0 0 4px var(--accent);
+}
+@media (hover: hover) {
+	.toolbar .palette .swatch:not(.custom):hover {
+		transform: scale(1.12);
+	}
+}
+.palette-rule {
+	grid-column: 8;
+	grid-row: 1 / 3;
+	justify-self: center;
+	width: 1px;
+	margin: 8px 0;
+	background: var(--border);
+}
+/* The well for one's own colour: the same as the fourth place of the bar, level with both rows. */
+.toolbar .palette .swatch.custom {
+	grid-column: 9;
+	grid-row: 1 / 3;
+	align-self: center;
+	justify-self: center;
+	min-width: 28px;
+	width: 28px;
+	height: 28px;
+	margin: 0;
+}
+.toolbar .palette .swatch.custom:not(.active):not([aria-expanded="true"]) {
+	box-shadow: none;
+}
+.toolbar .palette .swatch.custom[aria-expanded="true"],
+.toolbar .palette .swatch.custom.active {
+	box-shadow:
+		0 0 0 2px var(--surface),
+		0 0 0 4px var(--accent);
+}
+.palette .color-picker {
+	grid-column: 1 / -1;
+	grid-row: 3;
+	margin: 8px 0 0;
+}
+@media (pointer: coarse) {
+	.palette {
+		grid-template-columns: repeat(7, 44px) 13px 44px;
+		grid-template-rows: 44px 44px;
+	}
+	.toolbar .palette .swatch {
+		margin: 9px;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.palette {
+		animation: none;
+	}
+	.toolbar .palette .swatch {
+		transition: none;
+	}
 }
 
 /* The picker of any colour: hue and shade, inside the list so nothing is cut off. */
@@ -681,19 +870,6 @@ canvas {
 		width: 28px;
 		height: 28px;
 	}
-}
-.palette {
-	position: absolute;
-	top: calc(100% + 8px);
-	left: 50%;
-	transform: translateX(-50%);
-	display: grid;
-	grid-template-columns: repeat(6, auto);
-	padding: 8px;
-	border: 1px solid var(--border);
-	border-radius: var(--radius-lg);
-	background: var(--surface);
-	box-shadow: var(--shadow);
 }
 .toolbar .dot {
 	background: currentColor;
@@ -968,17 +1144,6 @@ canvas {
 	border-right-color: currentColor;
 	border-bottom-color: currentColor;
 	opacity: 0.55;
-}
-/* The fourth colour place holds more than one colour (R-079): a small corner on the dot, as on the
-   buttons that open a list, white with a shadow so that it reads on any colour. */
-.toolbar .swatch.more.has-list::after {
-	right: 1px;
-	bottom: 1px;
-	border-width: 4px;
-	border-right-color: #fff;
-	border-bottom-color: #fff;
-	opacity: 1;
-	filter: drop-shadow(0 0 1px #0009);
 }
 .shape-list,
 .style-list,
@@ -1632,8 +1797,7 @@ button.participant {
 .toolbar.rail .shape-list,
 .toolbar.rail .style-list,
 .toolbar.rail .stroke-popover,
-.toolbar.rail .settings-list,
-.toolbar.rail .palette {
+.toolbar.rail .settings-list {
 	top: 0;
 	left: calc(100% + 12px);
 	transform: none;

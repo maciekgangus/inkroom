@@ -86,6 +86,19 @@ describe("Toolbar", () => {
 			expect(more.title).toMatch(/Więcej kolorów/);
 		});
 
+		test("the palette hangs from the fourth place: both in one wrapper, with a rule before the well of one's own colour", () => {
+			act(() => click("more colors"));
+			const wrap = root.querySelector(".palette-wrap") as HTMLElement;
+			expect(wrap).not.toBeNull();
+			expect(wrap.contains(q("more colors"))).toBe(true);
+			expect(wrap.querySelector(":scope > .palette")).not.toBeNull();
+			const palette = wrap.querySelector(".palette") as HTMLElement;
+			expect(palette.querySelector(".palette-rule")).not.toBeNull();
+			// 14 fixed colours (two rows of seven) and the well of one's own colour.
+			expect(palette.querySelectorAll(".swatch:not(.custom)")).toHaveLength(14);
+			expect(palette.querySelector(".swatch.custom")).not.toBeNull();
+		});
+
 		test("the palette shuts after a colour from anywhere: the grid, a quick colour or the fourth place", () => {
 			const open = () => {
 				act(() => click("more colors"));
@@ -172,7 +185,7 @@ describe("Toolbar", () => {
 			act(() => click(`color ${COLORS[1]}`)); // a quick colour
 			expect(settings.color).toBe(COLORS[1]);
 			const slot = q("more colors") as HTMLElement;
-			expect(slot.style.background).not.toBe("");
+			expect(slot.style.getPropertyValue("--well")).not.toBe("");
 			expect(slot.querySelector("svg")).toBeNull(); // no plus: the colour is there
 			expect(slot.getAttribute("aria-pressed")).toBe("false");
 		});
