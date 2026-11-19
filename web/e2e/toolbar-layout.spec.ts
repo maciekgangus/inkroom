@@ -46,6 +46,9 @@ test("upright, the list of settings opens beside the rail and fits the screen", 
 	// the three sections are there and a colour can be picked
 	await expect(page.locator(".settings-title")).toHaveCount(3);
 	await page.locator("[aria-label='color #d32f2f']").tap();
+	// picking a colour shuts the list; opened again, it shows the colour as chosen
+	await expect(page.locator(".settings-list")).toHaveCount(0);
+	await page.locator("[aria-label='pen settings']").tap();
 	await expect(page.locator("[aria-label='color #d32f2f']")).toHaveAttribute(
 		"aria-pressed",
 		"true",
