@@ -120,9 +120,74 @@ describe("AccountDialog (R-085)", () => {
 		expect(q("[role=alert]")?.textContent).toContain("nieprawidłowe");
 	});
 
-	test("Close closes", async () => {
+	test("the cross closes and there is no lone Close button", async () => {
 		await show();
-		await act(async () => byText("Zamknij")?.click());
+		expect(byText("Zamknij")).toBeUndefined();
+		await act(async () =>
+			q<HTMLButtonElement>("button[aria-label=Zamknij]")?.click(),
+		);
 		expect(onClose).toHaveBeenCalled();
+	});
+
+	test("Escape closes the window", async () => {
+		await show();
+		await act(async () => {
+			q<HTMLElement>(".account-dialog")?.dispatchEvent(
+				new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+			);
+		});
+		expect(onClose).toHaveBeenCalled();
+	});
+
+	test("shows an avatar with the initial and a pill with the sign-in method", async () => {
+		await show();
+		expect(q(".account-avatar")?.textContent).toBe("A");
+		expect(q(".account-method")?.textContent).toContain("Hasło");
+		render(null, root);
+		await show(false);
+		expect(q(".account-method")?.textContent).toContain("Google");
+	});
+
+	test("the password button waits for a valid form and the hint says why", async () => {
+		await show();
+		const button = () =>
+			q<HTMLButtonElement>("form.password-form button[type=submit]");
+		expect(button()?.disabled).toBe(true);
+		await type("input[name=current]", "old-password");
+		await type("input[name=new]", "short");
+		expect(button()?.disabled).toBe(true);
+		expect(q(".field-hint")?.textContent).toContain("8");
+		await type("input[name=new]", "long-enough-1");
+		expect(button()?.disabled).toBe(false);
+		expect(q(".field-hint")).toBeNull();
+	});
+
+	test("the eye shows and hides a password", async () => {
+		await show();
+		const eye = q<HTMLButtonElement>("input[name=new] + button.eye");
+		expect(q<HTMLInputElement>("input[name=new]")?.type).toBe("password");
+		await act(async () => eye?.click());
+		expect(q<HTMLInputElement>("input[name=new]")?.type).toBe("text");
+		await act(async () =>
+			q<HTMLButtonElement>("input[name=new] + button.eye")?.click(),
+		);
+		expect(q<HTMLInputElement>("input[name=new]")?.type).toBe("password");
+	});
+
+	test("the danger zone is folded until asked and can be cancelled", async () => {
+		await show();
+		expect(q("input[name=confirm]")).toBeNull();
+		expect(root.textContent).toContain("Strefa zagrożenia");
+		await act(async () => byText("Usuń konto")?.click());
+		expect(q("input[name=confirm]")).not.toBeNull();
+		await act(async () => byText("Anuluj")?.click());
+		expect(q("input[name=confirm]")).toBeNull();
+	});
+
+	test("the delete button always has a label that differs from its background", async () => {
+		await show();
+		const open = byText("Usuń konto") as HTMLButtonElement;
+		expect(open.textContent?.trim().length).toBeGreaterThan(0);
+		expect(open.classList.contains("danger")).toBe(false);
 	});
 });
