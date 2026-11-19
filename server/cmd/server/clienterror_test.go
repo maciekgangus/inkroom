@@ -211,3 +211,23 @@ func TestSanitizePageKeepsOnlyThePathWithoutBoardIds(t *testing.T) {
 		}
 	}
 }
+
+func TestBoardIdsAreMaskedEverywhereInAReport(t *testing.T) {
+	logs := captureLogs(t)
+	srv, _, _ := startApp(t, filepath.Join(t.TempDir(), "t.db"), t.TempDir())
+	body := `{"message":"Failed to fetch https://x.dev/api/boards/SECRETONE/images/h1 and ws://x.dev/ws/SECRETTWO","source":"https://x.dev/b/SECRETTHREE",` +
+		`"stack":"Error\n    at f (https://x.dev/b/SECRETTHREE:1:5)\n    at g (https://x.dev/assets/a.js:2:3)","page":"/b/SECRETFOUR"}`
+	if got := status(call(t, srv, "POST", "/api/client-error", body, nil)); got != http.StatusNoContent {
+		t.Fatalf("status = %d", got)
+	}
+	out := logs.String()
+	for _, secret := range []string{"SECRETONE", "SECRETTWO", "SECRETTHREE", "SECRETFOUR"} {
+		if strings.Contains(out, secret) {
+			t.Errorf("log leaks %s: %s", secret, out)
+		}
+	}
+	l := logs.clientErrors(t)[0]
+	if !strings.Contains(l["stack"].(string), "/assets/a.js:2:3") || !strings.Contains(l["message"].(string), "/api/boards/:id/images/h1") {
+		t.Errorf("the rest of the report must survive: %v", l)
+	}
+}

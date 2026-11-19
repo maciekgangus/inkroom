@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -48,7 +49,7 @@ func (a *app) clientError(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Nieprawidłowe żądanie")
 		return
 	}
-	msg := clip(body.Message, maxClientMessage)
+	msg := maskIDs(clip(body.Message, maxClientMessage))
 	if msg == "" {
 		writeError(w, http.StatusBadRequest, "Brak opisu błędu")
 		return
@@ -65,9 +66,9 @@ func (a *app) clientError(w http.ResponseWriter, r *http.Request) {
 	metrics.ClientErrors.Inc()
 	a.clientLog.Warn("client error",
 		"message", msg,
-		"source", clip(pathOnly(body.Source), maxClientSource),
+		"source", clip(maskIDs(pathOnly(body.Source)), maxClientSource),
 		"line", clampInt(body.Line), "col", clampInt(body.Col),
-		"stack", clip(body.Stack, maxClientStack),
+		"stack", maskIDs(clip(body.Stack, maxClientStack)),
 		"page", sanitizePage(body.Page),
 		"screen", clip(body.Screen, maxClientMeta),
 		"release", clip(body.Release, maxClientMeta),
@@ -76,6 +77,13 @@ func (a *app) clientError(w http.ResponseWriter, r *http.Request) {
 	)
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// boardIDInPath matches the id in a board's link or API path: /b/<id>, /ws/<id>, /api/boards/<id>.
+// A board id is the secret of its link, so it must not reach the logs, even from a message or a
+// stack trace that mentions a URL.
+var boardIDInPath = regexp.MustCompile(`(/(?:b|ws|api/boards)/)[^/\s?#:"'<>)]+`)
+
+func maskIDs(s string) string { return boardIDInPath.ReplaceAllString(s, "${1}:id") }
 
 func clampInt(n int) int {
 	if n < 0 {
