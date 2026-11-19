@@ -683,18 +683,51 @@ describe("App", () => {
 				expect(text()).not.toContain("Żadna tablica nie pasuje");
 			});
 
-			test("'Udostępnione' hides my own boards", async () => {
+			test("'Udostępnione' hides my own boards and shows as the pressed pill", async () => {
 				await open();
 				await click("Filtr");
-				await act(async () => {
-					const sel = root.querySelector(
-						'select[name="scope"]',
-					) as HTMLSelectElement;
-					sel.value = "shared";
-					sel.dispatchEvent(new Event("change", { bubbles: true }));
-				});
+				await click("Udostępnione");
 				expect(text()).toContain("Cudza");
 				expect(text()).not.toContain("Matma");
+				expect(button("Udostępnione").getAttribute("aria-pressed")).toBe(
+					"true",
+				);
+				expect(button("Wszystkie").getAttribute("aria-pressed")).toBe("false");
+				expect(root.querySelector("select")).toBeNull();
+			});
+
+			test("the pills are labelled groups: who, when, order", async () => {
+				await open();
+				await click("Filtr");
+				const groups = [...root.querySelectorAll(".filter-menu fieldset")].map(
+					(g) => g.getAttribute("aria-label"),
+				);
+				expect(groups).toEqual(["Czyje", "Zmieniona", "Kolejność"]);
+			});
+
+			test("the cross in the search field clears the text and only shows when there is some", async () => {
+				await open();
+				await click("Filtr");
+				expect(button("Skasuj tekst")).toBeUndefined();
+				await search("zzz");
+				expect(text()).toContain("Żadna tablica nie pasuje");
+				await click("Skasuj tekst");
+				expect(
+					(root.querySelector('input[name="search"]') as HTMLInputElement)
+						.value,
+				).toBe("");
+				expect(text()).toContain("Matma");
+				expect(button("Skasuj tekst")).toBeUndefined();
+			});
+
+			test("a time range pill narrows the lists and the magnifier shows that a filter is on", async () => {
+				await open();
+				await click("Filtr");
+				expect(button("Filtr").getAttribute("aria-pressed")).toBe("false");
+				await click("Dziś");
+				expect(button("Dziś").getAttribute("aria-pressed")).toBe("true");
+				expect(text()).not.toContain("Cudza");
+				expect(button("Filtr").getAttribute("aria-pressed")).toBe("true");
 			});
 		});
 

@@ -28,3 +28,31 @@ test("the folded filter finds a board by name and brings the rest back when clea
 		page.locator(".boards .board", { hasText: `Matematyka ${tag}` }),
 	).toHaveCount(1);
 });
+
+test("the filter card fits the screen and its pills are easy to hit (R-091)", async ({
+	page,
+}) => {
+	await page.context().request.post("/api/login", { data: E2E_LOGIN });
+	await page.goto("/");
+	await page.waitForSelector(".boards .board");
+	await page.getByRole("button", { name: "Filtr", exact: true }).click();
+	const card = page.locator(".filter-menu");
+	await expect(card).toBeVisible();
+	const view = page.viewportSize();
+	const box = await card.boundingBox();
+	expect(box).not.toBeNull();
+	expect((box?.x ?? -1) >= 0).toBe(true);
+	expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(
+		view?.width ?? 0,
+	);
+	// no pill is cut off on the right, and a finger can hit each one
+	const pills = await page.locator(".segmented button").all();
+	expect(pills).toHaveLength(10);
+	for (const p of pills) {
+		const b = await p.boundingBox();
+		expect((b?.x ?? 0) + (b?.width ?? 0)).toBeLessThanOrEqual(
+			(box?.x ?? 0) + (box?.width ?? 0) + 1,
+		);
+		expect(b?.height ?? 0).toBeGreaterThanOrEqual(36);
+	}
+});
