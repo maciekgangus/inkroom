@@ -15,7 +15,7 @@ export const SIZES = [1, 2, 4];
 export const WIDTH_SHOWN = 2;
 
 /** What the line style list offers, with the icon of each (R-038). */
-const LINE_STYLES: {
+export const LINE_STYLES: {
 	style: Dash;
 	label: string;
 	icon: "style-solid" | "style-dashed" | "style-dotted" | "wave";

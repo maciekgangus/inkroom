@@ -1,13 +1,14 @@
+import type { ComponentChildren } from "preact";
 import type { Stroke } from "./board/board";
 import {
 	capabilities,
-	type Dash,
 	dashOptions,
 	planeOf,
 	type StylePatch,
 	styleOf,
 } from "./board/style";
 import type { Rect } from "./board/viewport";
+import { ColorRow } from "./color-row";
 import {
 	isVisible,
 	panelTitle,
@@ -16,23 +17,18 @@ import {
 	sidePosition,
 } from "./floating-panel";
 import { FunctionEditor } from "./function-editor";
-import { Icon, type IconName } from "./icon";
+import { Icon } from "./icon";
 import { Slider } from "./slider";
 import "./properties-panel.css";
 import { useLayoutEffect, useRef, useState } from "preact/hooks";
-import { WIDTH_SHOWN } from "./stroke-controls";
+import { LINE_STYLES, SIZES, WIDTH_SHOWN } from "./stroke-controls";
 
-/** How each line style is shown on its button; the natural pen gets a wave icon. */
-const DASH_LABELS: Record<Dash, string> = {
-	solid: "━",
-	dashed: "╌",
-	dotted: "┈",
-	natural: "",
-};
-
-/** The most the menu is wide, and the side of its tile, in px. */
-const MENU_WIDTH = 270;
-const TILE = 40;
+/** The menu's width (up to 320px) with room to spare, for choosing its side. */
+const MENU_WIDTH = 340;
+/** The same for a coordinate plane, whose menu is wider (up to 400px) for its formulas. */
+const WIDE_MENU_WIDTH = 420;
+/** The side of the tile that opens the menu again (44px on a touch screen). */
+const TILE = 44;
 
 /** Where the column of tools on the left edge of an upright tablet ends (R-082), or 0 without it. */
 const railEnd = (): number => {
@@ -108,7 +104,14 @@ export function PropertiesPanel({
 	const view = { w: innerWidth, h: innerHeight };
 	const ids = elements.map((e) => e.id).join(",");
 	if (anchor && sideOf.current?.key !== ids)
-		sideOf.current = { key: ids, side: pickSide(anchor, MENU_WIDTH, view) };
+		sideOf.current = {
+			key: ids,
+			side: pickSide(
+				anchor,
+				capabilities(elements).plane ? WIDE_MENU_WIDTH : MENU_WIDTH,
+				view,
+			),
+		};
 	const side = sideOf.current?.side ?? "right";
 	// An object that is off the screen takes its menu and tile with it.
 	if (anchor && !isVisible(anchor, view)) return null;
@@ -147,12 +150,51 @@ export function PropertiesPanel({
 	const now = styleOf(elements);
 	const plane = planeOf(elements);
 	const on = (active: boolean) => (active ? "active" : "");
+	const sizeAndOpacity = (
+		<>
+			{can.size &&
+				(can.textOnly ? (
+					<Slider
+						icon="text"
+						label="prop font size"
+						min={8}
+						max={200}
+						value={now.fontSize}
+						unit=" px"
+						onInput={(v) => onPreview({ fontSize: v })}
+						onChange={(v) => onChange({ fontSize: v })}
+					/>
+				) : (
+					<Slider
+						icon="width"
+						label="prop size"
+						min={0.25 * WIDTH_SHOWN}
+						max={50 * WIDTH_SHOWN}
+						step={0.25 * WIDTH_SHOWN}
+						value={now.size * WIDTH_SHOWN}
+						unit=" px"
+						onInput={(v) => onPreview({ size: v / WIDTH_SHOWN })}
+						onChange={(v) => onChange({ size: v / WIDTH_SHOWN })}
+					/>
+				))}
+			<Slider
+				icon="opacity"
+				label="prop opacity"
+				min={1}
+				max={100}
+				value={Math.round(now.opacity * 100)}
+				unit="%"
+				onInput={(v) => onPreview({ opacity: v / 100 })}
+				onChange={(v) => onChange({ opacity: v / 100 })}
+			/>
+		</>
+	);
 
 	return (
 		// biome-ignore lint/a11y/noStaticElementInteractions: the handler only keeps the focus where it is
 		<div
 			ref={ref}
-			class={`properties${at ? " floating" : ""}`}
+			class={`properties${can.plane ? " wide" : ""}${at ? " floating" : ""}`}
 			style={
 				at
 					? {
@@ -194,93 +236,18 @@ export function PropertiesPanel({
 				{onClose && (
 					<button
 						type="button"
-						class="panel-close"
+						class="panel-close icon"
 						aria-label="close panel"
 						title="Zamknij"
 						onClick={onClose}
 					>
-						×
+						<Icon name="close" />
 					</button>
 				)}
 			</div>
-			{can.color && (
-				<div class="row">
-					<ColorBlock
-						icon="pen"
-						prefix="prop color"
-						current={now.color}
-						colors={palette ?? colors}
-						display={display}
-						onPick={(c) => c !== null && onChange({ color: c })}
-					/>
-				</div>
-			)}
-			{can.size && (
-				<div class="row">
-					{can.textOnly ? (
-						<Slider
-							icon="text"
-							label="prop font size"
-							min={8}
-							max={200}
-							value={now.fontSize}
-							unit=" px"
-							onInput={(v) => onPreview({ fontSize: v })}
-							onChange={(v) => onChange({ fontSize: v })}
-						/>
-					) : (
-						<Slider
-							icon="width"
-							label="prop size"
-							min={0.25 * WIDTH_SHOWN}
-							max={50 * WIDTH_SHOWN}
-							step={0.25 * WIDTH_SHOWN}
-							value={now.size * WIDTH_SHOWN}
-							unit=" px"
-							onInput={(v) => onPreview({ size: v / WIDTH_SHOWN })}
-							onChange={(v) => onChange({ size: v / WIDTH_SHOWN })}
-						/>
-					)}
-				</div>
-			)}
-			{can.dash && (
-				<div class="row">
-					{dashOptions(elements).map((dash) => (
-						<button
-							type="button"
-							key={dash}
-							aria-label={`prop dash ${dash}`}
-							class={on(now.dash === dash)}
-							onClick={() => onChange({ dash })}
-						>
-							{dash === "natural" ? <Icon name="wave" /> : DASH_LABELS[dash]}
-						</button>
-					))}
-				</div>
-			)}
-			{can.plane && (
-				<>
-					<div class="row">
-						<button
-							type="button"
-							aria-label="prop grid"
-							aria-pressed={plane.grid}
-							class={on(plane.grid)}
-							onClick={() => onChange({ grid: !plane.grid })}
-						>
-							Siatka
-						</button>
-						<button
-							type="button"
-							aria-label="prop axes"
-							aria-pressed={plane.showAxes}
-							class={on(plane.showAxes)}
-							onClick={() => onChange({ showAxes: !plane.showAxes })}
-						>
-							Osie
-						</button>
-					</div>
-					<div class="row">
+			<div class="panel-body">
+				{can.plane && (
+					<Group sliders>
 						<Slider
 							icon="grid"
 							label="prop cell"
@@ -292,161 +259,175 @@ export function PropertiesPanel({
 							onInput={(v) => onPreview({ cell: v })}
 							onChange={(v) => onChange({ cell: v })}
 						/>
-					</div>
-				</>
-			)}
-			{can.plane && (
-				<div class="row">
-					{(
-						[
-							["numbers", "1 2 3"],
-							["pi", "π"],
-							["none", "Bez"],
-						] as const
-					).map(([how, label]) => (
+						{sizeAndOpacity}
+					</Group>
+				)}
+				{can.color && (
+					<Group>
+						<span class="prop-label">{can.fill ? "Kontur" : "Kolor"}</span>
+						<ColorRow
+							prefix="prop color"
+							current={now.color}
+							colors={palette ?? colors}
+							display={display}
+							onPreview={(c) => onPreview({ color: c })}
+							onPick={(c) => c !== null && onChange({ color: c })}
+						/>
+					</Group>
+				)}
+				{can.fill && (
+					<Group>
+						<span class="prop-label">Wypełnienie</span>
+						<ColorRow
+							prefix="prop fill"
+							allowNone
+							current={now.fill}
+							colors={palette ?? colors}
+							display={display}
+							onPreview={(c) => onPreview({ fill: c })}
+							onPick={(c) => onChange({ fill: c })}
+						/>
+					</Group>
+				)}
+				{((can.size && !can.textOnly && !can.plane) || can.dash) && (
+					<Group options>
+						{can.size &&
+							!can.textOnly &&
+							!can.plane &&
+							SIZES.map((s) => (
+								<button
+									type="button"
+									key={s}
+									class={`icon ${on(now.size === s)}`}
+									aria-label={`prop size ${s}`}
+									aria-pressed={now.size === s}
+									title={`Grubość ${s * WIDTH_SHOWN} px`}
+									onClick={() => onChange({ size: s })}
+								>
+									<span
+										class="dot"
+										style={{
+											width: `${s * 2 + 2}px`,
+											height: `${s * 2 + 2}px`,
+										}}
+									/>
+								</button>
+							))}
+						{can.size && !can.textOnly && !can.plane && can.dash && (
+							<span class="prop-sep" />
+						)}
+						{can.dash &&
+							LINE_STYLES.filter((s) =>
+								dashOptions(elements).includes(s.style),
+							).map((s) => (
+								<button
+									type="button"
+									key={s.style}
+									title={s.label}
+									aria-label={`prop dash ${s.style}`}
+									aria-pressed={now.dash === s.style}
+									class={`icon ${on(now.dash === s.style)}`}
+									onClick={() => onChange({ dash: s.style })}
+								>
+									<Icon name={s.icon} />
+								</button>
+							))}
+					</Group>
+				)}
+				{!can.plane && <Group sliders>{sizeAndOpacity}</Group>}
+				{can.numbers && !can.plane && (
+					<Group>
 						<button
 							type="button"
-							key={how}
-							aria-label={`prop numbering ${how}`}
-							aria-pressed={plane.numbering === how}
-							class={on(plane.numbering === how)}
-							onClick={() => onChange({ numbering: how })}
+							aria-label="prop numbers"
+							aria-pressed={now.numbered}
+							title="Numeracja 1 2 3"
+							class={`icon digits ${on(now.numbered)}`}
+							onClick={() => onChange({ numbered: !now.numbered })}
 						>
-							{label}
+							123
 						</button>
-					))}
-				</div>
-			)}
-			{can.plane && (
-				<FunctionEditor
-					fns={plane.fns}
-					onPreview={onPreview}
-					onChange={onChange}
-				/>
-			)}
-			{can.numbers && !can.plane && (
-				<div class="row">
-					<button
-						type="button"
-						aria-label="prop numbers"
-						aria-pressed={now.numbered}
-						class={on(now.numbered)}
-						onClick={() => onChange({ numbered: !now.numbered })}
-					>
-						Numeracja 1 2 3
-					</button>
-				</div>
-			)}
-			{can.fill && (
-				<div class="row">
-					<ColorBlock
-						icon="bucket"
-						prefix="prop fill"
-						current={now.fill}
-						colors={palette ?? colors}
-						display={display}
-						onPick={(c) => onChange({ fill: c })}
-						allowNone
-					/>
-				</div>
-			)}
-			<div class="row">
-				<Slider
-					icon="opacity"
-					label="prop opacity"
-					min={1}
-					max={100}
-					value={Math.round(now.opacity * 100)}
-					unit="%"
-					onInput={(v) => onPreview({ opacity: v / 100 })}
-					onChange={(v) => onChange({ opacity: v / 100 })}
-				/>
+					</Group>
+				)}
+				{can.plane && (
+					<>
+						<Group split>
+							<div class="prop-cluster">
+								<button
+									type="button"
+									aria-label="prop grid"
+									aria-pressed={plane.grid}
+									title="Siatka"
+									class={`icon ${on(plane.grid)}`}
+									onClick={() => onChange({ grid: !plane.grid })}
+								>
+									<Icon name="grid" />
+								</button>
+								<button
+									type="button"
+									aria-label="prop axes"
+									aria-pressed={plane.showAxes}
+									title="Osie"
+									class={`icon ${on(plane.showAxes)}`}
+									onClick={() => onChange({ showAxes: !plane.showAxes })}
+								>
+									<Icon name="axes" />
+								</button>
+							</div>
+							<span class="prop-sep" />
+							<div class="prop-cluster">
+								{(
+									[
+										["numbers", "123", "Numeracja 1 2 3"],
+										["pi", "π", "Numeracja w π"],
+										["none", null, "Bez numeracji"],
+									] as const
+								).map(([how, label, title]) => (
+									<button
+										type="button"
+										key={how}
+										aria-label={`prop numbering ${how}`}
+										aria-pressed={plane.numbering === how}
+										title={title}
+										class={`icon ${label === "123" ? "digits " : ""}${on(plane.numbering === how)}`}
+										onClick={() => onChange({ numbering: how })}
+									>
+										{label ?? <Icon name="empty-square" />}
+									</button>
+								))}
+							</div>
+						</Group>
+						<FunctionEditor
+							fns={plane.fns}
+							display={display}
+							onPreview={onPreview}
+							onChange={onChange}
+						/>
+					</>
+				)}
 			</div>
 		</div>
 	);
 }
 
-/**
- * A colour to choose: a window showing the current one (or that there is none), and under it the
- * palette with a tile of its own for any other colour. With `allowNone` the first tile clears it.
- */
-function ColorBlock({
-	icon,
-	prefix,
-	current,
-	colors,
-	display,
-	onPick,
-	allowNone = false,
+/** One group of controls, split from the next by a rule, as the groups of the wide bar. */
+const Group = ({
+	children,
+	split = false,
+	sliders = false,
+	options = false,
 }: {
-	icon: IconName;
-	prefix: string;
-	current: string | null;
-	colors: string[];
-	display: (color: string) => string;
-	onPick: (color: string | null) => void;
-	allowNone?: boolean;
-}) {
-	// A colour that is not on the palette sits on the last tile, which then shows it.
-	// The fill row has the "none" tile too, so it shows one colour fewer and both rows have as many tiles.
-	const shown = allowNone ? colors.slice(0, -1) : colors;
-	const own = current !== null && !shown.includes(current);
-	return (
-		<div class="color-block">
-			<div class="color-current">
-				<span class="color-icon">
-					<Icon name={icon} />
-				</span>
-				<span
-					class={`chip${current === null ? " none" : ""}`}
-					style={
-						current === null ? undefined : { background: display(current) }
-					}
-				>
-					{current === null && <Icon name="no-fill" />}
-				</span>
-				<span class="color-name">
-					{current === null ? "brak" : display(current).toUpperCase()}
-				</span>
-			</div>
-			<div class="palette-grid">
-				{allowNone && (
-					<button
-						type="button"
-						aria-label={`${prefix} none`}
-						title="Bez wypełnienia"
-						class={`swatch none ${current === null ? "active" : ""}`}
-						onClick={() => onPick(null)}
-					>
-						<Icon name="no-fill" />
-					</button>
-				)}
-				{shown.map((c) => (
-					<button
-						type="button"
-						key={c}
-						aria-label={`${prefix} ${c}`}
-						class={`swatch ${current === c ? "active" : ""}`}
-						style={{ background: display(c) }}
-						onClick={() => onPick(c)}
-					/>
-				))}
-				<label
-					class={`swatch custom${own ? " active" : ""}`}
-					title="Własny kolor"
-					style={own && current ? { background: display(current) } : undefined}
-				>
-					<input
-						type="color"
-						aria-label={`${prefix} custom`}
-						value={
-							current && /^#[0-9a-f]{6}$/i.test(current) ? current : "#5b5bf0"
-						}
-						onInput={(e) => onPick((e.currentTarget as HTMLInputElement).value)}
-					/>
-					{!own && <Icon name="plus" />}
-				</label>
-			</div>
-		</div>
-	);
-}
+	/** The ready widths and the line styles, two clusters with a rule, the whole row in the middle. */
+	options?: boolean;
+	children: ComponentChildren;
+	/** Two clusters of switches on one line: one by the left edge, one by the right, a rule between. */
+	split?: boolean;
+	/** Sliders one under another on one grid: icon, track and value in columns of the same widths. */
+	sliders?: boolean;
+}) => (
+	<div
+		class={`prop-group${split ? " split" : ""}${sliders ? " sliders" : ""}${options ? " options" : ""}`}
+	>
+		{children}
+	</div>
+);

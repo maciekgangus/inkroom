@@ -1,146 +1,314 @@
 .text-editor.solid {
 	background: var(--surface);
 }
-/* Same look as the main toolbar: glass surface, round swatches with a ring,
-   borderless icon-like buttons and an accent tint for the active one. */
+
+/*
+ * The object menu (R-042, R-060): the wide tool bar stood on its side. Same glass card, groups split
+ * by the bar's 1px rule, round colour dots with a ring on the chosen one, ready widths as dots, line
+ * styles as icons, borderless 40px buttons (44px on a touch screen) tinted with the accent when on.
+ */
 .properties {
 	position: fixed;
 	right: 12px;
 	top: 64px;
+	/* Above the mini map and the zoom controls, which it may overlap when tall. */
+	z-index: 2;
+	box-sizing: border-box;
 	display: flex;
 	flex-direction: column;
-	max-width: 260px;
-	padding: 6px;
+	/* The ready widths and the line styles stand in one line in this width; a graph has a wider menu. */
+	width: min(320px, calc(100vw - 24px));
+	padding: 0 6px 6px;
 	border: 1px solid var(--border);
 	border-radius: var(--radius-lg);
 	background: color-mix(in srgb, var(--surface) 85%, transparent);
 	-webkit-backdrop-filter: blur(12px);
 	backdrop-filter: blur(12px);
 	box-shadow: var(--shadow);
-	z-index: 1;
 	-webkit-user-select: none;
 	user-select: none;
 }
-.properties .row {
+/* Attached to the object it edits (R-042): placed from the script, hidden until measured. */
+.properties.floating {
+	right: auto;
+}
+
+/* The title: what the object is, the handle for moving the menu, and the cross. */
+.panel-title {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	min-height: 40px;
+	padding-left: 8px;
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--muted);
+	cursor: grab;
+	touch-action: none;
+}
+.panel-title:active {
+	cursor: grabbing;
+}
+
+/* Everything under the title; scrolls when the menu would not fit the screen (a plane with graphs). */
+.panel-body {
+	display: flex;
+	flex-direction: column;
+	max-height: calc(100dvh - 96px);
+	margin: 0 -6px -6px;
+	padding: 0 6px 6px;
+	overflow-x: hidden;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	-webkit-overflow-scrolling: touch;
+}
+/* A coordinate plane has much to show (formulas): its menu is wider, as wide as the screen allows. */
+.properties.wide {
+	width: min(400px, calc(100vw - 24px));
+}
+/* The small grey name over a row of colours (what the row colours), as a title of the menu. */
+.prop-label {
+	flex: 0 0 100%;
+	padding: 2px 8px 0;
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--muted);
+}
+/* A group of controls, as a group of the wide bar: 2px apart, a 1px rule before the next. */
+.prop-group {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 2px;
 	align-items: center;
+	gap: 2px;
 	padding: 4px 0;
-}
-.properties .row + .row {
 	border-top: 1px solid var(--border);
 }
-.properties button {
+/* A row of a few switches (grid, axes, numbering) stands in the middle, the buttons evenly apart. */
+/* Two equal halves with the rule exactly in the middle, each cluster in the middle of its half. */
+.prop-group.split {
+	display: grid;
+	grid-template-columns: 1fr 1px 1fr;
+	column-gap: 0;
+	align-items: center;
+}
+.prop-group.split > .prop-sep {
+	align-self: stretch;
+	margin: 6px 0;
+}
+.prop-cluster {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+}
+.prop-group.split > .prop-cluster {
+	justify-self: center;
+}
+/* Sliders one under another on one grid: icon, track and value in columns of the same widths. */
+.prop-group.sliders {
+	display: grid;
+	grid-template-columns: 40px 1fr 56px;
+	column-gap: 0;
+	row-gap: 0;
+	align-items: center;
+}
+.prop-group.sliders .slider {
+	display: contents;
+}
+.prop-group.sliders .slider-icon {
+	display: grid;
+	place-items: center;
+	height: 40px;
+}
+.prop-group.sliders .slider input {
+	min-width: 0;
+	margin: 0 6px;
+}
+.prop-group.sliders .slider .value {
+	min-width: 0;
+	text-align: right;
+	padding-right: 6px;
+}
+/* The digits and the pi are a symbol in the same square as the icons. */
+.properties button.digits {
+	font-family: var(--mono);
+	font-size: 14px;
+	letter-spacing: -0.04em;
+}
+.properties button.icon:not(.digits):not(:has(svg)) {
+	font-size: 20px;
+	font-weight: 400;
+}
+/* The ready widths and the line styles: two clusters with a rule, the whole row in the middle. */
+.prop-group.options {
+	flex-wrap: nowrap;
+	justify-content: center;
+}
+/* The rule between ready widths and line styles, as between two groups of the bar. */
+.prop-sep {
+	align-self: stretch;
+	width: 1px;
+	margin: 6px 4px;
+	background: var(--border);
+}
+.properties .dot {
+	display: block;
+	border-radius: 50%;
+	background: currentColor;
+}
+
+/* Buttons: as in the bar, no frame, the icon colour, the accent tint when on. */
+.properties button:not(.swatch) {
+	box-sizing: border-box;
 	min-width: 40px;
-	min-height: 40px;
-	padding: 0 8px;
+	height: 40px;
+	padding: 0 12px;
+	gap: 6px;
 	border: 1px solid transparent;
 	border-radius: var(--radius);
 	background: transparent;
 	color: var(--icon);
 	font: inherit;
 	font-size: 14px;
+	font-weight: 500;
 }
-.properties button:hover {
+.properties button.icon {
+	width: 40px;
+	padding: 0;
+}
+@media (hover: hover) {
+	.properties button:not(.swatch):hover:not(:disabled) {
+		background: var(--surface-hover);
+	}
+}
+.properties button:not(.swatch):active:not(:disabled) {
 	background: var(--surface-hover);
 }
-.properties button.active {
+.properties button.active,
+.properties button.active:hover:not(:disabled) {
 	background: var(--accent-soft);
 	color: var(--accent);
 }
-/* A colour: the window with the current one, the palette under it. */
-.color-block {
-	width: 100%;
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-	padding: 4px 2px;
-}
-.color-current {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	color: var(--muted);
-	font-size: 12px;
-}
-.color-current .chip {
-	display: grid;
-	place-items: center;
-	width: 44px;
-	height: 28px;
-	border: 1px solid var(--border);
-	border-radius: 8px;
-	box-shadow: inset 0 0 0 2px var(--surface);
-}
-.color-current .chip.none {
-	background: var(--surface-hover);
-}
-.color-current .color-name {
-	font-family: var(--mono, ui-monospace, monospace);
-	letter-spacing: 0.04em;
+
+/* Colour tiles: a 24px dot in a 40px cell (the whole cell is the target), a ring on the chosen one. */
+/* The colours in one row across the menu: the ends stand on the edges of the other rows. The least
+   important ones are left out when the menu is narrow, so the row never wraps. */
+.prop-group {
+	container-type: inline-size;
 }
 .palette-grid {
-	display: grid;
-	grid-template-columns: repeat(6, 1fr);
-	justify-items: center;
-	gap: 8px;
-	padding: 4px 0;
+	display: flex;
+	flex-wrap: nowrap;
+	justify-content: space-between;
+	width: 100%;
 }
-/* Round tiles with a ring on the chosen one, as in the bar at the top. */
-.properties .swatch {
-	box-sizing: border-box;
+.palette-grid:not(.fn-colors) > * {
+	flex: none;
+}
+@container (max-width: 319px) {
+	.palette-grid .swatch.opt2 {
+		display: none;
+	}
+}
+@container (max-width: 279px) {
+	.palette-grid .swatch.opt {
+		display: none;
+	}
+}
+.properties button.swatch,
+.properties button.swatch:hover:not(:disabled),
+.properties button.swatch:active {
+	position: relative;
 	display: grid;
 	place-items: center;
+	width: 40px;
+	min-width: 40px;
+	height: 40px;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	background: transparent;
+	color: var(--muted);
+}
+.properties .swatch::before {
+	content: "";
+	grid-area: 1 / 1;
+	box-sizing: border-box;
 	width: 24px;
 	height: 24px;
-	min-width: 24px;
-	min-height: 24px;
-	padding: 0;
-	border: 1px solid color-mix(in srgb, var(--text) 18%, transparent);
 	border-radius: 50%;
-	cursor: pointer;
-	transition: transform 0.08s;
+	background: var(--swatch, transparent);
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 18%, transparent);
+	transition:
+		transform 0.08s,
+		box-shadow 0.12s;
 }
-.properties .swatch:hover {
-	transform: scale(1.12);
-}
-.properties .swatch.active {
-	box-shadow:
-		0 0 0 3px var(--surface),
-		0 0 0 5px var(--accent);
-}
-.properties .swatch.none {
-	background: var(--surface);
-	color: var(--muted);
-}
-.properties .swatch.none svg {
-	width: 16px;
-	height: 16px;
-}
-.properties .swatch.custom {
+.properties .swatch > svg {
+	grid-area: 1 / 1;
 	position: relative;
-	background: none;
-	border: 1px dashed var(--muted);
-	color: var(--muted);
-}
-.properties .swatch.custom[style] {
-	border-color: color-mix(in srgb, var(--text) 18%, transparent);
-	border-style: solid;
-}
-.properties .swatch.custom svg {
 	width: 14px;
 	height: 14px;
 	pointer-events: none;
 }
-.properties .swatch.custom input {
-	position: absolute;
-	inset: 0;
-	width: 100%;
-	height: 100%;
-	opacity: 0;
-	cursor: pointer;
+.properties .swatch.active::before,
+.properties .swatch[aria-expanded="true"]::before {
+	box-shadow:
+		inset 0 0 0 1px color-mix(in srgb, var(--text) 18%, transparent),
+		0 0 0 3px var(--surface),
+		0 0 0 5px var(--accent);
 }
+@media (hover: hover) {
+	.properties .swatch:hover::before {
+		transform: scale(1.12);
+	}
+}
+/* No fill: an empty dot with the crossed square. */
+.properties .swatch.none::before {
+	background: var(--surface);
+}
+.properties .swatch.none > svg {
+	width: 16px;
+	height: 16px;
+}
+/* Any other colour: a dashed ring with a plus, or a dot in that colour. */
+.properties .swatch.custom:not(.own)::before {
+	border: 1.5px dashed var(--muted);
+	background: transparent;
+	box-shadow: none;
+}
+.properties .swatch.custom:not(.own)[aria-expanded="true"]::before {
+	box-shadow:
+		0 0 0 3px var(--surface),
+		0 0 0 5px var(--accent);
+}
+
+/* What a shut menu leaves by its object: one button of the wide bar on its own glass (R-060). */
+.panel-tile {
+	position: fixed;
+	right: 12px;
+	top: 64px;
+	z-index: 2;
+	width: 40px;
+	height: 40px;
+	padding: 0;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: color-mix(in srgb, var(--surface) 85%, transparent);
+	-webkit-backdrop-filter: blur(12px);
+	backdrop-filter: blur(12px);
+	box-shadow: var(--shadow);
+	color: var(--icon);
+}
+@media (hover: hover) {
+	.panel-tile:hover:not(:disabled) {
+		background: var(--surface);
+	}
+}
+
 .slider-icon {
 	display: grid;
 	place-items: center;
@@ -219,159 +387,262 @@
 	color: var(--muted);
 }
 
-/* Attached to the object it edits (R-042): placed from the script, hidden until measured. */
-.properties.floating {
-	right: auto;
-}
-.panel-title {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	padding: 2px 2px 6px 6px;
-	font-size: 11px;
-	font-weight: 600;
-	letter-spacing: 0.06em;
-	text-transform: uppercase;
-	color: var(--muted);
-}
-
-.panel-close {
-	width: 22px;
-	height: 22px;
-	padding: 0;
-	border: 0;
-	border-radius: 50%;
-	background: transparent;
-	color: var(--muted);
-	font-size: 16px;
-	line-height: 1;
-	cursor: pointer;
-}
-.panel-close:hover {
-	background: var(--hover, rgba(0, 0, 0, 0.07));
-	color: inherit;
-}
-
-/* The title is the handle for moving the menu. */
-.properties .panel-title {
-	cursor: grab;
-	touch-action: none;
-}
-.properties .panel-title:active {
-	cursor: grabbing;
-}
-/* What a shut menu leaves by its object: a small tile that opens it again. */
-.panel-tile {
-	position: fixed;
-	right: 12px;
-	top: 64px;
-	z-index: 1;
-	width: 40px;
-	height: 40px;
-	padding: 0;
-	border: 1px solid var(--border);
-	border-radius: var(--radius);
-	background: color-mix(in srgb, var(--surface) 85%, transparent);
-	-webkit-backdrop-filter: blur(12px);
-	backdrop-filter: blur(12px);
-	box-shadow: var(--shadow);
-	color: var(--icon);
-}
-
 /* The function graphs of a coordinate plane (R-092). */
-.fns {
-	display: flex;
+.prop-group.fns {
 	flex-direction: column;
-	gap: 6px;
-	padding: 4px 0;
-	max-height: 46vh;
-	overflow-y: auto;
-	-webkit-overflow-scrolling: touch;
+	flex-wrap: nowrap;
+	align-items: stretch;
+}
+.fns-label {
+	padding-left: 8px;
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--text);
 }
 .fns-head {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	gap: 6px;
-	font-weight: 600;
+	min-height: 40px;
 }
-.properties .fns-head button:disabled {
-	opacity: 0.4;
+.properties button.fn-add {
+	position: relative;
+	padding: 0 14px 0 8px;
+	color: var(--accent);
 }
+.properties button.fn-add::after {
+	content: "";
+	position: absolute;
+	right: 5px;
+	bottom: 5px;
+	border: 3px solid transparent;
+	border-right-color: currentColor;
+	border-bottom-color: currentColor;
+	opacity: 0.55;
+}
+/* Ready formulas: two columns where the menu is wide, one where it is narrow; a formula is never broken. */
 .fn-presets {
 	display: grid;
-	grid-template-columns: 1fr 1fr;
+	grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
 	gap: 4px;
+	padding: 2px 0 6px;
 }
 .properties .fn-presets button {
-	display: flex;
 	flex-direction: column;
 	align-items: flex-start;
-	min-height: 40px;
+	justify-content: center;
+	gap: 1px;
 	height: auto;
-	padding: 4px 8px;
+	min-height: 48px;
+	padding: 6px 10px;
+	border-color: var(--border);
+	color: var(--text);
+	font-size: 13px;
 	text-align: left;
+	white-space: nowrap;
 }
 .fn-presets small {
-	opacity: 0.65;
+	font-family: var(--mono);
 	font-size: 11px;
+	color: var(--muted);
 }
+
+/*
+ * One curve, in one column from the top: the formula with the values now (and the bin), the colour,
+ * the coefficients, the width. Every row has the same 40px first cell, so the icons, the colour dot and
+ * the names stand on one line, and nothing moves when another function is picked.
+ */
 .fn {
 	display: flex;
 	flex-direction: column;
 	gap: 2px;
-	padding: 6px;
-	border: 1px solid var(--border);
-	border-radius: var(--radius-lg);
+	padding: 6px 0 4px;
+	border-top: 1px solid var(--border);
 }
 .fn-title {
 	display: flex;
-	align-items: center;
-	gap: 6px;
-}
-.fn-dot {
-	flex: none;
-	width: 12px;
-	height: 12px;
-	border-radius: 50%;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 4px;
+	padding-left: 8px;
 }
 .fn-formula {
 	flex: 1;
 	min-width: 0;
+	padding: 9px 0;
 	overflow-wrap: anywhere;
+	font-family: var(--mono);
+	font-size: 14px;
+	line-height: 1.35;
 	font-weight: 600;
+	color: var(--text);
 }
-.fn-colors {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 4px;
-	padding: 2px 0;
+.fn-row {
+	display: grid;
+	grid-template-columns: 40px 1fr;
+	align-items: center;
 }
-.properties .fn-colors .fn-color {
-	width: 28px;
-	min-width: 28px;
-	height: 28px;
+.fn-row-label {
+	font-size: 13px;
+	color: var(--muted);
+}
+/* The colours unfold under the dot: the row grows from nothing, smoothly, and the ring of the chosen
+   one has room all round (the padding), so it is never cut off. */
+.fn-colors-wrap {
+	display: grid;
+	grid-template-rows: 0fr;
+	visibility: hidden;
+	transition:
+		grid-template-rows 0.18s ease,
+		visibility 0s linear 0.18s;
+}
+.fn-colors-wrap.open {
+	grid-template-rows: 1fr;
+	visibility: visible;
+	transition: grid-template-rows 0.18s ease;
+}
+/* The row of colours is the very row of the top of the menu (ColorRow): a container of its own, so that
+   its least important colours go when it is narrow. */
+.fn-colors-wrap > .fn-colors {
+	min-height: 0;
+	overflow: hidden;
 	padding: 0;
-	border-radius: 50%;
-	border: 2px solid transparent;
+	container-type: inline-size;
 }
-.properties .fn-colors .fn-color.active {
-	border-color: var(--text);
+.fn-colors-wrap.open > .fn-colors {
+	padding: 4px 0 6px;
+}
+.properties button.fn-canon {
+	justify-content: flex-start;
+	width: 100%;
 }
 .fn-coef {
 	display: grid;
-	grid-template-columns: 18px 64px 1fr;
+	grid-template-columns: 40px 76px 1fr;
 	align-items: center;
-	gap: 6px;
-}
-.fn-coef input[type="number"] {
-	box-sizing: border-box;
-	width: 100%;
-	min-height: 36px;
-	padding: 2px 6px;
-	font: inherit;
+	gap: 8px;
 }
 .fn-name {
 	font-style: italic;
 	text-align: center;
+	color: var(--text);
+}
+.fn-coef input[type="number"] {
+	box-sizing: border-box;
+	width: 100%;
+	height: 36px;
+	padding: 0 8px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--surface);
+	font-family: var(--mono);
+	font-size: 14px;
+	text-align: right;
+}
+/* The number field shows the value; the slider takes what room is left. */
+.fn-coef .slider {
+	min-height: 36px;
+	padding: 0;
+}
+.fn-coef .slider input {
+	min-width: 0;
+}
+.fn-coef .slider .value {
+	display: none;
+}
+/* The width slider: its icon in the same 40px first cell as the colour dot and the names. */
+.fn .slider {
+	padding: 0;
+	gap: 0;
+}
+.fn .slider-icon {
+	display: grid;
+	place-items: center;
+	flex: none;
+	width: 40px;
+}
+.fn .slider input {
+	min-width: 0;
+	margin-right: 10px;
+}
+
+/* A touch screen: every target at least 44px (tablets, R-082), larger slider thumbs, and 16px text
+   in fields so that iPad Safari does not zoom in on them. */
+@media (pointer: coarse) {
+	.panel-title,
+	.fns-head {
+		min-height: 44px;
+	}
+	.properties button:not(.swatch) {
+		min-width: 44px;
+		height: 44px;
+	}
+	.properties button.icon {
+		width: 44px;
+	}
+	/* Wider cells: the least important colours go sooner. */
+	@container (max-width: 351px) {
+		.palette-grid .swatch.opt2 {
+			display: none;
+		}
+	}
+	@container (max-width: 307px) {
+		.palette-grid .swatch.opt {
+			display: none;
+		}
+	}
+	.prop-group.sliders {
+		grid-template-columns: 44px 1fr 56px;
+	}
+	.prop-group.sliders .slider-icon {
+		height: 44px;
+	}
+	.properties button.swatch,
+	.properties button.swatch:hover:not(:disabled),
+	.properties button.swatch:active {
+		width: 44px;
+		min-width: 44px;
+		height: 44px;
+	}
+	.properties .swatch::before {
+		width: 28px;
+		height: 28px;
+	}
+	.fn-row {
+		grid-template-columns: 44px 1fr;
+	}
+	.fn-coef {
+		grid-template-columns: 44px 76px 1fr;
+	}
+	.fn .slider-icon {
+		width: 44px;
+	}
+	.properties .slider {
+		min-height: 44px;
+	}
+	.properties .slider input::-webkit-slider-thumb {
+		width: 24px;
+		height: 24px;
+	}
+	.properties .slider input::-moz-range-thumb {
+		width: 24px;
+		height: 24px;
+	}
+	.fn-coef input[type="number"] {
+		height: 44px;
+		font-size: 16px;
+	}
+	.panel-tile {
+		width: 44px;
+		height: 44px;
+	}
+}
+@media (pointer: coarse) {
+	.properties .slider input {
+		background: linear-gradient(
+			to right,
+			var(--accent) calc(12px + (100% - 24px) * var(--p, 0)),
+			var(--border) calc(12px + (100% - 24px) * var(--p, 0))
+		);
+	}
 }

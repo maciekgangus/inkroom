@@ -310,6 +310,43 @@ export function fnLabel(f: PlaneFn): string {
 	}
 }
 
+/**
+ * The formula with every coefficient written out, the zero and one ones too, so that a change in
+ * any of them can be seen while a slider moves: "y = 1·x² + 0·x + 0".
+ */
+export function fnFormula(f: PlaneFn): string {
+	const [a, b, c, d] = f.c;
+	const add = (k: number): string =>
+		` ${k < 0 ? MINUS : "+"} ${num(Math.abs(k))}`;
+	// The shift p in "(x − p)": a negative p is added.
+	const shifted = (p: number): string =>
+		`x ${p < 0 ? "+" : MINUS} ${num(Math.abs(p))}`;
+	switch (f.k) {
+		case "linear":
+			return `y = ${num(a)}·x${add(b)}`;
+		case "quad":
+			return f.canon
+				? `y = ${num(a)}·(${shifted(b)})²${add(c)}`
+				: `y = ${num(a)}·x²${add(b)}·x${add(c)}`;
+		case "cubic":
+			return `y = ${num(a)}·x³${add(b)}·x²${add(c)}·x${add(d)}`;
+		case "abs":
+			return `y = ${num(a)}·|${shifted(b)}|${add(c)}`;
+		case "exp":
+			return `y = ${num(a)}·${num(b)}ˣ`;
+		case "log":
+			return `y = ${num(a)}·log_${num(b)}(x)`;
+		case "sqrt":
+			return `y = ${num(a)}·√(${shifted(b)})${add(c)}`;
+		case "hom":
+			return `y = ${num(a)}/(${shifted(b)})${add(c)}`;
+		default: {
+			const name = f.k === "tan" ? "tg" : f.k;
+			return `y = ${num(a)}·${name}(${num(b)}·x${add(c)})${add(d)}`;
+		}
+	}
+}
+
 const isNum = (v: unknown): v is number =>
 	typeof v === "number" && Number.isFinite(v);
 

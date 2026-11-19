@@ -45,6 +45,11 @@ const ICONS = {
 		"M12 3v12M8 7l4-4 4 4M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1",
 	search: "M11 4a7 7 0 1 0 0 14a7 7 0 0 0 0-14ZM20 20l-4.2-4.2",
 	close: "M6 6l12 12M18 6 6 18",
+	/** The two axes of a coordinate system, each with an arrow head. */
+	axes: "M4 12h16M17 9l3 3-3 3M12 20V4M9 7l3-3 3 3",
+	/** An empty square drawn with a dashed outline: nothing there. */
+	"empty-square":
+		"M5 4h3M11 4h2M16 4h3M20 5v3M20 11v2M20 16v3M19 20h-3M13 20h-2M8 20H5M4 19v-3M4 13v-2M4 8V5",
 	check: "M5 12.5l4.5 4.5L19 7.5",
 	alert: "M12 21a9 9 0 1 0 0-18a9 9 0 0 0 0 18ZM12 8v5M12 16h.01",
 	tiles:

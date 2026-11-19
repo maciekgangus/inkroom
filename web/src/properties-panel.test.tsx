@@ -210,12 +210,60 @@ describe("PropertiesPanel", () => {
 
 		test("each function shows its formula and its coefficients in fields and sliders", () => {
 			mount([withFns(f1, f2)]);
-			expect(root.textContent).toContain("y = 2x − 1");
-			expect(root.textContent).toContain("y = x² − 4");
+			// Every coefficient is written with its value, so a change in any of them is seen.
+			expect(root.textContent).toContain("y = 2·x − 1");
+			expect(root.textContent).toContain("y = 1·x² + 0·x − 4");
 			expect(input("fn f1 coef 0")?.value).toBe("2");
 			expect(input("fn f1 coef 1")?.value).toBe("-1");
 			expect(input("fn f2 coef 2")?.value).toBe("-4");
 			expect(slider("fn f1 slider 0")).not.toBeNull();
+		});
+
+		test("the formula follows the coefficients while a slider moves", () => {
+			mount([withFns(f1)]);
+			expect(root.querySelector(".fn-formula")?.textContent).toBe(
+				"y = 2·x − 1",
+			);
+			act(() => move(slider("fn f1 slider 1") as HTMLInputElement, 5, "input"));
+			expect(lastPatch(onPreview).fns?.[0].c).toEqual([2, 5]);
+		});
+
+		test("the colour of a curve is behind its dot: the row is closed until the dot is pressed", () => {
+			mount([withFns(f1)]);
+			expect(root.querySelector(".fn-colors-wrap.open")).toBeNull();
+			act(() => btn("fn f1 colors")?.click());
+			expect(root.querySelector(".fn-colors-wrap.open")).not.toBeNull();
+		});
+
+		test("the colours of a curve are the same row as the colours of the plane: seven tiles and the tile for any other colour", () => {
+			mount([withFns(f1)]);
+			const curve = root.querySelector(".fn .palette-grid") as HTMLElement;
+			const top = root.querySelector(
+				".panel-body > .prop-group .palette-grid",
+			) as HTMLElement;
+			expect(curve.querySelectorAll(".swatch:not(.custom)")).toHaveLength(7);
+			expect(curve.querySelectorAll(".swatch.custom")).toHaveLength(1);
+			// The same row as at the top (ColorRow), only with the colours of curves.
+			expect(curve.className).toBe(top.className);
+			expect(btn("fn f1 color custom")).not.toBeNull();
+		});
+
+		test("pressing a colour of the curve shuts the row; the picker of its own colour does not", () => {
+			mount([withFns(f1)]);
+			act(() => btn("fn f1 colors")?.click());
+			expect(root.querySelector(".fn-colors-wrap.open")).not.toBeNull();
+			act(() => btn("fn f1 color custom")?.click());
+			expect(root.querySelector(".fn-colors-wrap.open")).not.toBeNull();
+			act(() => btn("fn f1 color #388e3c")?.click());
+			expect(root.querySelector(".fn-colors-wrap.open")).toBeNull();
+		});
+
+		test("a coordinate plane has a wide menu for its formulas, the other objects a narrower one", () => {
+			mount([withFns(f1)]);
+			expect(root.querySelector(".properties.wide")).not.toBeNull();
+			render(null, root);
+			mount([freehand]);
+			expect(root.querySelector(".properties.wide")).toBeNull();
 		});
 
 		test("typing a coefficient changes only that function and that number", () => {
@@ -252,6 +300,7 @@ describe("PropertiesPanel", () => {
 
 		test("the colour and the width of a curve are its own", () => {
 			mount([withFns(f1)]);
+			act(() => btn("fn f1 colors")?.click());
 			act(() => btn("fn f1 color #388e3c")?.click());
 			expect(onChange).toHaveBeenLastCalledWith({
 				fns: [{ ...f1, color: "#388e3c" }],
@@ -420,7 +469,7 @@ describe("PropertiesPanel", () => {
 					maxY: 300,
 				}),
 			);
-			expect(spot(".properties").left).toBeGreaterThan(innerWidth - 20 - 270);
+			expect(spot(".properties").left).toBeGreaterThan(innerWidth - 20 - 340);
 		});
 	});
 
@@ -455,7 +504,7 @@ describe("PropertiesPanel", () => {
 			);
 			const custom = root.querySelector(".swatch.custom") as HTMLElement;
 			expect(custom.classList.contains("active")).toBe(true);
-			expect(custom.style.background).not.toBe("");
+			expect(custom.style.getPropertyValue("--swatch")).not.toBe("");
 		});
 	});
 
@@ -591,10 +640,16 @@ describe("PropertiesPanel", () => {
 		const box = { minX: 400, minY: 200, maxX: 600, maxY: 300 };
 
 		test("is placed near the object it edits", () => {
-			const panel = mountAt([rect], box);
+			// room for the menu on the right of the object
+			const panel = mountAt([rect], {
+				minX: 100,
+				minY: 200,
+				maxX: 300,
+				maxY: 300,
+			});
 			expect(panel.classList.contains("floating")).toBe(true);
 			expect(panel.style.top).toBe("200px"); // level with the top of the object
-			expect(parseFloat(panel.style.left)).toBeGreaterThan(600); // on its right
+			expect(parseFloat(panel.style.left)).toBeGreaterThan(300); // on its right
 		});
 
 		test("without an anchor it keeps the corner it always had", () => {
@@ -675,10 +730,19 @@ describe("the colour windows of the panel", () => {
 
 	test("show the current colour, and that a shape has no fill, without words on the buttons", () => {
 		const root = show([{ ...rect, color: "#d32f2f" }]);
-		const names = [...root.querySelectorAll(".color-name")].map(
-			(n) => n.textContent,
-		);
-		expect(names).toEqual(["#D32F2F", "brak"]);
+		// No hex code, no black window: the current colour is the ring on its round tile.
+		expect(root.textContent).not.toMatch(/#[0-9a-f]{6}/i);
+		expect(root.querySelector(".color-current, .chip, .color-name")).toBeNull();
+		expect(
+			root
+				.querySelector('[aria-label="prop color #d32f2f"]')
+				?.classList.contains("active"),
+		).toBe(true);
+		expect(
+			root
+				.querySelector('[aria-label="prop fill none"]')
+				?.classList.contains("active"),
+		).toBe(true);
 		expect(root.textContent).not.toContain("Bez wypełnienia");
 		expect(
 			root.querySelector('[aria-label="prop fill none"] svg'),
@@ -702,5 +766,287 @@ describe("the colour windows of the panel", () => {
 	test("the sliders say what they are for with an icon", () => {
 		const root = show([rect]);
 		expect(root.querySelectorAll(".slider .slider-icon svg")).toHaveLength(2); // width, opacity
+	});
+
+	test("the custom colour is a round tile that opens our own picker: a preview while it moves, one change on release", () => {
+		const onChange = vi.fn();
+		const onPreview = vi.fn();
+		const root = document.createElement("div");
+		render(
+			<PropertiesPanel
+				elements={[rect]}
+				colors={COLORS}
+				onChange={onChange}
+				onPreview={onPreview}
+			/>,
+			root,
+		);
+		expect(root.querySelector('input[type="color"]')).toBeNull();
+		act(() =>
+			(
+				root.querySelector('[aria-label="prop color custom"]') as HTMLElement
+			).click(),
+		);
+		// The picker is a window of its own on the page, not part of the menu: it does not push it.
+		expect(root.querySelector(".color-picker")).toBeNull();
+		const shade = document.querySelector(
+			'input[aria-label="prop color custom shade"]',
+		) as HTMLInputElement;
+		shade.value = "30";
+		act(() => {
+			shade.dispatchEvent(new Event("input", { bubbles: true }));
+		});
+		expect(onPreview).toHaveBeenLastCalledWith({
+			color: expect.stringMatching(/^#[0-9a-f]{6}$/),
+		});
+		expect(onChange).not.toHaveBeenCalled();
+		act(() => {
+			shade.dispatchEvent(new Event("change", { bubbles: true }));
+		});
+		expect(onChange).toHaveBeenCalledOnce();
+	});
+});
+
+describe("the picker window beside the menu", () => {
+	const open = () => {
+		const root = document.createElement("div");
+		document.body.appendChild(root);
+		render(
+			<PropertiesPanel elements={[rect]} colors={COLORS} onChange={() => {}} />,
+			root,
+		);
+		act(() =>
+			(
+				root.querySelector('[aria-label="prop color custom"]') as HTMLElement
+			).click(),
+		);
+		return root;
+	};
+
+	test("shuts on Escape and on a press outside it, but not on a press inside", () => {
+		const root = open();
+		expect(document.querySelector(".color-popover")).not.toBeNull();
+		act(() => {
+			document
+				.querySelector(".color-popover")
+				?.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+		});
+		expect(document.querySelector(".color-popover")).not.toBeNull();
+		act(() => {
+			document.body.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+		});
+		expect(document.querySelector(".color-popover")).toBeNull();
+		act(() =>
+			(
+				root.querySelector('[aria-label="prop color custom"]') as HTMLElement
+			).click(),
+		);
+		expect(document.querySelector(".color-popover")).not.toBeNull();
+		const reached = vi.fn();
+		addEventListener("keydown", reached); // what else listens on the page, as the selection does
+		act(() => {
+			dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+		});
+		removeEventListener("keydown", reached);
+		expect(document.querySelector(".color-popover")).toBeNull();
+		// Escape shut the picker only: the selection behind it did not hear it.
+		expect(reached).not.toHaveBeenCalled();
+		render(null, root);
+		root.remove();
+	});
+
+	test("goes away with the menu", () => {
+		const root = open();
+		act(() => render(null, root));
+		expect(document.querySelector(".color-popover")).toBeNull();
+		root.remove();
+	});
+});
+
+describe("the object menu in the language of the wide bar", () => {
+	const show = (els: Stroke[]) => {
+		const root = document.createElement("div");
+		const onChange = vi.fn();
+		render(
+			<PropertiesPanel elements={els} colors={COLORS} onChange={onChange} />,
+			root,
+		);
+		return { root, onChange };
+	};
+	const groups = (root: HTMLElement) =>
+		root.querySelectorAll(".panel-body > .prop-group").length;
+
+	test("is made of groups split by a rule: a shape has four, a text two, an image one", () => {
+		expect(groups(show([rect]).root)).toBe(4); // colours, fill, widths and styles, sliders
+		expect(groups(show([text]).root)).toBe(2); // colours, size and opacity
+		expect(groups(show([image]).root)).toBe(1); // opacity
+	});
+
+	test("never uses the pastel settings button of the narrow bar", () => {
+		const { root } = show([rect]);
+		expect(
+			root.querySelector(".settings-button, .settings-title, .settings-color"),
+		).toBeNull();
+	});
+
+	test("the ready widths are dots, as in the bar, for a line but not for a text or an image", async () => {
+		const { root, onChange } = show([
+			{ ...base, kind: "line", size: 2, points: pts([0, 0], [5, 5]) } as Stroke,
+		]);
+		for (const s of [1, 2, 4])
+			expect(
+				root.querySelector(`[aria-label="prop size ${s}"] .dot`),
+			).not.toBeNull();
+		expect(
+			root
+				.querySelector('[aria-label="prop size 2"]')
+				?.getAttribute("aria-pressed"),
+		).toBe("true");
+		act(() =>
+			(root.querySelector('[aria-label="prop size 4"]') as HTMLElement).click(),
+		);
+		expect(onChange).toHaveBeenLastCalledWith({ size: 4 });
+		expect(
+			show([text]).root.querySelector('[aria-label="prop size 1"]'),
+		).toBeNull();
+		expect(
+			show([image]).root.querySelector('[aria-label="prop size 1"]'),
+		).toBeNull();
+	});
+
+	test("line styles are icons in the bar's order, with the natural pen first for a freehand stroke", () => {
+		const { root } = show([freehand]);
+		const dashes = [...root.querySelectorAll('[aria-label^="prop dash "]')];
+		expect(dashes.map((b) => b.getAttribute("aria-label"))).toEqual([
+			"prop dash natural",
+			"prop dash solid",
+			"prop dash dashed",
+			"prop dash dotted",
+		]);
+		for (const b of dashes) expect(b.querySelector("svg")).not.toBeNull();
+	});
+
+	test("the cross is an icon, not a letter", () => {
+		const root = document.createElement("div");
+		render(
+			<PropertiesPanel
+				elements={[rect]}
+				colors={COLORS}
+				onClose={() => {}}
+				onChange={() => {}}
+			/>,
+			root,
+		);
+		const close = root.querySelector(
+			'[aria-label="close panel"]',
+		) as HTMLElement;
+		expect(close.querySelector("svg")).not.toBeNull();
+		expect(close.textContent).toBe("");
+	});
+});
+
+describe("the menu of a coordinate plane", () => {
+	const plane = {
+		...base,
+		kind: "plane",
+		points: pts([0, 0], [5, 5]),
+	} as Stroke;
+	const show = () => {
+		const root = document.createElement("div");
+		render(
+			<PropertiesPanel
+				elements={[plane]}
+				colors={COLORS}
+				onChange={() => {}}
+			/>,
+			root,
+		);
+		return root;
+	};
+	const q = (root: HTMLElement, label: string) =>
+		root.querySelector(`[aria-label="${label}"]`) as HTMLElement | null;
+
+	test("is titled Wykres and has no ready widths, only the slider", () => {
+		const root = show();
+		expect(root.querySelector(".panel-title span")?.textContent).toBe("Wykres");
+		for (const s of [1, 2, 4]) expect(q(root, `prop size ${s}`)).toBeNull();
+		expect(root.querySelector('input[aria-label="prop size"]')).not.toBeNull();
+	});
+
+	test("the grid, the axes and the numbering are icon buttons of one size with titles, on one line split by a rule", () => {
+		const root = show();
+		const labels = [
+			"prop grid",
+			"prop axes",
+			"prop numbering numbers",
+			"prop numbering pi",
+			"prop numbering none",
+		];
+		for (const l of labels) {
+			const b = q(root, l) as HTMLElement;
+			expect(b.classList.contains("icon")).toBe(true);
+			expect(b.title).not.toBe("");
+			expect(b.getAttribute("aria-pressed")).not.toBeNull();
+		}
+		// Words are gone from the buttons: an icon, the digits or the symbol.
+		expect(q(root, "prop grid")?.querySelector("svg")).not.toBeNull();
+		expect(q(root, "prop axes")?.querySelector("svg")).not.toBeNull();
+		expect(q(root, "prop numbering none")?.querySelector("svg")).not.toBeNull();
+		expect(q(root, "prop numbering pi")?.textContent).toBe("π");
+		expect(q(root, "prop numbering numbers")?.textContent).toBe("123");
+		expect(root.textContent).not.toMatch(/Siatka|Osie|Bez/);
+		// One group: grid and axes in one cluster, numbering in the other, a rule between.
+		const row = q(root, "prop grid")?.closest(".prop-group") as HTMLElement;
+		expect(row.classList.contains("split")).toBe(true);
+		expect(row.contains(q(root, "prop numbering pi"))).toBe(true);
+		expect(row.querySelectorAll(".prop-cluster")).toHaveLength(2);
+		expect(row.querySelectorAll(":scope > .prop-sep")).toHaveLength(1);
+	});
+
+	test("the size of a cell is the first thing under the title", () => {
+		const root = show();
+		const first = root.querySelector(".panel-body > .prop-group");
+		expect(
+			first?.querySelector('input[aria-label="prop cell"]'),
+		).not.toBeNull();
+	});
+});
+
+describe("the colour rows say what they colour", () => {
+	const show = (els: Stroke[]) => {
+		const root = document.createElement("div");
+		render(
+			<PropertiesPanel elements={els} colors={COLORS} onChange={() => {}} />,
+			root,
+		);
+		return root;
+	};
+	const labels = (root: HTMLElement) =>
+		[...root.querySelectorAll(".prop-label")].map((l) => l.textContent);
+
+	test("a shape has two rows, the outline and the fill", () => {
+		const root = show([rect]);
+		expect(labels(root)).toEqual(["Kontur", "Wypełnienie"]);
+		// the rows are the same and still found by their old labels
+		expect(
+			root.querySelector('[aria-label="prop color #d32f2f"]'),
+		).not.toBeNull();
+		expect(root.querySelector('[aria-label="prop fill none"]')).not.toBeNull();
+	});
+
+	test("a stroke, a line, a text have one row, the colour", () => {
+		expect(labels(show([freehand]))).toEqual(["Kolor"]);
+		expect(labels(show([text]))).toEqual(["Kolor"]);
+		expect(
+			labels(
+				show([
+					{ ...base, kind: "line", points: pts([0, 0], [5, 5]) } as Stroke,
+				]),
+			),
+		).toEqual(["Kolor"]);
+	});
+
+	test("an image has no colour row, so no label", () => {
+		expect(labels(show([image]))).toEqual([]);
 	});
 });

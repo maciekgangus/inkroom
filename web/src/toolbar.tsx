@@ -1,8 +1,11 @@
-import { useEffect, useLayoutEffect, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { Settings } from "./board/controller";
 import { SHAPE_GROUPS, SHAPES, saveShape } from "./board/shapes";
+import { ColorWell } from "./color-well";
+import { CustomColor } from "./custom-color";
 import { closeOnDismiss } from "./dismiss";
 import { getExtraColor, setExtraColor } from "./extra-color";
+import { cardShift } from "./floating-panel";
 import { Icon } from "./icon";
 import { ImageControls, type ImageControlsProps } from "./image-controls";
 import { ShapeIcon } from "./shape-icon";
@@ -100,6 +103,25 @@ export function Toolbar({
 		return closeOnDismiss(".settings-wrap", () => setSettingsOpen(false));
 	}, [compact, settingsOpen]);
 	const [paletteOpen, setPaletteOpen] = useState(false);
+	const paletteRef = useRef<HTMLDivElement>(null);
+	// A palette that would stick out of the screen is moved back; its arrow still points at the place.
+	useLayoutEffect(() => {
+		const el = paletteRef.current;
+		if (!paletteOpen || !el) return;
+		el.style.setProperty("--shift", "0px");
+		const r = el.getBoundingClientRect();
+		el.style.setProperty(
+			"--shift",
+			`${cardShift(r.left, r.right, innerWidth)}px`,
+		);
+	}, [paletteOpen]);
+	// The palette shuts on Escape and on a press outside it and its fourth place (which toggles it).
+	useLayoutEffect(() => {
+		if (!paletteOpen) return;
+		return closeOnDismiss(".palette, .swatch.more", () =>
+			setPaletteOpen(false),
+		);
+	}, [paletteOpen]);
 	const [shapesOpen, setShapesOpen] = useState(false);
 	// The list belongs to the shape tool: leaving it closes the list.
 	const listOpen = shapesOpen && settings.tool === "shape";
@@ -138,6 +160,24 @@ export function Toolbar({
 				pick(c);
 				after?.();
 			}}
+		/>
+	);
+
+	// The tile for any other colour and its picker, in the palette and in the list of settings.
+	const [picking, setPicking] = useState(false);
+	useEffect(() => {
+		if (!paletteOpen && !settingsOpen) setPicking(false);
+	}, [paletteOpen, settingsOpen]);
+	const customColor = (
+		<CustomColor
+			label="custom color"
+			current={settings.color}
+			own={![...COLORS, ...MORE_COLORS].includes(settings.color)}
+			display={(c) => displayColor(c, theme)}
+			open={picking}
+			onToggle={() => setPicking(!picking)}
+			onInput={pick}
+			onChange={pick}
 		/>
 	);
 
@@ -237,18 +277,10 @@ export function Toolbar({
 							<div class="settings-list">
 								<span class="settings-title">Kolor</span>
 								<div class="settings-colors">
-									{[...COLORS, ...MORE_COLORS].map((c) => swatch(c))}
-									<label class="custom">
-										Własny kolor
-										<input
-											type="color"
-											aria-label="custom color"
-											value={custom ? settings.color : "#5b5bf0"}
-											onInput={(e) =>
-												pick((e.currentTarget as HTMLInputElement).value)
-											}
-										/>
-									</label>
+									{[...COLORS, ...MORE_COLORS].map((c) =>
+										swatch(c, () => setSettingsOpen(false)),
+									)}
+									{customColor}
 								</div>
 								<span class="settings-title">Grubość</span>
 								<StrokeControls settings={settings} onChange={set} inline />
@@ -259,47 +291,43 @@ export function Toolbar({
 			) : (
 				<>
 					<div class={`group${hasSelection ? " dimmed" : ""}`}>
-						{QUICK_COLORS.map((c) => swatch(c))}
-						<button
-							type="button"
-							aria-label="more colors"
-							aria-pressed={drawing && custom}
-							aria-expanded={paletteOpen}
-							title={
-								extra
-									? "Ostatni dodatkowy kolor (klawisz 4); jeszcze raz otwiera paletę"
-									: "Więcej kolorów"
-							}
-							class={`swatch more ${on(drawing && custom)}`}
-							style={
-								extra ? { background: displayColor(extra, theme) } : undefined
-							}
-							onClick={() => {
-								// The kept colour is picked first; pressed again, it opens the palette.
-								if (!custom && extra) pick(extra);
-								else setPaletteOpen(!paletteOpen);
-							}}
-						>
-							{!extra && <Icon name="plus" />}
-						</button>
-						{paletteOpen && (
-							<div class="palette">
-								{[...COLORS.slice(3), ...MORE_COLORS].map((c) =>
-									swatch(c, () => setPaletteOpen(false)),
-								)}
-								<label class="custom">
-									Własny kolor
-									<input
-										type="color"
-										aria-label="custom color"
-										value={custom ? settings.color : "#5b5bf0"}
-										onInput={(e) =>
-											pick((e.currentTarget as HTMLInputElement).value)
-										}
-									/>
-								</label>
-							</div>
-						)}
+						{QUICK_COLORS.map((c) => swatch(c, () => setPaletteOpen(false)))}
+						<div class="flyout-wrap palette-wrap">
+							<button
+								type="button"
+								aria-label="more colors"
+								aria-pressed={drawing && custom}
+								aria-expanded={paletteOpen}
+								aria-haspopup="true"
+								title={
+									extra
+										? "Więcej kolorów: ostatni dodatkowy kolor (klawisz 4); jeszcze raz otwiera paletę"
+										: "Więcej kolorów"
+								}
+								class={`swatch more has-list ${on(drawing && custom)}`}
+								style={
+									extra ? { "--well": displayColor(extra, theme) } : undefined
+								}
+								onClick={() => {
+									// The kept colour is picked first; pressed again, it opens the palette.
+									if (!custom && extra) {
+										pick(extra);
+										setPaletteOpen(false);
+									} else setPaletteOpen(!paletteOpen);
+								}}
+							>
+								<ColorWell empty={!extra} />
+							</button>
+							{paletteOpen && (
+								<div class="palette" ref={paletteRef}>
+									{[...COLORS.slice(3), ...MORE_COLORS].map((c) =>
+										swatch(c, () => setPaletteOpen(false)),
+									)}
+									<span class="palette-rule" aria-hidden="true" />
+									{customColor}
+								</div>
+							)}
+						</div>
 					</div>
 					<div class={`group${hasSelection ? " dimmed" : ""}`}>
 						<StrokeControls settings={settings} onChange={set} />

@@ -74,11 +74,62 @@ export function panelTitle(els: Stroke[]): string {
 				? "Linia"
 				: e.kind === "image"
 					? "Obraz"
-					: !e.kind || e.kind === "stroke"
-						? "Rysunek"
-						: "Kształt";
+					: e.kind === "plane"
+						? "Wykres"
+						: !e.kind || e.kind === "stroke"
+							? "Rysunek"
+							: "Kształt";
 	const classes = new Set(els.map(classOf));
 	if (classes.size > 1) return `Zaznaczenie (${els.length})`;
 	const [name] = classes;
 	return els.length > 1 ? `${name} (${els.length})` : name;
+}
+
+/**
+ * Where the popover of a colour picker stands (in screen px): outside the menu, beside it and level
+ * with the tile that opened it, so that it does not push the menu's contents down. On the left of a
+ * menu in the right half of the screen, else on the right; if that side has no room it takes the
+ * other, and with room on neither it is null and the picker stays inside the menu.
+ */
+export function popoverSpot(
+	tile: Rect,
+	menu: Rect,
+	size: { w: number; h: number },
+	view: { w: number; h: number },
+): { left: number; top: number } | null {
+	const gap = 8;
+	const leftEdge = menu.minX - gap - size.w;
+	const rightEdge = menu.maxX + gap;
+	const fitsLeft = leftEdge >= MARGIN;
+	const fitsRight = rightEdge + size.w <= view.w - MARGIN;
+	const preferLeft = (menu.minX + menu.maxX) / 2 > view.w / 2;
+	const left =
+		preferLeft && fitsLeft
+			? leftEdge
+			: fitsRight
+				? rightEdge
+				: fitsLeft
+					? leftEdge
+					: null;
+	if (left === null) return null;
+	const top = Math.max(
+		MARGIN,
+		Math.min(tile.minY - gap, view.h - size.h - MARGIN),
+	);
+	return { left, top };
+}
+
+/**
+ * How far a card (the palette under the fourth colour place) must be moved sideways to stay on the
+ * screen, in px: 0 when it fits. Its arrow moves the other way, so it still points at the place.
+ */
+export function cardShift(
+	left: number,
+	right: number,
+	viewWidth: number,
+	margin = MARGIN,
+): number {
+	if (left < margin) return margin - left;
+	if (right > viewWidth - margin) return viewWidth - margin - right;
+	return 0;
 }

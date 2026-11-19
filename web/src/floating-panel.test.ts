@@ -1,9 +1,11 @@
 import { describe, expect, test } from "vitest";
 import type { Stroke } from "./board/board";
 import {
+	cardShift,
 	isVisible,
 	panelTitle,
 	pickSide,
+	popoverSpot,
 	sidePosition,
 } from "./floating-panel";
 
@@ -83,6 +85,11 @@ describe("panelTitle", () => {
 		],
 	});
 
+	test("a coordinate plane is a graph (Wykres), not a shape", () => {
+		expect(panelTitle([el("plane")])).toBe("Wykres");
+		expect(panelTitle([el("plane"), el("plane")])).toBe("Wykres (2)");
+	});
+
 	test("names the class of a single object", () => {
 		expect(panelTitle([el("text")])).toBe("Tekst");
 		expect(panelTitle([el("line")])).toBe("Linia");
@@ -109,5 +116,60 @@ describe("panelTitle", () => {
 
 	test("nothing, nothing to name", () => {
 		expect(panelTitle([])).toBe("");
+	});
+});
+
+describe("popoverSpot", () => {
+	const view = { w: 1000, h: 800 };
+	const size = { w: 240, h: 100 };
+	const tile = { minX: 900, minY: 200, maxX: 940, maxY: 240 };
+
+	test("stands on the left of a menu that is by the right edge, level with the tile", () => {
+		const menu = { minX: 760, minY: 100, maxX: 1000 - 12, maxY: 500 };
+		const spot = popoverSpot(tile, menu, size, view);
+		expect(spot).not.toBeNull();
+		expect(spot?.left).toBe(menu.minX - 8 - size.w);
+		expect(spot?.top).toBe(tile.minY - 8);
+	});
+
+	test("stands on the right of a menu that is by the left edge", () => {
+		const menu = { minX: 12, minY: 100, maxX: 266, maxY: 500 };
+		const spot = popoverSpot(
+			{ ...tile, minX: 200, maxX: 240 },
+			menu,
+			size,
+			view,
+		);
+		expect(spot?.left).toBe(menu.maxX + 8);
+	});
+
+	test("flips to the other side when the preferred one has no room", () => {
+		// The menu is in the right half but only 100px from the left edge: the left side is too narrow.
+		const menu = { minX: 100, minY: 100, maxX: 600, maxY: 500 };
+		const spot = popoverSpot(tile, menu, size, view);
+		expect(spot?.left).toBe(menu.maxX + 8);
+	});
+
+	test("is null when there is no room on either side: it then stays inside the menu", () => {
+		const menu = { minX: 100, minY: 100, maxX: 900, maxY: 500 };
+		expect(popoverSpot(tile, menu, size, view)).toBeNull();
+	});
+
+	test("is kept on the screen vertically", () => {
+		const menu = { minX: 760, minY: 100, maxX: 988, maxY: 790 };
+		const low = { minX: 900, minY: 780, maxX: 940, maxY: 800 };
+		expect(popoverSpot(low, menu, size, view)?.top).toBe(view.h - size.h - 8);
+		const high = { minX: 900, minY: 0, maxX: 940, maxY: 20 };
+		expect(popoverSpot(high, menu, size, view)?.top).toBe(8);
+	});
+});
+
+describe("cardShift", () => {
+	test("is 0 while the card fits", () => {
+		expect(cardShift(100, 420, 1000)).toBe(0);
+	});
+	test("moves a card that sticks out on the left or on the right back to the margin", () => {
+		expect(cardShift(-30, 290, 1000)).toBe(38);
+		expect(cardShift(700, 1020, 1000)).toBe(-28);
 	});
 });

@@ -66,12 +66,111 @@ describe("Toolbar", () => {
 		const q = (label: string) =>
 			root.querySelector(`[aria-label="${label}"]`) as HTMLElement | null;
 
+		test("the fourth place is one SVG of circles round one centre, with a plus only while it is empty", () => {
+			const more = q("more colors") as HTMLElement;
+			const svg = more.querySelector("svg.well") as SVGElement;
+			expect(svg.getAttribute("viewBox")).toBe("0 0 40 40");
+			for (const c of svg.querySelectorAll("circle")) {
+				expect(c.getAttribute("cx")).toBe("20");
+				expect(c.getAttribute("cy")).toBe("20");
+			}
+			expect(svg.querySelector("path[d^='M20 16']")).not.toBeNull();
+			expect(svg.querySelectorAll(".ring path")).toHaveLength(8);
+		});
+
+		test("the fourth place says it holds more than one colour: a list marker, a title and a popup hint", () => {
+			const more = q("more colors") as HTMLElement;
+			expect(more.classList.contains("has-list")).toBe(true);
+			expect(more.getAttribute("aria-haspopup")).toBe("true");
+			expect(more.title).toMatch(/Więcej kolorów/);
+			act(() => click("more colors"));
+			act(() => click(`color ${MORE_COLORS[3]}`));
+			act(() => click(`color ${COLORS[1]}`));
+			// With a colour kept there, it still says so.
+			expect(more.classList.contains("has-list")).toBe(true);
+			expect(more.title).toMatch(/Więcej kolorów/);
+		});
+
+		test("the palette hangs from the fourth place: both in one wrapper, with a rule before the well of one's own colour", () => {
+			act(() => click("more colors"));
+			const wrap = root.querySelector(".palette-wrap") as HTMLElement;
+			expect(wrap).not.toBeNull();
+			expect(wrap.contains(q("more colors"))).toBe(true);
+			expect(wrap.querySelector(":scope > .palette")).not.toBeNull();
+			const palette = wrap.querySelector(".palette") as HTMLElement;
+			expect(palette.querySelector(".palette-rule")).not.toBeNull();
+			// 14 fixed colours (two rows of seven) and the well of one's own colour.
+			expect(palette.querySelectorAll(".swatch:not(.custom)")).toHaveLength(14);
+			expect(palette.querySelector(".swatch.custom")).not.toBeNull();
+		});
+
+		test("the palette shuts after a colour from anywhere: the grid, a quick colour or the fourth place", () => {
+			const open = () => {
+				act(() => click("more colors"));
+				expect(root.querySelector(".palette")).not.toBeNull();
+			};
+			open();
+			act(() => click(`color ${MORE_COLORS[2]}`)); // from the grid
+			expect(root.querySelector(".palette")).toBeNull();
+			act(() => click(`color ${COLORS[1]}`)); // a quick colour, palette shut
+			act(() => click("more colors")); // the colour kept in the fourth place is picked first
+			expect(settings.color).toBe(MORE_COLORS[2]);
+			expect(root.querySelector(".palette")).toBeNull();
+			open(); // pressed again, the fourth place opens the palette
+			act(() => click(`color ${COLORS[1]}`)); // a quick colour of the bar, palette open
+			expect(root.querySelector(".palette")).toBeNull();
+			act(() => click("more colors")); // the kept colour is picked, palette shut
+			open(); // and pressed once more it opens
+			act(() => click("more colors")); // the fourth place itself, with the palette open
+			expect(root.querySelector(".palette")).toBeNull();
+		});
+
+		test("the palette shuts on Escape and on a press outside it, not on a press inside it", () => {
+			act(() => click("more colors"));
+			act(() => {
+				(root.querySelector(".palette") as HTMLElement).dispatchEvent(
+					new Event("pointerdown", { bubbles: true }),
+				);
+			});
+			expect(root.querySelector(".palette")).not.toBeNull();
+			act(() => {
+				document.body.dispatchEvent(
+					new Event("pointerdown", { bubbles: true }),
+				);
+			});
+			expect(root.querySelector(".palette")).toBeNull();
+			act(() => click("more colors"));
+			expect(root.querySelector(".palette")).not.toBeNull();
+			act(() => {
+				dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+			});
+			expect(root.querySelector(".palette")).toBeNull();
+		});
+
+		test("the palette shuts after a colour is picked, not while the picker's sliders move", () => {
+			act(() => click("more colors"));
+			act(() => click("custom color"));
+			const shade = q("custom color shade") as HTMLInputElement;
+			shade.value = "30";
+			act(() => {
+				shade.dispatchEvent(new Event("input", { bubbles: true }));
+				shade.dispatchEvent(new Event("change", { bubbles: true }));
+			});
+			expect(root.querySelector(".palette")).not.toBeNull();
+			act(() => click(`color ${MORE_COLORS[2]}`));
+			expect(root.querySelector(".palette")).toBeNull();
+		});
+
 		test("the extra colours stay hidden until the palette is opened", () => {
 			expect(MORE_COLORS).toHaveLength(12);
 			expect(q(`color ${MORE_COLORS[0]}`)).toBeNull();
 			act(() => click("more colors"));
 			for (const c of MORE_COLORS) expect(q(`color ${c}`)).not.toBeNull();
-			expect(q("custom color")?.getAttribute("type")).toBe("color");
+			// A round tile that opens our own picker, not the system colour field.
+			const tile = q("custom color") as HTMLElement;
+			expect(tile.tagName).toBe("BUTTON");
+			expect(tile.getAttribute("aria-expanded")).toBe("false");
+			expect(root.querySelector('input[type="color"]')).toBeNull();
 		});
 
 		test("picking an extra colour sets it, closes the palette and marks the palette button", () => {
@@ -91,8 +190,9 @@ describe("Toolbar", () => {
 			act(() => click(`color ${COLORS[1]}`)); // a quick colour
 			expect(settings.color).toBe(COLORS[1]);
 			const slot = q("more colors") as HTMLElement;
-			expect(slot.style.background).not.toBe("");
-			expect(slot.querySelector("svg")).toBeNull(); // no plus: the colour is there
+			expect(slot.style.getPropertyValue("--well")).not.toBe("");
+			expect(slot.querySelector("svg.well")).not.toBeNull(); // the ring is always there
+			expect(slot.querySelector("svg.well path[d^='M20 16']")).toBeNull(); // no plus: the colour is there // no plus: the colour is there
 			expect(slot.getAttribute("aria-pressed")).toBe("false");
 		});
 
@@ -118,12 +218,15 @@ describe("Toolbar", () => {
 		test("the picker sets any colour and goes back to the pen from the eraser", () => {
 			click("eraser");
 			act(() => click("more colors"));
-			const input = q("custom color") as HTMLInputElement;
-			input.value = "#123456";
+			act(() => click("custom color"));
+			const before = settings.color;
+			const shade = q("custom color shade") as HTMLInputElement;
+			shade.value = "30";
 			act(() => {
-				input.dispatchEvent(new Event("input", { bubbles: true }));
+				shade.dispatchEvent(new Event("input", { bubbles: true }));
 			});
-			expect(settings.color).toBe("#123456");
+			expect(settings.color).toMatch(/^#[0-9a-f]{6}$/);
+			expect(settings.color).not.toBe(before);
 			expect(settings.tool).toBe("pen");
 		});
 	});
@@ -502,17 +605,27 @@ describe("Toolbar on a narrow screen: one button for colour, width and style (R-
 			expect(q(`line style ${s}`)).not.toBeNull();
 	});
 
-	test("choosing a colour or a width works from the list and leaves it open", () => {
+	test("a width and a style work from the list and leave it open; a colour works and shuts it", () => {
 		screen("compact");
 		show();
 		act(() => (q("pen settings") as HTMLElement).click());
-		act(() => (q(`color ${COLORS[1]}`) as HTMLElement).click());
-		expect(settings.color).toBe(COLORS[1]);
 		act(() => (q(`size ${SIZES[2]}`) as HTMLElement).click());
 		expect(settings.size).toBe(SIZES[2]);
 		act(() => (q("line style dashed") as HTMLElement).click());
 		expect(settings.lineStyle).toBe("dashed");
 		expect(root.querySelector(".settings-list")).not.toBeNull();
+		// The picker's sliders do not shut it either.
+		act(() => (q("custom color") as HTMLElement).click());
+		const shade = q("custom color shade") as HTMLInputElement;
+		shade.value = "30";
+		act(() => {
+			shade.dispatchEvent(new Event("input", { bubbles: true }));
+			shade.dispatchEvent(new Event("change", { bubbles: true }));
+		});
+		expect(root.querySelector(".settings-list")).not.toBeNull();
+		act(() => (q(`color ${COLORS[1]}`) as HTMLElement).click());
+		expect(settings.color).toBe(COLORS[1]);
+		expect(root.querySelector(".settings-list")).toBeNull();
 	});
 
 	test("Escape closes the list", () => {

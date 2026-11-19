@@ -3,12 +3,14 @@ import {
 	COEF_LIMIT,
 	FN_KINDS,
 	FN_PRESETS,
-	fnLabel,
+	fnFormula,
 	MAX_FNS,
 	newFn,
 	type PlaneFn,
 } from "./board/functions";
 import type { StylePatch } from "./board/style";
+import { ColorRow } from "./color-row";
+import { Icon } from "./icon";
 import { Slider } from "./slider";
 
 /** The colours a new function takes in turn, none of them the black of the axes. */
@@ -56,29 +58,37 @@ const namesOf = (f: PlaneFn): string[] =>
  */
 export function FunctionEditor({
 	fns,
+	display = (c) => c,
 	onPreview,
 	onChange,
 }: {
 	fns: PlaneFn[];
+	/** How a stored colour is shown (dark mode swaps black and white). */
+	display?: (color: string) => string;
 	onPreview: (patch: StylePatch) => void;
 	onChange: (patch: StylePatch) => void;
 }) {
 	const [picking, setPicking] = useState(false);
+	/** The curve whose colours are open: they are behind its dot, one tap away. */
+	const [colorsOf, setColorsOf] = useState<string | null>(null);
 	const replace = (id: string, next: PlaneFn) =>
 		fns.map((f) => (f.id === id ? next : f));
 	const full = fns.length >= MAX_FNS;
 	return (
-		<div class="fns">
+		<div class="prop-group fns">
 			<div class="fns-head">
-				<span>Funkcje</span>
+				<span class="fns-label">Funkcje</span>
 				<button
 					type="button"
+					class={`fn-add${picking ? " active" : ""}`}
 					aria-label="fn add"
 					aria-expanded={picking}
+					title={full ? `Najwyżej ${MAX_FNS} funkcji` : "Dodaj funkcję"}
 					disabled={full}
 					onClick={() => setPicking(!picking)}
 				>
-					+ Dodaj funkcję
+					<Icon name="plus" />
+					Dodaj
 				</button>
 			</div>
 			{picking && !full && (
@@ -105,34 +115,48 @@ export function FunctionEditor({
 			{fns.map((f) => (
 				<div class="fn" key={f.id} data-fn={f.id}>
 					<div class="fn-title">
-						<span class="fn-dot" style={{ background: f.color }} />
-						<span class="fn-formula">{fnLabel(f)}</span>
+						<span class="fn-formula">{fnFormula(f)}</span>
 						<button
 							type="button"
-							class="fn-remove"
+							class="icon fn-remove"
 							aria-label={`fn remove ${f.id}`}
 							title="Usuń funkcję"
 							onClick={() =>
 								onChange({ fns: fns.filter((x) => x.id !== f.id) })
 							}
 						>
-							×
+							<Icon name="trash" />
 						</button>
 					</div>
-					<div class="fn-colors">
-						{FN_COLORS.map((c) => (
-							<button
-								type="button"
-								key={c}
-								class={`fn-color${f.color === c ? " active" : ""}`}
-								style={{ background: c }}
-								aria-label={`fn ${f.id} color ${c}`}
-								aria-pressed={f.color === c}
-								onClick={() =>
+					<div class="fn-row fn-color-row">
+						<button
+							type="button"
+							class="swatch"
+							style={{ "--swatch": display(f.color) }}
+							aria-label={`fn ${f.id} colors`}
+							aria-expanded={colorsOf === f.id}
+							title="Kolor wykresu"
+							onClick={() => setColorsOf(colorsOf === f.id ? null : f.id)}
+						/>
+						<span class="fn-row-label">Kolor wykresu</span>
+					</div>
+					<div class={`fn-colors-wrap${colorsOf === f.id ? " open" : ""}`}>
+						<div class="fn-colors">
+							<ColorRow
+								prefix={`fn ${f.id} color`}
+								current={f.color}
+								colors={FN_COLORS.slice(0, 7)}
+								display={display}
+								onPreview={(c) =>
+									onPreview({ fns: replace(f.id, { ...f, color: c }) })
+								}
+								onPick={(c) =>
+									c !== null &&
 									onChange({ fns: replace(f.id, { ...f, color: c }) })
 								}
+								onChosen={() => setColorsOf(null)}
 							/>
-						))}
+						</div>
 					</div>
 					{f.k === "quad" && (
 						<button
@@ -186,6 +210,7 @@ export function FunctionEditor({
 						);
 					})}
 					<Slider
+						icon="width"
 						label={`fn ${f.id} width`}
 						min={0.5}
 						max={10}
