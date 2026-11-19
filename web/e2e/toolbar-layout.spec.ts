@@ -126,57 +126,38 @@ test("the share button is on the top bar, an icon only (R-083)", async ({
 	await expect(share.locator("svg")).toHaveCount(1);
 });
 
-/** The geometry of a colour well and its palette, in CSS px: every centre and margin to the pixel. */
-const wellGeometry = (page: import("@playwright/test").Page) =>
+/** The geometry of the palette, in CSS px: every centre and margin to the pixel. */
+const paletteGeometry = (page: import("@playwright/test").Page) =>
 	page.evaluate(() => {
 		const R = (e: Element) => e.getBoundingClientRect();
 		const slot = document.querySelector(
 			"[aria-label='more colors']",
 		) as HTMLElement;
 		const pal = document.querySelector(".palette") as HTMLElement;
-		const pseudo = (el: HTMLElement, which: "::before" | "::after") => {
-			const r = R(el);
-			const cs = getComputedStyle(el, which);
-			const left = r.left + Number.parseFloat(cs.left);
-			const top = r.top + Number.parseFloat(cs.top);
-			const w = Number.parseFloat(cs.width);
-			const h = Number.parseFloat(cs.height);
-			return { cx: left + w / 2, cy: top + h / 2, w, h };
-		};
-		const centre = (r: DOMRect) => ({
-			cx: r.left + r.width / 2,
-			cy: r.top + r.height / 2,
-		});
-		const well = pal.querySelector(".swatch.custom") as HTMLElement;
+		const tile = pal.querySelector(".swatch.custom") as HTMLElement;
 		const dots = [...pal.querySelectorAll(".swatch:not(.custom)")].map(R);
 		const pr = R(pal);
 		const rule = R(pal.querySelector(".palette-rule") as HTMLElement);
-		const wr = R(well);
+		const tr = R(tile);
+		const svg = tile.querySelector("svg") as SVGElement;
+		const sv = R(svg);
 		const top = Math.min(...dots.map((d) => d.top));
 		const bottom = Math.max(...dots.map((d) => d.bottom));
 		const cols = [...new Set(dots.map((d) => d.left))].sort((a, b) => a - b);
 		const lastRight = Math.max(...dots.map((d) => d.right));
 		const sr = R(slot);
 		return {
-			slot: {
-				...centre(sr),
-				ring: pseudo(slot, "::before"),
-				dot: pseudo(slot, "::after"),
-			},
-			wellRing: {
-				...centre(wr),
-				ring: pseudo(well, "::before"),
-				dot: pseudo(well, "::after"),
-			},
-			wellSize: [wr.width, wr.height],
+			tileSize: [tr.width, tr.height],
 			dotSize: [dots[0].width, dots[0].height],
+			plusCx: sv.left + sv.width / 2 - (tr.left + tr.width / 2),
+			plusCy: sv.top + sv.height / 2 - (tr.top + tr.height / 2),
 			gridCy: (top + bottom) / 2,
-			wellCy: wr.top + wr.height / 2,
+			tileCy: tr.top + tr.height / 2,
 			ruleCy: rule.top + rule.height / 2,
 			ruleGapLeft: rule.left - lastRight,
-			ruleGapRight: wr.left - rule.right,
+			ruleGapRight: tr.left - rule.right,
 			padLeft: dots[0].left - pr.left,
-			padRight: pr.right - wr.right,
+			padRight: pr.right - tr.right,
 			padTop: top - pr.top,
 			padBottom: pr.bottom - bottom,
 			colSteps: cols.slice(1).map((c, i) => c - cols[i]),
@@ -185,39 +166,118 @@ const wellGeometry = (page: import("@playwright/test").Page) =>
 		};
 	});
 
-test("the colour well of the fourth place and the palette are centred to the pixel", async ({
+test("the palette is centred to the pixel: equal margins and columns, the dashed tile level with the grid", async ({
 	page,
 }) => {
 	await page.setViewportSize({ width: 1700, height: 900 });
 	await page.locator("[aria-label='more colors']").click();
 	await expect(page.locator(".palette")).toBeVisible();
 	await page.waitForTimeout(250); // the card has come in
-	const g = await wellGeometry(page);
+	const g = await paletteGeometry(page);
 	const near = (a: number, b: number, what: string) =>
 		expect(Math.abs(a - b), what).toBeLessThanOrEqual(0.5);
-	// the fourth place: the ring, the colour and the button are one centre
-	near(g.slot.ring.cx, g.slot.cx, "ring x");
-	near(g.slot.ring.cy, g.slot.cy, "ring y");
-	near(g.slot.dot.cx, g.slot.cx, "dot x");
-	near(g.slot.dot.cy, g.slot.cy, "dot y");
-	// the well of one's own colour: the same, as big as a colour of the grid, level with both rows
-	near(g.wellRing.ring.cx, g.wellRing.cx, "well ring x");
-	near(g.wellRing.dot.cy, g.wellRing.cy, "well dot y");
-	expect(g.wellSize).toEqual(g.dotSize);
-	near(g.wellCy, g.gridCy, "well level with the grid");
+	expect(g.tileSize).toEqual(g.dotSize);
+	near(g.plusCx, 0, "the plus is in the middle of the tile (x)");
+	near(g.plusCy, 0, "the plus is in the middle of the tile (y)");
+	near(g.tileCy, g.gridCy, "tile level with the grid");
 	near(g.ruleCy, g.gridCy, "rule level with the grid");
 	near(
 		g.ruleGapLeft,
 		g.ruleGapRight,
-		"rule equally far from the grid and the well",
+		"rule equally far from the grid and the tile",
 	);
-	// the card: equal margins on all four sides, equal columns, centred under the fourth place
 	near(g.padLeft, g.padRight, "left and right");
 	near(g.padTop, g.padBottom, "top and bottom");
 	near(g.padLeft, g.padTop, "sides and top");
 	for (const step of g.colSteps) near(step, g.colSteps[0], "column step");
 	near(g.cardCx, g.slotCx, "the card under the fourth place");
-	// whole pixels, so that the edges are sharp
-	expect(g.slot.dot.w % 2).toBe(0);
-	expect(g.wellRing.dot.w % 2).toBe(0);
 });
+
+/**
+ * The fourth place, as pixels: a screenshot of it with a pink colour in it, and the centre of mass of
+ * the colour compared with that of the rainbow ring round it. They must agree to half a pixel of the
+ * device, at every pixel ratio (the ring and the colour are one SVG, so a rounding cannot split them).
+ */
+const centres = (page: import("@playwright/test").Page, png: Buffer) =>
+	page.evaluate(async (b64) => {
+		const img = new Image();
+		img.src = `data:image/png;base64,${b64}`;
+		await img.decode();
+		const cv = document.createElement("canvas");
+		cv.width = img.width;
+		cv.height = img.height;
+		const ctx = cv.getContext("2d") as CanvasRenderingContext2D;
+		ctx.drawImage(img, 0, 0);
+		const { data, width, height } = ctx.getImageData(
+			0,
+			0,
+			img.width,
+			img.height,
+		);
+		const px = (x: number, y: number) => {
+			const i = (y * width + x) * 4;
+			return [data[i], data[i + 1], data[i + 2]];
+		};
+		const bg = px(0, 0);
+		const dist = (a: number[], b: number[]) =>
+			Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+		const pink = [233, 30, 99];
+		const cx0 = width / 2;
+		const cy0 = height / 2;
+		const k = width / 40; // device px per CSS px
+		// First the colour: pink pixels well inside the gap (the ring is 2px further out, and also red).
+		let dot = { w: 0, x: 0, y: 0 };
+		for (let y = 0; y < height; y++) {
+			for (let x = 0; x < width; x++) {
+				const r = Math.hypot(x + 0.5 - cx0, y + 0.5 - cy0) / k;
+				if (r < 9.6 && dist(px(x, y), pink) < 90)
+					dot = { w: dot.w + 1, x: dot.x + x + 0.5, y: dot.y + y + 0.5 };
+			}
+		}
+		const dc = [dot.x / dot.w, dot.y / dot.w];
+		// Then the ring: everything that is not the background and lies beyond the gap, measured from
+		// the colour's own middle, so that a shifted picture cannot cut the ring on one side.
+		let ring = { w: 0, x: 0, y: 0 };
+		for (let y = 0; y < height; y++) {
+			for (let x = 0; x < width; x++) {
+				const r = Math.hypot(x + 0.5 - dc[0], y + 0.5 - dc[1]) / k;
+				if (r > 10.4 && dist(px(x, y), bg) > 40)
+					ring = { w: ring.w + 1, x: ring.x + x + 0.5, y: ring.y + y + 0.5 };
+			}
+		}
+		return {
+			size: width,
+			dotCount: dot.w,
+			ringCount: ring.w,
+			dot: [dot.x / dot.w, dot.y / dot.w],
+			ring: [ring.x / ring.w, ring.y / ring.w],
+		};
+	}, png.toString("base64"));
+
+for (const dpr of [1, 1.25, 1.5, 2]) {
+	test.describe(`the fourth place at a pixel ratio of ${dpr}`, () => {
+		test.use({ deviceScaleFactor: dpr });
+		test("the colour sits in the middle of the rainbow ring", async ({
+			page,
+		}) => {
+			await page.addInitScript(() =>
+				localStorage.setItem("inkroom.extraColor", "#e91e63"),
+			);
+			await page.setViewportSize({ width: 1700, height: 900 });
+			await page.reload();
+			const slot = page.locator("[aria-label='more colors']");
+			await expect(slot).toBeVisible();
+			await page.mouse.move(5, 500); // no hover: the ring stands still
+			const png = await slot.screenshot();
+			const c = await centres(page, png);
+			expect(c.dotCount).toBeGreaterThan(20);
+			expect(c.ringCount).toBeGreaterThan(40);
+			// the colour and the ring have one centre, to half a device pixel
+			expect(Math.abs(c.dot[0] - c.ring[0])).toBeLessThanOrEqual(0.5);
+			expect(Math.abs(c.dot[1] - c.ring[1])).toBeLessThanOrEqual(0.5);
+			// and it is the middle of the place
+			expect(Math.abs(c.dot[0] - c.size / 2)).toBeLessThanOrEqual(1);
+			expect(Math.abs(c.dot[1] - c.size / 2)).toBeLessThanOrEqual(1);
+		});
+	});
+}

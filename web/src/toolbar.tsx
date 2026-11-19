@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { Settings } from "./board/controller";
 import { SHAPE_GROUPS, SHAPES, saveShape } from "./board/shapes";
-import { CustomColor, WellPlus } from "./custom-color";
+import { ColorWell } from "./color-well";
+import { CustomColor } from "./custom-color";
 import { closeOnDismiss } from "./dismiss";
 import { getExtraColor, setExtraColor } from "./extra-color";
 import { cardShift } from "./floating-panel";
@@ -323,7 +324,7 @@ export function Toolbar({
 									} else setPaletteOpen(!paletteOpen);
 								}}
 							>
-								{!extra && <WellPlus />}
+								<ColorWell empty={!extra} />
 							</button>
 							{paletteOpen && (
 								<div class="palette" ref={paletteRef}>

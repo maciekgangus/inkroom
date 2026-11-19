@@ -258,9 +258,9 @@ describe("PropertiesPanel", () => {
 			expect(root.querySelector(".fn-colors-wrap.open")).toBeNull();
 		});
 
-		test("a coordinate plane has a wide menu, the others not", () => {
+		test("every object has the same wide menu: there is no narrow one beside the wide one", () => {
 			mount([withFns(f1)]);
-			expect(root.querySelector(".properties.wide")).not.toBeNull();
+			expect(root.querySelector(".properties.wide")).toBeNull();
 			render(null, root);
 			mount([freehand]);
 			expect(root.querySelector(".properties.wide")).toBeNull();
@@ -469,7 +469,7 @@ describe("PropertiesPanel", () => {
 					maxY: 300,
 				}),
 			);
-			expect(spot(".properties").left).toBeGreaterThan(innerWidth - 20 - 280);
+			expect(spot(".properties").left).toBeGreaterThan(innerWidth - 20 - 420);
 		});
 	});
 
@@ -640,10 +640,16 @@ describe("PropertiesPanel", () => {
 		const box = { minX: 400, minY: 200, maxX: 600, maxY: 300 };
 
 		test("is placed near the object it edits", () => {
-			const panel = mountAt([rect], box);
+			// room for the wide menu on the right of the object
+			const panel = mountAt([rect], {
+				minX: 100,
+				minY: 200,
+				maxX: 300,
+				maxY: 300,
+			});
 			expect(panel.classList.contains("floating")).toBe(true);
 			expect(panel.style.top).toBe("200px"); // level with the top of the object
-			expect(parseFloat(panel.style.left)).toBeGreaterThan(600); // on its right
+			expect(parseFloat(panel.style.left)).toBeGreaterThan(300); // on its right
 		});
 
 		test("without an anchor it keeps the corner it always had", () => {
@@ -1003,5 +1009,44 @@ describe("the menu of a coordinate plane", () => {
 		expect(
 			first?.querySelector('input[aria-label="prop cell"]'),
 		).not.toBeNull();
+	});
+});
+
+describe("the colour rows say what they colour", () => {
+	const show = (els: Stroke[]) => {
+		const root = document.createElement("div");
+		render(
+			<PropertiesPanel elements={els} colors={COLORS} onChange={() => {}} />,
+			root,
+		);
+		return root;
+	};
+	const labels = (root: HTMLElement) =>
+		[...root.querySelectorAll(".prop-label")].map((l) => l.textContent);
+
+	test("a shape has two rows, the outline and the fill", () => {
+		const root = show([rect]);
+		expect(labels(root)).toEqual(["Kontur", "Wypełnienie"]);
+		// the rows are the same and still found by their old labels
+		expect(
+			root.querySelector('[aria-label="prop color #d32f2f"]'),
+		).not.toBeNull();
+		expect(root.querySelector('[aria-label="prop fill none"]')).not.toBeNull();
+	});
+
+	test("a stroke, a line, a text have one row, the colour", () => {
+		expect(labels(show([freehand]))).toEqual(["Kolor"]);
+		expect(labels(show([text]))).toEqual(["Kolor"]);
+		expect(
+			labels(
+				show([
+					{ ...base, kind: "line", points: pts([0, 0], [5, 5]) } as Stroke,
+				]),
+			),
+		).toEqual(["Kolor"]);
+	});
+
+	test("an image has no colour row, so no label", () => {
+		expect(labels(show([image]))).toEqual([]);
 	});
 });

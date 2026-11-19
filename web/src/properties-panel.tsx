@@ -23,10 +23,8 @@ import "./properties-panel.css";
 import { useLayoutEffect, useRef, useState } from "preact/hooks";
 import { LINE_STYLES, SIZES, WIDTH_SHOWN } from "./stroke-controls";
 
-/** The menu's width (254px, 278px on a touch screen) with room to spare, for choosing its side. */
-const MENU_WIDTH = 280;
-/** The same for a coordinate plane, whose menu is wide (up to 400px). */
-const WIDE_MENU_WIDTH = 420;
+/** The menu's width (up to 400px, the same for every object) with room to spare, for choosing its side. */
+const MENU_WIDTH = 420;
 /** The side of the tile that opens the menu again (44px on a touch screen). */
 const TILE = 44;
 
@@ -106,11 +104,7 @@ export function PropertiesPanel({
 	if (anchor && sideOf.current?.key !== ids)
 		sideOf.current = {
 			key: ids,
-			side: pickSide(
-				anchor,
-				capabilities(elements).plane ? WIDE_MENU_WIDTH : MENU_WIDTH,
-				view,
-			),
+			side: pickSide(anchor, MENU_WIDTH, view),
 		};
 	const side = sideOf.current?.side ?? "right";
 	// An object that is off the screen takes its menu and tile with it.
@@ -194,7 +188,7 @@ export function PropertiesPanel({
 		// biome-ignore lint/a11y/noStaticElementInteractions: the handler only keeps the focus where it is
 		<div
 			ref={ref}
-			class={`properties${can.plane ? " wide" : ""}${at ? " floating" : ""}`}
+			class={`properties${at ? " floating" : ""}`}
 			style={
 				at
 					? {
@@ -264,6 +258,7 @@ export function PropertiesPanel({
 				)}
 				{can.color && (
 					<Group>
+						<span class="prop-label">{can.fill ? "Kontur" : "Kolor"}</span>
 						<ColorRow
 							prefix="prop color"
 							current={now.color}
@@ -276,6 +271,7 @@ export function PropertiesPanel({
 				)}
 				{can.fill && (
 					<Group>
+						<span class="prop-label">Wypełnienie</span>
 						<ColorRow
 							prefix="prop fill"
 							allowNone

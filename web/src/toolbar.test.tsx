@@ -73,6 +73,18 @@ describe("Toolbar", () => {
 		const q = (label: string) =>
 			root.querySelector(`[aria-label="${label}"]`) as HTMLElement | null;
 
+		test("the fourth place is one SVG of circles round one centre, with a plus only while it is empty", () => {
+			const more = q("more colors") as HTMLElement;
+			const svg = more.querySelector("svg.well") as SVGElement;
+			expect(svg.getAttribute("viewBox")).toBe("0 0 40 40");
+			for (const c of svg.querySelectorAll("circle")) {
+				expect(c.getAttribute("cx")).toBe("20");
+				expect(c.getAttribute("cy")).toBe("20");
+			}
+			expect(svg.querySelector("path[d^='M20 16']")).not.toBeNull();
+			expect(svg.querySelectorAll(".ring path")).toHaveLength(8);
+		});
+
 		test("the fourth place says it holds more than one colour: a list marker, a title and a popup hint", () => {
 			const more = q("more colors") as HTMLElement;
 			expect(more.classList.contains("has-list")).toBe(true);
@@ -186,7 +198,8 @@ describe("Toolbar", () => {
 			expect(settings.color).toBe(COLORS[1]);
 			const slot = q("more colors") as HTMLElement;
 			expect(slot.style.getPropertyValue("--well")).not.toBe("");
-			expect(slot.querySelector("svg")).toBeNull(); // no plus: the colour is there
+			expect(slot.querySelector("svg.well")).not.toBeNull(); // the ring is always there
+			expect(slot.querySelector("svg.well path[d^='M20 16']")).toBeNull(); // no plus: the colour is there // no plus: the colour is there
 			expect(slot.getAttribute("aria-pressed")).toBe("false");
 		});
 

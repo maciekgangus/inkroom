@@ -1,6 +1,7 @@
 import type { ComponentChildren } from "preact";
 import { useLayoutEffect, useRef, useState } from "preact/hooks";
 import { popoverSpot } from "./floating-panel";
+import { Icon } from "./icon";
 import { Portal } from "./portal";
 import { Slider } from "./slider";
 
@@ -49,27 +50,6 @@ function startOf(color: string | null): Hsl {
 	const ok = color !== null && /^#[0-9a-f]{6}$/i.test(color);
 	const [h, s, l] = hexToHsl(ok ? (color as string) : "#5b5bf0");
 	return [h, s < 10 ? 85 : s, Math.min(90, Math.max(10, l))];
-}
-
-/**
- * The plus on a colour well: drawn on a 12px square with arms of equal length meeting in the exact
- * middle (a text sign or the line icon are not centred to the pixel).
- */
-export function WellPlus() {
-	return (
-		<svg
-			width="12"
-			height="12"
-			viewBox="0 0 12 12"
-			fill="none"
-			stroke="currentColor"
-			stroke-width="2"
-			stroke-linecap="butt"
-			aria-hidden="true"
-		>
-			<path d="M6 1.5v9M1.5 6h9" />
-		</svg>
-	);
 }
 
 /**
@@ -127,7 +107,7 @@ export function CustomColor({
 				style={own && current ? { "--swatch": display(current) } : undefined}
 				onClick={onToggle}
 			>
-				{!own && <WellPlus />}
+				{!own && <Icon name="plus" />}
 			</button>
 			{open &&
 				(popover ? (
