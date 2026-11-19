@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, test } from "vitest";
 import type { Settings } from "./board/controller";
 import {
+	colorFor,
 	lineStyleFor,
+	rememberColor,
 	rememberLineStyle,
 	resetToolStyles,
 	switchTool,
@@ -68,5 +70,101 @@ describe("line style per tool (R-097)", () => {
 		resetToolStyles(false);
 		expect(lineStyleFor("line")).toBe("solid");
 		expect(lineStyleFor("pen")).toBe("natural");
+	});
+});
+
+describe("colour per tool (R-097)", () => {
+	beforeEach(() => resetToolStyles());
+	const RED = "#d32f2f";
+	const BLUE = "#1976d2";
+	const GREEN = "#388e3c";
+
+	test("pen, line and shapes each get back their own colour", () => {
+		const s = make();
+		s.color = RED;
+		rememberColor("pen", RED);
+		switchTool(s, "line");
+		s.color = BLUE;
+		rememberColor("line", BLUE);
+		switchTool(s, "shape");
+		s.color = GREEN;
+		rememberColor("shape", GREEN);
+		switchTool(s, "pen");
+		expect(s.color).toBe(RED);
+		switchTool(s, "line");
+		expect(s.color).toBe(BLUE);
+		switchTool(s, "shape");
+		expect(s.color).toBe(GREEN);
+	});
+
+	test("a tool never used inherits the colour in hand, then keeps it", () => {
+		const s = make();
+		s.color = RED;
+		switchTool(s, "line"); // first use: red, as the pen had it
+		expect(s.color).toBe(RED);
+		switchTool(s, "pen");
+		s.color = BLUE; // the pen changes later
+		rememberColor("pen", BLUE);
+		switchTool(s, "line");
+		expect(s.color).toBe(RED); // the line kept the colour it started with
+	});
+
+	test("leaving a tool keeps the colour it had, even if nothing called remember", () => {
+		const s = make();
+		s.color = RED; // set without rememberColor
+		switchTool(s, "line");
+		s.color = BLUE;
+		switchTool(s, "pen");
+		expect(s.color).toBe(RED);
+		switchTool(s, "line");
+		expect(s.color).toBe(BLUE);
+	});
+
+	test("the eraser, the hand, the laser, text and the plane keep the colour in hand", () => {
+		const s = make();
+		s.color = RED;
+		rememberColor("pen", RED);
+		for (const tool of ["eraser", "pan", "laser", "text", "plane"] as const) {
+			switchTool(s, tool);
+			expect(s.color).toBe(RED);
+		}
+		expect(colorFor("pen")).toBe(RED);
+	});
+
+	test("is kept on the device next to the line styles", () => {
+		rememberLineStyle("line", "dashed");
+		rememberColor("line", BLUE);
+		expect(
+			JSON.parse(localStorage.getItem("inkroom.toolStyles") ?? "{}"),
+		).toEqual({ line: "dashed", colors: { line: BLUE } });
+		resetToolStyles(false);
+		expect(colorFor("line")).toBe(BLUE);
+		expect(lineStyleFor("line")).toBe("dashed");
+	});
+
+	test("data stored before colours existed still loads", () => {
+		localStorage.setItem(
+			"inkroom.toolStyles",
+			JSON.stringify({ pen: "solid", line: "dashed" }),
+		);
+		resetToolStyles(false);
+		expect(lineStyleFor("line")).toBe("dashed");
+		expect(colorFor("line")).toBeUndefined();
+	});
+
+	test("ignores a stored colour that is not a colour", () => {
+		localStorage.setItem(
+			"inkroom.toolStyles",
+			JSON.stringify({ colors: { pen: "red", line: 5, shape: BLUE } }),
+		);
+		resetToolStyles(false);
+		expect(colorFor("pen")).toBeUndefined();
+		expect(colorFor("line")).toBeUndefined();
+		expect(colorFor("shape")).toBe(BLUE);
+	});
+
+	test("remembering a colour for a tool without one does nothing", () => {
+		rememberColor("eraser", RED);
+		expect(localStorage.getItem("inkroom.toolStyles")).toBeNull();
 	});
 });

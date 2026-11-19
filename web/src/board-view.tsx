@@ -58,7 +58,12 @@ import { type Peer, type SocketLike, SyncClient } from "./sync/sync";
 import { TextEditor } from "./text-editor";
 import { currentTheme, displayColor, useTheme } from "./theme";
 import { toolCursor } from "./tool-cursor";
-import { lineStyleFor, switchTool } from "./tool-style";
+import {
+	colorFor,
+	lineStyleFor,
+	rememberColor,
+	switchTool,
+} from "./tool-style";
 import { COLORS, QUICK_COLORS, SIZES, Toolbar } from "./toolbar";
 import { useToolbarLayout } from "./toolbar-layout";
 import { ZoomControls } from "./zoom-controls";
@@ -126,7 +131,7 @@ export function BoardView({
 	const settings = useMemo<Settings>(
 		() => ({
 			tool: "pen",
-			color: COLORS[0],
+			color: colorFor("pen") ?? COLORS[0], // R-097: what the pen had last
 			size: SIZES[1],
 			lineStyle: lineStyleFor("pen"), // R-073: the natural pen is the default, R-097: or what the pen had last
 			shape: loadShape(),
@@ -840,11 +845,13 @@ export function BoardView({
 					controller.setProps({ color: colour });
 				} else {
 					if (!QUICK_COLORS.includes(colour)) setExtraColor(colour);
-					settings.color = colour;
 					if (
 						!["pen", "line", "shape", "text", "plane"].includes(settings.tool)
 					)
 						switchTool(settings, "pen");
+					// After the switch, so the colour chosen wins over the one the pen had (R-097).
+					settings.color = colour;
+					rememberColor(settings.tool, colour);
 				}
 				e.preventDefault();
 				bump();
