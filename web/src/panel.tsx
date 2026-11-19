@@ -254,21 +254,23 @@ export function Panel({ account, navigate, onLogout }: Props) {
 						]}
 						onChange={(sort) => patch({ sort })}
 					/>
-					<div class="filter-foot">
-						<span class="filter-count" aria-live="polite">
-							{shownCount !== null &&
-								`Pokazano ${shownCount} z ${totalCount} tablic`}
-						</span>
-						{isFiltering(filter) && (
-							<button
-								type="button"
-								class="filter-reset"
-								onClick={() => setFilter(DEFAULT_FILTER)}
-							>
-								Wyczyść
-							</button>
-						)}
-					</div>
+					{(shownCount !== null || isFiltering(filter)) && (
+						<div class="filter-foot">
+							<span class="filter-count" aria-live="polite">
+								{shownCount !== null &&
+									`Pokazano ${shownCount} z ${totalCount} tablic`}
+							</span>
+							{isFiltering(filter) && (
+								<button
+									type="button"
+									class="filter-reset"
+									onClick={() => setFilter(DEFAULT_FILTER)}
+								>
+									Wyczyść
+								</button>
+							)}
+						</div>
+					)}
 				</div>
 			)}
 			{filter.scope !== "shared" && <h2>Moje tablice</h2>}
