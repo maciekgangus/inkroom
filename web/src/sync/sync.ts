@@ -1,5 +1,6 @@
 import { type Background, isBackground } from "../board/background";
 import type { Board, BoardOp, Point, Stroke } from "../board/board";
+import type { Rect } from "../board/viewport";
 
 /** The subset of WebSocket the client uses (lets tests supply a fake). */
 export interface SocketLike {
@@ -17,6 +18,8 @@ export interface Peer {
 	name: string;
 	/** The owner took away this person's right to draw (R-016). */
 	muted?: boolean;
+	/** The id of the person whose view this one follows (R-093). */
+	follows?: string;
 }
 
 export interface RemoteCursor {
@@ -50,12 +53,27 @@ interface Options {
 	schedule?: (fn: () => void) => void;
 }
 
+/** What the follow-the-view messages of other people call back (R-093). */
+export interface FollowHandlers {
+	/** The visible board rectangle of the person we follow. */
+	onView?: (id: string, rect: Rect) => void;
+	/** The board's owner asks everyone to share their view. */
+	onInvite?: (id: string) => void;
+	/** How many people follow our view (the server counts them). */
+	onFollowers?: (n: number) => void;
+	/** The server refused to let us follow this person (it would make a circle, or they left). */
+	onRefused?: (id: string) => void;
+	/** The person we followed left the board: following has ended. */
+	onEnded?: (id: string) => void;
+}
+
 interface LiveOut {
 	stroke: Stroke;
 	sent: number;
 }
 
 const CURSOR_INTERVAL_MS = 33; // about 30 updates per second
+const VIEW_INTERVAL_MS = 50; // our view goes out about 20 times a second at most (R-093)
 const CURSOR_TTL_MS = 15_000; // a cursor that stopped updating disappears
 const BASE_DELAY_MS = 500;
 const MAX_DELAY_MS = 5000;
@@ -88,6 +106,12 @@ export class SyncClient {
 	private laserPending: { points: [number, number][]; start: boolean } | null =
 		null;
 	private laserScheduled = false;
+	private following = ""; // id of the person whose view we follow (R-093)
+	private viewOut: Rect | null = null; // our latest view not yet sent
+	private viewLastSent = Number.NEGATIVE_INFINITY;
+	private viewSent: Rect | null = null; // what we last sent: an unchanged view is not sent again
+	private viewTimer: ReturnType<typeof setTimeout> | null = null;
+	private followHandlers: FollowHandlers = {};
 	private schedule: (fn: () => void) => void;
 
 	constructor(
@@ -162,14 +186,21 @@ export class SyncClient {
 	private setPeers(raw: unknown[]): void {
 		this.peersIn = raw.flatMap((p) => {
 			if (typeof p !== "object" || p === null) return [];
-			const { id, name, muted } = p as {
+			const { id, name, muted, follows } = p as {
 				id?: unknown;
 				name?: unknown;
 				muted?: unknown;
+				follows?: unknown;
 			};
-			return typeof id === "string" && typeof name === "string"
-				? [muted === true ? { id, name, muted } : { id, name }]
-				: [];
+			if (typeof id !== "string" || typeof name !== "string") return [];
+			return [
+				{
+					id,
+					name,
+					...(muted === true ? { muted } : {}),
+					...(typeof follows === "string" && follows ? { follows } : {}),
+				},
+			];
 		});
 		this.opts.onPeers?.(this.peersIn);
 	}
@@ -234,6 +265,65 @@ export class SyncClient {
 			start: p.start,
 			points: p.points,
 		});
+	}
+
+	/** Starts following the view of the person with this id; an empty id stops (R-093). */
+	follow(id: string): void {
+		this.following = id;
+		this.send({ t: "follow", id });
+	}
+
+	/**
+	 * Reports the board rectangle we look at; sent at most about 20 times a second, and not again
+	 * while it does not change unless `force` (R-093).
+	 */
+	sendView(rect: Rect, force = false): void {
+		if (force) this.viewSent = null; // a new follower has not seen it yet
+		this.viewOut = rect;
+		const wait = VIEW_INTERVAL_MS - (this.now() - this.viewLastSent);
+		if (wait <= 0) {
+			this.flushView();
+		} else if (!this.viewTimer) {
+			this.viewTimer = setTimeout(() => this.flushView(), wait);
+		}
+	}
+
+	private flushView(): void {
+		if (this.viewTimer) clearTimeout(this.viewTimer);
+		this.viewTimer = null;
+		const r = this.viewOut;
+		this.viewOut = null;
+		const s = this.viewSent;
+		if (
+			!r ||
+			!this.isOpen ||
+			(s &&
+				Math.abs(s.minX - r.minX) < 0.5 &&
+				Math.abs(s.minY - r.minY) < 0.5 &&
+				Math.abs(s.maxX - r.maxX) < 0.5 &&
+				Math.abs(s.maxY - r.maxY) < 0.5)
+		)
+			return;
+		this.viewSent = r;
+		this.viewLastSent = this.now();
+		this.send({
+			t: "view",
+			id: this.opts.self?.authorId ?? "",
+			minX: r.minX,
+			minY: r.minY,
+			maxX: r.maxX,
+			maxY: r.maxY,
+		});
+	}
+
+	/** Asks everyone on the board to join our view (the board's owner only; the server checks). */
+	invite(): void {
+		this.send({ t: "invite", id: this.opts.self?.authorId ?? "" });
+	}
+
+	/** Sets what the follow-the-view messages call back. */
+	setFollowHandlers(h: FollowHandlers): void {
+		this.followHandlers = h;
 	}
 
 	/** Other people's unfinished strokes, to be drawn on the live layer. */
@@ -333,6 +423,7 @@ export class SyncClient {
 			case "snapshot":
 				if (isBackground(m.background)) this.opts.onBackground?.(m.background);
 				this.board.setStrokes(m.strokes ?? []);
+				if (this.following) this.send({ t: "follow", id: this.following });
 				for (const { op, merged } of this.pending.values()) {
 					this.board.applyRemote(op);
 					if (merged && op.t === "add")
@@ -395,6 +486,40 @@ export class SyncClient {
 					(m as { start?: boolean }).start === true,
 				);
 				return; // a pointer, not the board
+			case "view": {
+				const r = m as unknown as Rect & { id?: unknown };
+				if (
+					typeof r.id !== "string" ||
+					![r.minX, r.minY, r.maxX, r.maxY].every(Number.isFinite) ||
+					r.maxX <= r.minX ||
+					r.maxY <= r.minY
+				)
+					return;
+				this.followHandlers.onView?.(r.id, {
+					minX: r.minX,
+					minY: r.minY,
+					maxX: r.maxX,
+					maxY: r.maxY,
+				});
+				return; // a view, not the board
+			}
+			case "follow_refused":
+			case "follow_end":
+				if (typeof m.id === "string" && m.id) {
+					this.following = ""; // not to be asked for again after a reconnect
+					if (m.t === "follow_end") this.followHandlers.onEnded?.(m.id);
+					else this.followHandlers.onRefused?.(m.id);
+				}
+				return;
+			case "invite":
+				if (typeof m.id === "string" && m.id)
+					this.followHandlers.onInvite?.(m.id);
+				return;
+			case "followers": {
+				const n = (m as unknown as { n?: unknown }).n;
+				if (typeof n === "number") this.followHandlers.onFollowers?.(n);
+				return;
+			}
 			case "cursor_drop":
 				for (const id of m.ids ?? []) this.cursorsIn.delete(id);
 				this.opts.onCursors?.();
@@ -446,6 +571,7 @@ export class SyncClient {
 
 	private dropped(): void {
 		this.isOpen = false;
+		this.viewSent = null; // after a reconnect the followers need our view again
 		this.setPeers([]); // the server lists everyone again when we are back
 		this.cursorSent = null;
 		this.cursorsIn.clear();

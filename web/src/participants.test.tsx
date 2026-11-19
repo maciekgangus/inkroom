@@ -1,5 +1,5 @@
 import { render } from "preact";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { cursorColor } from "./cursor-colors";
 import { Participants } from "./participants";
 
@@ -156,5 +156,60 @@ describe("Participants: colours and shape", () => {
 				(c) => (c as HTMLElement).dataset.color,
 			),
 		).toEqual(["#111111", "#222222"]);
+	});
+
+	describe("following (R-093)", () => {
+		const peers = [
+			{ id: "me", name: "Ola" },
+			{ id: "a1", name: "Ann" },
+		];
+
+		test("with a handler, pressing another person's chip calls it; our own chip is not pressable", () => {
+			const root = document.createElement("div");
+			const onFollow = vi.fn();
+			render(
+				<Participants peers={peers} selfId="me" onFollow={onFollow} />,
+				root,
+			);
+			const buttons = root.querySelectorAll("button.participant");
+			expect(buttons).toHaveLength(1);
+			(buttons[0] as HTMLButtonElement).click();
+			expect(onFollow).toHaveBeenCalledWith(peers[1]);
+		});
+
+		test("the chip of the person we follow is marked", () => {
+			const root = document.createElement("div");
+			render(
+				<Participants
+					peers={peers}
+					selfId="me"
+					onFollow={() => {}}
+					following="a1"
+				/>,
+				root,
+			);
+			expect(root.querySelector(".participant.following")?.textContent).toBe(
+				"A",
+			);
+			expect(root.querySelectorAll(".participant.following")).toHaveLength(1);
+		});
+
+		test("the owner's handler for the menu wins over following", () => {
+			const root = document.createElement("div");
+			const onSelect = vi.fn();
+			const onFollow = vi.fn();
+			render(
+				<Participants
+					peers={peers}
+					selfId="me"
+					onSelect={onSelect}
+					onFollow={onFollow}
+				/>,
+				root,
+			);
+			(root.querySelector("button.participant") as HTMLButtonElement).click();
+			expect(onSelect).toHaveBeenCalledOnce();
+			expect(onFollow).not.toHaveBeenCalled();
+		});
 	});
 });
