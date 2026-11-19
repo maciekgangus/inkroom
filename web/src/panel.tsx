@@ -12,6 +12,7 @@ import {
 import { BoardPreview } from "./board-preview";
 import { Icon, type IconName } from "./icon";
 import { Logo } from "./logo";
+import { Segmented } from "./segmented";
 
 const VIEW_KEY = "inkroom.boardView";
 type View = "list" | "tiles";
@@ -201,66 +202,73 @@ export function Panel({ account, navigate, onLogout }: Props) {
 			</fieldset>
 			{filterOpen && (
 				<div class="filter-menu">
-					<input
-						name="search"
-						type="search"
-						placeholder="Nazwa, właściciel lub data (np. 17.11)"
-						value={filter.query}
-						onInput={(e) => patch({ query: e.currentTarget.value })}
+					<div class="filter-search">
+						<Icon name="search" />
+						<input
+							name="search"
+							type="search"
+							placeholder="Nazwa, właściciel lub data (np. 17.11)"
+							value={filter.query}
+							onInput={(e) => patch({ query: e.currentTarget.value })}
+						/>
+						{filter.query !== "" && (
+							<button
+								type="button"
+								class="icon-btn"
+								aria-label="Skasuj tekst szukania"
+								title="Skasuj tekst"
+								onClick={() => patch({ query: "" })}
+							>
+								<Icon name="close" />
+							</button>
+						)}
+					</div>
+					<Segmented
+						label="Czyje"
+						value={filter.scope}
+						choices={[
+							{ value: "all", label: "Wszystkie" },
+							{ value: "mine", label: "Moje" },
+							{ value: "shared", label: "Udostępnione" },
+						]}
+						onChange={(scope) => patch({ scope })}
 					/>
-					<label>
-						Czyje
-						<select
-							name="scope"
-							value={filter.scope}
-							onChange={(e) =>
-								patch({ scope: e.currentTarget.value as BoardFilter["scope"] })
-							}
-						>
-							<option value="all">Wszystkie</option>
-							<option value="mine">Moje</option>
-							<option value="shared">Udostępnione mi</option>
-						</select>
-					</label>
-					<label>
-						Zmieniona
-						<select
-							name="range"
-							value={filter.range}
-							onChange={(e) =>
-								patch({ range: e.currentTarget.value as BoardFilter["range"] })
-							}
-						>
-							<option value="any">kiedykolwiek</option>
-							<option value="today">dziś</option>
-							<option value="7">w ostatnich 7 dniach</option>
-							<option value="30">w ostatnich 30 dniach</option>
-						</select>
-					</label>
-					<label>
-						Kolejność
-						<select
-							name="sort"
-							value={filter.sort}
-							onChange={(e) =>
-								patch({ sort: e.currentTarget.value as BoardFilter["sort"] })
-							}
-						>
-							<option value="changed">od ostatnio zmienionych</option>
-							<option value="name">po nazwie</option>
-							<option value="size">od największych</option>
-						</select>
-					</label>
-					{isFiltering(filter) && (
-						<button type="button" onClick={() => setFilter(DEFAULT_FILTER)}>
-							Wyczyść
-						</button>
-					)}
-					{shownCount !== null && (
-						<p class="muted filter-count">
-							Pokazano {shownCount} z {totalCount} tablic
-						</p>
-					)}
+					<Segmented
+						label="Zmieniona"
+						value={filter.range}
+						choices={[
+							{ value: "any", label: "Zawsze" },
+							{ value: "today", label: "Dziś" },
+							{ value: "7", label: "7 dni" },
+							{ value: "30", label: "30 dni" },
+						]}
+						onChange={(range) => patch({ range })}
+					/>
+					<Segmented
+						label="Kolejność"
+						value={filter.sort}
+						choices={[
+							{ value: "changed", label: "Ostatnie" },
+							{ value: "name", label: "Nazwa" },
+							{ value: "size", label: "Największe" },
+						]}
+						onChange={(sort) => patch({ sort })}
+					/>
+					<div class="filter-foot">
+						<span class="filter-count" aria-live="polite">
+							{shownCount !== null &&
+								`Pokazano ${shownCount} z ${totalCount} tablic`}
+						</span>
+						{isFiltering(filter) && (
+							<button
+								type="button"
+								class="filter-reset"
+								onClick={() => setFilter(DEFAULT_FILTER)}
+							>
+								Wyczyść
+							</button>
+						)}
+					</div>
 				</div>
 			)}
 			{filter.scope !== "shared" && <h2>Moje tablice</h2>}
