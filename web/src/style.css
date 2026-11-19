@@ -2045,6 +2045,13 @@ button.participant {
 .account-dialog button:disabled {
 	opacity: 0.45;
 }
+/* A primary button that cannot be used yet is a quiet outline, not a grey slab. */
+.account-dialog button.primary:disabled {
+	border-color: var(--border);
+	background: var(--surface-hover);
+	color: var(--muted);
+	opacity: 1;
+}
 .account-zone {
 	margin-top: 16px;
 }
