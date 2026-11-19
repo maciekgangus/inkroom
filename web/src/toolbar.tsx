@@ -313,7 +313,7 @@ export function Toolbar({
 								{!extra && <Icon name="plus" />}
 							</button>
 							{paletteOpen && (
-								<div class="palette" role="group" aria-label="Więcej kolorów">
+								<div class="palette">
 									{[...COLORS.slice(3), ...MORE_COLORS].map((c) =>
 										swatch(c, () => setPaletteOpen(false)),
 									)}
