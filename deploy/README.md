@@ -273,6 +273,85 @@ docker compose logs app --since 1h | jq -r 'select(.level!="DEBUG") | [.time,.le
 
 Zbieranie logów i metryk w jednym miejscu z alertami na Telegram to Etap 2 (ADR 0023).
 
+## 11. Stos logów i alertów: Loki, Grafana, Telegram (R-098, ADR 0023)
+
+Jedno miejsce, w którym widać błędy wszystkich kontenerów (aplikacja, Litestream, tunel, a później kolejne mikroserwisy), wykresy ruchu i alerty na Telegramie, gdy coś się psuje. Cztery kontenery obok reszty, w tym samym `docker-compose.yml`, wyłączone, dopóki nie włączysz profilu `observability`:
+
+```
+kontenery  --stdout-->  Alloy  --logi-->  Loki ---------+
+host i kontenery  ----metryki----------->  Prometheus --+--> Grafana --alert--> Telegram
+aplikacja  --app:9100/metrics-----------> Prometheus ---+     (za Cloudflare Access)
+```
+
+Aplikacja od nich nie zależy: jeśli stos się zepsuje, aplikacja i nocna aktualizacja działają dalej. Zasoby: razem do ok. 1,5 GB RAM (limity w pliku), logi i metryki trzymane 30 dni (Prometheus najwyżej 10 GB) na wolumenach `loki_data` i `prometheus_data`.
+
+### Telegram (raz, w telefonie)
+
+1. W Telegramie napisz do **@BotFather**: `/newbot`, nazwa (np. „Inkroom alerty”), nazwa użytkownika kończąca się na `bot`. Dostaniesz **token** (`123456:ABC...`). Nie wklejaj go do czatu ani do repo, tylko do `.env` na serwerze.
+2. Otwórz swojego bota w Telegramie i naciśnij **Start** (albo napisz cokolwiek). Bez tego bot nie może do Ciebie pisać (Telegram odpowie „chat not found”).
+3. Na serwerze sprawdź numer czatu (token wpisz w terminalu, nie w czacie):
+   ```sh
+   curl -s "https://api.telegram.org/bot<TOKEN>/getUpdates"
+   ```
+   W odpowiedzi szukaj `"chat":{"id":123456789,...}`. To jest **chat id** (dla grupy: dodaj bota do grupy, napisz tam coś, id jest ujemne, np. `-100123...`).
+4. Szybki test samego bota: `curl -s "https://api.telegram.org/bot<TOKEN>/sendMessage" -d chat_id=<ID> -d text=test`. Wiadomość ma przyjść.
+
+### Cloudflare (raz, w przeglądarce)
+
+Grafana jest dostępna pod własną nazwą, za Cloudflare Access, tak jak strona administratora (sekcja 7):
+
+1. Tunel: Zero Trust, Networks, Tunnels, tunel `Inkroom`, **Public Hostname**, dodaj nazwę np. `logs` (domena Twoja), **Service: HTTP, URL `grafana:3000`**.
+2. Access: Zero Trust, Access, Applications, **Add an application, Self-hosted**, nazwa „Inkroom logi”, domena `logs.<twoja domena>` (cała, bez ścieżki), sesja np. 24 godziny.
+3. Policy: akcja **Allow**, reguła *Include, Emails* = Twój adres e-mail. Nic więcej.
+
+Bez tej bramki nie otwieraj nazwy w tunelu: Grafana ma własne logowanie (konto `admin` i hasło z `.env`), ale to druga linia obrony, nie pierwsza.
+
+### Włączenie (na serwerze)
+
+Dopisz do `.env` (obok `docker-compose.yml`; szablon w `env.template`):
+
+```
+COMPOSE_PROFILES=observability
+GF_SECURITY_ADMIN_PASSWORD=<długie losowe hasło: openssl rand -base64 24>
+GRAFANA_ROOT_URL=https://logs.<twoja domena>
+TELEGRAM_BOT_TOKEN=<token od BotFather>
+TELEGRAM_CHAT_ID=<id czatu>
+```
+
+Potem `docker compose up -d` (albo poczekaj na nocną aktualizację z sekcji 4: ona też podniesie nowe kontenery). Pierwszy start pobiera obrazy (ok. 1 GB). Bez `GF_SECURITY_ADMIN_PASSWORD` Grafana odmawia startu i mówi o tym w `docker compose logs grafana`; bez danych Telegrama startuje, ale alerty nigdzie nie idą.
+
+### Jak z tego korzystać
+
+- **Wykresy:** `https://logs.<twoja domena>`, dashboard **Inkroom** jest stroną startową: błędy i ostrzeżenia według usługi, ostatnie ERROR i WARN, błędy zgłoszone przez przeglądarki, ruch i czas odpowiedzi (p95) według ścieżki, 5xx, połączenia WebSocket i aktywne tablice, panic, pamięć aplikacji, procesor i dysk serwera, pamięć i restarty kontenerów.
+- **Logi:** Grafana, **Explore**, źródło **Loki**. Najczęstsze zapytania (LogQL):
+  ```
+  {level="ERROR"}                                    wszystkie błędy, każda usługa
+  {service="app"} | json | level="ERROR"             błędy aplikacji z polami (request_id, path, status...)
+  {service="app"} | json | request_id="abc123"       cała historia jednego żądania
+  {service="client"}                                  błędy zgłoszone przez przeglądarki (iPad, tablet)
+  {service="app"} |= "panic"                          panic ze stosem
+  {container="workdir-cloudflared-1"}                 tunel
+  ```
+  Etykiety są tylko cztery (`service`, `container`, `level`, `compose_project`); `request_id`, `path` i reszta zostają w linii i czyta się je przez `| json`.
+- **Alerty** (Alerting, Alert rules): ERROR w logach dowolnej usługi (5 minut), więcej niż 5% odpowiedzi 5xx, panic, aplikacja nie odpowiada przez 2 minuty, kontener restartuje się (3 starty w 15 minut), dysk ponad 80%, wysyp błędów z przeglądarek. Wiadomości są grupowane (jedna na alert i usługę) i powtarzane najwyżej co 12 godzin, więc telefon nie zalewa.
+- **Test całej drogi** (log, Loki, alert, Telegram; wiadomość przychodzi po 1 do 3 minutach, „OK” po kolejnych 5):
+  ```sh
+  docker compose exec grafana sh -c 'echo "{\"level\":\"ERROR\",\"service\":\"test\",\"msg\":\"test alertu\"}" > /proc/1/fd/1'
+  ```
+
+### Nowy mikroserwis (np. nagrywanie lekcji)
+
+1. Loguj na stdout **jedną linią JSON** z polami `time`, `level` (`DEBUG`, `INFO`, `WARN`, `ERROR`), `msg` i `service` (nazwa usługi, np. `recorder`); do tego `request_id` i pola zdarzenia. Nic więcej nie trzeba: Alloy czyta każdy kontener tego projektu compose sam.
+2. Metryki (jeśli są): wystaw `/metrics` na wewnętrznym porcie (np. `recorder:9100`, bez publikowania go w tunelu) i dopisz blok `job_name` w `observability/prometheus.yml` (jest zakomentowany przykład), potem `docker compose restart prometheus`.
+3. Alert o błędach tej usługi działa od razu: reguła „ERROR w logach” łapie każdą usługę.
+
+### Wyłączenie, miejsce na dysku, kopie
+
+- Zatrzymanie: usuń `COMPOSE_PROFILES` z `.env` i `docker compose stop loki alloy prometheus grafana` (kontenery spoza aktywnego profilu nie są usuwane przez `up`).
+- Retencja: logi 30 dni (`observability/loki.yml`), metryki 30 dni lub 10 GB (flagi Prometheusa w `docker-compose.yml`). Zajętość: `docker system df -v`; alert o dysku ostrzeże przy 80%.
+- Kopie: logi i metryki są jednorazowe i nie są kopiowane do R2. Dashboard i alerty leżą w repozytorium (`observability/`), więc po awarii wracają razem z folderem `deploy/`. Konto `admin` i ustawienia z interfejsu są w wolumenie `grafana_data`.
+- Gniazdo Dockera (`/var/run/docker.sock`) jest montowane do Alloy, żeby czytać logi kontenerów: kto przejmie ten kontener, ma uprawnienia roota na serwerze. Obraz jest przypięty do wersji, nie ma opublikowanego portu i jest w sieci wewnętrznej (ADR 0023).
+
 ## Gdy coś nie działa
 
 | Objaw | Co sprawdzić |
@@ -284,6 +363,9 @@ Zbieranie logów i metryk w jednym miejscu z alertami na Telegram to Etap 2 (ADR
 | Google: „Błąd 400: redirect_uri_mismatch” | adres w konsoli Google musi być dokładnie `PUBLIC_URL` + `/api/auth/google/callback` (https, bez ukośnika na końcu) |
 | Google: „Access blocked” albo logują się tylko testerzy | ekran zgody nadal w trybie „Testing”; opublikuj aplikację (punkt 8.2) |
 | Przycisk Google się nie pojawia | brak `GOOGLE_CLIENT_ID` lub `GOOGLE_CLIENT_SECRET` w `.env` (sprawdź `docker compose logs app`) |
+| Grafana restartuje się bez końca | brak `GF_SECURITY_ADMIN_PASSWORD` w `.env` (`docker compose logs grafana` mówi to wprost) |
+| Alert jest, a Telegram milczy | zły token lub id czatu, albo nie nacisnąłeś Start w czacie z botem (Telegram: „chat not found”); sprawdź krok 4 z sekcji 10 i w Grafanie Alerting, Contact points, wiersz `telegram` (błędy wysyłki) |
+| W Grafanie nie ma logów aplikacji | aplikacja nie loguje JSON-em (R-098) albo `docker compose logs alloy` pokazuje błąd dostępu do `/var/run/docker.sock` |
 | Rysowanie nie synchronizuje się | WebSocket: sprawdź w konsoli przeglądarki `/ws/...`; tunel wspiera WebSocket, więc zwykle to zła trasa |
 | `unauthorized` albo `denied` przy pobieraniu obrazu | Docker nie jest zalogowany do `ghcr.io` (dla użytkownika, który to uruchamia, a timer to root) albo token wygasł lub nie ma `read:packages`; powtórz "Logowanie do rejestru" |
 | `update.sh` kończy się błędem | `docker compose logs app`; skrypt sam wraca do poprzedniego obrazu, a log mówi, który nie wstał |
