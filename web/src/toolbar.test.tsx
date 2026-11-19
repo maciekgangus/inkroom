@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { Settings } from "./board/controller";
 import { resetExtraColor } from "./extra-color";
 import { setTheme } from "./theme";
+import { resetToolStyles } from "./tool-style";
 import { COLORS, MORE_COLORS, SIZES, Toolbar } from "./toolbar";
 
 describe("Toolbar", () => {
@@ -14,6 +15,7 @@ describe("Toolbar", () => {
 
 	beforeEach(() => {
 		resetExtraColor();
+		resetToolStyles();
 		root = document.createElement("div");
 		settings = { tool: "pen", color: COLORS[0], size: SIZES[1] };
 		onUndo = vi.fn();
@@ -178,6 +180,31 @@ describe("Toolbar", () => {
 		click(`color ${COLORS[2]}`);
 		expect(settings.color).toBe(COLORS[2]);
 		expect(settings.tool).toBe("pen");
+	});
+
+	test("each of pen, line and shape remembers its own colour (R-097)", () => {
+		click(`color ${COLORS[1]}`); // pen: red
+		click("line");
+		click(`color ${COLORS[2]}`); // line: blue
+		click("shape");
+		click(`color ${COLORS[0]}`); // shape: black
+		click("pen");
+		expect(settings.color).toBe(COLORS[1]);
+		click("line");
+		expect(settings.color).toBe(COLORS[2]);
+		click("shape");
+		expect(settings.color).toBe(COLORS[0]);
+	});
+
+	test("a colour picked from the eraser goes to the pen and wins over the pen's old colour", () => {
+		click(`color ${COLORS[1]}`); // the pen has red
+		click("eraser");
+		click(`color ${COLORS[2]}`);
+		expect(settings.tool).toBe("pen");
+		expect(settings.color).toBe(COLORS[2]);
+		click("line");
+		click("pen");
+		expect(settings.color).toBe(COLORS[2]);
 	});
 
 	test("size buttons set the size", () => {

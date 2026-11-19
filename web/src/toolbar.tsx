@@ -10,7 +10,7 @@ import { saveSnapShapes } from "./shape-snap";
 import { toolKey } from "./shortcuts";
 import { StrokeControls } from "./stroke-controls";
 import { displayColor, useTheme } from "./theme";
-import { rememberLineStyle, switchTool } from "./tool-style";
+import { rememberColor, rememberLineStyle, switchTool } from "./tool-style";
 import { useToolbarLayout } from "./toolbar-layout";
 
 export const COLORS = ["#111111", "#d32f2f", "#1976d2", "#388e3c", "#f57c00"];
@@ -77,9 +77,14 @@ export function Toolbar({
 }: Props) {
 	const [, rerender] = useState(0);
 	const set = (patch: Partial<Settings>) => {
-		const { tool, ...rest } = patch;
+		const { tool, color, ...rest } = patch;
 		Object.assign(settings, rest);
 		if (tool) switchTool(settings, tool);
+		// A colour picked together with a tool is the one chosen, not the one the tool had (R-097).
+		if (color) {
+			settings.color = color;
+			rememberColor(settings.tool, color);
+		}
 		if (patch.lineStyle) rememberLineStyle(settings.tool, patch.lineStyle);
 		if (patch.snapShapes !== undefined) saveSnapShapes(patch.snapShapes);
 		rerender((n) => n + 1);
