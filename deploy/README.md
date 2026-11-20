@@ -364,7 +364,7 @@ Potem `docker compose up -d` (albo poczekaj na nocną aktualizację z sekcji 4: 
 | Google: „Access blocked” albo logują się tylko testerzy | ekran zgody nadal w trybie „Testing”; opublikuj aplikację (punkt 8.2) |
 | Przycisk Google się nie pojawia | brak `GOOGLE_CLIENT_ID` lub `GOOGLE_CLIENT_SECRET` w `.env` (sprawdź `docker compose logs app`) |
 | Grafana restartuje się bez końca | brak `GF_SECURITY_ADMIN_PASSWORD` w `.env` (`docker compose logs grafana` mówi to wprost) |
-| Alert jest, a Telegram milczy | zły token lub id czatu, albo nie nacisnąłeś Start w czacie z botem (Telegram: „chat not found”); sprawdź krok 4 z sekcji 10 i w Grafanie Alerting, Contact points, wiersz `telegram` (błędy wysyłki) |
+| Alert jest, a Telegram milczy | zły token lub id czatu, albo nie nacisnąłeś Start w czacie z botem (Telegram: „chat not found”); sprawdź krok 4 z sekcji 11 i w Grafanie Alerting, Contact points, wiersz `telegram` (błędy wysyłki) |
 | W Grafanie nie ma logów aplikacji | aplikacja nie loguje JSON-em (R-098) albo `docker compose logs alloy` pokazuje błąd dostępu do `/var/run/docker.sock` |
 | Rysowanie nie synchronizuje się | WebSocket: sprawdź w konsoli przeglądarki `/ws/...`; tunel wspiera WebSocket, więc zwykle to zła trasa |
 | `unauthorized` albo `denied` przy pobieraniu obrazu | Docker nie jest zalogowany do `ghcr.io` (dla użytkownika, który to uruchamia, a timer to root) albo token wygasł lub nie ma `read:packages`; powtórz "Logowanie do rejestru" |
