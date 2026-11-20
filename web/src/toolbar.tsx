@@ -13,7 +13,13 @@ import { saveSnapShapes } from "./shape-snap";
 import { toolKey } from "./shortcuts";
 import { StrokeControls } from "./stroke-controls";
 import { displayColor, useTheme } from "./theme";
-import { rememberColor, rememberLineStyle, switchTool } from "./tool-style";
+import {
+	rememberColor,
+	rememberLineStyle,
+	rememberOpacity,
+	rememberSize,
+	switchTool,
+} from "./tool-style";
 import { useToolbarLayout } from "./toolbar-layout";
 
 export const COLORS = ["#111111", "#d32f2f", "#1976d2", "#388e3c", "#f57c00"];
@@ -89,6 +95,10 @@ export function Toolbar({
 			rememberColor(settings.tool, color);
 		}
 		if (patch.lineStyle) rememberLineStyle(settings.tool, patch.lineStyle);
+		// Thickness and opacity are kept for the tool at once, so they survive a reload (R-097).
+		if (patch.size !== undefined) rememberSize(settings.tool, patch.size);
+		if (patch.opacity !== undefined)
+			rememberOpacity(settings.tool, patch.opacity);
 		if (patch.snapShapes !== undefined) saveSnapShapes(patch.snapShapes);
 		rerender((n) => n + 1);
 		if (patch.tool) onToolChange?.();

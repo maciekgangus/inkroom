@@ -3,9 +3,14 @@ import type { Settings } from "./board/controller";
 import {
 	colorFor,
 	lineStyleFor,
+	opacityFor,
 	rememberColor,
 	rememberLineStyle,
+	rememberOpacity,
+	rememberSize,
 	resetToolStyles,
+	restoreStart,
+	sizeFor,
 	switchTool,
 } from "./tool-style";
 
@@ -166,5 +171,117 @@ describe("colour per tool (R-097)", () => {
 	test("remembering a colour for a tool without one does nothing", () => {
 		rememberColor("eraser", RED);
 		expect(localStorage.getItem("inkroom.toolStyles")).toBeNull();
+	});
+});
+
+describe("thickness, opacity and the last tool survive a reload (R-097)", () => {
+	beforeEach(() => resetToolStyles());
+	/** What a freshly opened page would read: the module forgets its copy, the storage stays. */
+	const reload = () => resetToolStyles(false);
+
+	test("thickness and opacity are kept per tool and come back on a switch", () => {
+		const s = { ...make(), size: 4, opacity: 0.5 };
+		switchTool(s, "line"); // the pen keeps 4 and 50 %, the line starts with them
+		s.size = 1;
+		s.opacity = 1;
+		switchTool(s, "pen");
+		expect(s.size).toBe(4);
+		expect(s.opacity).toBe(0.5);
+		switchTool(s, "line");
+		expect(s.size).toBe(1);
+		expect(s.opacity).toBe(1);
+	});
+
+	test("the thickness and opacity in hand go to the tool being left; a tool used first starts with them", () => {
+		const s = { ...make(), size: 3, opacity: 0.4 };
+		switchTool(s, "shape");
+		expect(s.size).toBe(3);
+		expect(s.opacity).toBe(0.4);
+		expect(sizeFor("pen")).toBe(3);
+		expect(opacityFor("pen")).toBe(0.4);
+		expect(sizeFor("shape")).toBe(3);
+	});
+
+	test("everything stays after a reload, for each tool", () => {
+		rememberColor("pen", "#ff0000");
+		rememberSize("pen", 4);
+		rememberOpacity("pen", 0.5);
+		rememberLineStyle("line", "dashed");
+		rememberColor("line", "#0000ff");
+		rememberSize("line", 0.5);
+		reload();
+		expect(colorFor("pen")).toBe("#ff0000");
+		expect(sizeFor("pen")).toBe(4);
+		expect(opacityFor("pen")).toBe(0.5);
+		expect(lineStyleFor("line")).toBe("dashed");
+		expect(colorFor("line")).toBe("#0000ff");
+		expect(sizeFor("line")).toBe(0.5);
+		expect(sizeFor("shape")).toBeUndefined();
+	});
+
+	test("the page starts with the last drawing tool and its settings", () => {
+		const s = make();
+		switchTool(s, "line");
+		rememberLineStyle("line", "dashed");
+		rememberColor("line", "#0000ff");
+		rememberSize("line", 4);
+		reload();
+		const fresh = make();
+		restoreStart(fresh);
+		expect(fresh.tool).toBe("line");
+		expect(fresh.lineStyle).toBe("dashed");
+		expect(fresh.color).toBe("#0000ff");
+		expect(fresh.size).toBe(4);
+	});
+
+	test("with nothing stored the page starts with the pen and the defaults", () => {
+		const fresh = { ...make(), color: "#111111", size: 2 };
+		restoreStart(fresh);
+		expect(fresh.tool).toBe("pen");
+		expect(fresh.color).toBe("#111111");
+		expect(fresh.size).toBe(2);
+		expect(fresh.lineStyle).toBe("natural");
+	});
+
+	test("the eraser, the hand and the laser are not remembered as the last tool", () => {
+		const s = make();
+		switchTool(s, "shape");
+		switchTool(s, "eraser");
+		switchTool(s, "laser");
+		reload();
+		const fresh = make();
+		restoreStart(fresh);
+		expect(fresh.tool).toBe("shape");
+	});
+
+	test("what an earlier version stored is still read, and bad values are ignored", () => {
+		localStorage.setItem(
+			"inkroom.toolStyles",
+			JSON.stringify({
+				pen: "solid",
+				colors: { pen: "#ff0000" },
+				sizes: { pen: -3, line: "x", shape: 999 },
+				opacities: { pen: 5, line: 0, shape: "half" },
+				last: "eraser",
+			}),
+		);
+		expect(lineStyleFor("pen")).toBe("solid");
+		expect(colorFor("pen")).toBe("#ff0000");
+		expect(sizeFor("pen")).toBeUndefined();
+		expect(sizeFor("line")).toBeUndefined();
+		expect(sizeFor("shape")).toBeUndefined();
+		expect(opacityFor("pen")).toBeUndefined();
+		expect(opacityFor("line")).toBeUndefined();
+		const fresh = make();
+		restoreStart(fresh);
+		expect(fresh.tool).toBe("pen");
+	});
+
+	test("unreadable storage leaves the defaults", () => {
+		localStorage.setItem("inkroom.toolStyles", "{not json");
+		const fresh = make();
+		restoreStart(fresh);
+		expect(fresh.tool).toBe("pen");
+		expect(sizeFor("pen")).toBeUndefined();
 	});
 });

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { Settings } from "./board/controller";
 import { resetExtraColor } from "./extra-color";
 import { setTheme } from "./theme";
-import { resetToolStyles } from "./tool-style";
+import { colorFor, resetToolStyles, restoreStart, sizeFor } from "./tool-style";
 import { COLORS, MORE_COLORS, SIZES, Toolbar } from "./toolbar";
 
 describe("Toolbar", () => {
@@ -308,6 +308,37 @@ describe("Toolbar", () => {
 		click("line");
 		click("pen");
 		expect(settings.color).toBe(COLORS[2]);
+	});
+
+	test("each of pen, line and shape remembers its own thickness, and keeps it over a reload (R-097)", () => {
+		click(`size ${SIZES[2]}`); // pen: thick
+		expect(sizeFor("pen")).toBe(SIZES[2]); // kept at once, not only when the tool is left
+		resetToolStyles(false); // a reload: the module forgets, the storage stays
+		expect(sizeFor("pen")).toBe(SIZES[2]);
+		click("line");
+		click(`size ${SIZES[0]}`); // line: thin
+		click("pen");
+		expect(settings.size).toBe(SIZES[2]);
+		click("line");
+		expect(settings.size).toBe(SIZES[0]);
+	});
+
+	test("a page opens with the drawing tool it was left with, wearing its settings (R-097)", () => {
+		click("line");
+		click(`color ${COLORS[2]}`);
+		click(`size ${SIZES[2]}`);
+		resetToolStyles(false); // a reload
+		const fresh: Settings = { tool: "pen", color: COLORS[0], size: SIZES[1] };
+		restoreStart(fresh);
+		const box = document.createElement("div");
+		act(() =>
+			render(<Toolbar settings={fresh} onUndo={onUndo} onRedo={onRedo} />, box),
+		);
+		const pressed = [...box.querySelectorAll('[aria-pressed="true"]')].map(
+			(b) => b.getAttribute("aria-label"),
+		);
+		expect(pressed).toEqual(["line", `color ${COLORS[2]}`, `size ${SIZES[2]}`]);
+		expect(colorFor("line")).toBe(COLORS[2]);
 	});
 
 	test("size buttons set the size", () => {
