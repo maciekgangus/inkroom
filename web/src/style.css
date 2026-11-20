@@ -2278,3 +2278,85 @@ button.participant {
 		0 0 0 2px var(--surface),
 		0 0 0 4px var(--accent);
 }
+
+/* A newer release is out (R-099): a calm card at the bottom, out of the way of the toolbar and the strokes. */
+.update-banner {
+	position: fixed;
+	left: 50%;
+	bottom: 16px;
+	transform: translateX(-50%);
+	z-index: 5;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	box-sizing: border-box;
+	max-width: calc(100vw - 24px);
+	min-height: 48px;
+	padding: 4px 6px 4px 14px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: color-mix(in srgb, var(--surface) 90%, transparent);
+	-webkit-backdrop-filter: blur(12px);
+	backdrop-filter: blur(12px);
+	box-shadow: var(--shadow);
+	color: var(--text);
+	font-size: 14px;
+	-webkit-user-select: none;
+	user-select: none;
+	animation: update-banner-in 160ms ease-out;
+}
+.update-banner svg {
+	width: 18px;
+	height: 18px;
+	flex: none;
+	color: var(--accent);
+}
+.update-banner button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 40px;
+	min-width: 40px;
+	box-sizing: border-box;
+	border: 0;
+	border-radius: var(--radius);
+	background: none;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+}
+.update-banner .update-reload {
+	padding: 0 14px;
+	background: var(--accent-soft);
+	color: var(--accent);
+	font-weight: 600;
+}
+.update-banner button svg {
+	color: var(--icon);
+}
+@media (hover: hover) {
+	.update-banner button:hover {
+		background: var(--surface-hover);
+	}
+	.update-banner .update-reload:hover {
+		background: var(--accent-soft);
+		filter: brightness(0.96);
+	}
+}
+@media (pointer: coarse) {
+	.update-banner button {
+		min-height: 44px;
+		min-width: 44px;
+	}
+}
+@keyframes update-banner-in {
+	from {
+		opacity: 0;
+		transform: translate(-50%, 8px);
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.update-banner {
+		animation: none;
+	}
+}

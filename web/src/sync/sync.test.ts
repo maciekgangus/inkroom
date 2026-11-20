@@ -80,6 +80,27 @@ describe("SyncClient", () => {
 		const sentOf = (t: string) => sock().sent.filter((m) => m.t === t);
 		const rect = { minX: 0, minY: 10, maxX: 800, maxY: 610 };
 
+		test("tells when a connection opens, every time (R-099)", () => {
+			const onOpen = vi.fn();
+			const c = new SyncClient(new Board(), {
+				createSocket: () => {
+					const s = new FakeSocket();
+					sockets.push(s);
+					return s;
+				},
+				onUpdate: () => {},
+				onOpen,
+			});
+			c.connect();
+			sock().open();
+			expect(onOpen).toHaveBeenCalledTimes(1);
+			sock().drop();
+			vi.advanceTimersByTime(60_000);
+			sock().open();
+			expect(onOpen).toHaveBeenCalledTimes(2);
+			c.close();
+		});
+
 		test("follow and stop are sent as follow messages", () => {
 			connectAndJoin();
 			client.follow("tutor");

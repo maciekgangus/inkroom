@@ -45,6 +45,7 @@ const ICONS = {
 		"M12 3v12M8 7l4-4 4 4M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1",
 	search: "M11 4a7 7 0 1 0 0 14a7 7 0 0 0 0-14ZM20 20l-4.2-4.2",
 	close: "M6 6l12 12M18 6 6 18",
+	refresh: "M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7",
 	/** The two axes of a coordinate system, each with an arrow head. */
 	axes: "M4 12h16M17 9l3 3-3 3M12 20V4M9 7l3-3 3 3",
 	/** An empty square drawn with a dashed outline: nothing there. */

@@ -24,6 +24,8 @@ type app struct {
 	staticDir string
 	// turnstileSiteKey is the public key of the registration captcha, given to the client.
 	turnstileSiteKey string
+	// version is the release this server runs, given to the client so an old tab can tell (R-099).
+	version string
 	// admin checks the Cloudflare Access token of the admin page (R-064); nil: the page is off.
 	admin *cfaccess.Verifier
 	// adminDevOpen opens the admin page without Cloudflare for direct requests (local development).
@@ -45,6 +47,7 @@ func newApp(staticDir string, st *store.Store) *app {
 		auth:          auth.New(st),
 		hub:           room.NewHub(st, flushEvery),
 		staticDir:     staticDir,
+		version:       "dev",
 		adminSecret:   newAdminSecret(),
 		clientLog:     logx.For("client"),
 		clientLimit:   newRateLimiter(time.Now, clientErrorsPerHour, time.Hour, clientLimiterKeys),
@@ -127,7 +130,7 @@ func (a *app) Handler() http.Handler {
 	mux.HandleFunc("GET /api/auth/google/start", a.auth.GoogleStart)
 	mux.HandleFunc("GET /api/auth/google/callback", a.auth.GoogleCallback)
 	mux.HandleFunc("GET /api/config", func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]any{"turnstileSiteKey": a.turnstileSiteKey, "google": a.auth.GoogleEnabled()})
+		writeJSON(w, http.StatusOK, map[string]any{"turnstileSiteKey": a.turnstileSiteKey, "google": a.auth.GoogleEnabled(), "version": a.version})
 	})
 	mux.HandleFunc("GET /ws/{id}", a.serveWS)
 	index := func(w http.ResponseWriter, r *http.Request) {
