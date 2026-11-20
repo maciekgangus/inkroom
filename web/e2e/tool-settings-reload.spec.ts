@@ -39,14 +39,25 @@ const meanColor = (page: Page, x: number, y: number, w: number, h: number) =>
 const pressed = (page: Page, tool: string) =>
 	page.locator(`[aria-label='${tool}']`).getAttribute("aria-pressed");
 
-test("the pen, the line and the shapes keep their colours, and the page opens with the last tool (R-097)", async ({
+// The tools are picked with the toolbar buttons and the settings are seeded in the storage, not
+// typed with keyboard shortcuts: the e2e account keeps its own shortcuts on the server (R-086),
+// and shortcuts.spec.ts rebinds the pen on it, so the keys are not the same in every run.
+const KEY = "inkroom.toolStyles";
+
+test("the page opens with the last tool and each of pen and line draws with its own colour (R-097)", async ({
 	page,
 }) => {
-	await page.keyboard.press("KeyF"); // the pen is red
-	await page.keyboard.press("Digit2");
-	await page.keyboard.press("KeyL"); // the line is blue
-	await page.keyboard.press("Digit3");
-
+	await page.evaluate(
+		([key]) =>
+			localStorage.setItem(
+				key,
+				JSON.stringify({
+					colors: { pen: "#d32f2f", line: "#1976d2" },
+					last: "line",
+				}),
+			),
+		[KEY],
+	);
 	await page.reload();
 	await page.waitForSelector(".participants");
 
@@ -60,8 +71,8 @@ test("the pen, the line and the shapes keep their colours, and the page opens wi
 	const line = await meanColor(page, 290, 290, 220, 20);
 	expect(line?.blue).toBeGreaterThan((line?.red ?? 0) + 50);
 
-	// and the pen still has its own colour
-	await page.keyboard.press("KeyF");
+	// and the pen has its own colour
+	await page.locator("[aria-label='pen']").tap();
 	await pen(page, [300, 500], [500, 500]);
 	await expect
 		.poll(async () => (await meanColor(page, 290, 490, 220, 20)) !== null)
@@ -70,11 +81,19 @@ test("the pen, the line and the shapes keep their colours, and the page opens wi
 	expect(stroke?.red).toBeGreaterThan((stroke?.blue ?? 0) + 50);
 });
 
-test("the eraser is not the tool a page opens with", async ({ page }) => {
-	await page.keyboard.press("KeyK"); // shapes
-	await page.keyboard.press("KeyE"); // eraser
+test("the tool left in a page is kept for the next one, but never the eraser (R-097)", async ({
+	page,
+}) => {
+	await page.locator("[aria-label='line']").tap();
+	await page.locator("[aria-label='eraser']").tap();
 	await page.reload();
 	await page.waitForSelector(".participants");
-	expect(await pressed(page, "shape")).toBe("true");
+	expect(await pressed(page, "line")).toBe("true");
 	expect(await pressed(page, "eraser")).not.toBe("true");
+	expect(
+		await page.evaluate(
+			([key]) => JSON.parse(localStorage.getItem(key) ?? "{}").last,
+			[KEY],
+		),
+	).toBe("line");
 });
