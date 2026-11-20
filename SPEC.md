@@ -13,8 +13,7 @@ Własna, tania tablica interaktywna do korepetycji online zamiast IDROO. Korepet
 ## 2. Priorytety projektowe
 1. Responsywność i brak opóźnień, wygoda ponad wszystko.
 2. Pełna obsługa iPada i innych tabletów z rysikiem.
-3. Oszczędność CPU na serwerze (RAM w nadmiarze).
-4. Gotowa biblioteka tablicy zamiast własnej, jeśli jest tego warta.
+3. Gotowa biblioteka tablicy zamiast własnej, jeśli jest tego warta.
 
 ## 3. Wymagania funkcjonalne
 Priorytety: P1 do pierwszej lekcji, P2 zaraz po niej, P3 później. Statusy: proposed, accepted, done, dropped.
@@ -131,7 +130,7 @@ Miary to propozycje startowe, do potwierdzenia po pierwszych testach na prawdziw
 | N-005 | Utrata połączenia | ponowne połączenie bez utraty narysowanych elementów |
 | N-006 | Koszt hostingu | docelowo własny serwer domowy (VPS), bez miesięcznych opłat za hosting |
 | N-007 | Dane uczniów | minimum danych (imię), brak śledzenia, możliwość usunięcia tablicy |
-| N-008 | Obciążenie CPU serwera | niskie; stos dobrany pod oszczędność procesora |
+| N-008 | Obciążenie CPU serwera | nie jest ograniczeniem projektu (od 2026-11-19: obliczenia są po stronie klienta, a serwer prawie nie zużywa procesora; maszyna ma 100 GB dysku i 8 GB RAM, do 16 GB); obciążenie jest mierzone metrykami, a cięższe elementy (logi, metryki, mikroserwisy) są dozwolone |
 | N-009 | Uruchamianie i wdrożenie | całość startuje jedną komendą `docker compose up`; ta sama konfiguracja lokalnie i na serwerze; sekrety w `.env` poza repo; dane (baza, zapisane tablice) w wolumenach z kopią zapasową (ADR 0002) |
 | N-010 | Palm rejection | oparcie dłoni na ekranie nie zostawia śladów podczas rysowania rysikiem; rysik ma pierwszeństwo przed dotykiem |
 | N-011 | Konflikty przy współpracy | jednoczesna edycja przez kilka osób nie gubi elementów; gdy dwie osoby zmieniają ten sam element, wygrywa ostatnia zmiana, bez błędu i bez blokowania |
@@ -280,3 +279,4 @@ Do zrobienia przy wdrożeniu: ADR z konfiguracją bucketu (klucze w `.env`, CORS
 - 2026-11-19: R-097 rozszerzone na prośbę użytkownika: kolor też pamiętany osobno dla pióra, linii i kształtów (grubość zostaje wspólna), `accepted`.
 - 2026-11-18: R-060 i R-042: menu obiektu w stylu szerokiego paska narzędzi na prośbę użytkownika (grupy oddzielone kreską, okrągłe kafelki kolorów, gotowe grubości i style linii jako ikony obok suwaków, bez pola z kolorem i kodem szesnastkowym); własny kolor jako okrągły kafelek z własnym próbnikiem (odcień i jasność) w menu i w pasku zamiast systemowego pola koloru, `accepted`.
 - 2026-11-19: R-091: wygląd wyszukiwarki i filtra tablic przeprojektowany na prośbę użytkownika ("brzydka, nie pasuje stylem"): zamiast pól wyboru pastylki w stylu reszty aplikacji (Czyje: Wszystkie, Moje, Udostępnione; Zmieniona: Zawsze, Dziś, 7 dni, 30 dni; Kolejność: Ostatnie, Nazwa, Największe), pole szukania z ikoną lupy i krzyżykiem kasowania; działanie bez zmian.
+- 2026-11-19: priorytet „Oszczędność CPU na serwerze” usunięty z listy priorytetów (sekcja 2 i CLAUDE.md) na prośbę użytkownika: serwer prawie nie zużywa procesora, a zasoby maszyny (100 GB dysku, 8 GB RAM) pozwalają na cięższe elementy, jak zbieranie logów i metryk; N-008 odpowiednio zmienione.
