@@ -1,0 +1,73 @@
+# The local copy of the log stack for the test server (see ../SKILL.md and docs/testowanie-lokalne.md).
+# Started by `server.sh start --logs`, never by hand and never on the server: the app is the native
+# test process, so Alloy reads its log FILE instead of the Docker socket, and Prometheus scrapes the
+# host. Loki, Grafana, its provisioning, the dashboard and the alert rules are the REAL ones from
+# deploy/observability, so this exercises what runs on the VM. The Telegram bot is replaced by `sink`.
+# The images are the pinned ones from deploy/docker-compose.yml (server.sh reads them from there).
+name: inkroom-logs
+services:
+  loki:
+    image: ${LOKI_IMAGE}
+    command: -config.file=/etc/loki/loki.yml
+    volumes:
+      - loki_data:/loki
+      - ${REPO}/deploy/observability/loki.yml:/etc/loki/loki.yml:ro,z
+  alloy:
+    image: ${ALLOY_IMAGE}
+    command: [run, "--server.http.listen-addr=0.0.0.0:12345", "--storage.path=/var/lib/alloy/data", /etc/alloy/config.alloy]
+    user: "0:0"
+    volumes:
+      - alloy_data:/var/lib/alloy/data
+      - ${STATE}/logs/config.alloy:/etc/alloy/config.alloy:ro,z
+      - ${STATE}:/testlogs:ro,z
+    depends_on: [loki]
+  prometheus:
+    image: ${PROMETHEUS_IMAGE}
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=2d
+    ports:
+      - "127.0.0.1:${PROM_PORT}:9090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - prometheus_data:/prometheus
+      - ${STATE}/logs/prometheus.yml:/etc/prometheus/prometheus.yml:ro,z
+  grafana:
+    image: ${GRAFANA_IMAGE}
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: local-test
+      GF_SERVER_ROOT_URL: http://localhost:${GRAFANA_PORT}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/inkroom.json
+      # Alerts go to the local sink, shaped like the Telegram Bot API (a webhook to sendMessage).
+      TELEGRAM_API_URL: http://sink:9199
+      TELEGRAM_BOT_TOKEN: local-token
+      TELEGRAM_CHAT_ID: "123456789"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ${REPO}/deploy/observability/grafana/provisioning:/etc/grafana/provisioning:ro,z
+      - ${REPO}/deploy/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro,z
+    depends_on: [loki, prometheus, sink]
+  # A fake Telegram: keeps what Grafana posts in ${STATE}/sink/received.jsonl.
+  sink:
+    image: ${SINK_IMAGE}
+    command: python /sink.py
+    ports:
+      - "127.0.0.1:${SINK_PORT}:9199"
+    volumes:
+      - ${REPO}/.claude/skills/test-server/logs/sink.py:/sink.py:ro,z
+      - ${STATE}/sink:/sink:z
+volumes:
+  loki_data:
+  alloy_data:
+  prometheus_data:
+  grafana_data:
