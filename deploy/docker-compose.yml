@@ -1,6 +1,13 @@
 # The app and its tunnel on the VPS (ADR 0003, ADR 0014). Copy this folder to the server and put a
 # .env beside it (never in the repo; see env.template). Nothing here opens a port to the internet:
 # visitors reach the app through the tunnel, which `cloudflared` dials out from this machine.
+# Every service rotates its Docker logs, or they grow until the disk is full (ADR 0022).
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   app:
     # The image from the registry, no build. Tracks :latest (the last release); INKROOM_TAG in
@@ -12,6 +19,13 @@ services:
     env_file:
       - path: .env
         required: false
+    # Logs are JSON lines on stdout (LOG_LEVEL: debug, info, warn, error). /metrics is served on
+    # METRICS_ADDR, a port of its own that is not published and not routed by the tunnel; it is
+    # reachable on the compose network only (ADR 0022). Empty METRICS_ADDR turns it off.
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      METRICS_ADDR: ${METRICS_ADDR-:9100}
+    logging: *logging
     volumes:
       - data:/data
     restart: unless-stopped
@@ -27,6 +41,7 @@ services:
     image: litestream/litestream:0.5.18
     user: "65532:65532"
     command: replicate -config /etc/litestream.yml
+    logging: *logging
     volumes:
       - data:/data
       - ./litestream.yml:/etc/litestream.yml:ro,z
@@ -42,6 +57,7 @@ services:
     image: litestream/litestream:0.5.18
     user: "65532:65532"
     command: restore -config /etc/litestream.yml -if-db-not-exists -if-replica-exists /data/inkroom.db
+    logging: *logging
     volumes:
       - data:/data
       - ./litestream.yml:/etc/litestream.yml:ro,z
@@ -51,6 +67,7 @@ services:
   shell:
     image: busybox:1.37
     profiles: ["tools"]
+    logging: *logging
     volumes:
       - data:/data
 
@@ -59,6 +76,7 @@ services:
     # The tunnel's own configuration (which hostname goes to which service) lives in Cloudflare;
     # this container only needs the token, and reaches the app by its name on the compose network.
     command: tunnel --no-autoupdate run
+    logging: *logging
     environment:
       TUNNEL_TOKEN: ${TUNNEL_TOKEN:?set TUNNEL_TOKEN in .env (Cloudflare Zero Trust, Networks, Tunnels)}
     depends_on:

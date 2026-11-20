@@ -247,6 +247,32 @@ CONTACT_EMAIL=adres@do-kontaktu.pl
 
 Potem `docker compose up -d` (albo następna aktualizacja). Bez tych dwóch zmiennych strony działają, ale zamiast operatora pokazują „Dane operatora nie zostały jeszcze uzupełnione”, a w logu jest ostrzeżenie; Google takiej strony nie przyjmie, więc uzupełnij przed publikacją aplikacji (punkt 8.2). Pola ekranu zgody: *Application home page* `https://inkroom.lesniakmaciek.dev/`, *Privacy policy link* `https://inkroom.lesniakmaciek.dev/privacy`, *Terms of service link* `https://inkroom.lesniakmaciek.dev/terms`, a domena `lesniakmaciek.dev` jako autoryzowana. Teksty są w `server/cmd/server/legal/`; po zmianie podbij `legalUpdated` w `legal.go`.
 
+## 10. Logi i metryki aplikacji (R-098, ADR 0022)
+
+Aplikacja pisze logi JSON na stdout (pola `time`, `level`, `msg`, `service`, `request_id`, dla żądań
+`method`, `path`, `status`, `duration_ms`). Każda usługa w `docker-compose.yml` ma rotację logów
+Dockera (10 MB × 5), więc dysk się nie zapełni.
+
+```sh
+docker compose logs -f app                                          # na żywo
+docker compose logs app | jq 'select(.level=="ERROR")'             # same błędy
+docker compose logs app | jq 'select(.service=="client")'          # błędy z przeglądarek
+docker compose logs app --since 1h | jq -r 'select(.level!="DEBUG") | [.time,.level,.msg,.path,.status] | @tsv'
+```
+
+- `LOG_LEVEL` w `.env` (`debug`, `info`, `warn`, `error`; domyślnie `info`). Na `debug` widać każde
+  żądanie, nie tylko błędy i wolne.
+- `/metrics` (Prometheus) jest na porcie `METRICS_ADDR` (domyślnie `:9100` wewnątrz kontenera). Port
+  **nie jest publikowany** i nie idzie przez tunel; widzą go tylko kontenery w tej samej sieci
+  compose. Podgląd z maszyny: `docker compose exec app wget -qO- http://127.0.0.1:9100/metrics`
+  (obraz aplikacji nie ma powłoki, więc jeśli to nie działa, użyj kontenera `busybox` z tej samej sieci:
+  `docker run --rm --network workdir_default busybox wget -qO- http://app:9100/metrics`).
+  `METRICS_ADDR=` (pusty) wyłącza endpoint.
+- Błędy z przeglądarek uczniów trafiają do tego samego logu jako `"service":"client"` (strona bez
+  numeru tablicy, rozmiar okna, przeglądarka). Adresów IP, e-maili ani nazw użytkowników w logach nie ma.
+
+Zbieranie logów i metryk w jednym miejscu z alertami na Telegram to Etap 2 (ADR 0023).
+
 ## Gdy coś nie działa
 
 | Objaw | Co sprawdzić |

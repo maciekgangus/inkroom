@@ -3,7 +3,7 @@ package main
 import (
 	"embed"
 	"html/template"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 )
@@ -26,7 +26,7 @@ type legalData struct {
 func (a *app) configureLegal(operator, contact string) {
 	a.legal = legalData{Operator: strings.TrimSpace(operator), Contact: strings.TrimSpace(contact), Updated: legalUpdated}
 	if a.legal.Operator == "" || a.legal.Contact == "" {
-		log.Print("OPERATOR_NAME or CONTACT_EMAIL is not set: /privacy and /terms show a placeholder instead of the operator")
+		slog.Warn("OPERATOR_NAME or CONTACT_EMAIL is not set: /privacy and /terms show a placeholder instead of the operator")
 	}
 }
 
@@ -41,7 +41,7 @@ func (a *app) legalPage(name string) http.HandlerFunc {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Cache-Control", "public, max-age=300")
 		if err := t.ExecuteTemplate(w, "layout", d); err != nil {
-			log.Printf("legal page %s: %v", name, err)
+			slog.Error("rendering a legal page", "page", name, "err", err)
 		}
 	}
 }

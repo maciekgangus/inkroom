@@ -1,10 +1,13 @@
 package room
 
 import (
-	"log"
+	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
+	"github.com/maciekgangus/inkroom/server/internal/logx"
+	"github.com/maciekgangus/inkroom/server/internal/metrics"
 	"github.com/maciekgangus/inkroom/server/internal/store"
 )
 
@@ -43,11 +46,18 @@ func (h *Hub) loop(every time.Duration) {
 	for {
 		select {
 		case <-t.C:
-			h.Flush()
+			h.flushSafely()
 		case <-h.stop:
 			return
 		}
 	}
+}
+
+// flushSafely is Flush that survives a panic: it is logged and the loop goes on, because a
+// flush that never comes again would silently stop saving every board.
+func (h *Hub) flushSafely() {
+	defer logx.Recover("hub-flush")
+	h.Flush()
 }
 
 // Join adds c to the board's room, loading the room from the store if needed.
@@ -72,10 +82,11 @@ func (h *Hub) Join(boardID string, c *Client) (*Room, error) {
 		r.setRevoked(revoked)
 		r.OnRevoke = func(person string, on bool) {
 			if err := h.p.SetRevoked(boardID, person, on); err != nil {
-				log.Printf("saving drawing rights of a board %s: %v", boardID, err)
+				slog.Error("saving drawing rights of a board", "board", logx.Ref(boardID), "err", err)
 			}
 		}
 		h.rooms[boardID] = r
+		metrics.RoomsActive.Inc()
 	}
 	r.Join(c)
 	return r, nil
@@ -89,6 +100,7 @@ func (h *Hub) Leave(boardID string, r *Room, c *Client) {
 	if h.rooms[boardID] == r && r.empty() {
 		h.flushRoom(boardID, r)
 		delete(h.rooms, boardID)
+		metrics.RoomsActive.Dec()
 	}
 }
 
@@ -115,6 +127,9 @@ func (h *Hub) Delete(boardID string) {
 	h.mu.Lock()
 	r := h.rooms[boardID]
 	delete(h.rooms, boardID)
+	if r != nil {
+		metrics.RoomsActive.Dec()
+	}
 	h.mu.Unlock()
 	if r != nil {
 		r.shutdown()
@@ -143,6 +158,7 @@ func (h *Hub) Close() {
 		h.mu.Lock()
 		rooms := h.rooms
 		h.rooms = map[string]*Room{}
+		metrics.RoomsActive.Add(-int64(len(rooms)))
 		h.mu.Unlock()
 		for _, r := range rooms {
 			r.shutdown()
@@ -161,14 +177,26 @@ func (h *Hub) flushRoom(boardID string, r *Room) {
 	if len(ops) == 0 || closed {
 		return
 	}
-	if err := h.p.Apply(boardID, ops, time.Now()); err != nil {
-		log.Printf("saving board %s: %v", boardID, err)
+	if err := h.apply(boardID, ops); err != nil {
+		slog.Error("saving board", "board", logx.Ref(boardID), "err", err)
 		r.mu.Lock()
 		if !r.closed {
 			r.pending = append(ops, r.pending...) // retry on the next flush
 		}
 		r.mu.Unlock()
 	}
+}
+
+// apply saves ops. A panic in the persistence code is logged and returned as an error, so the
+// batch goes back to pending and is retried instead of being lost with the panic.
+func (h *Hub) apply(boardID string, ops []store.Op) (err error) {
+	defer func() {
+		if v := recover(); v != nil {
+			logx.Panic("hub-apply", v)
+			err = fmt.Errorf("panic while saving: %v", v)
+		}
+	}()
+	return h.p.Apply(boardID, ops, time.Now())
 }
 
 func (r *Room) empty() bool {

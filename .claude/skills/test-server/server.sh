@@ -38,6 +38,7 @@ lan_ip() {
 
 urls() {
 	echo "  on this PC:  http://localhost:$PORT"
+	echo "  metrics:     http://127.0.0.1:$((PORT + 1000))/metrics   (internal port, same machine only)"
 	ip=$(lan_ip)
 	[ -n "$ip" ] && echo "  on the LAN:  http://$ip:$PORT   (an iPad on the same Wi-Fi; port may need: sudo firewall-cmd --add-port=$PORT/tcp)"
 	echo "  account:     test@example.test / test-user-1234  (login: test@example.test or test)"
@@ -59,7 +60,7 @@ start)
 	(cd "$ROOT/server" && go build -o "$STATE/server" ./cmd/server)
 	# The public dev account of the project (see CLAUDE.md) and Cloudflare's published Turnstile
 	# test keys, so nothing secret is involved.
-	DATA_DIR="$STATE/data" PORT="$PORT" STATIC_DIR="$ROOT/web/dist" \
+	DATA_DIR="$STATE/data" PORT="$PORT" STATIC_DIR="$ROOT/web/dist" METRICS_ADDR="127.0.0.1:$((PORT + 1000))" \
 		ADMIN_DEV_OPEN=1 SEED_USER_EMAIL=test@example.test SEED_USER_PASSWORD=test-user-1234 \
 		TURNSTILE_SITE_KEY=1x00000000000000000000AA TURNSTILE_SECRET=1x0000000000000000000000000000000AA \
 		nohup "$STATE/server" >"$LOG" 2>&1 &

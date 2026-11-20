@@ -370,6 +370,10 @@ func isSecure(r *http.Request) bool {
 	return r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
 }
 
+// ClientIP is the address of the caller as clientIP finds it. It is for rate limits kept in
+// memory; the address is never logged or stored.
+func ClientIP(r *http.Request) string { return clientIP(r) }
+
 // clientIP prefers the address Cloudflare reports (the app is only reachable through the tunnel).
 func clientIP(r *http.Request) string {
 	if ip := r.Header.Get("CF-Connecting-IP"); ip != "" {

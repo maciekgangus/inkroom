@@ -20,6 +20,7 @@
 <tr><td>Logowanie przez Google: identyfikator konta Google, adres e-mail i nazwa z zakresów <code>openid</code>, <code>email</code> i <code>profile</code>. Nic więcej od Google nie pobieramy.</td><td>Założenie konta i logowanie bez hasła</td></tr>
 <tr><td>Tablice: kreski, kształty, teksty, wczytane obrazy i strony PDF (PDF jest zamieniany na obrazy w Twojej przeglądarce, oryginał pliku nie jest przechowywany), nazwa i daty tablicy, lista tablic, które odwiedziłeś, podglądy tablic</td><td>Działanie tablicy: zapis, współdzielenie z osobami, którym dasz link, lista w panelu</td></tr>
 <tr><td>Uwagi z przycisku „!”: treść, strona, rozmiar ekranu, nazwa przeglądarki i nazwa użytkownika (jeśli jesteś zalogowany)</td><td>Poprawianie błędów i rozwój aplikacji. Wyświetla je tylko operator.</td></tr>
+<tr><td>Dziennik działania aplikacji (logi): błędy serwera i wolne żądania (rodzaj żądania, ścieżka bez identyfikatorów, kod odpowiedzi, czas) oraz błędy zgłaszane przez przeglądarkę (komunikat błędu, adres skryptu bez parametrów, ścieżka strony bez numeru tablicy, rozmiar okna, nazwa przeglądarki, numer konta jeśli jesteś zalogowany). Bez adresów IP, adresów e-mail, nazw użytkowników i treści tablic.</td><td>Wykrywanie i naprawianie błędów oraz pilnowanie, czy usługa działa</td></tr>
 <tr><td>Gość (bez konta): losowy tajny kod w ciasteczku</td><td>Pamiętanie, że to Ty rysowałeś na tablicy</td></tr>
 <tr><td>Dane techniczne połączenia (np. adres IP), które widzi Cloudflare przepuszczający ruch do serwera. Sam serwer aplikacji nie zapisuje adresów IP w bazie ani w logach; używa ich tylko przejściowo w pamięci do ograniczania liczby prób logowania i rejestracji</td><td>Bezpieczeństwo i działanie usługi</td></tr>
 </table>
@@ -47,6 +48,7 @@
 <li>Konto i tablice: do usunięcia konta. Możesz je usunąć sam w oknie „Konto” w aplikacji: znikają konto, Twoje tablice, sesje i podglądy. Tablice innych osób, które odwiedziłeś, zostają u ich właścicieli, a wpis o odwiedzinach znika.</li>
 <li>Kopie bazy danych w Cloudflare R2 są przechowywane 7 dni. Usunięte dane znikają z kopii najpóźniej po tygodniu.</li>
 <li>Uwagi z przycisku „!”: około miesiąca, potem operator je usuwa.</li>
+<li>Dziennik działania aplikacji (logi): do 30 dni, potem jest usuwany automatycznie.</li>
 </ul>
 
 <h2>6. Twoje prawa</h2>
