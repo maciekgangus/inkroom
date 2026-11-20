@@ -322,8 +322,9 @@ export function BoardView({
 			onUpdate: () => remote.mark(BOARD),
 			onLaser: (id, points, start) => laserBridge.current(id, points, start),
 			onLive: () => remote.mark(LIVE),
-			// A server restarted for a release closes the socket: when it is back, ask which release it runs.
-			onOpen: () => void versionWatch.check(),
+			// A server restarted for a release closes the socket: when it is back, ask which release it
+			// runs, at once (the connection is the signal, so the 30 s gap does not apply).
+			onOpen: () => void versionWatch.check({ force: true }),
 		});
 		// What comes from the network is painted once per frame, however many messages came: a
 		// stroke someone is drawing touches only the live layer, the board is repainted only when
