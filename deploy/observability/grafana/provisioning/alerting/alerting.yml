@@ -1,0 +1,338 @@
+apiVersion: 1
+
+# Alerts of Inkroom (ADR 0023). Every rule is `A` (a query) -> `B` (the last value of each series) ->
+# `C` (a threshold). Notifications go to Telegram (the contact point below), grouped so that
+# a phone is not flooded: one message per alert and service, repeated at most every 12 hours.
+
+# The Telegram bot of the alerts. It is a webhook to the Bot API (sendMessage) with a payload of our
+# own, not Grafana's built-in Telegram contact point: that one reads `chatid` as text, but Grafana
+# turns an environment variable made of digits (every chat id) into a number when it provisions,
+# and refuses to start (ADR 0023). In a JSON template the chat id stays text.
+contactPoints:
+  - orgId: 1
+    name: telegram
+    receivers:
+      - uid: telegram-owner
+        type: webhook
+        settings:
+          url: ${TELEGRAM_API_URL}/bot${TELEGRAM_BOT_TOKEN}/sendMessage
+          httpMethod: POST
+          payload:
+            template: '{{ coll.Dict "chat_id" "${TELEGRAM_CHAT_ID}" "disable_web_page_preview" true "text" (tmpl.Exec "inkroom.telegram" .) | data.ToJSON }}'
+        disableResolveMessage: false
+
+# What the message says: the state, the alert, its summary and description, a link to Grafana.
+templates:
+  - orgId: 1
+    name: inkroom
+    template: |
+      {{ define "inkroom.telegram" -}}
+      {{ if eq .Status "firing" }}🔥 ALERT{{ else }}✅ OK{{ end }}: {{ .CommonLabels.alertname }}
+      {{ range .Alerts }}
+      {{ .Annotations.summary }}
+      {{ .Annotations.description }}
+      {{ end }}
+      {{ .ExternalURL }}
+      {{- end }}
+
+policies:
+  - orgId: 1
+    receiver: telegram
+    group_by: [alertname, service]
+    group_wait: 30s
+    group_interval: 5m
+    repeat_interval: 12h
+
+groups:
+  - orgId: 1
+    name: inkroom
+    folder: Inkroom
+    interval: 1m
+    rules:
+      - uid: inkroom-error-logs
+        title: Błędy w logach
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: loki
+            model:
+              refId: A
+              expr: 'sum by (service) (count_over_time({level="ERROR"}[5m]))'
+              queryType: instant
+              editorMode: code
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              refId: B
+              settings:
+                mode: dropNN
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              refId: C
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        labels:
+          severity: error
+        annotations:
+          summary: "ERROR w logach: {{ $labels.service }}"
+          description: "Usługa {{ $labels.service }} zapisała błędy (poziom ERROR) w ostatnich 5 minutach: {{ $values.B }}. Grafana, Explore, Loki: {service=`{{ $labels.service }}`} | json | level=`ERROR`."
+      - uid: inkroom-5xx
+        title: Błędy 5xx serwera
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: 'sum(increase(inkroom_http_requests_total{status=~"5.."}[5m])) and (sum(rate(inkroom_http_requests_total{status=~"5.."}[5m])) / clamp_min(sum(rate(inkroom_http_requests_total[5m])), 0.0001) > 0.05)'
+              instant: true
+              editorMode: code
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              refId: B
+              settings:
+                mode: dropNN
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              refId: C
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [4]
+        noDataState: OK
+        execErrState: Error
+        for: 2m
+        labels:
+          severity: error
+        annotations:
+          summary: "Dużo odpowiedzi 5xx"
+          description: "Ponad 5% żądań kończy się błędem serwera (co najmniej 5 w 5 minut): {{ $values.B }}."
+      - uid: inkroom-panics
+        title: Panic w aplikacji
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: 'sum(increase(inkroom_panics_total[5m]))'
+              instant: true
+              editorMode: code
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              refId: B
+              settings:
+                mode: dropNN
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              refId: C
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Panic w aplikacji"
+          description: "Aplikacja złapała panic ({{ $values.B }} w 5 minut). Stos jest w logach: {service=`app`} | json | msg=~`.*panic.*`."
+      - uid: inkroom-app-down
+        title: Aplikacja nie odpowiada
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: 'min(up{job="app"})'
+              instant: true
+              editorMode: code
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              refId: B
+              settings:
+                mode: dropNN
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              refId: C
+              conditions:
+                - evaluator:
+                    type: lt
+                    params: [1]
+        noDataState: Alerting
+        execErrState: Error
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Aplikacja nie odpowiada na metryki"
+          description: "Prometheus nie ma metryk z app:9100 od ponad 2 minut (aplikacja nie działa albo restartuje się)."
+      - uid: inkroom-restart-loop
+        title: Kontener restartuje się
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: 'max by (name) (changes(container_start_time_seconds{name!=""}[15m]))'
+              instant: true
+              editorMode: code
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              refId: B
+              settings:
+                mode: dropNN
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              refId: C
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [2]
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kontener {{ $labels.name }} restartuje się"
+          description: "Kontener {{ $labels.name }} wystartował {{ $values.B }} razy w ciągu 15 minut."
+      - uid: inkroom-disk
+        title: Dysk prawie pełny
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: '100 * (1 - node_filesystem_avail_bytes{mountpoint="/",fstype!="rootfs"} / node_filesystem_size_bytes{mountpoint="/",fstype!="rootfs"})'
+              instant: true
+              editorMode: code
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              refId: B
+              settings:
+                mode: dropNN
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              refId: C
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [80]
+        noDataState: OK
+        execErrState: Error
+        for: 10m
+        labels:
+          severity: error
+        annotations:
+          summary: "Dysk serwera zajęty w {{ $values.B }}%"
+          description: "Zajętość dysku przekroczyła 80% (logi, metryki i kopie bazy rosną na tym samym dysku)."
+      - uid: inkroom-client-errors
+        title: Wysyp błędów w przeglądarkach
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: 'sum(increase(inkroom_client_errors_total[10m]))'
+              instant: true
+              editorMode: code
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              refId: B
+              settings:
+                mode: dropNN
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              refId: C
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [20]
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        labels:
+          severity: warning
+        annotations:
+          summary: "Dużo błędów zgłaszanych przez przeglądarki"
+          description: "Przeglądarki zgłosiły {{ $values.B }} błędów w 10 minutach: Grafana, Explore, Loki: {service=`client`}."
