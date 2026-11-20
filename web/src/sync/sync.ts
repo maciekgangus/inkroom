@@ -77,6 +77,12 @@ const VIEW_INTERVAL_MS = 50; // our view goes out about 20 times a second at mos
 const CURSOR_TTL_MS = 15_000; // a cursor that stopped updating disappears
 const BASE_DELAY_MS = 500;
 const MAX_DELAY_MS = 5000;
+// A connection can die without a word (a tablet that slept, a Wi-Fi that changed): the page then
+// shows a stale board until it is reloaded. So a quiet connection is asked whether it is alive.
+const BEAT_MS = 5000; // how often the connection is looked at
+const PING_AFTER_MS = 20_000; // quiet for this long: ask the server
+const DEAD_AFTER_MS = 35_000; // quiet for this long: the connection is given up and opened again
+const PROBE_MS = 4000; // after coming back to the page, this long is allowed for an answer
 
 /**
  * Connects a Board to the server (ADR 0004): sends local operations, applies server
@@ -90,6 +96,10 @@ export class SyncClient {
 	private closed = false;
 	private attempts = 0;
 	private timer: ReturnType<typeof setTimeout> | null = null;
+	private lastIn = 0; // when anything last came from the server
+	private lastPing = Number.NEGATIVE_INFINITY;
+	private beat: ReturnType<typeof setInterval> | null = null;
+	private probe: ReturnType<typeof setTimeout> | null = null;
 	/**
 	 * Operations the server has not confirmed yet, by element id. `merged` marks an add that
 	 * already carries a later edit (so a re-send creates the element with its latest content).
@@ -129,6 +139,8 @@ export class SyncClient {
 		socket.onopen = () => {
 			this.isOpen = true;
 			this.attempts = 0;
+			this.lastIn = this.now();
+			this.startBeat();
 		};
 		socket.onmessage = (ev) => this.receive(ev.data);
 		socket.onclose = () => this.dropped();
@@ -138,7 +150,65 @@ export class SyncClient {
 	close(): void {
 		this.closed = true;
 		if (this.timer) clearTimeout(this.timer);
+		this.stopBeat();
 		this.socket?.close();
+	}
+
+	/**
+	 * To be called when the page comes back (visible again, online again): the connection may have
+	 * died while nobody looked. It is asked at once and replaced when it does not answer; one that
+	 * is waiting to retry is retried now.
+	 */
+	checkAlive(): void {
+		if (this.closed) return;
+		if (!this.isOpen) {
+			if (this.timer) {
+				clearTimeout(this.timer);
+				this.timer = null;
+				this.attempts = 0;
+				this.connect();
+			}
+			return;
+		}
+		const asked = this.now();
+		this.lastPing = asked;
+		this.send({ t: "ping" });
+		if (this.probe) clearTimeout(this.probe);
+		this.probe = setTimeout(() => {
+			if (this.isOpen && this.lastIn < asked) this.lost();
+		}, PROBE_MS);
+	}
+
+	private startBeat(): void {
+		this.stopBeat();
+		this.beat = setInterval(() => {
+			if (!this.isOpen) return;
+			const now = this.now();
+			const quiet = now - this.lastIn;
+			if (quiet >= DEAD_AFTER_MS) this.lost();
+			else if (quiet >= PING_AFTER_MS && now - this.lastPing >= PING_AFTER_MS) {
+				this.lastPing = now;
+				this.send({ t: "ping" });
+			}
+		}, BEAT_MS);
+	}
+
+	private stopBeat(): void {
+		if (this.beat) clearInterval(this.beat);
+		if (this.probe) clearTimeout(this.probe);
+		this.beat = null;
+		this.probe = null;
+	}
+
+	/** Gives up a connection that went silent; a dead one may take minutes to report its end. */
+	private lost(): void {
+		const socket = this.socket;
+		if (!socket) return;
+		socket.onopen = null;
+		socket.onmessage = null;
+		socket.onclose = null;
+		socket.close();
+		this.dropped();
 	}
 
 	/** Reports our pointer position (board coordinates); sent at most about 30 times a second. */
@@ -410,10 +480,13 @@ export class SyncClient {
 		} catch {
 			return;
 		}
+		this.lastIn = this.now();
 		switch (m.t) {
 			case "background":
 				if (isBackground(m.value)) this.opts.onBackground?.(m.value);
 				return; // the pattern is not on the canvas
+			case "pong":
+				return; // only proof that the connection is alive (lastIn is already set)
 			case "peers":
 				if (Array.isArray(m.peers)) this.setPeers(m.peers as unknown[]);
 				return;
@@ -571,6 +644,7 @@ export class SyncClient {
 
 	private dropped(): void {
 		this.isOpen = false;
+		this.stopBeat();
 		this.viewSent = null; // after a reconnect the followers need our view again
 		this.setPeers([]); // the server lists everyone again when we are back
 		this.cursorSent = null;

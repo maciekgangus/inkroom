@@ -681,6 +681,14 @@ export function BoardView({
 		};
 		resize();
 		sync.connect();
+		// A tablet that slept or changed its Wi-Fi may hold a dead connection: when the page is
+		// looked at again it is checked (and replaced when silent) instead of showing a stale board.
+		const alive = () => {
+			if (document.visibilityState !== "hidden") sync.checkAlive();
+		};
+		document.addEventListener("visibilitychange", alive);
+		addEventListener("online", alive);
+		addEventListener("pageshow", alive);
 
 		const down = (e: PointerEvent) => {
 			penDown = true;
@@ -908,6 +916,9 @@ export function BoardView({
 			remote.cancel();
 			cancelAnimationFrame(laserRafId.current);
 			sync.close();
+			document.removeEventListener("visibilitychange", alive);
+			removeEventListener("online", alive);
+			removeEventListener("pageshow", alive);
 			removeEventListener("resize", resize);
 			cancelled = true;
 			viewSaver.flush();
