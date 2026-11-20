@@ -394,6 +394,10 @@ func (r *Room) Handle(c *Client, raw []byte) error {
 			return err
 		}
 		r.broadcastLocked(msg, c)
+	case "ping":
+		// A client that hears nothing asks whether the connection is alive: it is told at once,
+		// it alone, and nothing is stored or relayed.
+		c.trySend([]byte(`{"t":"pong"}`))
 	default:
 		return errors.New("unknown message type")
 	}

@@ -851,4 +851,60 @@ describe("SyncClient", () => {
 			c.close();
 		});
 	});
+
+	describe("a connection that went silent (heartbeat)", () => {
+		const pings = (s: FakeSocket) => s.sent.filter((m) => m.t === "ping");
+		const tick = (ms: number) => {
+			clock += ms;
+			vi.advanceTimersByTime(ms);
+		};
+
+		test("a quiet board is asked whether it is alive, and an answer keeps the connection", () => {
+			connectAndJoin();
+			tick(25_000);
+			expect(pings(sock()).length).toBe(1);
+			sock().receive({ t: "pong" });
+			tick(25_000);
+			expect(sockets.length).toBe(1);
+			expect(sock().closed).toBe(false);
+		});
+
+		test("when nothing comes back the connection is dropped and opened again", () => {
+			connectAndJoin();
+			const dead = sock();
+			tick(60_000);
+			expect(dead.closed).toBe(true);
+			tick(1_000); // the new connection waits for its retry delay
+			expect(sockets.length).toBe(2);
+		});
+
+		test("coming back to the page checks at once, and a silent connection is replaced", () => {
+			connectAndJoin();
+			const dead = sock();
+			tick(10_000);
+			client.checkAlive();
+			expect(pings(dead).length).toBeGreaterThan(0);
+			tick(5_000); // no answer
+			expect(dead.closed).toBe(true);
+		});
+
+		test("an answer to the check keeps the connection", () => {
+			connectAndJoin();
+			tick(10_000);
+			client.checkAlive();
+			sock().receive({ t: "pong" });
+			tick(5_000);
+			expect(sock().closed).toBe(false);
+			expect(sockets.length).toBe(1);
+		});
+
+		test("messages of the board count as being alive: no ping while they come", () => {
+			connectAndJoin();
+			for (let i = 0; i < 6; i++) {
+				tick(8_000);
+				sock().receive({ t: "peers", peers: [] });
+			}
+			expect(pings(sock()).length).toBe(0);
+		});
+	});
 });
