@@ -57,6 +57,7 @@ func main() {
 	if !a.auth.GoogleEnabled() {
 		slog.Warn("GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is not set: signing in with Google is off")
 	}
+	a.configureVersion(serverVersion(os.Getenv("APP_VERSION"), buildVersion))
 	a.configureLegal(os.Getenv("OPERATOR_NAME"), os.Getenv("CONTACT_EMAIL"))
 	a.configureAdmin(os.Getenv("CF_ACCESS_TEAM_DOMAIN"), os.Getenv("CF_ACCESS_AUD"))
 	if a.admin == nil {
