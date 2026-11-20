@@ -13,6 +13,7 @@ import { BoardPreview } from "./board-preview";
 import { Icon, type IconName } from "./icon";
 import { Logo } from "./logo";
 import { Segmented } from "./segmented";
+import { versionWatch } from "./version";
 
 const VIEW_KEY = "inkroom.boardView";
 type View = "list" | "tiles";
@@ -73,10 +74,14 @@ export function Panel({ account, navigate, onLogout }: Props) {
 
 	useEffect(() => {
 		load(false);
+		void versionWatch.check(); // the panel is where a long-open tab usually comes back (R-099)
 		// The panel shows what the server had when it was opened, and people come back to it
 		// after drawing elsewhere: by "back" (the page may be restored from the browser's
 		// back-forward cache, scripts and all, without loading), from another tab or window.
-		const refresh = () => load(true);
+		const refresh = () => {
+			load(true);
+			void versionWatch.check();
+		};
 		const shown = (e: Event) => {
 			if ((e as PageTransitionEvent).persisted) refresh();
 		};

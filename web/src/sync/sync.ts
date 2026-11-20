@@ -41,6 +41,8 @@ interface Options {
 	onPeers?: (peers: Peer[]) => void;
 	/** Called with the board's name whenever the owner renames it (R-045). */
 	onName?: (name: string) => void;
+	/** Called each time the connection opens, the first time and after every reconnect (R-099). */
+	onOpen?: () => void;
 	/** Clock in ms; tests replace it. */
 	now?: () => number;
 	/** Called whenever the board or the remote live strokes changed (time to redraw). */
@@ -141,6 +143,7 @@ export class SyncClient {
 			this.attempts = 0;
 			this.lastIn = this.now();
 			this.startBeat();
+			this.opts.onOpen?.();
 		};
 		socket.onmessage = (ev) => this.receive(ev.data);
 		socket.onclose = () => this.dropped();

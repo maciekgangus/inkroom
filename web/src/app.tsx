@@ -8,6 +8,7 @@ import { ADMIN_NAME, isReservedName } from "./names";
 import { Panel } from "./panel";
 import type { SocketLike } from "./sync/sync";
 import { ThemeToggle } from "./theme";
+import { UpdateBanner } from "./update-banner";
 
 const BOARD_PATH = /^\/b\/([0-9a-f]{32})$/;
 const REGISTER_PATH = "/register";
@@ -67,6 +68,7 @@ export function App({
 				<FeedbackButton />
 				<ThemeToggle />
 			</div>
+			<UpdateBanner />
 		</>
 	);
 }

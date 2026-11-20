@@ -90,10 +90,13 @@ export const login = (login: string, password: string) =>
 
 /**
  * Public settings of the server: the site key of the registration captcha ("" when closed) and
- * whether signing in with Google is on (R-063).
+ * whether signing in with Google is on (R-063), and the release the server runs (R-099).
  */
 export const config = () =>
-	request<{ turnstileSiteKey: string; google?: boolean }>("GET", "/api/config");
+	request<{ turnstileSiteKey: string; google?: boolean; version?: string }>(
+		"GET",
+		"/api/config",
+	);
 
 /** Sets a new password after checking the current one (R-085). */
 export const changePassword = (current: string, next: string) =>

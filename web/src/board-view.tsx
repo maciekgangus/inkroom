@@ -61,6 +61,7 @@ import { toolCursor } from "./tool-cursor";
 import { rememberColor, restoreStart, switchTool } from "./tool-style";
 import { COLORS, QUICK_COLORS, SIZES, Toolbar } from "./toolbar";
 import { useToolbarLayout } from "./toolbar-layout";
+import { versionWatch } from "./version";
 import { ZoomControls } from "./zoom-controls";
 
 /** Not crypto.randomUUID: it is missing on http:// pages (LAN testing on an iPad). */
@@ -321,6 +322,8 @@ export function BoardView({
 			onUpdate: () => remote.mark(BOARD),
 			onLaser: (id, points, start) => laserBridge.current(id, points, start),
 			onLive: () => remote.mark(LIVE),
+			// A server restarted for a release closes the socket: when it is back, ask which release it runs.
+			onOpen: () => void versionWatch.check(),
 		});
 		// What comes from the network is painted once per frame, however many messages came: a
 		// stroke someone is drawing touches only the live layer, the board is repainted only when
@@ -684,7 +687,9 @@ export function BoardView({
 		// A tablet that slept or changed its Wi-Fi may hold a dead connection: when the page is
 		// looked at again it is checked (and replaced when silent) instead of showing a stale board.
 		const alive = () => {
-			if (document.visibilityState !== "hidden") sync.checkAlive();
+			if (document.visibilityState === "hidden") return;
+			sync.checkAlive();
+			void versionWatch.check();
 		};
 		document.addEventListener("visibilitychange", alive);
 		addEventListener("online", alive);
