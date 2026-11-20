@@ -27,7 +27,7 @@ const (
 // wsTypes are the message types counted by name; everything else is "other", so a client cannot
 // make the number of series grow.
 var wsTypes = []string{"add", "update", "remove", "live", "perm", "cursor", "laser", "follow", "view", "invite",
-	"background", "name", "peers", "snapshot", "followers", "follow_refused", "follow_end", "live_drop", "cursor_drop", "other"}
+	"background", "name", "peers", "snapshot", "followers", "follow_refused", "follow_end", "live_drop", "cursor_drop", "ping", "pong", "other"}
 
 // wsEntry is the canonical name of a message type with its two counters.
 type wsEntry struct {

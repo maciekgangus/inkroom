@@ -627,3 +627,19 @@ func TestLaserNeedsAnId(t *testing.T) {
 		t.Fatal("a laser without an id was accepted")
 	}
 }
+
+// A client that hears nothing cannot tell a quiet board from a dead connection: its ping is
+// answered at once, to it alone, and nothing is stored or relayed.
+func TestPingIsAnsweredWithPongToTheSenderOnly(t *testing.T) {
+	r := New()
+	a, b := join(r), join(r)
+	recv(t, a)
+	recv(t, b)
+	if err := r.Handle(a, []byte(`{"t":"ping"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if m := recv(t, a); m["t"] != "pong" {
+		t.Fatalf("got %v", m)
+	}
+	none(t, b)
+}
