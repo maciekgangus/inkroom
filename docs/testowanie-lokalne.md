@@ -2,7 +2,11 @@
 
 Od teraz każdy test funkcji idzie razem z logami: aplikacja działa jako zwykły proces, a obok niej w
 kontenerach działa **kopia stosu z serwera** (Loki, Alloy, Prometheus, Grafana) z tymi samymi plikami
-konfiguracyjnymi, dashboardem i regułami alertów (`deploy/observability`, ADR 0022 i 0023). Zamiast
+konfiguracyjnymi, dashboardem i regułami alertów (`deploy/observability`, ADR 0022 i 0023). Alloy
+działa na **nieprzerobionym pliku produkcyjnym** `deploy/observability/config.alloy`, z tymi samymi
+montowaniami (gniazdo Dockera, `/`, `/sys`, `/var/lib/docker`) co na VM, więc zbiera też metryki hosta i
+kontenerów. Lokalnie dochodzi do niego tylko jeden dodatkowy plik, który czyta log aplikacji (bo
+aplikacja nie jest tu kontenerem). Zamiast
 Telegrama alerty trafiają do **atrapy**, która zapisuje je do pliku, więc nic nie wymaga bota ani
 sekretów. Skrypt i skill: `.claude/skills/test-server/`.
 
@@ -23,6 +27,7 @@ sh .claude/skills/test-server/server.sh status 8099
 | Aplikacja | http://localhost:8099 (konto `test@example.test` / `test-user-1234`, albo samo `test`) |
 | Grafana (dashboard „Inkroom” jest stroną główną) | http://127.0.0.1:3100, `admin` / `local-test` |
 | Prometheus | http://127.0.0.1:9190 |
+| Loki (API, do `curl`) | http://127.0.0.1:3200 |
 | Atrapa Telegrama | http://127.0.0.1:9199 (ostatnie 20 wiadomości) i plik `~/.cache/inkroom-test-server-8099/sink/received.jsonl` |
 | Metryki aplikacji | http://127.0.0.1:9099/metrics |
 | Log aplikacji (plik) | `~/.cache/inkroom-test-server-8099/log` (jedna linia JSON na zdarzenie) |
@@ -58,6 +63,8 @@ Menu, Explore, źródło **Loki**, tryb Code. Zapytania (LogQL):
 | żądania danej trasy | `{service="app"} \| json \| path="/api/boards/{id}"` |
 | liczba błędów na minutę | `sum by (service) (count_over_time({level="ERROR"}[1m]))` |
 
+Do skryptów i sprawdzeń pytaj Lokiego wprost (`curl -G http://127.0.0.1:3200/loki/api/v1/query_range --data-urlencode 'query={level="ERROR"}'`), a nie przez proxy źródła danych w Grafanie: jej własne błędy uprawnień dla tych zapytań trafiają do logów jako ERROR (`service="grafana"`).
+
 Etykiety (`service`, `level`, `container`) są tylko trzy, a reszta (`path`, `status`, `request_id`) jest
 w linii i czytana przez `| json`, więc indeks zostaje mały. Identyfikator żądania widzisz w
 nagłówku odpowiedzi (`X-Request-Id`) w narzędziach przeglądarki, zakładka Sieć.
@@ -70,9 +77,13 @@ błędy przeglądarek), „Ruch” (żądania na sekundę i p95 wg ścieżki, 5x
 (pamięć i goroutines Go, panic i błędy przeglądarek). Po wejściu na tablicę i narysowaniu kreski
 „Połączenia WebSocket” i „Aktywne tablice” pokazują 1, a „Wiadomości WebSocket na sekundę” rosną.
 
-Panele, które **lokalnie są puste i to jest poprawne**: „Odpowiedzi 5xx” (dopóki nie ma 5xx) oraz
-procesor, pamięć i dysk serwera i pamięć oraz starty kontenerów (te metryki zbiera Alloy z
-Dockera na VM; lokalnie aplikacja nie jest kontenerem). Na VM mają być wypełnione.
+Panele „Procesor serwera”, „Pamięć serwera”, „Zajętość dysku”, „Pamięć kontenerów” i „Starty
+kontenerów” mają dane także lokalnie (metryki hosta z `prometheus.exporter.unix`, kontenerów z
+`prometheus.exporter.cadvisor`, oba z produkcyjnej konfiguracji Alloy). Uwaga: cAdvisor widzi
+**wszystkie** kontenery Dockera na maszynie, więc lokalnie na wykresach są też obce kontenery z
+Twojego komputera (na VM będą tylko te z projektu). Panele, które **lokalnie są puste i to jest
+poprawne**: „Odpowiedzi 5xx” i „Odpowiedzi 5xx na sekundę” (dopóki nie ma 5xx) oraz panel błędów
+przeglądarek, jeśli w oknie czasu nie było błędu klienta.
 
 ## 5. Alerty i atrapa Telegrama
 
@@ -82,6 +93,7 @@ aplikacja nie odpowiada, restart kontenera, dysk, wysyp błędów przeglądarek)
 
 - **Test samej drogi wysyłki:** Alerting, Contact points, „telegram”, przycisk „Test”. W atrapie
   (http://127.0.0.1:9199) pojawia się wiadomość z `chat_id` jako **tekstem** (`"123456789"`).
+- **Które ERROR-y wysyłają alert:** reguła „Błędy w logach” liczy ERROR-y wszystkich usług **poza kontenerami samego stosu** (`loki`, `alloy`, `prometheus`, `grafana`): przy każdym starcie Loki zapisuje jeden niegroźny ERROR (`error getting ingester clients`), więc nie ma wiadomości przy każdym wdrożeniu. Te ERROR-y są nadal w Explore i na dashboardzie; padnięty stos wykrywa alert o restartach kontenera.
 - **Prawdziwa reguła:** sekcja 6. Wiadomość ma postać `🔥 ALERT: <nazwa>` i opis. Alert, który
   wraca do normy, wysyła `✅ OK` (po kilku minutach, bo interwał grupy to 5 minut).
 - **Podgląd:** `tail -f ~/.cache/inkroom-test-server-8099/sink/received.jsonl` albo
@@ -111,8 +123,17 @@ aplikacja nie odpowiada, restart kontenera, dysk, wysyp błędów przeglądarek)
    `for (let i=0;i<30;i++) setTimeout(()=>{throw new Error("x"+i)},i*50)` (uwaga: serwer ogranicza
    liczbę zgłoszeń na osobę do 20 na godzinę, więc wystarczy wtedy zalogować się na dwa konta albo
    sprawdzić regułę zapytaniem w Prometheusie `sum(increase(inkroom_client_errors_total[10m]))`).
-6. **Restart kontenera, dysk:** te metryki lokalnie nie istnieją (reguły mają `noData = OK`);
-   sprawdzasz je dopiero na VM.
+6. **Restart kontenera** (reguła „Kontener restartuje się”, próg: ponad 2 starty w 15 minut): lokalny
+   stos ma kontener `canary`, który istnieje tylko po to, żeby go restartować:
+   ```sh
+   for i in 1 2 3; do docker restart inkroom-logs-8099-canary-1; sleep 35; done
+   ```
+   Po kilkunastu sekundach w atrapie jest „Kontener inkroom-logs-8099-canary-1 wystartował 3 razy w ciągu
+   15 minut”, a panel „Starty kontenerów” pokazuje 3 dla tego kontenera.
+7. **Dysk powyżej 80%:** zapytanie reguły zwraca liczbę (zajętość `/`), ale 80% nie da się
+   bezpiecznie przekroczyć lokalnie. Sprawdzono tymczasową kopią reguły z progiem 1% (utworzoną
+   przez API Grafany i usuniętą), która wysłała wiadomość „Dysk serwera zajęty w 33%”. Zapytanie w
+   Prometheusie: `100 * (1 - node_filesystem_avail_bytes{mountpoint="/",fstype!="rootfs"} / node_filesystem_size_bytes{mountpoint="/",fstype!="rootfs"})`.
 
 ## 7. Zatrzymanie i sprzątanie
 
@@ -136,7 +157,7 @@ lokalnego to:
 | aplikacja jako proces, Alloy czyta plik logu | aplikacja jako kontener, Alloy czyta logi przez gniazdo Dockera, etykiety `container`, `compose_project` z Docker Compose |
 | Prometheus pobiera metryki z `host.docker.internal:9099` | z `app:9100` w sieci Dockera |
 | atrapa zamiast Telegrama | prawdziwy bot, wiadomość z tą samą treścią i `chat_id` jako tekstem |
-| brak metryk hosta i kontenerów (panele puste) | procesor, pamięć, dysk i starty kontenerów wypełnione |
+| metryki hosta i kontenerów z komputera deweloperskiego (cAdvisor widzi wszystkie kontenery Dockera) | te same panele, ale tylko dla VM i jej kontenerów |
 | Grafana na `127.0.0.1:3100` bez Cloudflare Access | Grafana za Cloudflare Access pod `logs.<domena>` (tunel) |
 | hasło `local-test` | `GF_SECURITY_ADMIN_PASSWORD` z `.env` |
 | log z nowego startu zaczyna się od zera | log kontenera rotowany przez Dockera (10 MB x 5), Loki trzyma 30 dni |
@@ -146,3 +167,16 @@ w Explore zwraca logi, (3) „Test” kontaktu daje wiadomość w Telegramie, (4
 (5) wejście na `logs.<domena>` bez zalogowania w Cloudflare Access jest zablokowane, (6)
 `docker stats` pokazuje, że stos mieści się w ok. 1,5 GB, (7) po wywołaniu błędu przeglądarki
 (sekcja 2) pojawia się wpis `service="client"`.
+
+## 9. Czego lokalnie nie da się sprawdzić (i nie sprawdzono)
+
+- **Alert 5xx i panic:** wymagają prawdziwej usterki serwera; reguły sprawdzaj zapytaniami w
+  Prometheusie, a sam panic testami Go (`go test ./...`).
+- **Dysk powyżej 80%:** sprawdzone tylko tymczasową regułą z progiem 1% (sekcja 6, punkt 7).
+- **Podman bez Dockera:** skrypt przełącza się na `podman compose`, ale produkcyjny Alloy montuje
+  `/var/run/docker.sock`; pod rootless Podmanem trzeba udostępnić gniazdo zgodne z Dockerem
+  (`systemctl --user enable --now podman.socket`) i podmienić ścieżkę. Ta ścieżka nie była testowana,
+  bo na tej maszynie działa Docker.
+- **Inny system hosta:** VM to Debian z innym układem katalogów Dockera i wersją jądra niż Fedora tutaj;
+  po wdrożeniu sprawdź, że panele hosta i kontenerów mają dane (lista w sekcji 8).
+- **Telegram, Cloudflare Access i `logs.<domena>`:** wymagają Twoich kont, sprawdzasz po wdrożeniu.

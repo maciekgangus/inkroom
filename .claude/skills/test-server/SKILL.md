@@ -24,9 +24,13 @@ Skrypt: `.claude/skills/test-server/server.sh` (z korzenia checkoutu; ścieżka 
 
 Lokalna kopia tego, co działa na VM (ADR 0022 i 0023): **Loki, Alloy, Prometheus i Grafana to te same
 obrazy, pliki konfiguracyjne, dashboard i reguły alertów z `deploy/observability`**, więc test sprawdza
-to, co pójdzie na serwer. Różnice: aplikacja jest procesem natywnym, więc Alloy czyta jej **plik logu**
-(ten sam blok przetwarzania co w produkcji), Prometheus pobiera metryki z hosta, a zamiast Telegrama
-alerty trafiają do **atrapy** (`logs/sink.py`), która zapisuje je do pliku. Nic nie wymaga sekretów.
+to, co pójdzie na serwer. Alloy działa na **nieprzerobionym pliku produkcyjnym** `config.alloy`, z tymi
+samymi montowaniami (gniazdo Dockera, `/`, `/sys`), więc zbiera logi kontenerów oraz metryki hosta i
+kontenerów (panele procesora, pamięci, dysku i kontenerów mają dane). Różnice: aplikacja jest procesem
+natywnym, więc dochodzi jeden plik czytający jej **log** (`local.alloy`, generowany przez skrypt) i
+Prometheus pobiera jej metryki z hosta; zamiast Telegrama alerty trafiają do **atrapy**
+(`logs/sink.py`), która zapisuje je do pliku. Jest też kontener `canary` do ćwiczenia alertu o
+restartach (`docker restart inkroom-logs-<port>-canary-1`). Nic nie wymaga sekretów.
 Wymaga działającego Dockera (a gdy go nie ma, rootless Podmana). Pliki: `logs/docker-compose.yml`,
 `logs/sink.py`; konfiguracje wynikowe powstają w `~/.cache/inkroom-test-server-<port>/logs/`.
 
@@ -37,6 +41,7 @@ wchodzą sobie w drogę):
 |---|---|
 | Grafana (dashboard „Inkroom” jako strona główna) | http://127.0.0.1:3100, login `admin` / `local-test` |
 | Prometheus | http://127.0.0.1:9190 |
+| Loki (API, do `curl`) | http://127.0.0.1:3200 |
 | Atrapa Telegrama (alerty) | http://127.0.0.1:9199, plik `~/.cache/inkroom-test-server-8099/sink/received.jsonl` |
 | Metryki aplikacji | http://127.0.0.1:9099/metrics (w trybie `--logs` nasłuchują na wszystkich interfejsach, żeby Prometheus w kontenerze je widział; to dane techniczne bez danych osobowych) |
 
@@ -62,7 +67,7 @@ Przy `--logs` podaj użytkownikowi także te adresy. Przewodnik testów krok po 
 ## Lista kontrolna logów przy każdym teście funkcji
 
 Po ręcznym przejściu przez funkcję (w Claude in Chrome albo przez użytkownika) sprawdź w Grafanie
-(Explore, źródło Loki) lub przez API (`/api/datasources/proxy/uid/loki/loki/api/v1/query_range`):
+(Explore, źródło Loki) lub przez API Lokiego (`curl -G http://127.0.0.1:3200/loki/api/v1/query_range --data-urlencode 'query={service="app"}'`; nie używaj do tego proxy Grafany, bo jej własne błędy RBAC trafiają potem do logów jako ERROR i fałszują sprawdzenie):
 
 1. **Zdarzenia funkcji są w logu:** `{service="app"} | json` pokazuje żądania funkcji (`path` to wzorzec
    trasy, np. `/api/boards/{id}`), z poprawnym `status` i rozsądnym `duration_ms`.

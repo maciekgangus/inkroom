@@ -9,24 +9,54 @@ services:
   loki:
     image: ${LOKI_IMAGE}
     command: -config.file=/etc/loki/loki.yml
+    # Published on the host so the checks can ask Loki directly (queries through Grafana's data source
+    # proxy make Grafana log ERRORs of its own, which the alert on ERROR logs would count).
+    ports:
+      - "127.0.0.1:${LOKI_PORT}:3100"
     volumes:
       - loki_data:/loki
       - ${REPO}/deploy/observability/loki.yml:/etc/loki/loki.yml:ro,z
+  # The REAL Alloy configuration of production (deploy/observability/config.alloy, unchanged): the
+  # logs of the containers through the Docker socket, and the metrics of the host and of the
+  # containers, with the same mounts as in deploy/docker-compose.yml. The directory is loaded as one
+  # configuration: next to the production file there is local.alloy, which only adds the log FILE of
+  # the native test server (the app is not a container here) and feeds the same processing block.
   alloy:
     image: ${ALLOY_IMAGE}
-    command: [run, "--server.http.listen-addr=0.0.0.0:12345", "--storage.path=/var/lib/alloy/data", /etc/alloy/config.alloy]
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/
     user: "0:0"
+    pid: host
+    environment:
+      LOG_PROJECT_FILTER: com.docker.compose.project=${LOGS_PROJECT}
     volumes:
       - alloy_data:/var/lib/alloy/data
-      - ${STATE}/logs/config.alloy:/etc/alloy/config.alloy:ro,z
+      - ${REPO}/deploy/observability/config.alloy:/etc/alloy/config.alloy:ro,z
+      - ${STATE}/logs/local.alloy:/etc/alloy/local.alloy:ro,z
       - ${STATE}:/testlogs:ro,z
-    depends_on: [loki]
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /:/host:ro,rslave
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    depends_on: [loki, prometheus]
+  # A container of its own to restart on purpose: its starts are what the "Kontener restartuje się"
+  # alert and the "Starty kontenerów" panel read (docs/testowanie-lokalne.md, section 6).
+  canary:
+    image: ${SINK_IMAGE}
+    command: sleep 100000
   prometheus:
     image: ${PROMETHEUS_IMAGE}
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
       - --storage.tsdb.retention.time=2d
+      - --web.enable-remote-write-receiver
     ports:
       - "127.0.0.1:${PROM_PORT}:9090"
     extra_hosts:
