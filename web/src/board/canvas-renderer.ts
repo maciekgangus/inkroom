@@ -7,6 +7,7 @@ import { planeFrame, sampleFn } from "./functions";
 import type { ImageCache } from "./image-cache";
 import { imageRect } from "./image-geometry";
 import type { LaserLine } from "./laser";
+import { currentLayerCap, layerMargin } from "./overdraw";
 import { type Frame, HANDLE_PX, ROT_OFFSET_PX } from "./selection-frame";
 import { LABEL_PX, PLANE_CELL, type PlaneLook, partsOf } from "./shape-parts";
 import { isPolygonKind } from "./shapes";
@@ -26,46 +27,17 @@ const FINE_RATIO = 0.3;
 /** The red of the laser pointer, and the width of its line on the screen. */
 const LASER_COLOR = "#ff1744";
 const LASER_WIDTH_PX = 4;
+/**
+ * A pan that has used this share of the margin paints the board layer again at once (R-074), so
+ * the unpainted edge does not arrive before the hand stops; at most once per EDGE_REPAINT_MS.
+ */
+const EDGE_SHARE = 0.5;
+const EDGE_REPAINT_MS = 100;
 /** How long the view must stand still before the bitmaps are painted sharp again. */
 const MOVE_SETTLE_MS = 120;
-/**
- * How much more than the screen the board layer is painted, on each side, as a share of the
- * window (R-074): the view can be moved a little and moved back without waiting for a repaint.
- */
-const OVERDRAW = 0.25;
-
-/**
- * The most pixels the board layer may have (R-077). A tablet with a dense screen cannot hold a
- * layer 2.25 times its screen: the page is killed for lack of memory. The overdraw shrinks to fit,
- * and is none where the screen alone is that big.
- */
-const MAX_LAYER_PIXELS = 10_000_000;
 /** A layer painted for one scale may be stretched by the CSS this far (or squeezed this far) before it is painted again. */
 const MAX_STRETCH = 2;
 
-/** The overdraw in CSS px, left/right and top/bottom, for the window and pixel ratio now. */
-function overdraw(): { mx: number; my: number } {
-	const dpr = window.devicePixelRatio || 1;
-	const fits = (f: number) =>
-		innerWidth *
-			(1 + 2 * f * OVERDRAW) *
-			dpr *
-			(innerHeight * (1 + 2 * f * OVERDRAW) * dpr) <=
-		MAX_LAYER_PIXELS;
-	let lo = 0;
-	let hi = 1;
-	if (fits(1)) lo = 1;
-	else
-		for (let i = 0; i < 12; i++) {
-			const mid = (lo + hi) / 2;
-			if (fits(mid)) lo = mid;
-			else hi = mid;
-		}
-	return {
-		mx: Math.floor(innerWidth * OVERDRAW * lo),
-		my: Math.floor(innerHeight * OVERDRAW * lo),
-	};
-}
 /** The longest the bitmaps are only moved, however long the view keeps moving. */
 const MOVE_MAX_MS = 350;
 /** The ink colour of the Inkroom brand, for the handles that edit the selection. */
@@ -595,7 +567,12 @@ export class CanvasRenderer implements Renderer {
 	/** Matches the canvas buffers to the window size and device pixel ratio. */
 	resize(): void {
 		const dpr = window.devicePixelRatio || 1;
-		const { mx, my } = overdraw();
+		const { mx, my } = layerMargin(
+			innerWidth,
+			innerHeight,
+			dpr,
+			currentLayerCap(),
+		);
 		this.margin = { mx, my };
 		this.committedCanvas.width = (innerWidth + 2 * mx) * dpr;
 		this.committedCanvas.height = (innerHeight + 2 * my) * dpr;
@@ -781,6 +758,10 @@ export class CanvasRenderer implements Renderer {
 		const stretch = v.scale / this.shown.committed.k;
 		if (stretch > MAX_STRETCH || stretch < 1 / MAX_STRETCH)
 			this.schedule(true, true);
+		else if (this.usedMargin()) {
+			this.lastEdgeRepaint = Date.now();
+			this.schedule(true, false);
+		}
 		if (this.settleTimer) clearTimeout(this.settleTimer);
 		const wait = Math.max(
 			0,
@@ -790,6 +771,20 @@ export class CanvasRenderer implements Renderer {
 			this.settleTimer = null;
 			this.schedule(true, true);
 		}, wait);
+	}
+
+	private lastEdgeRepaint = 0;
+
+	/** True when the pan since the board layer was painted used up EDGE_SHARE of its margin (throttled). */
+	private usedMargin(): boolean {
+		if (Date.now() - this.lastEdgeRepaint < EDGE_REPAINT_MS) return false;
+		const v = this.viewport;
+		const from = this.shown.committed;
+		const { mx, my } = this.margin;
+		return (
+			(mx > 0 && Math.abs(from.x - v.x) * v.scale > mx * EDGE_SHARE) ||
+			(my > 0 && Math.abs(from.y - v.y) * v.scale > my * EDGE_SHARE)
+		);
 	}
 
 	/** A layer was painted for the current view: its bitmap goes back to its place. */
