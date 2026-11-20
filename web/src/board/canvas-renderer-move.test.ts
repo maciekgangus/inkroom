@@ -41,12 +41,12 @@ describe("CanvasRenderer overdraw: the board is painted a little beyond the scre
 		const b = layer();
 		const r = new CanvasRenderer(a.canvas, b.canvas, new Viewport());
 		r.resize();
-		expect(a.canvas.width).toBe(1500); // a quarter more on each side
-		expect(a.canvas.height).toBe(1200);
-		expect(a.canvas.style.left).toBe("-250px");
-		expect(a.canvas.style.top).toBe("-200px");
-		expect(a.canvas.style.width).toBe("1500px");
-		expect(a.canvas.style.height).toBe("1200px");
+		expect(a.canvas.width).toBe(2000); // half a window more on each side
+		expect(a.canvas.height).toBe(1600);
+		expect(a.canvas.style.left).toBe("-500px");
+		expect(a.canvas.style.top).toBe("-400px");
+		expect(a.canvas.style.width).toBe("2000px");
+		expect(a.canvas.style.height).toBe("1600px");
 		expect(b.canvas.width).toBe(1000);
 		expect(b.canvas.style.left).toBeUndefined();
 	});
@@ -58,7 +58,7 @@ describe("CanvasRenderer overdraw: the board is painted a little beyond the scre
 		r.resize();
 		v.setScaleAt(0, 0, 2);
 		r.moveView();
-		expect(a.canvas.style.transformOrigin).toBe("250px 200px");
+		expect(a.canvas.style.transformOrigin).toBe("500px 400px");
 	});
 });
 
@@ -81,8 +81,8 @@ describe("CanvasRenderer buffer limit: a big screen does not get a bigger layer 
 
 	test("a desktop window keeps the full overdraw", () => {
 		const c = size(1920, 1080, 1);
-		expect(c.width).toBe(2880);
-		expect(c.height).toBe(1620);
+		expect(c.width).toBe(3840);
+		expect(c.height).toBe(2160);
 	});
 
 	test("the overdraw shrinks smoothly, never below the window", () => {
@@ -158,6 +158,28 @@ describe("CanvasRenderer.moveView: the view moves without painting every frame",
 			vi.advanceTimersByTime(30); // never idle for 120 ms
 		}
 		expect(a.ctx.clears).toBeGreaterThan(painted);
+	});
+
+	test("a pan that has used half of the margin paints the board at once, but not more than once per 100 ms (R-074)", () => {
+		const a = layer();
+		const v = new Viewport();
+		const r = new CanvasRenderer(a.canvas, layer().canvas, v);
+		r.resize(); // margin: half a window on each side
+		const half = innerWidth * 0.25; // half of the margin
+		const painted = a.ctx.clears;
+		v.panBy(-(half - 20), 0);
+		r.moveView();
+		expect(a.ctx.clears).toBe(painted); // under half: only moved
+		v.panBy(-40, 0);
+		r.moveView();
+		expect(a.ctx.clears).toBe(painted + 1); // past half: painted now, in the middle of the pan
+		v.panBy(-(half + 20), 0);
+		r.moveView();
+		expect(a.ctx.clears).toBe(painted + 1); // too soon after the last one
+		vi.advanceTimersByTime(100);
+		v.panBy(-10, 0);
+		r.moveView();
+		expect(a.ctx.clears).toBe(painted + 2);
 	});
 
 	test("repainting the live layer alone leaves the board bitmap where it is moved to", () => {
