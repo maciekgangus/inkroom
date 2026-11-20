@@ -13,7 +13,13 @@ async function measure(page: import("@playwright/test").Page, tag: string) {
 					const t = tile.getBoundingClientRect();
 					const n = tile.querySelector(".name")?.getBoundingClientRect();
 					const p = tile.querySelector(".preview-box")?.getBoundingClientRect();
+					const act = tile.querySelector(".actions")?.getBoundingClientRect();
 					return {
+						// Nothing on the tile may sit on top of the picture or of the name.
+						overlap: Boolean(
+							(p && n && n.top < p.bottom - 0.5) ||
+								(n && act && act.top < n.bottom - 0.5),
+						),
 						w: Math.round(t.width * 10) / 10,
 						h: Math.round(t.height * 10) / 10,
 						nameY: n ? Math.round((n.y - t.y) * 10) / 10 : -1,
@@ -81,7 +87,10 @@ for (const mode of [
 			expect(after[i].boxH, `tile ${i} picture box`).toBeCloseTo(d.boxH, 0);
 		}
 		// The picture box is a real 4:3 frame the whole time, never a collapsed strip.
-		for (const d of during) {
+		for (const d of [...during, ...after]) {
+			expect(d.overlap, "something sits on the picture or the name").toBe(
+				false,
+			);
 			expect(d.boxH).toBeGreaterThan(80);
 			expect(d.nameY).toBeGreaterThan(d.boxH);
 		}

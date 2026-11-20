@@ -451,7 +451,7 @@ input::placeholder {
 	flex: none;
 	width: 100%;
 	aspect-ratio: 4 / 3;
-	contain: size layout;
+	contain: layout;
 	position: relative;
 	border-radius: var(--radius);
 	background: #fff;
@@ -516,9 +516,14 @@ a.open-link {
 	outline: 2px solid var(--accent);
 	outline-offset: -2px;
 }
+/* A definite width, so the 4:3 frame inside is sized from the real tile width and the link is as
+   tall as its content; with an auto (stretched) width it came out too short and the text sat
+   on the picture. */
 .boards.tiles a.open-link {
 	display: flex;
 	flex: none;
+	width: 100%;
+	box-sizing: border-box;
 	flex-direction: column;
 	gap: 8px;
 	border-radius: var(--radius);
