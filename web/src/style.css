@@ -446,8 +446,13 @@ input::placeholder {
 	gap: 8px;
 	padding: 10px;
 }
+/* A fixed 4:3 frame: in a column it must never shrink or grow with the picture or the row (R-052). */
 .preview-box {
+	flex: none;
+	width: 100%;
 	aspect-ratio: 4 / 3;
+	contain: layout;
+	position: relative;
 	border-radius: var(--radius);
 	background: #fff;
 	border: 1px solid var(--border);
@@ -479,6 +484,8 @@ input::placeholder {
 	}
 }
 .preview-box .preview {
+	position: absolute;
+	inset: 0;
 	display: block;
 	width: 100%;
 	height: 100%;
@@ -509,8 +516,14 @@ a.open-link {
 	outline: 2px solid var(--accent);
 	outline-offset: -2px;
 }
+/* A definite width, so the 4:3 frame inside is sized from the real tile width and the link is as
+   tall as its content; with an auto (stretched) width it came out too short and the text sat
+   on the picture. */
 .boards.tiles a.open-link {
 	display: flex;
+	flex: none;
+	width: 100%;
+	box-sizing: border-box;
 	flex-direction: column;
 	gap: 8px;
 	border-radius: var(--radius);
