@@ -58,12 +58,7 @@ import { type Peer, type SocketLike, SyncClient } from "./sync/sync";
 import { TextEditor } from "./text-editor";
 import { currentTheme, displayColor, useTheme } from "./theme";
 import { toolCursor } from "./tool-cursor";
-import {
-	colorFor,
-	lineStyleFor,
-	rememberColor,
-	switchTool,
-} from "./tool-style";
+import { rememberColor, restoreStart, switchTool } from "./tool-style";
 import { COLORS, QUICK_COLORS, SIZES, Toolbar } from "./toolbar";
 import { useToolbarLayout } from "./toolbar-layout";
 import { ZoomControls } from "./zoom-controls";
@@ -128,17 +123,20 @@ export function BoardView({
 	const [background, setBackground] = useState<Background>("plain");
 	const committedRef = useRef<HTMLCanvasElement>(null);
 	const liveRef = useRef<HTMLCanvasElement>(null);
-	const settings = useMemo<Settings>(
-		() => ({
+	const settings = useMemo<Settings>(() => {
+		const start: Settings = {
 			tool: "pen",
-			color: colorFor("pen") ?? COLORS[0], // R-097: what the pen had last
+			color: COLORS[0],
 			size: SIZES[1],
-			lineStyle: lineStyleFor("pen"), // R-073: the natural pen is the default, R-097: or what the pen had last
+			lineStyle: "natural", // R-073: the natural pen is the default
 			shape: loadShape(),
 			snapShapes: loadSnapShapes(), // R-095
-		}),
-		[],
-	);
+		};
+		// R-097: the page opens with the drawing tool it was left with, wearing its own colour,
+		// line style, thickness and opacity.
+		restoreStart(start);
+		return start;
+	}, []);
 	const viewport = useMemo(() => new Viewport(), []);
 	const [scale, setScale] = useState(1);
 	/** An existing text being edited (double-click), if any. */
