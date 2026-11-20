@@ -333,7 +333,7 @@ Potem `docker compose up -d` (albo poczekaj na nocną aktualizację z sekcji 4: 
   {container="workdir-cloudflared-1"}                 tunel
   ```
   Etykiety są tylko cztery (`service`, `container`, `level`, `compose_project`); `request_id`, `path` i reszta zostają w linii i czyta się je przez `| json`.
-- **Alerty** (Alerting, Alert rules): ERROR w logach dowolnej usługi (5 minut), więcej niż 5% odpowiedzi 5xx, panic, aplikacja nie odpowiada przez 2 minuty, kontener restartuje się (3 starty w 15 minut), dysk ponad 80%, wysyp błędów z przeglądarek. Wiadomości są grupowane (jedna na alert i usługę) i powtarzane najwyżej co 12 godzin, więc telefon nie zalewa.
+- **Alerty** (Alerting, Alert rules): ERROR w logach dowolnej usługi poza samym stosem (5 minut), więcej niż 5% odpowiedzi 5xx, panic, aplikacja nie odpowiada przez 2 minuty, kontener restartuje się (3 starty w 15 minut), dysk ponad 80%, wysyp błędów z przeglądarek. Wiadomości są grupowane (jedna na alert i usługę) i powtarzane najwyżej co 12 godzin, więc telefon nie zalewa.
 - **Test całej drogi** (log, Loki, alert, Telegram; wiadomość przychodzi po 1 do 3 minutach, „OK” po kolejnych 5):
   ```sh
   docker compose exec grafana sh -c 'echo "{\"level\":\"ERROR\",\"service\":\"test\",\"msg\":\"test alertu\"}" > /proc/1/fd/1'

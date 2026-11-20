@@ -49,6 +49,9 @@ groups:
     folder: Inkroom
     interval: 1m
     rules:
+      # The stack's own containers are left out: at every start Loki logs one harmless ERROR (the ring is
+      # not ready yet) and a phone message per deployment is noise. A stack that is down is caught by the
+      # restart-loop alert and by the dashboard, where their ERRORs still show.
       - uid: inkroom-error-logs
         title: Błędy w logach
         condition: C
@@ -60,7 +63,7 @@ groups:
             datasourceUid: loki
             model:
               refId: A
-              expr: 'sum by (service) (count_over_time({level="ERROR"}[5m]))'
+              expr: 'sum by (service) (count_over_time({level="ERROR", service!~"loki|alloy|prometheus|grafana"}[5m]))'
               queryType: instant
               editorMode: code
           - refId: B
@@ -293,7 +296,7 @@ groups:
         labels:
           severity: error
         annotations:
-          summary: "Dysk serwera zajęty w {{ $values.B }}%"
+          summary: "Dysk serwera zajęty w {{ printf \"%.0f\" $values.B.Value }}%"
           description: "Zajętość dysku przekroczyła 80% (logi, metryki i kopie bazy rosną na tym samym dysku)."
       - uid: inkroom-client-errors
         title: Wysyp błędów w przeglądarkach
