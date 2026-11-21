@@ -1,11 +1,25 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import type { Stroke } from "./board";
+
+const outlines = vi.hoisted(() => ({ calls: 0 }));
+vi.mock("perfect-freehand", async (orig) => {
+	const real = await orig<typeof import("perfect-freehand")>();
+	return {
+		...real,
+		getStroke: (...a: Parameters<typeof real.getStroke>) => {
+			outlines.calls++;
+			return real.getStroke(...a);
+		},
+	};
+});
+
 import { CanvasRenderer } from "./canvas-renderer";
 import { Viewport } from "./viewport";
 
 /** Counts the paths built and their vertices; the context swallows everything. */
 function setup(budget?: number) {
-	const stats = { paths: 0, vertices: 0 };
+	const stats = { paths: 0, vertices: 0, drawn: 0 };
+	outlines.calls = 0;
 	vi.stubGlobal("requestAnimationFrame", undefined);
 	vi.stubGlobal(
 		"Path2D",
@@ -31,7 +45,13 @@ function setup(budget?: number) {
 	const ctx = new Proxy(
 		{},
 		{
-			get: (_t, k) => (k === "canvas" ? {} : () => ctx),
+			get: (_t, k) =>
+				k === "canvas"
+					? {}
+					: (..._a: unknown[]) => {
+							if (k === "lineTo" || k === "moveTo") stats.drawn++;
+							return ctx;
+						},
 			set: () => true,
 		},
 	) as unknown as CanvasRenderingContext2D;
@@ -72,32 +92,49 @@ function wave(id: string, x0: number, y0: number, n = 200): Stroke {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("the outline of a stroke seen from far away (R-100)", () => {
-	test("at a tenth of the scale it has a fraction of the vertices of the close one", () => {
+	test("at a tenth of the scale no path object is kept, a thinned polygon is drawn directly", () => {
 		const close = setup();
 		close.renderer.redraw([wave("s", 100, 100)]);
 		const far = setup();
 		far.viewport.scale = 0.1;
-		far.viewport.x = 0;
-		far.viewport.y = 0;
 		far.renderer.redraw([wave("s", 100, 100)]);
 		expect(close.stats.vertices).toBeGreaterThan(100);
-		expect(far.stats.vertices).toBeLessThan(close.stats.vertices * 0.5);
-		expect(far.stats.vertices).toBeGreaterThan(0);
+		expect(far.stats.paths).toBe(0);
+		expect(far.stats.drawn).toBeGreaterThan(3);
+		expect(far.stats.drawn).toBeLessThan(close.stats.vertices * 0.5);
 	});
 
-	test("zooming in builds the finer outline again, zooming out keeps what is there", () => {
+	test("the polygon is kept: painting again does not build the outline again", () => {
+		const { renderer, viewport } = setup();
+		const s = wave("s", 100, 100);
+		viewport.scale = 0.1;
+		renderer.redraw([s]);
+		expect(outlines.calls).toBe(1);
+		renderer.redraw([s]);
+		expect(outlines.calls).toBe(1);
+	});
+
+	test("zooming in builds the path again, zooming out keeps it", () => {
 		const { renderer, viewport, stats } = setup();
 		const s = wave("s", 100, 100);
 		viewport.scale = 0.1;
 		renderer.redraw([s]);
-		const coarse = stats.vertices;
+		expect(stats.paths).toBe(0);
 		viewport.scale = 1;
 		renderer.redraw([s]);
-		expect(stats.vertices).toBeGreaterThan(coarse * 2); // built again, finer
-		const fine = stats.vertices;
+		expect(stats.paths).toBe(1); // built finer, as a path
+		const built = outlines.calls;
 		viewport.scale = 0.1;
 		renderer.redraw([s]);
-		expect(stats.vertices).toBe(fine); // the fine one still serves
+		expect(stats.paths).toBe(1);
+		expect(outlines.calls).toBe(built); // the fine path still serves
+	});
+
+	test("a dashed stroke keeps its path at any distance (it is stroked, not filled)", () => {
+		const { renderer, viewport, stats } = setup();
+		viewport.scale = 0.1;
+		renderer.redraw([{ ...wave("s", 100, 100), dash: "dashed" }]);
+		expect(stats.paths).toBe(1);
 	});
 });
 
@@ -139,5 +176,21 @@ describe("the budget of cached paths (R-100)", () => {
 		viewport.x = 0;
 		renderer.redraw(all);
 		expect(stats.paths).toBe(2);
+	});
+
+	test("polygons of a far view are dropped over the budget too", () => {
+		const { renderer, viewport } = setup(1000);
+		const all = Array.from({ length: 10 }, (_, i) =>
+			wave(`s${i}`, i < 5 ? 0 : 20000, i * 30),
+		);
+		viewport.scale = 0.1;
+		renderer.redraw(all); // the first five
+		expect(outlines.calls).toBe(5);
+		viewport.x = 19990;
+		renderer.redraw(all); // the other five; the first five are dropped
+		expect(outlines.calls).toBe(10);
+		viewport.x = 0;
+		renderer.redraw(all);
+		expect(outlines.calls).toBe(15);
 	});
 });
