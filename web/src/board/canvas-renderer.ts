@@ -1,13 +1,15 @@
 import { getStroke } from "perfect-freehand";
 import { type Background, drawBackground } from "./background";
-import type { Stroke } from "./board";
+import type { Point, Stroke } from "./board";
 import { intersects, strokeBounds } from "./bounds";
 import type { Renderer } from "./controller";
 import { planeFrame, sampleFn } from "./functions";
 import type { ImageCache } from "./image-cache";
 import { imageRect } from "./image-geometry";
 import type { LaserLine } from "./laser";
+import { decimate, lodTier, lodTolerance } from "./lod";
 import { currentLayerCap, layerMargin } from "./overdraw";
+import { PathBudget } from "./path-budget";
 import { type Frame, HANDLE_PX, ROT_OFFSET_PX } from "./selection-frame";
 import { LABEL_PX, PLANE_CELL, type PlaneLook, partsOf } from "./shape-parts";
 import { isPolygonKind } from "./shapes";
@@ -51,8 +53,7 @@ const isFilled = (s: Stroke) =>
 	isFreehand(s) && s.dash !== "dashed" && s.dash !== "dotted";
 
 /** The path a freehand stroke runs along, smoothed through the midpoints of its samples. */
-function centerline(s: Stroke): Path2D | null {
-	const pts = s.points;
+function centerline(s: Stroke, pts: Point[] = s.points): Path2D | null {
 	if (pts.length === 0) return null;
 	const path = new Path2D();
 	path.moveTo(pts[0][0], pts[0][1]);
@@ -70,8 +71,12 @@ function centerline(s: Stroke): Path2D | null {
 	return path;
 }
 
-function outlinePath(stroke: Stroke): Path2D | null {
-	const outline = getStroke(stroke.points, strokeOptions(stroke));
+function outlinePath(
+	stroke: Stroke,
+	pts: Point[] = stroke.points,
+): Path2D | null {
+	// The options come from the whole stroke (its length decides the tapers), the samples may be thinned.
+	const outline = getStroke(pts, strokeOptions(stroke));
 	if (outline.length < 2) return null;
 	const path = new Path2D();
 	path.moveTo(outline[0][0], outline[0][1]);
@@ -169,8 +174,8 @@ function extraPaths(s: Stroke): Extras | null {
 }
 
 /** The path of a line, rectangle or circle; null for anything else. */
-function shapePath(s: Stroke): Path2D | null {
-	if (isFreehand(s)) return centerline(s);
+function shapePath(s: Stroke, pts?: Point[]): Path2D | null {
+	if (isFreehand(s)) return centerline(s, pts);
 	const [a, b] = s.points;
 	if (!b) return null;
 	const path = new Path2D();
@@ -206,8 +211,18 @@ function shapePath(s: Stroke): Path2D | null {
 	return path;
 }
 
-function elementPath(s: Stroke): Path2D | null {
-	return isFilled(s) ? outlinePath(s) : shapePath(s);
+function elementPath(s: Stroke, pts?: Point[]): Path2D | null {
+	return isFilled(s) ? outlinePath(s, pts) : shapePath(s, pts);
+}
+
+/** What a cached path of a freehand stroke costs in native memory per sample (measured, R-100). */
+const PATH_BYTES_PER_SAMPLE = 32;
+
+/** The most native memory the cached paths of freehand strokes may hold: less on a tablet. */
+function defaultPathBudget(): number {
+	const touch =
+		typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
+	return (touch ? 24 : 64) * 1024 * 1024;
 }
 
 /** Runs `draw` with the element's rotation and opacity applied (ADR 0008). */
@@ -449,6 +464,12 @@ function drawElement(
 interface Cached {
 	/** Computed on first use, only for strokes that are actually in view. */
 	path?: Path2D | null;
+	/** The level of detail the path was built for (0 every sample, see `lodTier`). */
+	tier?: number;
+	/** The estimated native bytes of `path`, counted by the budget (freehand strokes only). */
+	cost: number;
+	/** The frame that last painted it. */
+	used: number;
 	bounds: Rect;
 }
 
@@ -518,6 +539,10 @@ export class CanvasRenderer implements Renderer {
 	private remote: Stroke[] = [];
 	private strokes: Stroke[] = [];
 	private cache = new WeakMap<Stroke, Cached>();
+	/** The paths of freehand strokes are kept within a budget of native memory (R-100). */
+	private budget: PathBudget<Cached>;
+	/** The number of the committed layer's latest paint, to tell what it drew from what it did not. */
+	private frame = 0;
 	private selection: Frame | null = null;
 	private marquee: Rect | null = null;
 	private lasso: [number, number][] | null = null;
@@ -554,7 +579,13 @@ export class CanvasRenderer implements Renderer {
 		private viewport: Viewport,
 		/** Source of the pictures for image elements; without it they show as placeholders. */
 		private images: ImageCache | null = null,
+		pathBudget: number = defaultPathBudget(),
 	) {
+		this.budget = new PathBudget<Cached>(pathBudget, (c) => {
+			c.path = undefined;
+			c.tier = undefined;
+			c.cost = 0;
+		});
 		this.committed = committedCanvas.getContext("2d");
 		// Not desynchronized (the low-latency hint): the unfinished stroke is cleared and drawn whole
 		// at every move, and a canvas shown without waiting for the compositor can be shown between
@@ -651,6 +682,7 @@ export class CanvasRenderer implements Renderer {
 	/** The board's font has loaded: text sizes were measured without it, so measure them again. */
 	fontsChanged(): void {
 		this.cache = new WeakMap();
+		this.budget.clear();
 		this.schedule(true, true);
 	}
 
@@ -846,10 +878,12 @@ export class CanvasRenderer implements Renderer {
 			maxX: from.x + w / scale,
 			maxY: from.y + h / scale,
 		};
+		this.frame++;
 		for (const s of this.strokes) {
 			if (this.drag?.ids.has(s.id)) continue; // drawn on the live layer while dragged
 			this.drawStroke(ctx, s, view);
 		}
+		this.budget.sweep(this.frame);
 	}
 
 	/** Draws one element if it is in view, shifted by (dx, dy) when it is being moved. */
@@ -862,7 +896,7 @@ export class CanvasRenderer implements Renderer {
 	): void {
 		let c = this.cache.get(s);
 		if (!c) {
-			c = { bounds: strokeBounds(s) };
+			c = { bounds: strokeBounds(s), cost: 0, used: 0 };
 			this.cache.set(s, c);
 		}
 		const b = c.bounds;
@@ -880,14 +914,38 @@ export class CanvasRenderer implements Renderer {
 			this.drawImage(ctx, s);
 			return;
 		}
-		if (c.path === undefined) c.path = elementPath(s);
+		this.ensurePath(s, c);
 		drawElement(
 			ctx,
 			s,
-			c.path,
+			c.path ?? null,
 			this.ink(s.color),
 			fillOf(s, (c) => this.ink(c)),
 		);
+	}
+
+	/**
+	 * Makes sure the element has the path its view needs. A freehand stroke seen from far away gets
+	 * a thinned outline (R-100): a finer one already cached still serves, a coarser one is built
+	 * again finer. The path counts in the budget of the cache, which drops the longest unused.
+	 */
+	private ensurePath(s: Stroke, c: Cached): void {
+		if (!isFreehand(s)) {
+			if (c.path === undefined) c.path = elementPath(s);
+			return;
+		}
+		const tier = lodTier(this.viewport.scale);
+		if (c.path !== undefined && (c.path === null || (c.tier ?? 0) <= tier)) {
+			this.budget.touch(c, this.frame);
+			return;
+		}
+		const was = c.cost;
+		const pts = decimate(s.points, lodTolerance(tier), s.size);
+		c.path = elementPath(s, pts);
+		c.tier = tier;
+		c.cost = c.path ? pts.length * PATH_BYTES_PER_SAMPLE : 0;
+		if (was) this.budget.replace(c, was, this.frame);
+		else this.budget.add(c, this.frame);
 	}
 
 	/** Draws a photo, or a grey placeholder while it loads (or if it failed). */
