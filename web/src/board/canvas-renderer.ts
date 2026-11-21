@@ -11,6 +11,7 @@ import { lodTier } from "./lod";
 import { outlinePolygon } from "./outline-lod";
 import { currentLayerCap, currentLayerMaxSide, layerMargin } from "./overdraw";
 import { PathBudget } from "./path-budget";
+import { pointCount } from "./points";
 import { type Frame, HANDLE_PX, ROT_OFFSET_PX } from "./selection-frame";
 import { LABEL_PX, PLANE_CELL, type PlaneLook, partsOf } from "./shape-parts";
 import { isPolygonKind } from "./shapes";
@@ -964,7 +965,7 @@ export class CanvasRenderer implements Renderer {
 		} else {
 			c.poly = undefined;
 			c.path = elementPath(s);
-			c.cost = c.path ? s.points.length * PATH_BYTES_PER_SAMPLE : 0;
+			c.cost = c.path ? pointCount(s) * PATH_BYTES_PER_SAMPLE : 0;
 		}
 		c.tier = tier;
 		if (was) this.budget.replace(c, was, this.frame);

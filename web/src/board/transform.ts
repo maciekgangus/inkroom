@@ -1,4 +1,5 @@
 import type { Point, Stroke } from "./board";
+import { forEachPoint, pointCount } from "./points";
 import { fontSizeOf, textBox } from "./text";
 import type { Rect } from "./viewport";
 
@@ -31,19 +32,20 @@ const boxes = new WeakMap<Stroke, { n: number; box: Rect }>();
  */
 export function pointsBox(el: Stroke): Rect {
 	const kept = boxes.get(el);
-	if (kept && kept.n === el.points.length) return kept.box;
+	const n = pointCount(el);
+	if (kept && kept.n === n) return kept.box;
 	let minX = Number.POSITIVE_INFINITY;
 	let minY = Number.POSITIVE_INFINITY;
 	let maxX = Number.NEGATIVE_INFINITY;
 	let maxY = Number.NEGATIVE_INFINITY;
-	for (const [x, y] of el.points) {
+	forEachPoint(el, (x, y) => {
 		if (x < minX) minX = x;
 		if (y < minY) minY = y;
 		if (x > maxX) maxX = x;
 		if (y > maxY) maxY = y;
-	}
+	});
 	const box = { minX, minY, maxX, maxY };
-	boxes.set(el, { n: el.points.length, box });
+	boxes.set(el, { n, box });
 	return box;
 }
 
