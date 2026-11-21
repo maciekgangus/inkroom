@@ -27,7 +27,7 @@ Priorytety: P1 do pierwszej lekcji, P2 zaraz po niej, P3 później. Statusy: pro
 | R-005 | Obsługa myszy, dotyku i rysika (Pointer Events, nacisk rysika) na: iPad + Apple Pencil (Safari), tablet z Androidem + rysik (Chrome), tablet graficzny przy PC (Wacom itp.) | P1 | accepted |
 | R-006 | Współpraca na żywo: wszyscy w pokoju widzą zmiany w czasie rzeczywistym | P1 | done |
 | R-007 | Automatyczny zapis stanu tablicy; powrót przez ten sam link i kontynuacja pracy na kolejnych lekcjach, bez logowania gościa | P1 | done |
-| R-008 | Cofnij i ponów działają per użytkownik: każdy cofa tylko własne ruchy (osobny stos w obrębie sesji) | P1 | done |
+| R-008 | Cofnij i ponów działają per użytkownik: każdy cofa tylko własne ruchy (osobny stos w obrębie sesji). **Historia jest ograniczona (R-100):** użytkownik może cofnąć co najwyżej ostatnie 200 swoich kroków i tyle, ile mieści się w budżecie punktów (600 tys. punktów na małym tablecie, 1,5 mln przy 8 GB pamięci lub więcej; krok liczy się punktami elementów, które trzyma, nie jako jeden); po przekroczeniu najstarsze kroki są odrzucane (zmiany zostają na tablicy, znika tylko możliwość ich cofnięcia), a najnowszy krok jest zawsze zachowany, nawet jeśli sam przekracza budżet (cofnięcie „usunąłem wszystko” działa), aż do następnego kroku. Poza tym zachowanie bez zmian (zbiorowe cofnięcie gumki R-078, unieważnianie ponawiania nowym krokiem) | P1 | done |
 | R-009 | Panel twórcy z listą jego tablic (nazwa, data ostatniej zmiany, kopiowanie linku, otwarcie, usunięcie) | P1 | done |
 | R-010 | Nieskończone lub przewijane płótno, przesuwanie i powiększanie | P2 | done |
 | R-011 | Kilka stron (kart) w jednej tablicy | P2 | dropped |
@@ -292,3 +292,4 @@ Do zrobienia przy wdrożeniu: ADR z konfiguracją bucketu (klucze w `.env`, CORS
 
 - 2026-11-20: R-099 (baner „Dostępna nowa wersja, odśwież”: wersja serwera w `/api/config`, wersja klienta zaszyta w kompilacji, sprawdzanie przy ponownym połączeniu, powrocie na stronę i otwarciu panelu) na prośbę użytkownika, `accepted`.
 - 2026-11-20: R-100 (pamięć klienta na dużych tablicach: najpierw pomiar czterech koszyków pamięci w powtarzalnym benchmarku, potem redukcja według liczb) na prośbę użytkownika, `accepted`; pierwszy PR dodaje tylko benchmark, bez zmiany zachowania aplikacji.
+- 2026-11-21: R-100 krok 2b (historia cofania): R-008 uzupełnione o limit 200 kroków na autora i budżet punktów (kroki odrzucane od najstarszego, najnowszy zawsze zachowany); skasowane kreski przestają być trzymane w pamięci po odrzuceniu kroku. Przy okazji indeks po id i wyszukiwanie binarne w `Board` zamiast `find` w pętlach (zaznaczenie wszystkiego i Delete nie jest już kwadratowe), na prośbę użytkownika (R-100), `accepted`.

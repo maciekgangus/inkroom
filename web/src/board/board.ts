@@ -117,6 +117,42 @@ interface Action {
 interface History {
 	undo: Action[];
 	redo: Action[];
+	/** The weight of the undo steps kept (see `weigh`). */
+	weight: number;
+}
+
+/**
+ * How much undo history an author keeps (R-008, R-100). The erased strokes an old step holds stay
+ * in memory as long as the step does, so a long session of erasing would fill a tablet: past
+ * these limits the oldest steps are dropped (the elements they changed stay on the board, only
+ * their undo is gone). The newest step is always kept, however large, until another step follows.
+ */
+export interface HistoryLimits {
+	/** Most undo steps per author. */
+	maxSteps: number;
+	/** Most points (plus a small weight per element) the undo steps of one author may hold together. */
+	maxPoints: number;
+}
+
+/** Default limits: 200 steps; about 30 MB of points on a small tablet, 80 MB with 8 GB or more. */
+export const HISTORY_LIMITS: HistoryLimits = {
+	maxSteps: 200,
+	maxPoints:
+		((navigator as { deviceMemory?: number }).deviceMemory ?? 4) >= 8
+			? 1_500_000
+			: 600_000,
+};
+
+/** What a step costs against `maxPoints`: the points of every element it holds, plus 8 per element. */
+function weigh(action: Action): number {
+	let w = 0;
+	if (action.changes) {
+		for (const c of action.changes)
+			w += c.before.points.length + c.after.points.length + 16;
+	} else {
+		for (const s of action.group ?? [action.stroke]) w += s.points.length + 8;
+	}
+	return w;
 }
 
 const byOrder = (a: Stroke, b: Stroke) =>
@@ -127,14 +163,47 @@ export class Board {
 	strokes: Stroke[] = [];
 	/** Grows with every change of the elements, so what is drawn from them can be kept until then. */
 	version = 0;
+	private changeListeners: (() => void)[] = [];
+
+	/**
+	 * Calls `fn` after every change of the elements (local or remote). Whoever keeps a list of
+	 * elements derived from the board (a selection) uses it to let go of them at once: a stale list
+	 * would keep erased strokes alive (R-100). The listener lives as long as the board does.
+	 */
+	onChange(fn: () => void): void {
+		this.changeListeners.push(fn);
+	}
+
+	private bump(): void {
+		this.version++;
+		for (const fn of this.changeListeners) fn();
+	}
+
 	/** Called for every local change (not for remote ones), so it can be sent to the server. */
 	onOp: ((op: BoardOp) => void) | null = null;
 	private histories = new Map<string, History>();
+	/** Every element by id, so lookups do not scan the whole board. */
+	private byId = new Map<string, Stroke>();
+	private limits: HistoryLimits;
+
+	constructor(limits: HistoryLimits = HISTORY_LIMITS) {
+		this.limits = limits;
+	}
+
+	/** How much history an author holds (for tests and the memory benchmark). */
+	historyStats(authorId: string): {
+		steps: number;
+		redo: number;
+		points: number;
+	} {
+		const h = this.history(authorId);
+		return { steps: h.undo.length, redo: h.redo.length, points: h.weight };
+	}
 
 	private history(authorId: string): History {
 		let h = this.histories.get(authorId);
 		if (!h) {
-			h = { undo: [], redo: [] };
+			h = { undo: [], redo: [], weight: 0 };
 			this.histories.set(authorId, h);
 		}
 		return h;
@@ -150,7 +219,7 @@ export class Board {
 	/** Adds several elements as one undo step, one `add` operation each. */
 	addMany(authorId: string, strokes: Stroke[]): void {
 		if (strokes.length === 0) return;
-		for (const s of strokes) this.insert(s);
+		this.insertMany(strokes);
 		this.record(authorId, { type: "add", stroke: strokes[0], group: strokes });
 		for (const s of strokes) this.onOp?.({ t: "add", stroke: s });
 	}
@@ -178,7 +247,7 @@ export class Board {
 
 	/** Erases any author's stroke; the action goes to `authorId`'s history. */
 	eraseStroke(authorId: string, strokeId: string): boolean {
-		const stroke = this.strokes.find((s) => s.id === strokeId);
+		const stroke = this.byId.get(strokeId);
 		if (!stroke) return false;
 		this.remove(strokeId);
 		this.record(authorId, { type: "erase", stroke });
@@ -199,7 +268,7 @@ export class Board {
 		let finished = false;
 		return {
 			erase: (strokeId) => {
-				const stroke = this.strokes.find((s) => s.id === strokeId);
+				const stroke = this.byId.get(strokeId);
 				if (!stroke) return false;
 				this.remove(strokeId);
 				erased.push(stroke);
@@ -221,10 +290,10 @@ export class Board {
 	/** Erases several elements as one undo step. Returns false if none of them exists. */
 	eraseMany(authorId: string, strokeIds: string[]): boolean {
 		const group = strokeIds
-			.map((id) => this.strokes.find((s) => s.id === id))
+			.map((id) => this.byId.get(id))
 			.filter((s): s is Stroke => !!s);
 		if (group.length === 0) return false;
-		for (const s of group) this.remove(s.id);
+		this.removeMany(group);
 		this.record(authorId, { type: "erase", stroke: group[0], group });
 		for (const s of group) this.onOp?.({ t: "remove", id: s.id });
 		return true;
@@ -245,7 +314,7 @@ export class Board {
 	updateMany(authorId: string, next: Stroke[]): boolean {
 		const changes: { before: Stroke; after: Stroke }[] = [];
 		for (const after of next) {
-			const before = this.strokes.find((s) => s.id === after.id);
+			const before = this.byId.get(after.id);
 			if (before) changes.push({ before, after });
 		}
 		if (changes.length === 0) return false;
@@ -272,6 +341,7 @@ export class Board {
 					? "add"
 					: "revert",
 		);
+		h.weight -= weigh(action);
 		h.redo.push(action);
 		return true;
 	}
@@ -289,6 +359,7 @@ export class Board {
 					? "remove"
 					: "reapply",
 		);
+		h.weight += weigh(action);
 		h.undo.push(action);
 		return true;
 	}
@@ -308,13 +379,26 @@ export class Board {
 	/** Replaces all strokes (server snapshot). */
 	setStrokes(strokes: Stroke[]): void {
 		this.strokes = [...strokes].sort(byOrder);
-		this.version++;
+		this.byId = new Map(this.strokes.map((s) => [s.id, s]));
+		this.bump();
 	}
 
 	private record(authorId: string, action: Action): void {
 		const h = this.history(authorId);
 		h.undo.push(action);
+		h.weight += weigh(action);
 		h.redo.length = 0;
+		// Past the limits drop the oldest steps, but never the newest one.
+		let drop = 0;
+		while (
+			h.undo.length - drop > 1 &&
+			(h.undo.length - drop > this.limits.maxSteps ||
+				h.weight > this.limits.maxPoints)
+		) {
+			h.weight -= weigh(h.undo[drop]);
+			drop++;
+		}
+		if (drop > 0) h.undo.splice(0, drop);
 	}
 
 	private apply(
@@ -328,44 +412,106 @@ export class Board {
 				this.onOp?.({ t: "update", stroke: version });
 			}
 		} else if (what === "add") {
-			for (const s of action.group ?? [action.stroke]) {
-				this.insert(s);
-				this.onOp?.({ t: "add", stroke: s });
-			}
+			const group = action.group ?? [action.stroke];
+			this.insertMany(group);
+			for (const s of group) this.onOp?.({ t: "add", stroke: s });
 		} else {
-			for (const s of action.group ?? [action.stroke]) {
-				this.remove(s.id);
-				this.onOp?.({ t: "remove", id: s.id });
-			}
+			const group = action.group ?? [action.stroke];
+			this.removeMany(group);
+			for (const s of group) this.onOp?.({ t: "remove", id: s.id });
 		}
 	}
 
 	private insert(stroke: Stroke): void {
-		if (this.strokes.some((s) => s.id === stroke.id)) return;
+		if (this.byId.has(stroke.id)) return;
 		let i = this.strokes.length;
 		while (i > 0 && byOrder(this.strokes[i - 1], stroke) > 0) i--;
 		this.strokes.splice(i, 0, stroke);
-		this.version++;
+		this.byId.set(stroke.id, stroke);
+		this.bump();
+	}
+
+	/** Adds several elements in one pass (a merge, not one splice each); ones already here are skipped. */
+	private insertMany(strokes: Stroke[]): void {
+		const fresh = strokes.filter((s) => !this.byId.has(s.id));
+		if (fresh.length === 0) return;
+		if (fresh.length === 1) {
+			this.insert(fresh[0]);
+			return;
+		}
+		fresh.sort(byOrder);
+		const merged: Stroke[] = [];
+		let a = 0;
+		let b = 0;
+		while (a < this.strokes.length || b < fresh.length) {
+			if (
+				b >= fresh.length ||
+				(a < this.strokes.length && byOrder(this.strokes[a], fresh[b]) <= 0)
+			)
+				merged.push(this.strokes[a++]);
+			else merged.push(fresh[b++]);
+		}
+		// in place: others hold this array
+		this.strokes.length = 0;
+		for (const s of merged) this.strokes.push(s);
+		for (const s of fresh) this.byId.set(s.id, s);
+		this.bump();
+	}
+
+	/** The index of an element in the drawing order (binary search on (z, id)), or -1. */
+	private indexOf(stroke: Stroke): number {
+		let lo = 0;
+		let hi = this.strokes.length - 1;
+		while (lo <= hi) {
+			const mid = (lo + hi) >> 1;
+			const c = byOrder(this.strokes[mid], stroke);
+			if (c === 0) return mid;
+			if (c < 0) lo = mid + 1;
+			else hi = mid - 1;
+		}
+		return -1;
 	}
 
 	/** Swaps in a new version of an element that is on the board; ignores unknown ids. */
 	private replace(stroke: Stroke): void {
-		const i = this.strokes.findIndex((s) => s.id === stroke.id);
+		const old = this.byId.get(stroke.id);
+		if (!old) return;
+		const i = this.indexOf(old);
 		if (i < 0) return;
-		this.version++;
-		if (this.strokes[i].z === stroke.z) {
+		this.bump();
+		if (old.z === stroke.z) {
 			this.strokes[i] = stroke;
+			this.byId.set(stroke.id, stroke);
 			return;
 		}
 		// A new z moves the element in the drawing order.
 		this.strokes.splice(i, 1);
+		this.byId.delete(stroke.id);
 		this.insert(stroke);
 	}
 
 	private remove(id: string): void {
-		const i = this.strokes.findIndex((s) => s.id === id);
+		const old = this.byId.get(id);
+		if (!old) return;
+		const i = this.indexOf(old);
 		if (i < 0) return;
 		this.strokes.splice(i, 1);
-		this.version++;
+		this.byId.delete(id);
+		this.bump();
+	}
+
+	/** Takes several elements off in one pass; unknown ones are skipped. */
+	private removeMany(strokes: Stroke[]): void {
+		const gone = new Set<string>();
+		for (const s of strokes) if (this.byId.has(s.id)) gone.add(s.id);
+		if (gone.size === 0) return;
+		let w = 0;
+		for (let r = 0; r < this.strokes.length; r++) {
+			const s = this.strokes[r];
+			if (!gone.has(s.id)) this.strokes[w++] = s;
+		}
+		this.strokes.length = w;
+		for (const id of gone) this.byId.delete(id);
+		this.bump();
 	}
 }

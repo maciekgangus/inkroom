@@ -267,7 +267,13 @@ export class Controller {
 		private viewport: Viewport,
 		private authorId: string,
 		private newId: () => string,
-	) {}
+	) {
+		// The list of selected elements is derived from the board: let it go with every change,
+		// or an erased element stays alive in it until the selection is read again (R-100).
+		board.onChange(() => {
+			this.selectedCache = null;
+		});
+	}
 
 	/** The selected image, if any. */
 	get selected(): Stroke | null {

@@ -43,3 +43,12 @@ najmniejszym zbliżeniu (0,1).
 - Karty w tle nie wykonują `requestAnimationFrame`; skrypt używa jednej karty na przeglądarkę, widocznej.
 - Liczby z `results/` to linia bazowa z dnia wpisanego w nazwie pliku: po zmianach z kroku 2 uruchom skrypt
   ponownie i porównaj.
+
+## Historia cofania i „jeden krok więcej” (R-008, R-100)
+
+Koszyk 3 ma od kroku 2b dodatkową kolumnę „heap after one more step”: po skasowaniu wszystkiego, cofnięciu i
+ponowieniu (Ctrl+Shift+Z) rysowany jest jeden krótki ślad piórem. Najnowszy krok historii jest zawsze zachowany,
+więc zaraz po „usuń wszystko” sterta nie spada (można jeszcze cofnąć); dopiero następny krok powoduje
+odrzucenie tego dużego i zwolnienie skasowanych kresek. Zmienna `BENCH_DEVMEM=4` ustawia `navigator.deviceMemory`
+(budżet historii zależy od niej: 600 tys. punktów przy 4 GB, 1,5 mln przy 8 GB lub więcej).
+Wyniki po zmianie: `bench/results/memory-2026-11-21-undo-cap.md`.
