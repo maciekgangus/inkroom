@@ -95,6 +95,22 @@ describe("Controller selection", () => {
 		board.onOp = (op) => ops.push(op);
 	});
 
+	describe("memory", () => {
+		test("the list of selected elements is let go when the board changes, so an erased element is not kept alive (R-100)", () => {
+			c.select("r1");
+			expect(selIds()).toEqual(["r1"]);
+			// reading the selection built a cache of the selected elements
+			expect(
+				(c as unknown as { selectedCache: unknown }).selectedCache,
+			).not.toBeNull();
+			board.eraseStroke("me", "r1"); // gone from the board, by whatever means (also a remote erase)
+			expect(
+				(c as unknown as { selectedCache: unknown }).selectedCache,
+			).toBeNull();
+			expect(selIds()).toEqual([]);
+		});
+	});
+
 	describe("choosing what is selected", () => {
 		test("addImage creates an image element with its source and corners, and selects it", () => {
 			const id = c.addImage("pic", { minX: 10, minY: 20, maxX: 110, maxY: 70 });

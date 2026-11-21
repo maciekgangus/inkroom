@@ -163,6 +163,22 @@ export class Board {
 	strokes: Stroke[] = [];
 	/** Grows with every change of the elements, so what is drawn from them can be kept until then. */
 	version = 0;
+	private changeListeners: (() => void)[] = [];
+
+	/**
+	 * Calls `fn` after every change of the elements (local or remote). Whoever keeps a list of
+	 * elements derived from the board (a selection) uses it to let go of them at once: a stale list
+	 * would keep erased strokes alive (R-100). The listener lives as long as the board does.
+	 */
+	onChange(fn: () => void): void {
+		this.changeListeners.push(fn);
+	}
+
+	private bump(): void {
+		this.version++;
+		for (const fn of this.changeListeners) fn();
+	}
+
 	/** Called for every local change (not for remote ones), so it can be sent to the server. */
 	onOp: ((op: BoardOp) => void) | null = null;
 	private histories = new Map<string, History>();
@@ -364,7 +380,7 @@ export class Board {
 	setStrokes(strokes: Stroke[]): void {
 		this.strokes = [...strokes].sort(byOrder);
 		this.byId = new Map(this.strokes.map((s) => [s.id, s]));
-		this.version++;
+		this.bump();
 	}
 
 	private record(authorId: string, action: Action): void {
@@ -412,7 +428,7 @@ export class Board {
 		while (i > 0 && byOrder(this.strokes[i - 1], stroke) > 0) i--;
 		this.strokes.splice(i, 0, stroke);
 		this.byId.set(stroke.id, stroke);
-		this.version++;
+		this.bump();
 	}
 
 	/** Adds several elements in one pass (a merge, not one splice each); ones already here are skipped. */
@@ -439,7 +455,7 @@ export class Board {
 		this.strokes.length = 0;
 		for (const s of merged) this.strokes.push(s);
 		for (const s of fresh) this.byId.set(s.id, s);
-		this.version++;
+		this.bump();
 	}
 
 	/** The index of an element in the drawing order (binary search on (z, id)), or -1. */
@@ -462,7 +478,7 @@ export class Board {
 		if (!old) return;
 		const i = this.indexOf(old);
 		if (i < 0) return;
-		this.version++;
+		this.bump();
 		if (old.z === stroke.z) {
 			this.strokes[i] = stroke;
 			this.byId.set(stroke.id, stroke);
@@ -481,7 +497,7 @@ export class Board {
 		if (i < 0) return;
 		this.strokes.splice(i, 1);
 		this.byId.delete(id);
-		this.version++;
+		this.bump();
 	}
 
 	/** Takes several elements off in one pass; unknown ones are skipped. */
@@ -496,6 +512,6 @@ export class Board {
 		}
 		this.strokes.length = w;
 		for (const id of gone) this.byId.delete(id);
-		this.version++;
+		this.bump();
 	}
 }

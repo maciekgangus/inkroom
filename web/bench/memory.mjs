@@ -140,6 +140,10 @@ async function openPage(boardId, view) {
 	});
 	if (!login.ok()) throw new Error(`login failed: ${login.status()}`);
 	if (view) await req.put(`${BASE}/api/boards/${boardId}/view`, { data: view });
+	if (process.env.BENCH_DEVMEM)
+		await context.addInitScript(
+			`Object.defineProperty(navigator,'deviceMemory',{get:()=>${Number(process.env.BENCH_DEVMEM)}})`,
+		);
 	const page = await context.newPage();
 	const cdp = await context.newCDPSession(page);
 	const browserCdp = await browser.newBrowserCDPSession();
@@ -265,6 +269,34 @@ async function eraseSweeps(page) {
 			await frame();
 		}
 		return times;
+	});
+}
+
+/** One short pen stroke on the board: a further undo step, after which a huge older step may be dropped (R-008, R-100). */
+async function drawOneStroke(page) {
+	await page.keyboard.press("KeyF"); // the pen
+	await page.evaluate(async () => {
+		const live = document.querySelector("canvas#live");
+		live.setPointerCapture = () => {};
+		const fire = (type, x, y, down) =>
+			live.dispatchEvent(
+				new PointerEvent(type, {
+					bubbles: true,
+					cancelable: true,
+					pointerId: 2,
+					pointerType: "mouse",
+					isPrimary: true,
+					clientX: x,
+					clientY: y,
+					pressure: down ? 0.5 : 0,
+					button: 0,
+					buttons: down ? 1 : 0,
+				}),
+			);
+		fire("pointerdown", 300, 300, true);
+		for (let i = 1; i <= 20; i++)
+			fire("pointermove", 300 + i * 10, 300 + i * 4, true);
+		fire("pointerup", 500, 380, false);
 	});
 }
 
@@ -433,6 +465,12 @@ for (const n of SIZES) {
 		await p.page.keyboard.press("Control+KeyZ"); // the grouped step undone
 		await sleep(3000);
 		r.afterUndo = await sample(p.cdp, p.browserCdp);
+		// erased again (redo), then one more step: the step that held everything is past the limit now
+		await p.page.keyboard.press("Control+Shift+KeyZ");
+		await sleep(3000);
+		await drawOneStroke(p.page);
+		await sleep(3000);
+		r.afterNextStep = await sample(p.cdp, p.browserCdp);
 		await p.browser.close();
 	}
 	results.sizes[n] = r;
@@ -471,16 +509,16 @@ out(
 );
 out();
 out(
-	"| elements | erased | heap before MB | heap after MB | expected fall MB | actual fall MB | held by history MB | heap after undo MB | native (anon) before / after / after undo MB |",
+	"| elements | erased | heap before MB | heap after MB | expected fall MB | actual fall MB | held by history MB | heap after undo MB | heap after one more step MB | native (anon) before / after / after undo / after next step MB |",
 );
-out("|---|---|---|---|---|---|---|---|---|");
+out("|---|---|---|---|---|---|---|---|---|---|");
 for (const n of SIZES) {
 	const r = results.sizes[n];
 	const erased = r.remainingBeforeEraseAll - r.remainingAfterEraseAll;
 	const expected = (erased * r.parsedOnly.heapParsed) / n;
 	const actual = r.beforeEraseAll.heap - r.afterEraseAll.heap;
 	out(
-		`| ${n} | ${erased} | ${(r.beforeEraseAll.heap / MB).toFixed(1)} | ${(r.afterEraseAll.heap / MB).toFixed(1)} | ${(expected / MB).toFixed(1)} | ${(actual / MB).toFixed(1)} | ${(Math.max(0, expected - actual) / MB).toFixed(1)} | ${(r.afterUndo.heap / MB).toFixed(1)} | ${(r.beforeEraseAll.rendererAnon / MB).toFixed(0)} / ${(r.afterEraseAll.rendererAnon / MB).toFixed(0)} / ${(r.afterUndo.rendererAnon / MB).toFixed(0)} |`,
+		`| ${n} | ${erased} | ${(r.beforeEraseAll.heap / MB).toFixed(1)} | ${(r.afterEraseAll.heap / MB).toFixed(1)} | ${(expected / MB).toFixed(1)} | ${(actual / MB).toFixed(1)} | ${(Math.max(0, expected - actual) / MB).toFixed(1)} | ${(r.afterUndo.heap / MB).toFixed(1)} | ${(r.afterNextStep.heap / MB).toFixed(1)} | ${(r.beforeEraseAll.rendererAnon / MB).toFixed(0)} / ${(r.afterEraseAll.rendererAnon / MB).toFixed(0)} / ${(r.afterUndo.rendererAnon / MB).toFixed(0)} / ${(r.afterNextStep.rendererAnon / MB).toFixed(0)} |`,
 	);
 }
 out();
