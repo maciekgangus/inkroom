@@ -39,7 +39,10 @@ test("on a touch screen no card blurs what is behind it and each one is opaque",
 	}
 });
 
-test("on a desktop the cards keep their glass", async ({ browser, baseURL }) => {
+test("on a desktop the cards keep their glass", async ({
+	browser,
+	baseURL,
+}) => {
 	const ctx = await browser.newContext({
 		baseURL,
 		viewport: { width: 1440, height: 900 },
@@ -49,7 +52,9 @@ test("on a desktop the cards keep their glass", async ({ browser, baseURL }) => 
 	const page = await ctx.newPage();
 	await openBoard(page);
 	const blur = await page.evaluate(
-		() => getComputedStyle(document.querySelector(".toolbar") as Element).backdropFilter,
+		() =>
+			getComputedStyle(document.querySelector(".toolbar") as Element)
+				.backdropFilter,
 	);
 	expect(blur).toContain("blur");
 	await ctx.close();
