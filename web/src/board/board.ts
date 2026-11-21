@@ -1,4 +1,5 @@
 import type { PlaneFn } from "./functions";
+import { packStroke, pointCount } from "./points";
 /** A point of a stroke: x, y and pen pressure (0..1). */
 export type Point = [x: number, y: number, pressure: number];
 
@@ -148,9 +149,9 @@ function weigh(action: Action): number {
 	let w = 0;
 	if (action.changes) {
 		for (const c of action.changes)
-			w += c.before.points.length + c.after.points.length + 16;
+			w += pointCount(c.before) + pointCount(c.after) + 16;
 	} else {
-		for (const s of action.group ?? [action.stroke]) w += s.points.length + 8;
+		for (const s of action.group ?? [action.stroke]) w += pointCount(s) + 8;
 	}
 	return w;
 }
@@ -378,6 +379,7 @@ export class Board {
 
 	/** Replaces all strokes (server snapshot). */
 	setStrokes(strokes: Stroke[]): void {
+		for (const s of strokes) packStroke(s);
 		this.strokes = [...strokes].sort(byOrder);
 		this.byId = new Map(this.strokes.map((s) => [s.id, s]));
 		this.bump();
@@ -424,6 +426,7 @@ export class Board {
 
 	private insert(stroke: Stroke): void {
 		if (this.byId.has(stroke.id)) return;
+		packStroke(stroke);
 		let i = this.strokes.length;
 		while (i > 0 && byOrder(this.strokes[i - 1], stroke) > 0) i--;
 		this.strokes.splice(i, 0, stroke);
@@ -439,6 +442,7 @@ export class Board {
 			this.insert(fresh[0]);
 			return;
 		}
+		for (const s of fresh) packStroke(s);
 		fresh.sort(byOrder);
 		const merged: Stroke[] = [];
 		let a = 0;
@@ -478,6 +482,7 @@ export class Board {
 		if (!old) return;
 		const i = this.indexOf(old);
 		if (i < 0) return;
+		packStroke(stroke);
 		this.bump();
 		if (old.z === stroke.z) {
 			this.strokes[i] = stroke;

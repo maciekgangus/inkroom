@@ -1,9 +1,9 @@
 import type { StrokeOptions } from "perfect-freehand";
-import type { Stroke } from "./board";
+import type { Point, Stroke } from "./board";
 
 /** True when every point has the same pressure, as with a mouse or a finger (no stylus). */
-const uniformPressure = (s: Stroke): boolean =>
-	s.points.every((p) => Math.abs(p[2] - s.points[0][2]) < 0.01);
+const uniformPressure = (pts: Point[]): boolean =>
+	pts.every((p) => Math.abs(p[2] - pts[0][2]) < 0.01);
 
 /**
  * How a freehand stroke is turned into an outline (R-037). The ordinary pen is as it has always
@@ -26,11 +26,10 @@ export function strokeOptions(s: Stroke): StrokeOptions {
 	const size = s.size * 1.5;
 	// A short stroke has little room for the tapers, which would eat it whole (a tap left no
 	// mark): they shrink with its length, none for a dot (R-075).
-	const length = s.points.reduce(
+	const pts = s.points;
+	const length = pts.reduce(
 		(sum, p, i) =>
-			i
-				? sum + Math.hypot(p[0] - s.points[i - 1][0], p[1] - s.points[i - 1][1])
-				: 0,
+			i ? sum + Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]) : 0,
 		0,
 	);
 	const tapered = length >= size * 3; // a tap or a tiny dash stays a plain dot
@@ -39,7 +38,7 @@ export function strokeOptions(s: Stroke): StrokeOptions {
 		thinning: 0.5,
 		smoothing: 0.7,
 		streamline: 0.65,
-		simulatePressure: uniformPressure(s),
+		simulatePressure: uniformPressure(pts),
 		start: {
 			taper: tapered ? Math.min(size * 2.5, length * 0.4) : 0,
 			cap: true,
