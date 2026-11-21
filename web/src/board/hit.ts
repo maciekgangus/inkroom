@@ -1,4 +1,5 @@
 import type { Stroke } from "./board";
+import { packedOf, packedX, packedY, pointCount } from "./points";
 import { partsOf } from "./shape-parts";
 import { isBlockKind, isPolygonKind, pointInPolygon } from "./shapes";
 import { textBox } from "./text";
@@ -37,6 +38,29 @@ function nearPolyline(
 			reach
 		)
 			return true;
+	}
+	return false;
+}
+
+/** `nearPolyline` for the points of a stroke, read in place when they are packed (R-100). */
+function nearStroke(
+	stroke: Stroke,
+	x: number,
+	y: number,
+	reach: number,
+): boolean {
+	const a = packedOf(stroke);
+	if (!a) return nearPolyline(stroke.points, x, y, reach);
+	const n = pointCount(stroke);
+	let px = packedX(a, 0);
+	let py = packedY(a, 0);
+	if (n === 1) return Math.hypot(x - px, y - py) <= reach;
+	for (let i = 1; i < n; i++) {
+		const qx = packedX(a, i);
+		const qy = packedY(a, i);
+		if (distToSegment(x, y, px, py, qx, qy) <= reach) return true;
+		px = qx;
+		py = qy;
 	}
 	return false;
 }
@@ -120,7 +144,6 @@ function hitLocal(
 	radius: number,
 ): boolean {
 	const reach = radius + stroke.size / 2;
-	const pts = stroke.points;
 	// A coordinate plane is like a picture: the eraser passes over it (R-084).
 	if (stroke.kind === "plane") return false;
 	if (isPolygonKind(stroke.kind)) {
@@ -135,7 +158,7 @@ function hitLocal(
 		case "image":
 			return false; // photos are removed by selecting them, never by erasing over them
 		case "rect": {
-			const [a, b] = pts;
+			const [a, b] = stroke.points;
 			const corners = [
 				[a[0], a[1]],
 				[b[0], a[1]],
@@ -153,7 +176,7 @@ function hitLocal(
 			return Math.abs(d - 1) * Math.min(rx, ry) <= reach;
 		}
 		case "circle": {
-			const [c, edge] = pts;
+			const [c, edge] = stroke.points;
 			const r = Math.hypot(edge[0] - c[0], edge[1] - c[1]);
 			return Math.abs(Math.hypot(x - c[0], y - c[1]) - r) <= reach;
 		}
@@ -167,7 +190,7 @@ function hitLocal(
 			);
 		}
 		default:
-			return nearPolyline(pts, x, y, reach);
+			return nearStroke(stroke, x, y, reach);
 	}
 }
 

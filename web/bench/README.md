@@ -52,3 +52,12 @@ więc zaraz po „usuń wszystko” sterta nie spada (można jeszcze cofnąć); 
 odrzucenie tego dużego i zwolnienie skasowanych kresek. Zmienna `BENCH_DEVMEM=4` ustawia `navigator.deviceMemory`
 (budżet historii zależy od niej: 600 tys. punktów przy 4 GB, 1,5 mln przy 8 GB lub więcej).
 Wyniki po zmianie: `bench/results/memory-2026-11-21-undo-cap.md`.
+
+## Punkty w tablicach typowanych (krok 3, R-100)
+
+Od kroku 3 punkty zatwierdzonych kresek odręcznych leżą w `Float32Array`, których pamięć jest **poza stertą
+JS** (zewnętrzna). Dlatego kolumna „1′ app heap, home view” spada o rząd wielkości i **nie jest już miarą
+pamięci kresek**: do porównań służy pamięć prywatna renderera (tabela „Process memory”, druga liczba).
+Kolumna „4 retained beyond the parsed strokes” wychodzi ujemna (surowe punkty zmierzone osobno w pustej
+karcie są zwykłymi tablicami, a w aplikacji ich już nie ma). Wyniki po zmianie:
+`bench/results/memory-2026-11-21-after-3-packed-points.md`.
