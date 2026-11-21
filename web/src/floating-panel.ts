@@ -51,6 +51,33 @@ export function sidePosition(
 	return { left, top };
 }
 
+/**
+ * Where the menu is drawn: by its object plus the move of its title, or, while a slider in it is
+ * being moved, exactly where it was when the hand took hold (`held`). A slider that changes the
+ * object's size (a text's size, a width, a plane's cell) makes the object's box grow, and the menu
+ * must not follow it away from under the hand.
+ */
+export function menuPlace(
+	spot: { left: number; top: number } | null,
+	offset: { x: number; y: number },
+	held: { left: number; top: number } | null,
+): { left: number; top: number } | null {
+	if (held) return held;
+	return spot ? { left: spot.left + offset.x, top: spot.top + offset.y } : null;
+}
+
+/**
+ * The move that keeps the menu where it was held once the hand lets go: it then stands there, and
+ * goes on following its object from that place (the move belongs to one opening of the menu, like
+ * a drag of its title).
+ */
+export function heldOffset(
+	held: { left: number; top: number },
+	spot: { left: number; top: number },
+): { x: number; y: number } {
+	return { x: held.left - spot.left, y: held.top - spot.top };
+}
+
 /** Whether any of the object is on the screen: the menu is shown only while it is. */
 export function isVisible(
 	anchor: Rect,

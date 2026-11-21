@@ -2,7 +2,9 @@ import { describe, expect, test } from "vitest";
 import type { Stroke } from "./board/board";
 import {
 	cardShift,
+	heldOffset,
 	isVisible,
+	menuPlace,
 	panelTitle,
 	pickSide,
 	popoverSpot,
@@ -171,5 +173,28 @@ describe("cardShift", () => {
 	test("moves a card that sticks out on the left or on the right back to the margin", () => {
 		expect(cardShift(-30, 290, 1000)).toBe(38);
 		expect(cardShift(700, 1020, 1000)).toBe(-28);
+	});
+});
+
+describe("menuPlace and heldOffset (a slider in the menu being moved)", () => {
+	const spot = { left: 300, top: 200 };
+	test("the menu stands by its object, plus the move of its title", () => {
+		expect(menuPlace(spot, { x: 10, y: -5 }, null)).toEqual({
+			left: 310,
+			top: 195,
+		});
+		expect(menuPlace(null, { x: 10, y: 10 }, null)).toBeNull();
+	});
+	test("while a place is held the menu stays there, whatever the object does", () => {
+		const held = { left: 310, top: 195 };
+		const grown = { left: 520, top: 140 };
+		expect(menuPlace(grown, { x: 0, y: 0 }, held)).toEqual(held);
+	});
+	test("after the hold the menu keeps the place it had: the move is what lies between", () => {
+		const held = { left: 310, top: 195 };
+		const grown = { left: 520, top: 140 };
+		const off = heldOffset(held, grown);
+		expect(off).toEqual({ x: -210, y: 55 });
+		expect(menuPlace(grown, off, null)).toEqual(held);
 	});
 });
