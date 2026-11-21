@@ -1,9 +1,9 @@
 import { describe, expect, test } from "vitest";
 import { Board, type BoardOp, type Point, type Stroke } from "./board";
 import { strokeBounds } from "./bounds";
+import { parseClipboard, serializeSelection } from "./clipboard";
 import { findHit, strokeHit } from "./hit";
 import { packedOf, pointCount } from "./points";
-import { parseClipboard, serializeSelection } from "./clipboard";
 import { translateEl } from "./transform";
 
 function wiggle(id: string, n = 60, x0 = 100, y0 = 50, z = 1): Stroke {

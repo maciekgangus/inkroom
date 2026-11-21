@@ -1,228 +1,225 @@
 {
-  "date": "2026-11-21T14:52:48.293Z",
-  "window": [
-    1600,
-    900
-  ],
-  "chromium": "158.0.8127.18",
-  "sizes": {
-    "5000": {
-      "id": "3fcf6a1147da6f00292c55e02b315dbb",
-      "n": 5000,
-      "parsedOnly": {
-        "count": 5000,
-        "textBytes": 22684288,
-        "heapString": 74388,
-        "anonString": 46870528,
-        "heapParsed": 49368296,
-        "anonParsed": 54382592
-      },
-      "load": {
-        "snapshotBytes": 22684288,
-        "loadMs": 1156,
-        "heapPeakTotal": 122490880
-      },
-      "home": {
-        "heap": 6678916,
-        "heapTotal": 7217152,
-        "rendererRss": 278355968,
-        "rendererAnon": 74516480,
-        "gpuRss": 132386816,
-        "gpuAnon": 16541696
-      },
-      "homePanFrames": {
-        "n": 120,
-        "p50": 16.7,
-        "p95": 16.7,
-        "max": 16.8,
-        "over33ms": 0
-      },
-      "homeAfterPan": {
-        "heap": 7137104,
-        "heapTotal": 7741440,
-        "rendererRss": 309366784,
-        "rendererAnon": 75366400,
-        "gpuRss": 172896256,
-        "gpuAnon": 18098176
-      },
-      "zoomOut": {
-        "heap": 7409348,
-        "heapTotal": 8003584,
-        "rendererRss": 313946112,
-        "rendererAnon": 81618944,
-        "gpuRss": 138977280,
-        "gpuAnon": 16539648
-      },
-      "zoomOutPanFrames": {
-        "n": 120,
-        "p50": 16.7,
-        "p95": 33.3,
-        "max": 100,
-        "over33ms": 8
-      },
-      "eraseHitMs": {
-        "n": 624,
-        "p50": 12.5,
-        "p95": 13.7,
-        "max": 18.1,
-        "over33ms": 0
-      },
-      "afterSweeps": {
-        "heap": 8129452,
-        "heapTotal": 8790016,
-        "rendererRss": 323600384,
-        "rendererAnon": 91133952,
-        "gpuRss": 154144768,
-        "gpuAnon": 18075648
-      },
-      "beforeEraseAll": {
-        "heap": 7330084,
-        "heapTotal": 7741440,
-        "rendererRss": 284753920,
-        "rendererAnon": 80822272,
-        "gpuRss": 132960256,
-        "gpuAnon": 16549888
-      },
-      "remainingBeforeEraseAll": 4877,
-      "eraseAllMs": 80,
-      "afterEraseAll": {
-        "heap": 7889068,
-        "heapTotal": 8265728,
-        "rendererRss": 321933312,
-        "rendererAnon": 87775232,
-        "gpuRss": 135548928,
-        "gpuAnon": 16451584
-      },
-      "remainingAfterEraseAll": 0,
-      "afterUndo": {
-        "heap": 8055696,
-        "heapTotal": 8527872,
-        "rendererRss": 325853184,
-        "rendererAnon": 92416000,
-        "gpuRss": 134676480,
-        "gpuAnon": 16889856
-      },
-      "afterNextStep": {
-        "heap": 7896268,
-        "heapTotal": 8527872,
-        "rendererRss": 326041600,
-        "rendererAnon": 91813888,
-        "gpuRss": 134389760,
-        "gpuAnon": 15882240
-      }
-    },
-    "20000": {
-      "id": "988dc5f4b95e625bca876a87218bff42",
-      "n": 20000,
-      "parsedOnly": {
-        "count": 20000,
-        "textBytes": 90562296,
-        "heapString": 74388,
-        "anonString": 183283712,
-        "heapParsed": 196902320,
-        "anonParsed": 209956864
-      },
-      "load": {
-        "snapshotBytes": 90562296,
-        "loadMs": 4602,
-        "heapPeakTotal": 265801728
-      },
-      "home": {
-        "heap": 17221240,
-        "heapTotal": 17649664,
-        "rendererRss": 331550720,
-        "rendererAnon": 129998848,
-        "gpuRss": 130961408,
-        "gpuAnon": 16547840
-      },
-      "homePanFrames": {
-        "n": 120,
-        "p50": 16.7,
-        "p95": 16.8,
-        "max": 33.4,
-        "over33ms": 5
-      },
-      "homeAfterPan": {
-        "heap": 17696328,
-        "heapTotal": 18173952,
-        "rendererRss": 365154304,
-        "rendererAnon": 131803136,
-        "gpuRss": 172773376,
-        "gpuAnon": 18087936
-      },
-      "zoomOut": {
-        "heap": 20025036,
-        "heapTotal": 20602880,
-        "rendererRss": 359661568,
-        "rendererAnon": 157241344,
-        "gpuRss": 132161536,
-        "gpuAnon": 16570368
-      },
-      "zoomOutPanFrames": {
-        "n": 120,
-        "p50": 16.7,
-        "p95": 166.6,
-        "max": 199.9,
-        "over33ms": 12
-      },
-      "eraseHitMs": {
-        "n": 624,
-        "p50": 51.4,
-        "p95": 53.3,
-        "max": 57.2,
-        "over33ms": 498
-      },
-      "afterSweeps": {
-        "heap": 20756584,
-        "heapTotal": 21389312,
-        "rendererRss": 433520640,
-        "rendererAnon": 171622400,
-        "gpuRss": 172716032,
-        "gpuAnon": 18106368
-      },
-      "beforeEraseAll": {
-        "heap": 19917752,
-        "heapTotal": 20602880,
-        "rendererRss": 358993920,
-        "rendererAnon": 156672000,
-        "gpuRss": 119971840,
-        "gpuAnon": 16537600
-      },
-      "remainingBeforeEraseAll": 19865,
-      "eraseAllMs": 159,
-      "afterEraseAll": {
-        "heap": 20385492,
-        "heapTotal": 21004288,
-        "rendererRss": 405004288,
-        "rendererAnon": 171012096,
-        "gpuRss": 150343680,
-        "gpuAnon": 16603136
-      },
-      "remainingAfterEraseAll": 0,
-      "afterUndo": {
-        "heap": 22013352,
-        "heapTotal": 25923584,
-        "rendererRss": 434565120,
-        "rendererAnon": 201031680,
-        "gpuRss": 149176320,
-        "gpuAnon": 16271360
-      },
-      "afterNextStep": {
-        "heap": 9600488,
-        "heapTotal": 10256384,
-        "rendererRss": 353116160,
-        "rendererAnon": 118661120,
-        "gpuRss": 151871488,
-        "gpuAnon": 18180096
-      }
-    }
-  },
-  "empty": {
-    "heap": 2823704,
-    "heapTotal": 3284992,
-    "rendererRss": 248811520,
-    "rendererAnon": 51736576,
-    "gpuRss": 133038080,
-    "gpuAnon": 16564224
-  }
+	"date": "2026-11-21T14:52:48.293Z",
+	"window": [1600, 900],
+	"chromium": "158.0.8127.18",
+	"sizes": {
+		"5000": {
+			"id": "3fcf6a1147da6f00292c55e02b315dbb",
+			"n": 5000,
+			"parsedOnly": {
+				"count": 5000,
+				"textBytes": 22684288,
+				"heapString": 74388,
+				"anonString": 46870528,
+				"heapParsed": 49368296,
+				"anonParsed": 54382592
+			},
+			"load": {
+				"snapshotBytes": 22684288,
+				"loadMs": 1156,
+				"heapPeakTotal": 122490880
+			},
+			"home": {
+				"heap": 6678916,
+				"heapTotal": 7217152,
+				"rendererRss": 278355968,
+				"rendererAnon": 74516480,
+				"gpuRss": 132386816,
+				"gpuAnon": 16541696
+			},
+			"homePanFrames": {
+				"n": 120,
+				"p50": 16.7,
+				"p95": 16.7,
+				"max": 16.8,
+				"over33ms": 0
+			},
+			"homeAfterPan": {
+				"heap": 7137104,
+				"heapTotal": 7741440,
+				"rendererRss": 309366784,
+				"rendererAnon": 75366400,
+				"gpuRss": 172896256,
+				"gpuAnon": 18098176
+			},
+			"zoomOut": {
+				"heap": 7409348,
+				"heapTotal": 8003584,
+				"rendererRss": 313946112,
+				"rendererAnon": 81618944,
+				"gpuRss": 138977280,
+				"gpuAnon": 16539648
+			},
+			"zoomOutPanFrames": {
+				"n": 120,
+				"p50": 16.7,
+				"p95": 33.3,
+				"max": 100,
+				"over33ms": 8
+			},
+			"eraseHitMs": {
+				"n": 624,
+				"p50": 12.5,
+				"p95": 13.7,
+				"max": 18.1,
+				"over33ms": 0
+			},
+			"afterSweeps": {
+				"heap": 8129452,
+				"heapTotal": 8790016,
+				"rendererRss": 323600384,
+				"rendererAnon": 91133952,
+				"gpuRss": 154144768,
+				"gpuAnon": 18075648
+			},
+			"beforeEraseAll": {
+				"heap": 7330084,
+				"heapTotal": 7741440,
+				"rendererRss": 284753920,
+				"rendererAnon": 80822272,
+				"gpuRss": 132960256,
+				"gpuAnon": 16549888
+			},
+			"remainingBeforeEraseAll": 4877,
+			"eraseAllMs": 80,
+			"afterEraseAll": {
+				"heap": 7889068,
+				"heapTotal": 8265728,
+				"rendererRss": 321933312,
+				"rendererAnon": 87775232,
+				"gpuRss": 135548928,
+				"gpuAnon": 16451584
+			},
+			"remainingAfterEraseAll": 0,
+			"afterUndo": {
+				"heap": 8055696,
+				"heapTotal": 8527872,
+				"rendererRss": 325853184,
+				"rendererAnon": 92416000,
+				"gpuRss": 134676480,
+				"gpuAnon": 16889856
+			},
+			"afterNextStep": {
+				"heap": 7896268,
+				"heapTotal": 8527872,
+				"rendererRss": 326041600,
+				"rendererAnon": 91813888,
+				"gpuRss": 134389760,
+				"gpuAnon": 15882240
+			}
+		},
+		"20000": {
+			"id": "988dc5f4b95e625bca876a87218bff42",
+			"n": 20000,
+			"parsedOnly": {
+				"count": 20000,
+				"textBytes": 90562296,
+				"heapString": 74388,
+				"anonString": 183283712,
+				"heapParsed": 196902320,
+				"anonParsed": 209956864
+			},
+			"load": {
+				"snapshotBytes": 90562296,
+				"loadMs": 4602,
+				"heapPeakTotal": 265801728
+			},
+			"home": {
+				"heap": 17221240,
+				"heapTotal": 17649664,
+				"rendererRss": 331550720,
+				"rendererAnon": 129998848,
+				"gpuRss": 130961408,
+				"gpuAnon": 16547840
+			},
+			"homePanFrames": {
+				"n": 120,
+				"p50": 16.7,
+				"p95": 16.8,
+				"max": 33.4,
+				"over33ms": 5
+			},
+			"homeAfterPan": {
+				"heap": 17696328,
+				"heapTotal": 18173952,
+				"rendererRss": 365154304,
+				"rendererAnon": 131803136,
+				"gpuRss": 172773376,
+				"gpuAnon": 18087936
+			},
+			"zoomOut": {
+				"heap": 20025036,
+				"heapTotal": 20602880,
+				"rendererRss": 359661568,
+				"rendererAnon": 157241344,
+				"gpuRss": 132161536,
+				"gpuAnon": 16570368
+			},
+			"zoomOutPanFrames": {
+				"n": 120,
+				"p50": 16.7,
+				"p95": 166.6,
+				"max": 199.9,
+				"over33ms": 12
+			},
+			"eraseHitMs": {
+				"n": 624,
+				"p50": 51.4,
+				"p95": 53.3,
+				"max": 57.2,
+				"over33ms": 498
+			},
+			"afterSweeps": {
+				"heap": 20756584,
+				"heapTotal": 21389312,
+				"rendererRss": 433520640,
+				"rendererAnon": 171622400,
+				"gpuRss": 172716032,
+				"gpuAnon": 18106368
+			},
+			"beforeEraseAll": {
+				"heap": 19917752,
+				"heapTotal": 20602880,
+				"rendererRss": 358993920,
+				"rendererAnon": 156672000,
+				"gpuRss": 119971840,
+				"gpuAnon": 16537600
+			},
+			"remainingBeforeEraseAll": 19865,
+			"eraseAllMs": 159,
+			"afterEraseAll": {
+				"heap": 20385492,
+				"heapTotal": 21004288,
+				"rendererRss": 405004288,
+				"rendererAnon": 171012096,
+				"gpuRss": 150343680,
+				"gpuAnon": 16603136
+			},
+			"remainingAfterEraseAll": 0,
+			"afterUndo": {
+				"heap": 22013352,
+				"heapTotal": 25923584,
+				"rendererRss": 434565120,
+				"rendererAnon": 201031680,
+				"gpuRss": 149176320,
+				"gpuAnon": 16271360
+			},
+			"afterNextStep": {
+				"heap": 9600488,
+				"heapTotal": 10256384,
+				"rendererRss": 353116160,
+				"rendererAnon": 118661120,
+				"gpuRss": 151871488,
+				"gpuAnon": 18180096
+			}
+		}
+	},
+	"empty": {
+		"heap": 2823704,
+		"heapTotal": 3284992,
+		"rendererRss": 248811520,
+		"rendererAnon": 51736576,
+		"gpuRss": 133038080,
+		"gpuAnon": 16564224
+	}
 }
