@@ -9,7 +9,7 @@ import { imageRect } from "./image-geometry";
 import type { LaserLine } from "./laser";
 import { lodTier } from "./lod";
 import { outlinePolygon } from "./outline-lod";
-import { currentLayerCap, layerMargin } from "./overdraw";
+import { currentLayerCap, currentLayerMaxSide, layerMargin } from "./overdraw";
 import { PathBudget } from "./path-budget";
 import { type Frame, HANDLE_PX, ROT_OFFSET_PX } from "./selection-frame";
 import { LABEL_PX, PLANE_CELL, type PlaneLook, partsOf } from "./shape-parts";
@@ -611,6 +611,7 @@ export class CanvasRenderer implements Renderer {
 			innerHeight,
 			dpr,
 			currentLayerCap(),
+			currentLayerMaxSide(),
 		);
 		this.margin = { mx, my };
 		this.committedCanvas.width = (innerWidth + 2 * mx) * dpr;
