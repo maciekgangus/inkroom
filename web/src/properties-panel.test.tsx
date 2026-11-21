@@ -337,6 +337,73 @@ describe("PropertiesPanel", () => {
 				new MouseEvent(type, { bubbles: true, clientX: x, clientY: y }),
 			);
 
+		describe("while a slider in it is being moved", () => {
+			const place = () => {
+				const el = root.querySelector(".properties") as HTMLElement;
+				return { left: el.style.left, top: el.style.top };
+			};
+			const rangeOf = () =>
+				root.querySelector(".properties input[type=range]") as HTMLInputElement;
+			const grown = { minX: 300, minY: 120, maxX: 780, maxY: 520 };
+
+			test("the menu stays where it was, however the object grows, and keeps the place after", async () => {
+				vi.useFakeTimers();
+				try {
+					mountWith({});
+					const before = place();
+					act(() => {
+						rangeOf().dispatchEvent(
+							new PointerEvent("pointerdown", { bubbles: true }),
+						);
+					});
+					// the object grows under the hand: its box moves the menu's natural place
+					mountWith({ anchor: grown });
+					expect(place()).toEqual(before);
+					mountWith({ anchor: { ...grown, maxX: 1100 } });
+					expect(place()).toEqual(before);
+					// the hand lets go: after a moment the menu is still there, now as a move from its object
+					act(() => {
+						window.dispatchEvent(new PointerEvent("pointerup"));
+						vi.advanceTimersByTime(100);
+					});
+					expect(place()).toEqual(before);
+				} finally {
+					vi.useRealTimers();
+				}
+			});
+
+			test("the keys on a slider hold the menu too, until a pause", () => {
+				vi.useFakeTimers();
+				try {
+					mountWith({});
+					const before = place();
+					act(() => {
+						rangeOf().dispatchEvent(
+							new KeyboardEvent("keydown", {
+								key: "ArrowRight",
+								bubbles: true,
+							}),
+						);
+					});
+					mountWith({ anchor: grown });
+					expect(place()).toEqual(before);
+					act(() => {
+						vi.advanceTimersByTime(100);
+					});
+					expect(place()).toEqual(before);
+				} finally {
+					vi.useRealTimers();
+				}
+			});
+
+			test("without a slider in hand the menu follows its object", () => {
+				mountWith({});
+				const before = place();
+				mountWith({ anchor: grown });
+				expect(place()).not.toEqual(before);
+			});
+		});
+
 		test("closed, it leaves a small tile by the object that opens the menu again", () => {
 			const onExpand = vi.fn();
 			mountWith({ collapsed: true, onExpand });

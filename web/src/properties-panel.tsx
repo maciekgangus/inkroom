@@ -10,7 +10,9 @@ import {
 import type { Rect } from "./board/viewport";
 import { ColorRow } from "./color-row";
 import {
+	heldOffset,
 	isVisible,
+	menuPlace,
 	panelTitle,
 	pickSide,
 	type Side,
@@ -20,7 +22,7 @@ import { FunctionEditor } from "./function-editor";
 import { Icon } from "./icon";
 import { Slider } from "./slider";
 import "./properties-panel.css";
-import { useLayoutEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { LINE_STYLES, SIZES, WIDTH_SHOWN } from "./stroke-controls";
 
 /** The menu's width (up to 320px) with room to spare, for choosing its side. */
@@ -83,6 +85,20 @@ export function PropertiesPanel({
 		from: { x: number; y: number };
 	} | null>(null);
 	const [size, setSize] = useState({ w: 0, h: 0 });
+	/**
+	 * Where the menu is held while a slider in it is being moved (pointer down on it until up, or the
+	 * keys on it until a pause): a slider that makes the object grow must not take the menu from under
+	 * the hand. `latest` is what the last render worked out, for the hold to start and end from.
+	 */
+	const held = useRef<{ left: number; top: number; key: string } | null>(null);
+	const latest = useRef<{
+		at: { left: number; top: number } | null;
+		spot: { left: number; top: number } | null;
+		key: string;
+	}>({ at: null, spot: null, key: "" });
+	const pause = useRef<number | undefined>(undefined);
+	const [, redraw] = useState(0);
+	useEffect(() => () => window.clearTimeout(pause.current), []);
 	// Shut and opened again, or on another object, the menu is back by its object (R-060): the move
 	// belongs to the object and to one opening of the menu (the key changes with each).
 	const turn = useRef({ collapsed, n: 0 });
@@ -143,9 +159,32 @@ export function PropertiesPanel({
 	const spot = anchor
 		? sidePosition(anchor, size, view, side, railEnd())
 		: null;
-	const at = spot
-		? { left: spot.left + offset.x, top: spot.top + offset.y }
-		: null;
+	if (held.current && held.current.key !== objectKey) held.current = null;
+	const at = menuPlace(spot, offset, held.current);
+	latest.current = {
+		at: spot ? { left: spot.left + offset.x, top: spot.top + offset.y } : null,
+		spot,
+		key: objectKey,
+	};
+	/** Takes hold of the menu's place: from now on the object's growing does not move it. */
+	const hold = () => {
+		if (held.current || !latest.current.at) return;
+		held.current = { ...latest.current.at, key: latest.current.key };
+	};
+	/** Lets go: the menu stays where it is held and follows its object from there. */
+	const letGo = () => {
+		window.clearTimeout(pause.current);
+		// A moment after the hand lets go: the change that follows the release has been drawn by then.
+		pause.current = window.setTimeout(() => {
+			const h = held.current;
+			held.current = null;
+			const { spot: now, key } = latest.current;
+			if (h && now && h.key === key) setMoved({ ...heldOffset(h, now), key });
+			else redraw((n) => n + 1);
+		}, 60);
+	};
+	const isSlider = (t: EventTarget | null) =>
+		t instanceof HTMLInputElement && t.type === "range";
 	const can = capabilities(elements);
 	const now = styleOf(elements);
 	const plane = planeOf(elements);
@@ -204,6 +243,22 @@ export function PropertiesPanel({
 						}
 					: undefined
 			}
+			onPointerDownCapture={(e) => {
+				if (!isSlider(e.target)) return;
+				hold();
+				const end = () => {
+					window.removeEventListener("pointerup", end);
+					window.removeEventListener("pointercancel", end);
+					letGo();
+				};
+				window.addEventListener("pointerup", end);
+				window.addEventListener("pointercancel", end);
+			}}
+			onKeyDownCapture={(e) => {
+				if (!isSlider(e.target)) return;
+				hold();
+				letGo();
+			}}
 			// A click on a button must not take the focus from a text field being edited.
 			onMouseDown={(e) => {
 				if ((e.target as HTMLElement).tagName !== "INPUT") e.preventDefault();

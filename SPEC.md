@@ -303,3 +303,4 @@ Do zrobienia przy wdrożeniu: ADR z konfiguracją bucketu (klucze w `.env`, CORS
 
 - 2026-11-21: R-100, krok 3 po pomiarach (surowe punkty to ok. 10 KB na element w stercie): punkty zatwierdzonych kresek odręcznych w `Float32Array` w pamięci klienta (względem pierwszego punktu), format w sieci i w bazie bez zmian; test pikselowy pilnuje, że rysunek się nie zmienia.
 - 2026-11-21: na prośbę użytkownika dopisane propozycje R-101 (poprawa pisania tekstu, zakres do ustalenia), R-102 (formatowanie w Markdownie) i R-103 (LaTeX), `proposed`; kod dopiero po akceptacji i rozstrzygnięciu otwartych pytań (ADR o bibliotece składu wzorów dla R-103).
+- 2026-11-21: R-060 (poprawka): podczas przesuwania suwaka w menu obiektu (rozmiar tekstu, grubość, przezroczystość, oczko układu) menu stoi w miejscu, mimo że obiekt rośnie, a po puszczeniu zostaje tam, gdzie jest, i dalej podąża za obiektem; dotyczy myszy, dotyku i klawiszy (uwaga użytkownika: menu uciekało spod ręki).
