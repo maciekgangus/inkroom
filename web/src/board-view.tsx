@@ -370,19 +370,27 @@ export function BoardView({
 				followRaf = 0;
 				return;
 			}
+			const frozen = penDown || textBusy.current;
 			const next = followStep(
 				follow,
 				viewport,
 				innerWidth,
 				innerHeight,
 				dt,
-				penDown || textBusy.current,
+				frozen,
 			);
 			if (next) {
 				viewport.x = next.x;
 				viewport.y = next.y;
 				viewport.scale = next.scale;
 				viewChanged.current(true);
+			}
+			// At rest the loop stops (a phone must not wake up 60 times a second for nothing); the
+			// other person moving, or the window changing size, starts it again. While the pen is
+			// down it keeps asking, to catch up the moment the hand is up.
+			if (!next && !frozen) {
+				followRaf = 0;
+				return;
 			}
 			followRaf = requestAnimationFrame(followFrame);
 		};
@@ -897,6 +905,7 @@ export function BoardView({
 		const gestureEvents = ["gesturestart", "gesturechange", "contextmenu"];
 
 		addEventListener("resize", resize);
+		addEventListener("resize", startFollowLoop);
 		addEventListener("keydown", key);
 		addEventListener("paste", paste);
 		addEventListener("copy", copy);
@@ -926,6 +935,7 @@ export function BoardView({
 			removeEventListener("online", alive);
 			removeEventListener("pageshow", alive);
 			removeEventListener("resize", resize);
+			removeEventListener("resize", startFollowLoop);
 			cancelled = true;
 			viewSaver.flush();
 			removeEventListener("pagehide", leaving);
