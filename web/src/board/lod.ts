@@ -1,5 +1,3 @@
-import type { Point } from "./board";
-
 /**
  * Level of detail of a freehand stroke (R-100). A board seen from far away needs no more of a
  * stroke than the screen can show: below half scale the stroke's samples are thinned out, so its
@@ -30,11 +28,11 @@ export function lodTolerance(tier: number): number {
  * pen's width, as the straight run between its neighbours would give it, is off by more than
  * `tolerance` (half the stroke's `size` per unit of pressure).
  */
-export function decimate(
-	points: Point[],
+export function decimate<T extends number[]>(
+	points: T[],
 	tolerance: number,
 	size: number,
-): Point[] {
+): T[] {
 	const n = points.length;
 	if (tolerance <= 0 || n <= 2) return points;
 	const keep = new Uint8Array(n);
@@ -43,10 +41,10 @@ export function decimate(
 	while (stack.length) {
 		const [a, b] = stack.pop() as [number, number];
 		if (b - a < 2) continue;
-		const [ax, ay, ap] = points[a];
+		const [ax, ay, ap = 0] = points[a];
 		const dx = points[b][0] - ax;
 		const dy = points[b][1] - ay;
-		const dp = points[b][2] - ap;
+		const dp = (points[b][2] ?? 0) - ap;
 		const len2 = dx * dx + dy * dy;
 		let worst = -1;
 		let at = -1;
@@ -56,7 +54,7 @@ export function decimate(
 				? Math.max(0, Math.min(1, ((p[0] - ax) * dx + (p[1] - ay) * dy) / len2))
 				: 0;
 			const off = Math.hypot(p[0] - (ax + t * dx), p[1] - (ay + t * dy));
-			const width = Math.abs(p[2] - (ap + t * dp)) * size * 0.5;
+			const width = Math.abs((p[2] ?? 0) - (ap + t * dp)) * size * 0.5;
 			const e = Math.max(off, width);
 			if (e > worst) {
 				worst = e;
@@ -68,7 +66,7 @@ export function decimate(
 			stack.push([a, at], [at, b]);
 		}
 	}
-	const out: Point[] = [];
+	const out: T[] = [];
 	for (let i = 0; i < n; i++) if (keep[i]) out.push(points[i]);
 	return out;
 }

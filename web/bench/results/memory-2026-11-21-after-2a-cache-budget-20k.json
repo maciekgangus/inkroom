@@ -1,112 +1,112 @@
 {
-	"date": "2026-11-21T10:12:55.547Z",
+	"date": "2026-11-21T10:34:59.730Z",
 	"window": [1600, 900],
 	"chromium": "158.0.8127.18",
 	"sizes": {
 		"20000": {
-			"id": "ee9adac5efacc610c05b10954e44e550",
+			"id": "49ebeffbcf89dadb4edbfe1a51029011",
 			"n": 20000,
 			"parsedOnly": {
 				"count": 20000,
 				"textBytes": 90562296,
 				"heapString": 74388,
-				"anonString": 183267328,
+				"anonString": 183279616,
 				"heapParsed": 196902320,
-				"anonParsed": 209924096
+				"anonParsed": 210239488
 			},
 			"load": {
 				"snapshotBytes": 90562296,
-				"loadMs": 4687,
+				"loadMs": 4821,
 				"heapPeakTotal": 271667200
 			},
 			"home": {
-				"heap": 204424120,
+				"heap": 204423184,
 				"heapTotal": 205144064,
-				"rendererRss": 474411008,
-				"rendererAnon": 272281600,
-				"gpuRss": 130580480,
-				"gpuAnon": 16541696
+				"rendererRss": 474251264,
+				"rendererAnon": 272238592,
+				"gpuRss": 131735552,
+				"gpuAnon": 16537600
 			},
 			"homePanFrames": {
 				"n": 120,
 				"p50": 16.7,
 				"p95": 16.8,
-				"max": 50.1,
-				"over33ms": 4
+				"max": 33.4,
+				"over33ms": 5
 			},
 			"homeAfterPan": {
-				"heap": 204903560,
+				"heap": 204891452,
 				"heapTotal": 205406208,
-				"rendererRss": 508100608,
-				"rendererAnon": 274173952,
-				"gpuRss": 172326912,
+				"rendererRss": 507871232,
+				"rendererAnon": 273995776,
+				"gpuRss": 173723648,
 				"gpuAnon": 18081792
 			},
 			"zoomOut": {
-				"heap": 207203696,
+				"heap": 207205860,
 				"heapTotal": 207835136,
-				"rendererRss": 512839680,
-				"rendererAnon": 311646208,
-				"gpuRss": 132194304,
-				"gpuAnon": 16582656
+				"rendererRss": 501510144,
+				"rendererAnon": 299177984,
+				"gpuRss": 130568192,
+				"gpuAnon": 16545792
 			},
 			"zoomOutPanFrames": {
 				"n": 120,
 				"p50": 16.7,
-				"p95": 183.3,
-				"max": 216.7,
+				"p95": 183.2,
+				"max": 233.4,
 				"over33ms": 12
 			},
 			"eraseHitMs": {
 				"n": 624,
-				"p50": 56.5,
-				"p95": 60.7,
-				"max": 70.2,
+				"p50": 56.8,
+				"p95": 59.4,
+				"max": 94.9,
 				"over33ms": 498
 			},
 			"afterSweeps": {
-				"heap": 207880452,
+				"heap": 207881572,
 				"heapTotal": 208359424,
-				"rendererRss": 578695168,
-				"rendererAnon": 346875904,
-				"gpuRss": 154316800,
-				"gpuAnon": 18114560
+				"rendererRss": 595259392,
+				"rendererAnon": 333318144,
+				"gpuRss": 170610688,
+				"gpuAnon": 18094080
 			},
 			"beforeEraseAll": {
-				"heap": 205805872,
+				"heap": 205810240,
 				"heapTotal": 206524416,
-				"rendererRss": 510939136,
-				"rendererAnon": 309688320,
-				"gpuRss": 130887680,
+				"rendererRss": 500043776,
+				"rendererAnon": 297842688,
+				"gpuRss": 130752512,
 				"gpuAnon": 16551936
 			},
 			"remainingBeforeEraseAll": 19865,
-			"eraseAllMs": 1476,
+			"eraseAllMs": 1466,
 			"afterEraseAll": {
-				"heap": 206886876,
+				"heap": 206887876,
 				"heapTotal": 207388672,
-				"rendererRss": 558096384,
-				"rendererAnon": 325300224,
-				"gpuRss": 149590016,
+				"rendererRss": 546344960,
+				"rendererAnon": 312541184,
+				"gpuRss": 149331968,
 				"gpuAnon": 16605184
 			},
 			"remainingAfterEraseAll": 0,
 			"afterUndo": {
-				"heap": 208350480,
-				"heapTotal": 211845120,
-				"rendererRss": 568131584,
-				"rendererAnon": 335859712,
-				"gpuRss": 148414464,
-				"gpuAnon": 16281600
+				"heap": 206986872,
+				"heapTotal": 207650816,
+				"rendererRss": 549859328,
+				"rendererAnon": 316579840,
+				"gpuRss": 148217856,
+				"gpuAnon": 16277504
 			}
 		}
 	},
 	"empty": {
-		"heap": 2816964,
-		"heapTotal": 3284992,
-		"rendererRss": 249298944,
+		"heap": 2810116,
+		"heapTotal": 3022848,
+		"rendererRss": 249655296,
 		"rendererAnon": 51738624,
-		"gpuRss": 115003392,
-		"gpuAnon": 16539648
+		"gpuRss": 133341184,
+		"gpuAnon": 16535552
 	}
 }

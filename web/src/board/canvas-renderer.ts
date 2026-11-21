@@ -1,13 +1,14 @@
 import { getStroke } from "perfect-freehand";
 import { type Background, drawBackground } from "./background";
-import type { Point, Stroke } from "./board";
+import type { Stroke } from "./board";
 import { intersects, strokeBounds } from "./bounds";
 import type { Renderer } from "./controller";
 import { planeFrame, sampleFn } from "./functions";
 import type { ImageCache } from "./image-cache";
 import { imageRect } from "./image-geometry";
 import type { LaserLine } from "./laser";
-import { decimate, lodTier, lodTolerance } from "./lod";
+import { lodTier } from "./lod";
+import { outlinePolygon } from "./outline-lod";
 import { currentLayerCap, layerMargin } from "./overdraw";
 import { PathBudget } from "./path-budget";
 import { type Frame, HANDLE_PX, ROT_OFFSET_PX } from "./selection-frame";
@@ -53,7 +54,8 @@ const isFilled = (s: Stroke) =>
 	isFreehand(s) && s.dash !== "dashed" && s.dash !== "dotted";
 
 /** The path a freehand stroke runs along, smoothed through the midpoints of its samples. */
-function centerline(s: Stroke, pts: Point[] = s.points): Path2D | null {
+function centerline(s: Stroke): Path2D | null {
+	const pts = s.points;
 	if (pts.length === 0) return null;
 	const path = new Path2D();
 	path.moveTo(pts[0][0], pts[0][1]);
@@ -71,12 +73,8 @@ function centerline(s: Stroke, pts: Point[] = s.points): Path2D | null {
 	return path;
 }
 
-function outlinePath(
-	stroke: Stroke,
-	pts: Point[] = stroke.points,
-): Path2D | null {
-	// The options come from the whole stroke (its length decides the tapers), the samples may be thinned.
-	const outline = getStroke(pts, strokeOptions(stroke));
+function outlinePath(stroke: Stroke): Path2D | null {
+	const outline = getStroke(stroke.points, strokeOptions(stroke));
 	if (outline.length < 2) return null;
 	const path = new Path2D();
 	path.moveTo(outline[0][0], outline[0][1]);
@@ -84,18 +82,6 @@ function outlinePath(
 		path.lineTo(outline[i][0], outline[i][1]);
 	path.closePath();
 	return path;
-}
-
-/** The outline of a filled stroke as plain numbers, x and y one after the other (R-100). */
-function outlinePolygon(stroke: Stroke, pts: Point[]): Float32Array {
-	const outline = getStroke(pts, strokeOptions(stroke));
-	if (outline.length < 2) return new Float32Array(0);
-	const out = new Float32Array(outline.length * 2);
-	for (let i = 0; i < outline.length; i++) {
-		out[2 * i] = outline[i][0];
-		out[2 * i + 1] = outline[i][1];
-	}
-	return out;
 }
 
 /** Adds a polyline to a path; it is closed when its last point is its first. */
@@ -186,8 +172,8 @@ function extraPaths(s: Stroke): Extras | null {
 }
 
 /** The path of a line, rectangle or circle; null for anything else. */
-function shapePath(s: Stroke, pts?: Point[]): Path2D | null {
-	if (isFreehand(s)) return centerline(s, pts);
+function shapePath(s: Stroke): Path2D | null {
+	if (isFreehand(s)) return centerline(s);
 	const [a, b] = s.points;
 	if (!b) return null;
 	const path = new Path2D();
@@ -223,8 +209,8 @@ function shapePath(s: Stroke, pts?: Point[]): Path2D | null {
 	return path;
 }
 
-function elementPath(s: Stroke, pts?: Point[]): Path2D | null {
-	return isFilled(s) ? outlinePath(s, pts) : shapePath(s, pts);
+function elementPath(s: Stroke): Path2D | null {
+	return isFilled(s) ? outlinePath(s) : shapePath(s);
 }
 
 /** What a cached path of a freehand stroke costs in native memory per sample (measured, R-100). */
@@ -485,7 +471,7 @@ interface Cached {
 	 * whatever its size, R-100) but its thinned outline as plain numbers, x and y one after the other.
 	 */
 	poly?: Float32Array;
-	/** The level of detail `path` or `poly` was built for (0 every sample, see `lodTier`). */
+	/** The level of detail `poly` was thinned for (see `lodTier`); a `path` is always complete. */
 	tier?: number;
 	/** The estimated bytes of `path` or `poly`, counted by the budget (freehand strokes only). */
 	cost: number;
@@ -952,9 +938,9 @@ export class CanvasRenderer implements Renderer {
 	/**
 	 * Makes sure the element has what its view needs to be drawn, and says which it is. A freehand
 	 * stroke seen from far away gets a thinned outline (R-100): from a quarter of the scale and
-	 * farther a filled one as a polygon of plain numbers, nearer as a path object. A finer one
-	 * already cached still serves, a coarser one is built again. What is cached counts in the
-	 * budget, which drops the longest unused.
+	 * farther a filled one as a polygon of plain numbers, nearer as a path object. A path serves
+	 * every view, a polygon thinned for a farther view is built again when the view comes closer.
+	 * What is cached counts in the budget, which drops the longest unused.
 	 */
 	private ensurePath(s: Stroke, c: Cached): "path" | "poly" {
 		if (!isFreehand(s)) {
@@ -962,23 +948,22 @@ export class CanvasRenderer implements Renderer {
 			return "path";
 		}
 		const tier = lodTier(this.viewport.scale);
-		const built = c.path !== undefined || c.poly !== undefined;
-		if (built && (c.path === null || (c.tier ?? 0) <= tier)) {
+		// A path is exact, it serves every view; a polygon only the views as far as it was thinned for.
+		if (c.path !== undefined || (c.poly && (c.tier ?? 0) <= tier)) {
 			this.budget.touch(c, this.frame);
-			return c.poly ? "poly" : "path";
+			return c.path !== undefined ? "path" : "poly";
 		}
 		const was = c.cost;
-		const pts = decimate(s.points, lodTolerance(tier), s.size);
 		let kind: "path" | "poly" = "path";
 		if (isFilled(s) && tier >= POLY_TIER) {
 			kind = "poly";
 			c.path = undefined;
-			c.poly = outlinePolygon(s, pts);
+			c.poly = outlinePolygon(s, tier);
 			c.cost = POLY_OVERHEAD_BYTES + c.poly.byteLength;
 		} else {
 			c.poly = undefined;
-			c.path = elementPath(s, pts);
-			c.cost = c.path ? pts.length * PATH_BYTES_PER_SAMPLE : 0;
+			c.path = elementPath(s);
+			c.cost = c.path ? s.points.length * PATH_BYTES_PER_SAMPLE : 0;
 		}
 		c.tier = tier;
 		if (was) this.budget.replace(c, was, this.frame);
