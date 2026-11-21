@@ -7,7 +7,10 @@ import { planeFrame, sampleFn } from "./functions";
 import type { ImageCache } from "./image-cache";
 import { imageRect } from "./image-geometry";
 import type { LaserLine } from "./laser";
+import { lodTier } from "./lod";
+import { outlinePolygon } from "./outline-lod";
 import { currentLayerCap, layerMargin } from "./overdraw";
+import { PathBudget } from "./path-budget";
 import { type Frame, HANDLE_PX, ROT_OFFSET_PX } from "./selection-frame";
 import { LABEL_PX, PLANE_CELL, type PlaneLook, partsOf } from "./shape-parts";
 import { isPolygonKind } from "./shapes";
@@ -208,6 +211,20 @@ function shapePath(s: Stroke): Path2D | null {
 
 function elementPath(s: Stroke): Path2D | null {
 	return isFilled(s) ? outlinePath(s) : shapePath(s);
+}
+
+/** What a cached path of a freehand stroke costs in native memory per sample (measured, R-100). */
+const PATH_BYTES_PER_SAMPLE = 32;
+/** From this tier on (a quarter of the scale and farther) a filled stroke is kept as a polygon. */
+const POLY_TIER = 2;
+/** The fixed cost of a polygon: the typed array and its entry in the cache. */
+const POLY_OVERHEAD_BYTES = 160;
+
+/** The most native memory the cached paths of freehand strokes may hold: less on a tablet. */
+function defaultPathBudget(): number {
+	const touch =
+		typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
+	return (touch ? 24 : 64) * 1024 * 1024;
 }
 
 /** Runs `draw` with the element's rotation and opacity applied (ADR 0008). */
@@ -449,6 +466,17 @@ function drawElement(
 interface Cached {
 	/** Computed on first use, only for strokes that are actually in view. */
 	path?: Path2D | null;
+	/**
+	 * Seen from far away a filled stroke keeps no path object (each costs a few KB of native memory
+	 * whatever its size, R-100) but its thinned outline as plain numbers, x and y one after the other.
+	 */
+	poly?: Float32Array;
+	/** The level of detail `poly` was thinned for (see `lodTier`); a `path` is always complete. */
+	tier?: number;
+	/** The estimated bytes of `path` or `poly`, counted by the budget (freehand strokes only). */
+	cost: number;
+	/** The frame that last painted it. */
+	used: number;
 	bounds: Rect;
 }
 
@@ -518,6 +546,10 @@ export class CanvasRenderer implements Renderer {
 	private remote: Stroke[] = [];
 	private strokes: Stroke[] = [];
 	private cache = new WeakMap<Stroke, Cached>();
+	/** The paths of freehand strokes are kept within a budget of native memory (R-100). */
+	private budget: PathBudget<Cached>;
+	/** The number of the committed layer's latest paint, to tell what it drew from what it did not. */
+	private frame = 0;
 	private selection: Frame | null = null;
 	private marquee: Rect | null = null;
 	private lasso: [number, number][] | null = null;
@@ -554,7 +586,14 @@ export class CanvasRenderer implements Renderer {
 		private viewport: Viewport,
 		/** Source of the pictures for image elements; without it they show as placeholders. */
 		private images: ImageCache | null = null,
+		pathBudget: number = defaultPathBudget(),
 	) {
+		this.budget = new PathBudget<Cached>(pathBudget, (c) => {
+			c.path = undefined;
+			c.poly = undefined;
+			c.tier = undefined;
+			c.cost = 0;
+		});
 		this.committed = committedCanvas.getContext("2d");
 		// Not desynchronized (the low-latency hint): the unfinished stroke is cleared and drawn whole
 		// at every move, and a canvas shown without waiting for the compositor can be shown between
@@ -651,6 +690,7 @@ export class CanvasRenderer implements Renderer {
 	/** The board's font has loaded: text sizes were measured without it, so measure them again. */
 	fontsChanged(): void {
 		this.cache = new WeakMap();
+		this.budget.clear();
 		this.schedule(true, true);
 	}
 
@@ -846,10 +886,12 @@ export class CanvasRenderer implements Renderer {
 			maxX: from.x + w / scale,
 			maxY: from.y + h / scale,
 		};
+		this.frame++;
 		for (const s of this.strokes) {
 			if (this.drag?.ids.has(s.id)) continue; // drawn on the live layer while dragged
 			this.drawStroke(ctx, s, view);
 		}
+		this.budget.sweep(this.frame);
 	}
 
 	/** Draws one element if it is in view, shifted by (dx, dy) when it is being moved. */
@@ -862,7 +904,7 @@ export class CanvasRenderer implements Renderer {
 	): void {
 		let c = this.cache.get(s);
 		if (!c) {
-			c = { bounds: strokeBounds(s) };
+			c = { bounds: strokeBounds(s), cost: 0, used: 0 };
 			this.cache.set(s, c);
 		}
 		const b = c.bounds;
@@ -880,14 +922,71 @@ export class CanvasRenderer implements Renderer {
 			this.drawImage(ctx, s);
 			return;
 		}
-		if (c.path === undefined) c.path = elementPath(s);
+		if (this.ensurePath(s, c) === "poly") {
+			this.drawPoly(ctx, s, c.poly, this.ink(s.color));
+			return;
+		}
 		drawElement(
 			ctx,
 			s,
-			c.path,
+			c.path ?? null,
 			this.ink(s.color),
 			fillOf(s, (c) => this.ink(c)),
 		);
+	}
+
+	/**
+	 * Makes sure the element has what its view needs to be drawn, and says which it is. A freehand
+	 * stroke seen from far away gets a thinned outline (R-100): from a quarter of the scale and
+	 * farther a filled one as a polygon of plain numbers, nearer as a path object. A path serves
+	 * every view, a polygon thinned for a farther view is built again when the view comes closer.
+	 * What is cached counts in the budget, which drops the longest unused.
+	 */
+	private ensurePath(s: Stroke, c: Cached): "path" | "poly" {
+		if (!isFreehand(s)) {
+			if (c.path === undefined) c.path = elementPath(s);
+			return "path";
+		}
+		const tier = lodTier(this.viewport.scale);
+		// A path is exact, it serves every view; a polygon only the views as far as it was thinned for.
+		if (c.path !== undefined || (c.poly && (c.tier ?? 0) <= tier)) {
+			this.budget.touch(c, this.frame);
+			return c.path !== undefined ? "path" : "poly";
+		}
+		const was = c.cost;
+		let kind: "path" | "poly" = "path";
+		if (isFilled(s) && tier >= POLY_TIER) {
+			kind = "poly";
+			c.path = undefined;
+			c.poly = outlinePolygon(s, tier);
+			c.cost = POLY_OVERHEAD_BYTES + c.poly.byteLength;
+		} else {
+			c.poly = undefined;
+			c.path = elementPath(s);
+			c.cost = c.path ? s.points.length * PATH_BYTES_PER_SAMPLE : 0;
+		}
+		c.tier = tier;
+		if (was) this.budget.replace(c, was, this.frame);
+		else this.budget.add(c, this.frame);
+		return kind;
+	}
+
+	/** Fills a thinned outline kept as numbers: no path object outlives the frame. */
+	private drawPoly(
+		ctx: CanvasRenderingContext2D,
+		s: Stroke,
+		p: Float32Array | undefined,
+		color: string,
+	): void {
+		if (!p || p.length < 6) return;
+		withLook(ctx, s, () => {
+			ctx.fillStyle = color;
+			ctx.beginPath();
+			ctx.moveTo(p[0], p[1]);
+			for (let i = 2; i < p.length; i += 2) ctx.lineTo(p[i], p[i + 1]);
+			ctx.closePath();
+			ctx.fill();
+		});
 	}
 
 	/** Draws a photo, or a grey placeholder while it loads (or if it failed). */
