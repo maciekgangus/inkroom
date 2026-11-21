@@ -2360,3 +2360,30 @@ button.participant {
 		animation: none;
 	}
 }
+
+/*
+ * Touch screens: solid cards instead of blurred glass. A blurred backdrop over the full-screen
+ * canvas is recomputed by the GPU on every frame the canvas moves (about nine cards at once); a
+ * phone gets warm and slow from it. The look stays the same, only the see-through part goes.
+ * `:root` raises the specificity above the rules of properties-panel.css, whatever the load order.
+ */
+@media (pointer: coarse) {
+	:root .toolbar,
+	:root .zoom,
+	:root .backgrounds,
+	:root .corner,
+	:root .color-popover,
+	:root .context-menu,
+	:root .board-title,
+	:root .participants,
+	:root .board-menu,
+	:root .minimap,
+	:root .follow-chip,
+	:root .update-banner,
+	:root .properties,
+	:root .panel-tile {
+		-webkit-backdrop-filter: none;
+		backdrop-filter: none;
+		background: var(--surface);
+	}
+}
