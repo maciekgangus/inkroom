@@ -16,7 +16,7 @@ services:
     volumes:
       - loki_data:/loki
       - ${REPO}/deploy/observability/loki.yml:/etc/loki/loki.yml:ro,z
-  # The REAL Alloy configuration of production (deploy/observability/config.alloy, unchanged): the
+  # The REAL Alloy configuration of production (deploy/agent/config.alloy, unchanged): the
   # logs of the containers through the Docker socket, and the metrics of the host and of the
   # containers, with the same mounts as in deploy/docker-compose.yml. The directory is loaded as one
   # configuration: next to the production file there is local.alloy, which only adds the log FILE of
@@ -34,7 +34,7 @@ services:
       LOG_PROJECT_FILTER: com.docker.compose.project=${LOGS_PROJECT}
     volumes:
       - alloy_data:/var/lib/alloy/data
-      - ${REPO}/deploy/observability/config.alloy:/etc/alloy/config.alloy:ro,z
+      - ${REPO}/deploy/agent/config.alloy:/etc/alloy/config.alloy:ro,z
       - ${STATE}/logs/local.alloy:/etc/alloy/local.alloy:ro,z
       - ${STATE}:/testlogs:ro,z
       - /var/run/docker.sock:/var/run/docker.sock:ro

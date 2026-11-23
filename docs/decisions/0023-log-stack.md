@@ -1,6 +1,6 @@
 # 0023. Stos do logów, metryk i alertów (Loki, Alloy, Prometheus, Grafana, Telegram)
 
-- Status: accepted
+- Status: accepted (miejsce uruchomienia stosu zmienia ADR 0024: stos jest na osobnej maszynie, na VM zostaje agent Alloy)
 - Data: 2026-11-19
 
 ## Kontekst

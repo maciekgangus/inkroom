@@ -3,7 +3,7 @@
 Od teraz każdy test funkcji idzie razem z logami: aplikacja działa jako zwykły proces, a obok niej w
 kontenerach działa **kopia stosu z serwera** (Loki, Alloy, Prometheus, Grafana) z tymi samymi plikami
 konfiguracyjnymi, dashboardem i regułami alertów (`deploy/observability`, ADR 0022 i 0023). Alloy
-działa na **nieprzerobionym pliku produkcyjnym** `deploy/observability/config.alloy`, z tymi samymi
+działa na **nieprzerobionym pliku produkcyjnym** `deploy/agent/config.alloy`, z tymi samymi
 montowaniami (gniazdo Dockera, `/`, `/sys`, `/var/lib/docker`) co na VM, więc zbiera też metryki hosta i
 kontenerów. Lokalnie dochodzi do niego tylko jeden dodatkowy plik, który czyta log aplikacji (bo
 aplikacja nie jest tu kontenerem). Zamiast

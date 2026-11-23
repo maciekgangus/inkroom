@@ -1,31 +1,18 @@
-# Prometheus: metrics of the app (the separate listener app:9100, not routed by the tunnel) and of
-# the stack itself. Metrics of the host and of the containers are pushed here by Alloy (remote
-# write), so no exporter containers are needed (ADR 0023).
+# Prometheus, on the stack's machine (ADR 0024). The metrics of the app, of the app's host and of its
+# containers are not scraped from here: the agent on the app's machine scrapes them and pushes them
+# (remote write), so no port of the app is reachable from this machine. What is scraped here is the
+# stack itself. A new microservice on the app's machine: a scrape block in deploy/agent/.
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
 
 scrape_configs:
-  - job_name: app
-    static_configs:
-      - targets: ["app:9100"]
-        labels:
-          service: app
-  # A new microservice (e.g. the recorder): add its internal address here, one block like this.
-  # - job_name: recorder
-  #   static_configs:
-  #     - targets: ["recorder:9100"]
-  #       labels:
-  #         service: recorder
   - job_name: prometheus
     static_configs:
       - targets: ["localhost:9090"]
   - job_name: loki
     static_configs:
       - targets: ["loki:3100"]
-  - job_name: alloy
-    static_configs:
-      - targets: ["alloy:12345"]
   - job_name: grafana
     static_configs:
       - targets: ["grafana:3000"]

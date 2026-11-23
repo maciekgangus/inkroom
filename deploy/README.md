@@ -273,17 +273,22 @@ docker compose logs app --since 1h | jq -r 'select(.level!="DEBUG") | [.time,.le
 
 Zbieranie logów i metryk w jednym miejscu z alertami na Telegram to Etap 2 (ADR 0023).
 
-## 11. Stos logów i alertów: Loki, Grafana, Telegram (R-098, ADR 0023)
+## 11. Stos logów i alertów: Loki, Grafana, Telegram (R-098, ADR 0023 i 0024)
 
-Jedno miejsce, w którym widać błędy wszystkich kontenerów (aplikacja, Litestream, tunel, a później kolejne mikroserwisy), wykresy ruchu i alerty na Telegramie, gdy coś się psuje. Cztery kontenery obok reszty, w tym samym `docker-compose.yml`, wyłączone, dopóki nie włączysz profilu `observability`:
+Jedno miejsce, w którym widać błędy wszystkich kontenerów (aplikacja, Litestream, tunel, a później kolejne mikroserwisy), wykresy ruchu i alerty na Telegramie, gdy coś się psuje. Stos jest **na innej maszynie niż aplikacja** (u nas `rpi-server`), żeby gdy VM z aplikacją padnie, logi, historia i alerty dalej były (i same o tym powiedziały). Dwa osobne projekty compose, żaden nie jest częścią `deploy/docker-compose.yml`:
 
 ```
-kontenery  --stdout-->  Alloy  --logi-->  Loki ---------+
-host i kontenery  ----metryki----------->  Prometheus --+--> Grafana --alert--> Telegram
-aplikacja  --app:9100/metrics-----------> Prometheus ---+     (za Cloudflare Access)
+maszyna aplikacji (VM)                         maszyna stosu (rpi-server)
+deploy/agent/            deploy/observability/
+kontenery --stdout--> Alloy --logi (3100)--->  Loki ---------+
+host, kontenery, app:9100 --metryki (9090)-->  Prometheus ---+--> Grafana --alert--> Telegram
+                                                    (tunel osobny, za Cloudflare Access)
 ```
 
-Aplikacja od nich nie zależy: jeśli stos się zepsuje, aplikacja i nocna aktualizacja działają dalej. Zasoby: razem do ok. 1,5 GB RAM (limity w pliku), logi i metryki trzymane 30 dni (Prometheus najwyżej 10 GB) na wolumenach `loki_data` i `prometheus_data`.
+- **Agent** (`deploy/agent/`, kontener Alloy) zostaje przy aplikacji, bo musi czytać gniazdo Dockera i `/proc` tej maszyny. Sam zbiera logi kontenerów projektu aplikacji i metryki (host, kontenery, `app:9100`) i wypycha je przez LAN.
+- **Stos** (`deploy/observability/`: Loki, Prometheus, Grafana, tunel `cloudflared` do Grafany) ma porty 3100 i 9090 otwarte **tylko na adresie LAN** tej maszyny (`LAN_IP`), bo nie mają logowania. Grafana jest na `127.0.0.1:3000` i przez tunel.
+- Aplikacja od nich nie zależy, a nocna aktualizacja ich nie dotyka. Gdy aplikacja, agent albo cała VM znika, `up{job="app"}` przestaje przychodzić i alert „Aplikacja nie odpowiada” się odpala, bo Grafana stoi gdzie indziej.
+- Zasoby stosu: do ok. 2 GB RAM (limity w pliku), logi i metryki 30 dni (Prometheus najwyżej 10 GB). Obrazy są wieloplatformowe, więc `aarch64` nie wymaga budowania niczego.
 
 ### Telegram (raz, w telefonie)
 
@@ -300,25 +305,28 @@ Aplikacja od nich nie zależy: jeśli stos się zepsuje, aplikacja i nocna aktua
 
 Grafana jest dostępna pod własną nazwą, za Cloudflare Access, tak jak strona administratora (sekcja 7):
 
-1. Tunel: Zero Trust, Networks, Tunnels, tunel `Inkroom`, **Public Hostname**, dodaj nazwę np. `logs` (domena Twoja), **Service: HTTP, URL `grafana:3000`**.
+1. Tunel: **osobny tunel dla maszyny stosu** (Zero Trust, Networks, Tunnels, Create a tunnel, np. `Inkroom logi`), **Public Hostname** `logs.<twoja domena>`, **Service: HTTP, URL `grafana:3000`**. Jego token idzie do `.env` stosu jako `TUNNEL_TOKEN`. **Nigdy token tunelu aplikacji:** dwie maszyny na jednym tunelu stają się replikami i ruch strony byłby dzielony między nie. Jeśli nazwa `logs` była wcześniej w tunelu `Inkroom`, usuń ją stamtąd.
 2. Access: Zero Trust, Access, Applications, **Add an application, Self-hosted**, nazwa „Inkroom logi”, domena `logs.<twoja domena>` (cała, bez ścieżki), sesja np. 24 godziny.
 3. Policy: akcja **Allow**, reguła *Include, Emails* = Twój adres e-mail. Nic więcej.
 
 Bez tej bramki nie otwieraj nazwy w tunelu: Grafana ma własne logowanie (konto `admin` i hasło z `.env`), ale to druga linia obrony, nie pierwsza.
 
-### Włączenie (na serwerze)
+### Uruchomienie
 
-Dopisz do `.env` (obok `docker-compose.yml`; szablon w `env.template`):
+Kolejność ma znaczenie (stos najpierw, żeby agent miał dokąd pisać):
 
-```
-COMPOSE_PROFILES=observability
-GF_SECURITY_ADMIN_PASSWORD=<długie losowe hasło: openssl rand -base64 24>
-GRAFANA_ROOT_URL=https://logs.<twoja domena>
-TELEGRAM_BOT_TOKEN=<token od BotFather>
-TELEGRAM_CHAT_ID=<id czatu>
-```
-
-Potem `docker compose up -d` (albo poczekaj na nocną aktualizację z sekcji 4: ona też podniesie nowe kontenery). Pierwszy start pobiera obrazy (ok. 1 GB). Bez `GF_SECURITY_ADMIN_PASSWORD` Grafana odmawia startu i mówi o tym w `docker compose logs grafana`; bez danych Telegrama startuje, ale alerty nigdzie nie idą.
+1. **Maszyna stosu.** Skopiuj tam folder `deploy/observability/` (`scp -r`), w nim `.env` z `env.template`:
+   ```
+   LAN_IP=<adres LAN tej maszyny>
+   GF_SECURITY_ADMIN_PASSWORD=<długie losowe hasło: openssl rand -base64 24>
+   GRAFANA_ROOT_URL=https://logs.<twoja domena>
+   TUNNEL_TOKEN=<token tunelu tej maszyny>
+   TELEGRAM_BOT_TOKEN=<token od BotFather>
+   TELEGRAM_CHAT_ID=<id czatu>
+   ```
+   Potem `docker compose up -d` w tym folderze. Bez `GF_SECURITY_ADMIN_PASSWORD` Grafana odmawia startu (`docker compose logs grafana`); bez danych Telegrama startuje, ale alerty nigdzie nie idą. Jeśli porty 3100, 9090 lub 3000 są tam zajęte: `LOKI_PORT`, `PROMETHEUS_PORT`, `GRAFANA_PORT` w `.env` (i te same numery w adresach agenta).
+2. **Maszyna aplikacji: agent.** Skopiuj `deploy/agent/` (np. do `~/inkroom-agent/`), w nim `.env` z `env.template` (`LOKI_URL=http://<LAN_IP>:3100`, `PROMETHEUS_URL=http://<LAN_IP>:9090`; nazwę projektu i sieci aplikacji zmieniasz tylko, gdy nie jest to `workdir`, sprawdź `docker compose ls`). `docker compose up -d`. W Grafanie, Explore, Loki, `{service="app"}` mają się pojawić logi.
+3. **Dopiero teraz nowy `deploy/docker-compose.yml`** na maszynie aplikacji (bez Lokiego, Prometheusa i Grafany). Pierwsze `docker compose up -d --remove-orphans` (także nocne) **usunie stare kontenery stosu** z tego projektu, razem z dotychczasową historią w wolumenach `workdir_loki_data` i innych (do usunięcia ręcznie `docker volume rm`, historia się nie przenosi). Z `.env` aplikacji usuń `COMPOSE_PROFILES=observability`, `GF_*`, `GRAFANA_ROOT_URL` i `TELEGRAM_*`, są teraz w `.env` stosu. W tunelu aplikacji usuń nazwę `logs` (patrz Cloudflare wyżej).
 
 ### Jak z tego korzystać
 
@@ -341,16 +349,17 @@ Potem `docker compose up -d` (albo poczekaj na nocną aktualizację z sekcji 4: 
 
 ### Nowy mikroserwis (np. nagrywanie lekcji)
 
-1. Loguj na stdout **jedną linią JSON** z polami `time`, `level` (`DEBUG`, `INFO`, `WARN`, `ERROR`), `msg` i `service` (nazwa usługi, np. `recorder`); do tego `request_id` i pola zdarzenia. Nic więcej nie trzeba: Alloy czyta każdy kontener tego projektu compose sam.
-2. Metryki (jeśli są): wystaw `/metrics` na wewnętrznym porcie (np. `recorder:9100`, bez publikowania go w tunelu) i dopisz blok `job_name` w `observability/prometheus.yml` (jest zakomentowany przykład), potem `docker compose restart prometheus`.
+1. Loguj na stdout **jedną linią JSON** z polami `time`, `level` (`DEBUG`, `INFO`, `WARN`, `ERROR`), `msg` i `service` (nazwa usługi, np. `recorder`); do tego `request_id` i pola zdarzenia. Nic więcej nie trzeba: agent czyta każdy kontener projektu aplikacji sam.
+2. Metryki (jeśli są): wystaw `/metrics` na wewnętrznym porcie (np. `recorder:9100`, bez publikowania go w tunelu) i dopisz blok `prometheus.scrape` w `agent/app-metrics.alloy` (wzór: `app`), potem `docker compose restart alloy` w folderze agenta. Metryki idą z agenta, nie z maszyny stosu, więc żaden port mikroserwisu nie musi być widoczny w LAN.
 3. Alert o błędach tej usługi działa od razu: reguła „ERROR w logach” łapie każdą usługę.
 
 ### Wyłączenie, miejsce na dysku, kopie
 
-- Zatrzymanie: usuń `COMPOSE_PROFILES` z `.env` i `docker compose stop loki alloy prometheus grafana` (kontenery spoza aktywnego profilu nie są usuwane przez `up`).
-- Retencja: logi 30 dni (`observability/loki.yml`), metryki 30 dni lub 10 GB (flagi Prometheusa w `docker-compose.yml`). Zajętość: `docker system df -v`; alert o dysku ostrzeże przy 80%.
-- Kopie: logi i metryki są jednorazowe i nie są kopiowane do R2. Dashboard i alerty leżą w repozytorium (`observability/`), więc po awarii wracają razem z folderem `deploy/`. Konto `admin` i ustawienia z interfejsu są w wolumenie `grafana_data`.
-- Gniazdo Dockera (`/var/run/docker.sock`) jest montowane do Alloy, żeby czytać logi kontenerów: kto przejmie ten kontener, ma uprawnienia roota na serwerze. Obraz jest przypięty do wersji, nie ma opublikowanego portu i jest w sieci wewnętrznej (ADR 0023).
+- Zatrzymanie: `docker compose down` w folderze agenta (logi przestają płynąć, alert o aplikacji się odpali, bo to właśnie agent wysyła `up`) lub stosu. Aplikacja działa dalej.
+- Retencja: logi 30 dni (`observability/loki.yml`), metryki 30 dni lub 10 GB (flagi Prometheusa w `observability/docker-compose.yml`). Zajętość na maszynie stosu: `docker system df -v`; alert o dysku patrzy na dysk maszyny aplikacji, nie stosu (dysk stosu sprawdzaj okazjonalnie).
+- Kopie: logi i metryki są jednorazowe i nie są kopiowane do R2. Dashboard i alerty leżą w repozytorium (`observability/`), więc po awarii wracają razem z folderem. Konto `admin` i ustawienia z interfejsu są w wolumenie `grafana_data`.
+- Gniazdo Dockera (`/var/run/docker.sock`) jest montowane do agenta, żeby czytać logi kontenerów: kto przejmie ten kontener, ma uprawnienia roota na maszynie aplikacji. Obraz jest przypięty do wersji i nie ma opublikowanego portu (ADR 0023). Stos nie ma gniazda Dockera.
+- Porty 3100 i 9090 stosu nie mają logowania: są otwarte tylko na adresie LAN. Nie przekierowuj ich z routera.
 
 ## Gdy coś nie działa
 
@@ -363,14 +372,16 @@ Potem `docker compose up -d` (albo poczekaj na nocną aktualizację z sekcji 4: 
 | Google: „Błąd 400: redirect_uri_mismatch” | adres w konsoli Google musi być dokładnie `PUBLIC_URL` + `/api/auth/google/callback` (https, bez ukośnika na końcu) |
 | Google: „Access blocked” albo logują się tylko testerzy | ekran zgody nadal w trybie „Testing”; opublikuj aplikację (punkt 8.2) |
 | Przycisk Google się nie pojawia | brak `GOOGLE_CLIENT_ID` lub `GOOGLE_CLIENT_SECRET` w `.env` (sprawdź `docker compose logs app`) |
-| Grafana restartuje się bez końca | brak `GF_SECURITY_ADMIN_PASSWORD` w `.env` (`docker compose logs grafana` mówi to wprost) |
+| Grafana restartuje się bez końca | brak `GF_SECURITY_ADMIN_PASSWORD` w `.env` stosu (`docker compose logs grafana` mówi to wprost) |
 | Alert jest, a Telegram milczy | zły token lub id czatu, albo nie nacisnąłeś Start w czacie z botem (Telegram: „chat not found”); sprawdź krok 4 z sekcji 11 i w Grafanie Alerting, Contact points, wiersz `telegram` (błędy wysyłki) |
-| W Grafanie nie ma logów aplikacji | aplikacja nie loguje JSON-em (R-098) albo `docker compose logs alloy` pokazuje błąd dostępu do `/var/run/docker.sock` |
+| W Grafanie nie ma logów aplikacji | aplikacja nie loguje JSON-em (R-098) albo `docker compose logs alloy` w folderze agenta pokazuje błąd dostępu do `/var/run/docker.sock` albo `connection refused` do `LOKI_URL` (stos nie działa lub zły adres) |
 | Rysowanie nie synchronizuje się | WebSocket: sprawdź w konsoli przeglądarki `/ws/...`; tunel wspiera WebSocket, więc zwykle to zła trasa |
 | `unauthorized` albo `denied` przy pobieraniu obrazu | Docker nie jest zalogowany do `ghcr.io` (dla użytkownika, który to uruchamia, a timer to root) albo token wygasł lub nie ma `read:packages`; powtórz "Logowanie do rejestru" |
 | `update.sh` kończy się błędem | `docker compose logs app`; skrypt sam wraca do poprzedniego obrazu, a log mówi, który nie wstał |
 
 ## Testy skryptów
+
+`sh scripts/test-split.sh` (Docker) sprawdza podział z sekcji 11 lokalnie: stos i agent jako osobne projekty, atrapa aplikacji, logi i `up{job="app"}` docierają przez adres LAN, a po zatrzymaniu aplikacji `up` spada do 0. `sh scripts/test-log-levels.sh` sprawdza, że przerwane przez przeglądarkę żądania `cloudflared` są WARN, a prawdziwe błędy zostają ERROR.
 
 `sh deploy/test-update.sh` sprawdza `update.sh` na atrapach `docker` i `curl` (bez Dockera); CI
 uruchamia go przy każdej zmianie, a także sprawdza, że `docker-compose.yml` czyta się z tokenem

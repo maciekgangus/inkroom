@@ -73,7 +73,7 @@ compose() {
 		return 1
 	fi
 	# The pinned images are the ones of the real stack (deploy/docker-compose.yml).
-	img() { grep -E "^[[:space:]]+image: $1" "$ROOT/deploy/docker-compose.yml" | head -1 | awk '{print $2}'; }
+	img() { grep -hE "^[[:space:]]+image: $1" "$ROOT"/deploy/observability/docker-compose.yml "$ROOT"/deploy/agent/docker-compose.yml | head -1 | awk '{print $2}'; }
 	REPO="$ROOT" STATE="$STATE" LOGS_PROJECT="$LOGS_PROJECT" GRAFANA_PORT="$GRAFANA_PORT" PROM_PORT="$PROM_PORT" LOKI_PORT="$LOKI_PORT" SINK_PORT="$SINK_PORT" \
 		LOKI_IMAGE=$(img grafana/loki) ALLOY_IMAGE=$(img grafana/alloy) PROMETHEUS_IMAGE=$(img prom/prometheus) \
 		GRAFANA_IMAGE=$(img grafana/grafana) SINK_IMAGE=python:3.13-alpine \
@@ -85,7 +85,7 @@ logs_running() {
 }
 
 # The configs that differ from production: Alloy reads the native server's log file, with the very
-# same processing block as deploy/observability/config.alloy, and Prometheus scrapes the host.
+# same processing block as deploy/agent/config.alloy, and Prometheus scrapes the host.
 write_logs_config() {
 	mkdir -p "$STATE/logs" "$STATE/sink"
 	chmod 777 "$STATE/sink"

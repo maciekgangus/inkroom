@@ -1,11 +1,11 @@
 #!/bin/sh
-# Runs the REAL deploy/observability/config.alloy and loki.yml against a container that prints real
+# Runs the REAL deploy/agent/config.alloy and loki.yml against a container that prints real
 # cloudflared lines, and checks the level each line gets in Loki: a browser closing a request
 # (benign) must be WARN, a real failure must stay ERROR (the alert "Błędy w logach" reads ERROR).
-# Needs docker; pinned images are read from deploy/docker-compose.yml. Cleans up after itself.
+# Needs docker; pinned images are read from deploy/observability and deploy/agent. Cleans up after itself.
 set -eu
 cd "$(dirname "$0")/.."
-img() { grep -E "image: .*$1" deploy/docker-compose.yml | head -n 1 | awk '{print $2}'; }
+img() { grep -hE "image: .*$1" deploy/observability/docker-compose.yml deploy/agent/docker-compose.yml | head -n 1 | awk '{print $2}'; }
 LOKI=$(img grafana/loki); ALLOY=$(img grafana/alloy)
 P=logleveltest
 W=$(mktemp -d); trap 'docker rm -f $P-loki $P-alloy $P-cf >/dev/null 2>&1; docker network rm $P >/dev/null 2>&1; rm -rf "$W"' EXIT
@@ -19,7 +19,7 @@ LINES
 docker network create $P >/dev/null
 docker run -d --name $P-loki --network $P --network-alias loki -v "$PWD/deploy/observability/loki.yml:/etc/loki/loki.yml:ro,z" -p 127.0.0.1:0:3100 "$LOKI" -config.file=/etc/loki/loki.yml >/dev/null
 docker run -d --name $P-alloy --network $P -u 0:0 --pid host -v /:/host:ro,rslave -v /:/rootfs:ro -v /sys:/sys:ro -v /var/run:/var/run:ro -v /var/lib/docker/:/var/lib/docker:ro -v /dev/disk/:/dev/disk:ro -e LOG_PROJECT_FILTER=com.docker.compose.project=$P \
-	-v "$PWD/deploy/observability/config.alloy:/etc/alloy/config.alloy:ro,z" -v /var/run/docker.sock:/var/run/docker.sock:ro \
+	-v "$PWD/deploy/agent/config.alloy:/etc/alloy/config.alloy:ro,z" -v /var/run/docker.sock:/var/run/docker.sock:ro \
 	"$ALLOY" run --storage.path=/tmp/alloy /etc/alloy/config.alloy >/dev/null
 sleep 8
 docker run -d --name $P-cf --label com.docker.compose.project=$P --label com.docker.compose.service=cloudflared \

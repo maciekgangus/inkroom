@@ -215,7 +215,7 @@ groups:
           severity: critical
         annotations:
           summary: "Aplikacja nie odpowiada na metryki"
-          description: "Prometheus nie ma metryk z app:9100 od ponad 2 minut (aplikacja nie działa albo restartuje się)."
+          description: "Prometheus nie dostaje metryk z app:9100 od ponad 2 minut: aplikacja nie działa albo restartuje się, agent (deploy/agent) stoi, albo cała maszyna aplikacji jest wyłączona (ADR 0024)."
       - uid: inkroom-restart-loop
         title: Kontener restartuje się
         condition: C
