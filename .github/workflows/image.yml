@@ -118,13 +118,16 @@ jobs:
       contents: read
       packages: read
     steps:
+      # docker/metadata-action tags the commit with its first 7 characters (type=sha), not all 40.
+      - id: ref
+        run: echo "tag=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
       # The image is private: without a login Trivy cannot pull it (UNAUTHORIZED).
       - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         env:
           TRIVY_USERNAME: ${{ github.actor }}
           TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
         with:
-          image-ref: ${{ env.IMAGE }}:sha-${{ github.sha }}
+          image-ref: ${{ env.IMAGE }}:${{ steps.ref.outputs.tag }}
           format: table
           severity: CRITICAL,HIGH
           ignore-unfixed: true
