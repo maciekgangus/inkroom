@@ -12,7 +12,7 @@ import (
 	"github.com/maciekgangus/inkroom/server/internal/store"
 )
 
-// The calendar API (R-104 to R-108, ADR 0024).
+// The calendar API (R-104 to R-108, ADR 0025).
 
 const (
 	defaultLessonTitle = "Korepetycje"
