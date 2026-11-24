@@ -42,6 +42,7 @@ import { getExtraColor, setExtraColor } from "./extra-color";
 import { FollowBar } from "./follow-bar";
 import { frameBatch } from "./frame-batch";
 import { Icon } from "./icon";
+import { MarkdownTextEditor } from "./markdown-text-editor";
 import { Minimap } from "./minimap";
 import { Participants } from "./participants";
 import { startPoint } from "./pdf/layout";
@@ -55,7 +56,6 @@ import { ShareButton } from "./share-button";
 import { applyToolShortcut, colorForKey, dropsSelection } from "./shortcuts";
 import { ShortcutsDialog } from "./shortcuts-dialog";
 import { type Peer, type SocketLike, SyncClient } from "./sync/sync";
-import { TextEditor } from "./text-editor";
 import { currentTheme, displayColor, useTheme } from "./theme";
 import { toolCursor } from "./tool-cursor";
 import { rememberColor, restoreStart, switchTool } from "./tool-style";
@@ -1173,7 +1173,7 @@ export function BoardView({
 			<canvas id="board" ref={committedRef} />
 			<canvas id="live" ref={liveRef} />
 			{editingText && (
-				<TextEditor
+				<MarkdownTextEditor
 					key={editingText.id}
 					x={
 						viewport.toScreen(
@@ -1215,7 +1215,7 @@ export function BoardView({
 				onChange={(patch) => changeStyle(patch, false)}
 			/>
 			{textAt && (
-				<TextEditor
+				<MarkdownTextEditor
 					key={`${textAt.x},${textAt.y}`}
 					x={viewport.toScreen(textAt.x, textAt.y)[0]}
 					y={viewport.toScreen(textAt.x, textAt.y)[1]}

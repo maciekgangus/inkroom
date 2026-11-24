@@ -526,8 +526,8 @@ out(
 	"Process memory per scenario (MB): heap / renderer anon / renderer rss / GPU process anon.",
 );
 out();
-out("| scenario | " + SIZES.join(" | ") + " |");
-out("|---|" + SIZES.map(() => "---").join("|") + "|");
+out(`| scenario | ${SIZES.join(" | ")} |`);
+out(`|---|${SIZES.map(() => "---").join("|")}|`);
 const fmt = (s) => {
 	const p = pick(s);
 	return `${p.heapMB} / ${p.rendererAnonMB} / ${p.rendererRssMB} / ${p.gpuAnonMB}`;
