@@ -22,13 +22,19 @@ FRESH=1 sh .claude/skills/test-server/server.sh start 8099 --logs   # od pustej 
 sh .claude/skills/test-server/server.sh status 8099
 ```
 
+Maszyna z repozytorium to VM w sieci domowej (`192.168.0.51`), a testuje się z innego komputera
+albo iPada. Dlatego aplikacja, Grafana i atrapa Telegrama słuchają na wszystkich interfejsach i
+podaje się adres LAN; Loki, Prometheus i metryki aplikacji zostają na `127.0.0.1` (pyta je tylko
+`curl` na tej maszynie). Serwer stawiany ręcznie poza skryptem też dostaje `BIND_ADDR=0.0.0.0:<port>`,
+bo z kontem testowym bez `BIND_ADDR` odmawia startu, a `127.0.0.1` jest z LAN nieosiągalne.
+
 | Co | Adres |
 |---|---|
-| Aplikacja | http://localhost:8099 (konto `test@example.test` / `test-user-1234`, albo samo `test`) |
-| Grafana (dashboard „Inkroom” jest stroną główną) | http://127.0.0.1:3100, `admin` / `local-test` |
+| Aplikacja | http://192.168.0.51:8099 (konto `test@example.test` / `test-user-1234`, albo samo `test`) |
+| Grafana (dashboard „Inkroom” jest stroną główną) | http://192.168.0.51:3100, `admin` / `local-test` |
 | Prometheus | http://127.0.0.1:9190 |
 | Loki (API, do `curl`) | http://127.0.0.1:3200 |
-| Atrapa Telegrama | http://127.0.0.1:9199 (ostatnie 20 wiadomości) i plik `~/.cache/inkroom-test-server-8099/sink/received.jsonl` |
+| Atrapa Telegrama | http://192.168.0.51:9199 (ostatnie 20 wiadomości) i plik `~/.cache/inkroom-test-server-8099/sink/received.jsonl` |
 | Metryki aplikacji | http://127.0.0.1:9099/metrics |
 | Log aplikacji (plik) | `~/.cache/inkroom-test-server-8099/log` (jedna linia JSON na zdarzenie) |
 

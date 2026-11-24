@@ -4,29 +4,28 @@ Własna, tania tablica interaktywna do prowadzenia korepetycji online (zamiennik
 Źródło prawdy o wymaganiach: @SPEC.md. Decyzje architektoniczne: `docs/decisions/`.
 
 ## Stan projektu
-Tablica działa na homelabie (https://inkroom.lesniakmaciek.dev, obraz z GHCR, tunel Cloudflare, kopie Litestream do R2). Stan wymagań jest w `SPEC.md` (tylko tam, nie tutaj), decyzje w `docs/decisions/`, wydania w `docs/wydawanie-wersji.md`. W toku: kalendarz zajęć (R-104 do R-109, ADR 0025) na gałęzi `feature/calendar`, wydajność dużych tablic (R-043), logowanie Google (R-063, czeka na test).
+Tablica działa na homelabie (https://inkroom.lesniakmaciek.dev, obraz z GHCR, tunel Cloudflare, kopie Litestream do R2). Stan wymagań jest w `SPEC.md` (tylko tam, nie tutaj), decyzje w `docs/decisions/`, wydania w `docs/wydawanie-wersji.md`. W toku: kalendarz zajęć (R-104 do R-109, ADR 0025, backend zmergowany, klient tymczasowy), wydajność dużych tablic (R-043), logowanie Google (R-063, czeka na test).
 
 ## Priorytety (w tej kolejności)
 1. Responsywność: kreska pojawia się natychmiast lokalnie, u drugiej osoby bez zauważalnego opóźnienia. Wygoda użytkownika ponad wszystko.
 2. Działa na iPadach i innych tabletach z rysikiem, nie tylko na PC (korepetytor pracuje na PC, uczniowie często na tabletach).
-3. Jeśli istnieje warta uwagi gotowa biblioteka tablicy, użyj jej zamiast pisać własną.
-
-Serwer prawie nie zużywa CPU (obliczenia są po stronie klienta), a maszyna ma 100 GB dysku i 8 GB RAM (do 16 GB), więc zasoby serwera nie ograniczają wyboru narzędzi (logi, metryki, mikroserwisy).
 
 ## Zasady pracy
 1. Najpierw myśl: wypisz założenia, a przy niejasności zapytaj zamiast zgadywać.
 2. Prostota: najmniej kodu, który rozwiązuje zadanie. Bez abstrakcji "na zapas".
 3. Chirurgiczne zmiany: ruszaj tylko to, co potrzebne do zadania. Nie refaktoryzuj przy okazji.
-4. Cel i weryfikacja: zadanie kończy się przechodzącymi testami. Najpierw test, potwierdź że pada, potem implementacja.
+4. Cel i weryfikacja: zadanie kończy się przechodzącymi testami. Najpierw test, potwierdź że pada, potem implementacja (zamieniaj zadania na weryfikowalne cele).
 5. Wymagania: przed implementacją sprawdź `SPEC.md`. Nowe lub zmienione wymaganie najpierw jako propozycja zmiany w `SPEC.md`, kod dopiero po mojej akceptacji.
 6. Decyzje architektoniczne zapisuj jako ADR w `docs/decisions/` (szablon: `0000-template.md`).
+7. **Każde zadanie we własnym worktree, nigdy w katalogu głównym.** Katalog główny (`/home/maciek/.t3/projects/ekorepetycje-inkroom`) zostaje na `main` i nikt w nim nie edytuje plików (także `CLAUDE.md`, `SPEC.md` i dokumentów), nie przełącza gałęzi, nie commituje i nie robi `checkout`, `reset` ani `restore`, bo pracuje w nim kilku agentów naraz i jeden kasuje drugiemu niezacommitowane zmiany. Pierwszy krok zadania: `git worktree add ../ekorepetycje-inkroom-<temat> -b <typ>/<temat> origin/main` (szczegóły w „Git worktrees i graf” niżej), a przed pierwszą edycją sprawdź `git rev-parse --show-toplevel`. Nie używaj `git stash`: stos jest jeden dla wszystkich worktree, więc `pop` może zabrać cudze zmiany. Cudzego worktree nie ruszaj; gdy coś w nim przeszkadza, powiedz mi.
 
 ## Komendy
-Stos: serwer w Go (`server/`), klient w TypeScript + Vite + Preact (`web/`). Komendy poniżej sprawdzone na szkielecie z Etapu 0 (poza `npm run dev`). Serwer czyta `PORT` (domyślnie 8080) i `STATIC_DIR` (domyślnie `../web/dist`), więc do dev serwera najpierw `cd web && npm run build`.
+Stos: serwer w Go (`server/`), klient w TypeScript + Vite + Preact (`web/`). Serwer czyta `PORT` (domyślnie 8080) i `STATIC_DIR` (domyślnie `../web/dist`), więc do dev serwera najpierw `cd web && npm run build`.
 - Uruchomienie całości: `docker compose up` (ADR 0002)
 - Build obrazu: `docker compose build`
 - Dev klienta: `cd web && npm run dev`; dev serwera: `cd server && go run ./cmd/server`
 - Testowanie lokalne z logami (Loki, Grafana, alerty w atrapie Telegrama): `sh .claude/skills/test-server/server.sh start 8099 --logs`, przewodnik w `docs/testowanie-lokalne.md`
+- **Ta maszyna to VM (`192.168.0.51`), a ja testuję z innego komputera lub iPada po LAN.** Każdy serwer, który mam obejrzeć (aplikacja, Grafana, podgląd zrzutów), słucha na wszystkich interfejsach (`BIND_ADDR=0.0.0.0:<port>`, nigdy `127.0.0.1`), a podajesz mi adres `http://192.168.0.51:<port>`, sprawdzony wcześniej `curl -fs http://192.168.0.51:<port>/healthz`. Serwer z kontem testowym bez `BIND_ADDR` odmawia startu; skrypt `test-server` ustawia go sam. Każdy worktree ma własny port (8099 i dalej), żeby agenci nie zatrzymywali sobie serwerów.
 - Testy: `cd server && go test ./...` oraz `cd web && npm test`; testy iPada (układ, rysik, dotyk) w Playwright: `cd web && npx playwright install chromium` (raz) i `npm run test:e2e` (Chromium) oraz `npm run test:e2e:webkit` (WebKit w kontenerze podman, ADR 0012)
 - Środowisko tej maszyny: Go 1.26 w `~/.local/go` i `gopls` w `~/go/bin` (dodane do `PATH` w `~/.bashrc`), `graphify` z `uv tool` (`graphifyy`). CPU maszyny (QEMU) nie ma AVX, więc `vite` i `vitest` (rolldown) kończą się „Illegal instruction”: lokalnie działają `go test`, `npx tsc --noEmit` i `npx biome check`, a testy i build klienta trzeba puszczać w CI albo na maszynie z AVX. Hook `post-edit.sh` puszcza `npm test` i tu milczy zamiast zgłosić błąd, więc nie traktuj jego ciszy jako zielonego wyniku.
 - Lint i format: `cd server && gofmt -l . && go vet ./...` oraz `cd web && npx biome check .`
@@ -40,8 +39,16 @@ Stos: serwer w Go (`server/`), klient w TypeScript + Vite + Preact (`web/`). Kom
 - Obraz i wydania (ADR 0014): GitHub Actions testuje i publikuje `ghcr.io/maciekgangus/inkroom` (`:main` i `:sha-<commit>` z `main`, `:latest` i `:X.Y.Z` z tagu `vX.Y.Z`); serwer śledzi `:latest`. **Merge do `main` niczego nie wdraża**: wydanie to `git tag -a vX.Y.Z -m "opis" && git push origin vX.Y.Z` (dokładny opis, cofanie i kopiowanie folderu `deploy/`: `docs/wydawanie-wersji.md`). Homelab: `deploy/README.md`, ADR 0003 i 0016; skrypty testują `sh deploy/test-update.sh` i `sh scripts/test-backup.sh`.
 - Praca przez PR (każdy agent we własnym worktree, korzeń zostaje na `main`): gałąź z `origin/main`, małe commity, PR (`gh pr create`), merge dopiero po zielonym jobie `test`. Joby `image` i `scan` (Trivy) działają tylko na `main` i tagach, więc PR ich nie sprawdza: po merge obejrzyj przebieg (`gh run list -R maciekgangus/inkroom`) i napraw od razu, bo czerwony `scan` zablokuje też wydanie z tagu. Przed `gh pr create` funkcji z interfejsem hook przypomina o ręcznym przejściu przez `/test-server`.
 - Na tej maszynie `git push` nie ma poświadczeń HTTPS: `git -c credential.helper='!gh auth git-credential' push -u origin <gałąź>`. Push zmian w `.github/workflows/` wymaga tokena `gh` z zakresem `workflow` (`gh auth refresh -h github.com -s workflow`, robi to użytkownik).
-- Wdrożenie: docker compose, najpierw lokalnie, później na domowym VPS (ADR 0002). Sekrety w `.env`, nigdy w obrazach ani w repo.
+- Sekrety w `.env`, nigdy w obrazach ani w repo. Logi i metryki (Loki, Prometheus, Grafana) działają na osobnej maszynie, przy aplikacji zostaje tylko agent Alloy (ADR 0022 do 0024).
 - Plugin lub serwer MCP dodawaj dopiero pod konkretny problem, a po dodaniu sprawdź `/context`.
+
+## Role agentów i skille
+Praca idzie przez subagentów z `.claude/agents/`: `backend` (`server/`), `frontend` (`web/`), `design` (szlif wyglądu), `deploy` (tylko odczyt i raport). Zasady ogólne są tu, procedury w skillach. `skills:` agenta preloaduje tylko skille z `.claude/skills/` (stąd `tdd`); skille z `server/` i `web/` ładują się same po odczycie pliku z tego podkatalogu i nie da się ich wpisać w `skills:`, tak samo ręcznego `deploy`.
+- Zawsze w kontekście: `tdd` (`.claude/skills/`, jeden na repo), `test-server`, komendy `/req` i `/status`.
+- Tylko przy pracy w podkatalogu: `server/.claude/skills/codebase-design`; `web/.claude/skills/frontend-design`, `web-design-guidelines`, `impeccable` (ręczny, `/impeccable`, bez hooków).
+- Ręczne, ryzykowne: `/deploy` (`disable-model-invocation`, niczego nie wdraża bez Twojego „tak”).
+- Audyt bezpieczeństwa: wbudowany `/security-review`. Nie instaluj drugiego skilla do tego samego zadania.
+- Źródła: `tdd`, `codebase-design` z mattpocock/skills @ d653911; `frontend-design` z anthropics/skills; `web-design-guidelines` z vercel-labs/agent-skills 1.1.0; `impeccable` z pbakaus/impeccable @ b49177d (4.10.0; `disable-model-invocation: true` dopisane lokalnie, po aktualizacji dopisz znowu). Zrzuty responsywności (375, 768, 1440 px): Playwright z `web/`, bez MCP.
 
 ## Kalendarz zajęć (R-104 do R-109, ADR 0025)
 Kalendarz jest w tej samej bazie SQLite i na tym samym koncie co tablice. Nie ma ról na koncie: prowadzącym jest ten, kto tworzy zajęcie. Moduły są rozdzielone w kodzie, nie w sieci.
