@@ -1,10 +1,10 @@
-# IDROO: współdzielona tablica do korepetycji (MVP)
+# Inkroom: współdzielona tablica i kalendarz zajęć do korepetycji
 
-Własna, tania tablica interaktywna do prowadzenia korepetycji online, zamiennik płatnego IDROO.
+Własna, tania tablica interaktywna do prowadzenia korepetycji online (zamiennik płatnego IDROO) z kalendarzem zajęć. Jedna aplikacja, jedna baza SQLite, jedno konto.
 Źródło prawdy o wymaganiach: @SPEC.md. Decyzje architektoniczne: `docs/decisions/`.
 
 ## Stan projektu
-Wymagania z `SPEC.md` są zrobione poza: R-005 (Android z rysikiem i tablet graficzny do sprawdzenia na sprzęcie), R-043 (wydajność dużych tablic, po pomiarach), R-063 (logowanie Google) oraz R-064, R-065, R-066 (panel administratora, zmergowane i działa, czekają na zmianę statusu na `done` po teście użytkownika). Stos: własny canvas + Go + SQLite, klient TypeScript + Preact (ADR 0001), synchronizacja ADR 0004. **Aplikacja działa na homelabie** pod https://inkroom.lesniakmaciek.dev (obraz z GHCR, tunel Cloudflare, kopie bazy Litestream do R2; ADR 0003, 0014, 0016, folder `deploy/`; ostatnie wydanie `v0.3.0`, a `main` ma już niewydane poprawki z uwag użytkowników i panel użytkowników i tablic, więc czeka na `v0.4.0`). Strona administratora `/admin` jest skonfigurowana za Cloudflare Access (ADR 0017) i pokazuje uwagi z przycisku „!”. Do zrobienia: wydajność na dużych tablicach (uwagi #8, #9, #17, R-043), automat przesyłania uwag do sesji (service token Cloudflare Access), sprawdzenie iPadem na danych komórkowych (N-001) i pierwsza lekcja (Etap 4).
+Tablica działa na homelabie (https://inkroom.lesniakmaciek.dev, obraz z GHCR, tunel Cloudflare, kopie Litestream do R2). Stan wymagań jest w `SPEC.md` (tylko tam, nie tutaj), decyzje w `docs/decisions/`, wydania w `docs/wydawanie-wersji.md`. W toku: kalendarz zajęć (R-104 do R-109, ADR 0025) na gałęzi `feature/calendar`, wydajność dużych tablic (R-043), logowanie Google (R-063, czeka na test).
 
 ## Priorytety (w tej kolejności)
 1. Responsywność: kreska pojawia się natychmiast lokalnie, u drugiej osoby bez zauważalnego opóźnienia. Wygoda użytkownika ponad wszystko.
@@ -28,6 +28,7 @@ Stos: serwer w Go (`server/`), klient w TypeScript + Vite + Preact (`web/`). Kom
 - Dev klienta: `cd web && npm run dev`; dev serwera: `cd server && go run ./cmd/server`
 - Testowanie lokalne z logami (Loki, Grafana, alerty w atrapie Telegrama): `sh .claude/skills/test-server/server.sh start 8099 --logs`, przewodnik w `docs/testowanie-lokalne.md`
 - Testy: `cd server && go test ./...` oraz `cd web && npm test`; testy iPada (układ, rysik, dotyk) w Playwright: `cd web && npx playwright install chromium` (raz) i `npm run test:e2e` (Chromium) oraz `npm run test:e2e:webkit` (WebKit w kontenerze podman, ADR 0012)
+- Środowisko tej maszyny: Go 1.26 w `~/.local/go` i `gopls` w `~/go/bin` (dodane do `PATH` w `~/.bashrc`), `graphify` z `uv tool` (`graphifyy`). CPU maszyny (QEMU) nie ma AVX, więc `vite` i `vitest` (rolldown) kończą się „Illegal instruction”: lokalnie działają `go test`, `npx tsc --noEmit` i `npx biome check`, a testy i build klienta trzeba puszczać w CI albo na maszynie z AVX. Hook `post-edit.sh` puszcza `npm test` i tu milczy zamiast zgłosić błąd, więc nie traktuj jego ciszy jako zielonego wyniku.
 - Lint i format: `cd server && gofmt -l . && go vet ./...` oraz `cd web && npx biome check .`
 
 ## Konwencje
@@ -40,14 +41,25 @@ Stos: serwer w Go (`server/`), klient w TypeScript + Vite + Preact (`web/`). Kom
 - Wdrożenie: docker compose, najpierw lokalnie, później na domowym VPS (ADR 0002). Sekrety w `.env`, nigdy w obrazach ani w repo.
 - Plugin lub serwer MCP dodawaj dopiero pod konkretny problem, a po dodaniu sprawdź `/context`.
 
+## Kalendarz zajęć (R-104 do R-109, ADR 0025)
+Kalendarz jest w tej samej bazie SQLite i na tym samym koncie co tablice. Nie ma ról na koncie: prowadzącym jest ten, kto tworzy zajęcie. Moduły są rozdzielone w kodzie, nie w sieci.
+- `server/internal/calendar/series.go`: rozwija regułę serii na zajęcia (strefa IANA, godzina trzyma się po zmianie czasu, najwyżej 200).
+- `server/internal/store/calendar.go`: tabele `lessons`, `lesson_series`, `unavailability`, `lesson_requests`. Konflikt terminu (`ErrConflict`) sprawdza się w tej samej transakcji co zapis; zajęcia odwołane nie blokują terminu.
+- `server/cmd/server/lessons.go`: API (`/api/calendar`, `/api/lessons`, `/api/series`, `/api/unavailability`, `/api/requests`). Zmienia i usuwa tylko prowadzący, prośbę o zmianę terminu składa każda strona.
+- Klient: `web/src/calendar-page.tsx` (trasa `/calendar`), na razie bez projektu graficznego.
+- Migracje dopisuje się wyłącznie na końcu listy `migrations` w `store.go`.
+- Ekorepetycje (stary projekt w Pythonie) są poza repozytorium, w `~/ekorepetycje-wzor`, tylko jako wzór funkcji. Strona główna, kontakt, czat AI, AWS i Terraform są poza zakresem (R-109).
+
 ## graphify
 
-This project has a graphify knowledge graph at graphify-out/.
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
 
 Rules:
-- Before answering architecture or codebase questions, read graphify-out/GRAPH_REPORT.md for god nodes and community structure
-- If graphify-out/wiki/index.md exists, navigate it instead of reading raw files
-- After modifying code files in this session, run `graphify update .` to keep the graph current (AST-only, no API cost)
+- When graphify-out/graph.json exists, run `graphify query "<question>"` before your first grep, search or source-file read for a codebase question, and put this rule in every subagent prompt that explores code. Read raw files only for lines the graph or an earlier read already located. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. When the answer is under a Markdown heading, `graphify section "<heading>"` prints that section's text, so the .md need not be opened. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+- A committed graphify-out/graph.json is rewritten whole on every build, so a large diff to it in a pull request is expected. Do not flag it as churn or suggest skipping the graph rebuild or its hooks.
 
 ### Git worktrees i graf
-Każdy agent pracuje we własnym `git worktree` (np. `git worktree add ../inkroom-<temat> -b feature/<temat> origin/main`), a katalog główny zostaje na `main`. `graphify-out/` jest w `.gitignore`, więc nowy worktree dostaje graf przez kopię: `cp -r ../inkroom/graphify-out ./graphify-out`. Po zmergowaniu do `main` graf odbudowuje się w katalogu głównym (`graphify update .`), a worktree kopiują go na nowo. Nowe numery wymagań i ADR rezerwuj po sprawdzeniu `origin/main` i otwartych PR-ów (`gh pr list`), żeby uniknąć kolizji.
+Każdy agent pracuje we własnym `git worktree` (np. `git worktree add ../<repo>-<temat> -b feature/<temat> origin/main`), a katalog główny zostaje na `main`. `graphify-out/` jest w `.gitignore`, więc nowy worktree dostaje graf przez kopię: `cp -r <główny katalog>/graphify-out ./graphify-out`. Po zmergowaniu do `main` graf odbudowuje się w katalogu głównym (`graphify update .`), a worktree kopiują go na nowo. Nowe numery wymagań i ADR rezerwuj po sprawdzeniu `origin/main` i otwartych PR-ów (`gh pr list`), żeby uniknąć kolizji.
