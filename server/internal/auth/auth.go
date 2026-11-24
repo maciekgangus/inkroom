@@ -95,6 +95,12 @@ type Service struct {
 	googleMu      sync.Mutex
 	googlePending map[string]pendingGoogle
 
+	// TrustProxyHeaders says the app sits behind a proxy that sets CF-Connecting-IP and
+	// X-Forwarded-Proto (the Cloudflare tunnel in deploy). Off by default, so a directly exposed
+	// instance does not trust those headers and cannot be tricked into another client's rate
+	// limit (security audit 2026-11).
+	TrustProxyHeaders bool
+
 	failMu sync.Mutex
 	fails  map[string][]time.Time
 
@@ -126,7 +132,7 @@ func (s *Service) Register(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusServiceUnavailable, "Rejestracja jest chwilowo niedostępna")
 		return
 	}
-	if err := s.Captcha.Verify(r.Context(), c.Captcha, clientIP(r)); err != nil {
+	if err := s.Captcha.Verify(r.Context(), c.Captcha, s.clientIP(r)); err != nil {
 		fail(w, http.StatusBadRequest, "Nie udało się potwierdzić, że nie jesteś robotem. Spróbuj jeszcze raz")
 		return
 	}
@@ -217,7 +223,7 @@ func (s *Service) Login(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusUnauthorized, "Nieprawidłowy login lub hasło")
 		return
 	}
-	ipKey := "ip:" + clientIP(r)
+	ipKey := "ip:" + s.clientIP(r)
 	u, err := s.store.UserByLogin(login)
 	// Failures are counted per account however it was named (its e-mail or its username), and
 	// per name for accounts that do not exist.
@@ -258,7 +264,7 @@ func (s *Service) Logout(w http.ResponseWriter, r *http.Request) {
 
 // ClearCookie tells the browser to drop the session cookie.
 func (s *Service) ClearCookie(w http.ResponseWriter, r *http.Request) {
-	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: isSecure(r)})
+	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: s.isSecure(r)})
 }
 
 // MinPassword and MaxPassword bound the length of a password.
@@ -305,7 +311,7 @@ func (s *Service) startSession(w http.ResponseWriter, r *http.Request, u store.U
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name: cookieName, Value: token, Path: "/", MaxAge: int(sessionTTL.Seconds()),
-		HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: isSecure(r),
+		HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: s.isSecure(r),
 	})
 }
 
@@ -366,24 +372,38 @@ func normalizeEmail(raw string) (string, error) {
 	return strings.ToLower(raw), nil
 }
 
-func isSecure(r *http.Request) bool {
-	return r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+func (s *Service) isSecure(r *http.Request) bool {
+	return r.TLS != nil || (s.TrustProxyHeaders && strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https"))
 }
 
 // ClientIP is the address of the caller as clientIP finds it. It is for rate limits kept in
 // memory; the address is never logged or stored.
-func ClientIP(r *http.Request) string { return clientIP(r) }
+func (s *Service) ClientIP(r *http.Request) string { return s.clientIP(r) }
 
-// clientIP prefers the address Cloudflare reports (the app is only reachable through the tunnel).
-func clientIP(r *http.Request) string {
-	if ip := r.Header.Get("CF-Connecting-IP"); ip != "" {
-		return ip
+// clientIP prefers the address Cloudflare reports, but only when the app is configured to sit
+// behind that proxy (TrustProxyHeaders); otherwise the header could be forged to share or dodge
+// an address-based rate limit.
+func (s *Service) clientIP(r *http.Request) string {
+	if s.TrustProxyHeaders {
+		if ip := r.Header.Get("CF-Connecting-IP"); ip != "" {
+			return ip
+		}
 	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		return r.RemoteAddr
 	}
 	return host
+}
+
+// SessionTokenHash returns the hash of the session cookie of the request, or "" when there is
+// none (used to keep the current session when others are ended).
+func (s *Service) SessionTokenHash(r *http.Request) string {
+	c, err := r.Cookie(cookieName)
+	if err != nil {
+		return ""
+	}
+	return hashToken(c.Value)
 }
 
 // RequireJSON enforces Content-Type: application/json, which (with SameSite=Lax) blocks CSRF.

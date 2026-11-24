@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"mime"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -72,7 +73,11 @@ func main() {
 		}
 	}
 	seedDevUser(a)
-	srv := &http.Server{Addr: ":" + getenv("PORT", "8080"), Handler: a.Handler()}
+	a.auth.TrustProxyHeaders = os.Getenv("TRUST_PROXY_HEADERS") == "1"
+	if !a.auth.TrustProxyHeaders {
+		slog.Warn("TRUST_PROXY_HEADERS is not set: proxy headers (CF-Connecting-IP, X-Forwarded-Proto) are not trusted; set it when running behind the Cloudflare tunnel")
+	}
+	srv := &http.Server{Addr: listenAddr(), Handler: a.Handler()}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -95,14 +100,48 @@ func main() {
 	slog.Info("stopped")
 }
 
+// listenAddr is where the app listens: BIND_ADDR, else ":PORT". A development-only switch
+// (ADMIN_DEV_OPEN or SEED_USER_*) with the default all-interfaces bind is never left public: the
+// dev admin page is forced to loopback and a seeded account refuses to start, so a mistake cannot
+// expose them on a server. Set BIND_ADDR to override on purpose (the local docker-compose does,
+// to publish the port) (security audit 2026-11).
+func listenAddr() string {
+	bind := os.Getenv("BIND_ADDR")
+	if bind != "" {
+		return bind
+	}
+	port := getenv("PORT", "8080")
+	bind = ":" + port
+	devSwitch := os.Getenv("ADMIN_DEV_OPEN") == "1" || os.Getenv("SEED_USER_EMAIL") != "" || os.Getenv("SEED_USER_PASSWORD") != ""
+	if devSwitch && publicBind(bind) {
+		if os.Getenv("SEED_USER_EMAIL") != "" || os.Getenv("SEED_USER_PASSWORD") != "" {
+			fatal("SEED_USER_* is set and the app would listen on all interfaces: refusing to start (development only; set BIND_ADDR=127.0.0.1:"+port+" to run anyway)", errors.New("public bind with a seeded dev account"))
+		}
+		bind = "127.0.0.1:" + port
+		slog.Warn("ADMIN_DEV_OPEN with the default bind: listening on loopback only", "addr", bind)
+	}
+	return bind
+}
+
+// publicBind reports whether addr listens on all interfaces (":8080", "0.0.0.0:8080", "[::]:8080").
+func publicBind(addr string) bool {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return false
+	}
+	return host == "" || host == "0.0.0.0" || host == "::" || host == "[::]"
+}
+
 // startMetrics serves /metrics (Prometheus text format) on METRICS_ADDR, a listener of its own:
 // never the public port and never behind the tunnel, only reachable on the machine or the
-// compose network (ADR 0022). Default :9100; set it empty to turn the endpoint off. A port that
-// is taken is a warning, not a reason to stop the app.
+// compose network (ADR 0022). Default 127.0.0.1:9100 (loopback, so a local run does not expose
+// it on the network); the server compose sets METRICS_ADDR=:9100 for the scrape over the compose
+// network. Set it empty to turn the endpoint off. A port that is taken is a warning, not a reason
+// to stop the app.
 func startMetrics() *http.Server {
 	addr, set := os.LookupEnv("METRICS_ADDR")
 	if !set {
-		addr = ":9100"
+		addr = "127.0.0.1:9100"
 	}
 	if addr == "" {
 		slog.Info("METRICS_ADDR is empty: /metrics is off")

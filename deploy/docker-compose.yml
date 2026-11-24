@@ -25,6 +25,9 @@ services:
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       METRICS_ADDR: ${METRICS_ADDR-:9100}
+      # Behind the Cloudflare tunnel: trust CF-Connecting-IP / X-Forwarded-Proto (rate limits,
+      # secure cookies). Never set this on an instance reachable directly (security audit 2026-11).
+      TRUST_PROXY_HEADERS: "1"
     logging: *logging
     volumes:
       - data:/data
@@ -72,7 +75,9 @@ services:
       - data:/data
 
   cloudflared:
-    image: cloudflare/cloudflared:latest
+    # Pinned version, never the mutable latest tag (security audit 2026-11); update on purpose,
+    # the nightly update.sh pulls whatever this file names.
+    image: cloudflare/cloudflared:2026.11.2
     # The tunnel's own configuration (which hostname goes to which service) lives in Cloudflare;
     # this container only needs the token, and reaches the app by its name on the compose network.
     command: tunnel --no-autoupdate run

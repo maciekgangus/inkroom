@@ -278,6 +278,7 @@ func TestCookieFlags(t *testing.T) {
 		t.Fatalf("plain http cookie: %+v", c)
 	}
 	e2 := setup(t)
+	e2.svc.TrustProxyHeaders = true // behind the proxy, as in deploy
 	w := e2.do(e2.svc.Register, creds, func(r *http.Request) { r.Header.Set("X-Forwarded-Proto", "https") })
 	if !w.Result().Cookies()[0].Secure {
 		t.Fatal("cookie should be Secure behind https")

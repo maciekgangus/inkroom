@@ -2,7 +2,8 @@
 # The release (image tag or commit), told to the browser and the server so an old tab notices (R-099).
 ARG VERSION=dev
 
-FROM node:22-alpine AS web
+# Pinned patch version, not the floating 22-alpine tag (security audit 2026-11; multi-arch, so local builds on arm64 still work).
+FROM node:22.23.5-alpine AS web
 ARG VERSION
 WORKDIR /web
 COPY web/package.json web/package-lock.json ./
@@ -10,7 +11,7 @@ RUN npm ci
 COPY web/ ./
 RUN VITE_APP_VERSION=$VERSION npm run build
 
-FROM golang:1.26-alpine AS server
+FROM golang:1.26.11-alpine AS server
 ARG VERSION
 WORKDIR /server
 COPY server/go.mod server/go.sum* ./

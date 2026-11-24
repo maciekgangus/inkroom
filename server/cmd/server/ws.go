@@ -17,6 +17,10 @@ const (
 	maxMessageBytes = 256 << 10
 	sendBuffer      = 256
 	writeTimeout    = 10 * time.Second
+	// One connection may send at most maxWSMessages per wsRateWindow. A person drawing sends well
+	// under a hundred messages a second; a flood sends thousands (security audit 2026-11).
+	maxWSMessages = 1200
+	wsRateWindow  = 10 * time.Second
 )
 
 // serveWS joins the caller to the board's room and pumps messages both ways.
@@ -89,10 +93,15 @@ func (a *app) serveWS(w http.ResponseWriter, r *http.Request) {
 		conn.Close(websocket.StatusGoingAway, "disconnected")
 	}()
 
+	rl := newRateLimiter(time.Now, maxWSMessages, wsRateWindow, 1)
 	for {
 		_, msg, err := conn.Read(ctx)
 		if err != nil {
 			conn.Close(websocket.StatusNormalClosure, "")
+			return
+		}
+		if !rl.allow("conn") {
+			conn.Close(websocket.StatusPolicyViolation, "too many messages")
 			return
 		}
 		metrics.WSMessage(metrics.DirIn, msg) // before Handle, which takes ownership of msg

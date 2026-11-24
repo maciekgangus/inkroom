@@ -62,6 +62,10 @@ func (a *app) adminOnly(next http.HandlerFunc) http.HandlerFunc {
 		}
 		w.Header().Set("X-Robots-Tag", "noindex, nofollow")
 		w.Header().Set("Cache-Control", "no-store")
+		// The admin page is embedded in the binary and uses one inline script, so the app's CSP
+		// (script-src 'self') would block it; this page gets its own policy that still allows no
+		// external scripts or frames (security audit 2026-11).
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'")
 		next(w, r)
 	}
 }

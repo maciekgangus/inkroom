@@ -19,7 +19,13 @@ var (
 	ErrEmailTaken = errors.New("email already registered")
 	// ErrUsernameTaken is returned when a username is used (letter case does not matter).
 	ErrUsernameTaken = errors.New("username already taken")
+	// ErrQuota is returned when a board would grow past MaxBoardBytes (security audit 2026-11).
+	ErrQuota = errors.New("board storage quota exceeded")
 )
+
+// MaxBoardBytes caps what one board's strokes and images take together, so a leaked board link
+// cannot be used to fill the disk (security audit 2026-11). A variable so tests can lower it.
+var MaxBoardBytes = int64(128 << 20)
 
 // User is an account.
 type User struct {
@@ -450,6 +456,21 @@ func (s *Store) DeleteSession(tokenHash string) error {
 	return err
 }
 
+// DeleteOtherSessions ends every session of the account except keepHash (after a password
+// change, so a stolen cookie stops working; security audit 2026-11).
+func (s *Store) DeleteOtherSessions(userID int64, keepHash string) error {
+	_, err := s.db.Exec("DELETE FROM sessions WHERE user_id = ? AND token_hash != ?", userID, keepHash)
+	return err
+}
+
+// boardBytes returns what a board's strokes and images take together.
+func (s *Store) boardBytes(boardID string) (int64, error) {
+	var n int64
+	err := s.db.QueryRow(`SELECT (SELECT COALESCE(SUM(LENGTH(data)), 0) FROM strokes WHERE board_id = ?)
+		+ (SELECT COALESCE(SUM(LENGTH(data)), 0) FROM images WHERE board_id = ?)`, boardID, boardID).Scan(&n)
+	return n, err
+}
+
 // CreateBoard adds a board owned by ownerID.
 func (s *Store) CreateBoard(id string, ownerID int64, name string) (Board, error) {
 	now := time.Now().Truncate(time.Second)
@@ -554,7 +575,23 @@ func (s *Store) RecordVisit(userID int64, boardID string, at time.Time) error {
 }
 
 // Apply writes a batch of stroke changes in one transaction and bumps the board's updated_at.
+// It refuses batches that would push the board past MaxBoardBytes (ErrQuota).
 func (s *Store) Apply(boardID string, ops []Op, at time.Time) error {
+	var incoming int64
+	for _, op := range ops {
+		if op.Add || op.Replace {
+			incoming += int64(len(op.Data))
+		}
+	}
+	if incoming > 0 {
+		used, err := s.boardBytes(boardID)
+		if err != nil {
+			return err
+		}
+		if used+incoming > MaxBoardBytes {
+			return ErrQuota
+		}
+	}
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
@@ -596,9 +633,17 @@ func (s *Store) LoadStrokes(boardID string) ([][]byte, error) {
 	return out, rows.Err()
 }
 
-// SaveImage stores an image's bytes under a board. The board must exist.
+// SaveImage stores an image's bytes under a board. The board must exist, and the board's quota
+// must have room for the image (ErrQuota).
 func (s *Store) SaveImage(id, boardID, mime string, data []byte) error {
-	_, err := s.db.Exec("INSERT INTO images (id, board_id, mime, data, created_at) VALUES (?, ?, ?, ?, ?)",
+	used, err := s.boardBytes(boardID)
+	if err != nil {
+		return err
+	}
+	if used+int64(len(data)) > MaxBoardBytes {
+		return ErrQuota
+	}
+	_, err = s.db.Exec("INSERT INTO images (id, board_id, mime, data, created_at) VALUES (?, ?, ?, ?, ?)",
 		id, boardID, mime, data, unix(time.Now()))
 	return err
 }

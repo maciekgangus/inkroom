@@ -1,0 +1,175 @@
+package main
+
+import (
+	"context"
+	"errors"
+	"net/http"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/coder/websocket"
+)
+
+// Security audit 2026-11: tests for the fixes (headers, rate limits, quotas, dev guards).
+
+func TestSecurityHeadersOnEveryResponse(t *testing.T) {
+	srv, _, _ := testApp(t)
+	resp, err := http.Get(srv.URL + "/healthz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	h := resp.Header
+	if h.Get("X-Content-Type-Options") != "nosniff" {
+		t.Error("missing nosniff")
+	}
+	if h.Get("X-Frame-Options") != "DENY" {
+		t.Error("missing X-Frame-Options: DENY")
+	}
+	if h.Get("Referrer-Policy") != "strict-origin-when-cross-origin" {
+		t.Error("missing Referrer-Policy")
+	}
+	if csp := h.Get("Content-Security-Policy"); !strings.Contains(csp, "default-src 'self'") || !strings.Contains(csp, "object-src 'none'") {
+		t.Errorf("bad CSP: %q", csp)
+	}
+}
+
+func TestAdminPageKeepsItsOwnStrictCSP(t *testing.T) {
+	srv, a, _ := testApp(t)
+	a.configureAdminDev(true) // direct request, no proxy headers: the page opens locally
+	resp, err := http.Get(srv.URL + "/admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("admin page = %d", resp.StatusCode)
+	}
+	csp := resp.Header.Get("Content-Security-Policy")
+	if !strings.Contains(csp, "script-src 'unsafe-inline'") || strings.Contains(csp, "challenges.cloudflare.com") {
+		t.Errorf("admin CSP should allow only its own inline script: %q", csp)
+	}
+	if resp.Header.Get("X-Robots-Tag") == "" {
+		t.Error("admin page should stay noindex")
+	}
+}
+
+func TestWSMessageRateLimit(t *testing.T) {
+	srv, _, _ := testApp(t)
+	id := newBoard(t, srv)
+	c := dial(t, srv, id)
+	read(t, c) // the snapshot
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	for i := 0; i < maxWSMessages; i++ {
+		if err := c.Write(ctx, websocket.MessageText, []byte(`{"t":"ping"}`)); err != nil {
+			t.Fatalf("write %d: %v", i, err)
+		}
+	}
+	// One more than the limit: the server closes the connection as misbehaving.
+	_ = c.Write(ctx, websocket.MessageText, []byte(`{"t":"ping"}`))
+	// Drain the pongs still queued, then the close must arrive.
+	for {
+		_, _, err := c.Read(ctx)
+		if err != nil {
+			var ce websocket.CloseError
+			if !errors.As(err, &ce) || ce.Code != websocket.StatusPolicyViolation {
+				t.Fatalf("expected policy-violation close, got %v", err)
+			}
+			return
+		}
+	}
+}
+
+// pngMagic is enough for http.DetectContentType to report image/png.
+var pngMagic = []byte("\x89PNG\r\n\x1a\n" + strings.Repeat("\x00", 32))
+
+func TestUploadRateLimitPerIP(t *testing.T) {
+	srv, _, _ := testApp(t)
+	id := newBoard(t, srv)
+	for i := 0; i < maxImageUploadsPerIP; i++ {
+		resp, err := http.Post(srv.URL+"/api/boards/"+id+"/images", "application/octet-stream", strings.NewReader(string(pngMagic)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusCreated {
+			t.Fatalf("upload %d = %d", i, resp.StatusCode)
+		}
+	}
+	resp, err := http.Post(srv.URL+"/api/boards/"+id+"/images", "application/octet-stream", strings.NewReader(string(pngMagic)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("upload past the limit = %d, want 429", resp.StatusCode)
+	}
+}
+
+func TestPasswordChangeEndsOtherSessions(t *testing.T) {
+	srv, _, _ := testApp(t)
+	u := register(t, srv, "a@example.com")
+	// A second session for the same account.
+	resp := call(t, srv, "POST", "/api/login", `{"login":"a@example.com","password":"password1"}`, nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("login = %d", resp.StatusCode)
+	}
+	var second *http.Cookie
+	for _, c := range resp.Cookies() {
+		if c.Name == "session" {
+			second = c
+		}
+	}
+	if second == nil {
+		t.Fatal("no session cookie on login")
+	}
+	// Change the password from the first session.
+	resp = call(t, srv, "POST", "/api/account/password", `{"current":"password1","new":"password2"}`, &u)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("password change = %d", resp.StatusCode)
+	}
+	// The old session is gone, the current one still works.
+	req, _ := http.NewRequest("GET", srv.URL+"/api/me", nil)
+	req.AddCookie(second)
+	r2, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r2.Body.Close()
+	if r2.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("old session after password change = %d, want 401", r2.StatusCode)
+	}
+	resp = call(t, srv, "GET", "/api/me", "", &u)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("current session after password change = %d, want 200", resp.StatusCode)
+	}
+}
+
+func TestListenAddrGuardsDevSwitches(t *testing.T) {
+	t.Setenv("BIND_ADDR", "")
+	t.Setenv("PORT", "8080")
+	t.Setenv("ADMIN_DEV_OPEN", "")
+	t.Setenv("SEED_USER_EMAIL", "")
+	t.Setenv("SEED_USER_PASSWORD", "")
+	if got := listenAddr(); got != ":8080" {
+		t.Fatalf("default bind = %q", got)
+	}
+	t.Setenv("ADMIN_DEV_OPEN", "1")
+	if got := listenAddr(); got != "127.0.0.1:8080" {
+		t.Fatalf("dev admin with default bind = %q, want loopback", got)
+	}
+	t.Setenv("BIND_ADDR", "0.0.0.0:9000") // explicit: the operator's choice, e.g. docker compose
+	if got := listenAddr(); got != "0.0.0.0:9000" {
+		t.Fatalf("explicit BIND_ADDR = %q", got)
+	}
+	for addr, want := range map[string]bool{":8080": true, "0.0.0.0:8080": true, "[::]:8080": true, "127.0.0.1:8080": false, "localhost:8080": false} {
+		if got := publicBind(addr); got != want {
+			t.Errorf("publicBind(%q) = %v, want %v", addr, got, want)
+		}
+	}
+}

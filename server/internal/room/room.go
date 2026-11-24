@@ -96,6 +96,9 @@ type entry struct {
 type Room struct {
 	mu      sync.Mutex
 	strokes map[string]entry
+	// size is what the strokes take in memory; it bounds a board at store.MaxBoardBytes even
+	// before the next flush (security audit 2026-11).
+	size    int64
 	seq     int
 	clients map[*Client]*presence
 	// background is shared by everyone; only the server changes it (ADR 0010).
@@ -147,10 +150,15 @@ func newPersisted(saved [][]byte, background string) *Room {
 			continue
 		}
 		r.seq++
+		r.size += int64(len(raw))
 		r.strokes[id] = entry{seq: r.seq, raw: append(json.RawMessage(nil), raw...)}
 	}
 	return r
 }
+
+// errBoardFull means the board reached store.MaxBoardBytes; the caller's connection is closed as
+// misbehaving (security audit 2026-11).
+var errBoardFull = errors.New("board is full")
 
 type message struct {
 	T      string          `json:"t"`
@@ -273,7 +281,11 @@ func (r *Room) Handle(c *Client, raw []byte) error {
 			return err
 		}
 		if _, ok := r.strokes[id]; !ok {
+			if r.size+int64(len(m.Stroke)) > store.MaxBoardBytes {
+				return errBoardFull
+			}
 			r.seq++
+			r.size += int64(len(m.Stroke))
 			r.strokes[id] = entry{seq: r.seq, raw: m.Stroke}
 			if r.track {
 				r.pending = append(r.pending, store.Op{Add: true, ID: id, Data: m.Stroke})
@@ -292,6 +304,10 @@ func (r *Room) Handle(c *Client, raw []byte) error {
 		if !ok {
 			return nil // deleted meanwhile: an update never brings an element back
 		}
+		if delta := int64(len(m.Stroke)) - int64(len(e.raw)); r.size+delta > store.MaxBoardBytes {
+			return errBoardFull
+		}
+		r.size += int64(len(m.Stroke)) - int64(len(e.raw))
 		e.raw = m.Stroke // same place in the snapshot, new content
 		r.strokes[id] = e
 		if r.track {
@@ -302,7 +318,8 @@ func (r *Room) Handle(c *Client, raw []byte) error {
 		if err := checkID(m.ID); err != nil {
 			return err
 		}
-		if _, ok := r.strokes[m.ID]; ok {
+		if e, ok := r.strokes[m.ID]; ok {
+			r.size -= int64(len(e.raw))
 			delete(r.strokes, m.ID)
 			if r.track {
 				r.pending = append(r.pending, store.Op{ID: m.ID})
