@@ -1,9 +1,8 @@
 #!/bin/sh
 # PreToolUse hook for Bash: block `gh pr create` for a change with UI code until the feature was
 # run in a browser against the test server and screenshots were saved (newer than the last commit).
-# No jq on this machine: match on the raw JSON from stdin.
-input=$(cat)
-case "$input" in
+cmd=$(jq -r '.tool_input.command // empty' 2>/dev/null)
+case "$cmd" in
 *"gh pr create"*) ;;
 *) exit 0 ;;
 esac
@@ -20,4 +19,4 @@ for f in "$dir"/*.png; do
 done
 [ -n "$fresh" ] && exit 0
 msg="Zablokowano gh pr create: zmiana dotyka interfejsu, a w $dir nie ma zrzutów ekranu nowszych niż ostatni commit. Odpal /test-server, przejdź funkcję w przeglądarce (Chromium, localhost:8099, konto test; sprawdź konsolę), zapisz zrzuty jako PNG w tym katalogu, dołącz je do opisu PR i pokaż użytkownikowi. Dopiero potem ponów. Blocked: run the feature in a browser against the test server and save screenshots (PNG, newer than the last commit) to that directory first."
-printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"%s"}}\n' "$msg"
+jq -n --arg m "$msg" '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:$m}}'
