@@ -683,6 +683,7 @@ export class Controller {
 			color?: string;
 			size?: number;
 			fontSize?: number;
+			font?: Stroke["font"];
 			opacity?: number;
 		},
 	): void {
@@ -700,6 +701,7 @@ export class Controller {
 			text,
 			...(width ? { width } : {}),
 			...(look?.fontSize ? { fontSize: look.fontSize } : {}),
+			...(look?.font ? { font: look.font } : {}),
 			...(opacity !== undefined && opacity < 1 ? { opacity } : {}),
 			points: [[x, y, 0.5]],
 		});

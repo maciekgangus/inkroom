@@ -2,39 +2,53 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { MarkdownTextEditor } from "./markdown-text-editor";
+import { stepSize, type TextFormat } from "./text-toolbar";
 
-describe("MarkdownTextEditor", () => {
+describe("MarkdownTextEditor (R-101, R-102)", () => {
 	let root: HTMLElement;
 	let onCommit: (text: string) => void;
 	let onCancel: () => void;
 
 	const field = () => root.querySelector("textarea") as HTMLTextAreaElement;
-	const toolbar = () => root.querySelector(".markdown-toolbar");
-	const helpButton = () =>
-		root.querySelector(".markdown-help-btn") as HTMLButtonElement;
+	const toolbar = () => root.querySelector(".text-toolbar") as HTMLElement;
+	const button = (label: string) =>
+		root.querySelector(`[aria-label="${label}"]`) as HTMLButtonElement;
+	const click = async (el: Element) => {
+		await act(async () => {
+			(el as HTMLElement).click();
+		});
+	};
+	/** Puts a text in the field and selects `from..to`, as the person would. */
+	const select = (value: string, from: number, to = from) => {
+		const f = field();
+		f.value = value;
+		f.focus();
+		f.setSelectionRange(from, to);
+	};
 
-	beforeEach(async () => {
-		root = document.createElement("div");
-		// Make it large enough to contain the editor
-		root.style.width = "1000px";
-		root.style.height = "1000px";
-		root.style.position = "relative";
-		document.body.append(root);
-		onCommit = vi.fn();
-		onCancel = vi.fn();
+	const mount = async (props: Record<string, unknown> = {}) => {
 		await act(async () => {
 			render(
 				<MarkdownTextEditor
 					x={120}
-					y={80}
+					y={160}
 					fontSize={30}
 					color="#d32f2f"
 					onCommit={onCommit}
 					onCancel={onCancel}
+					{...props}
 				/>,
 				root,
 			);
 		});
+	};
+
+	beforeEach(async () => {
+		root = document.createElement("div");
+		document.body.append(root);
+		onCommit = vi.fn();
+		onCancel = vi.fn();
+		await mount();
 	});
 
 	afterEach(() => {
@@ -42,317 +56,421 @@ describe("MarkdownTextEditor", () => {
 		root.remove();
 	});
 
-	test("renders textarea with correct position and size", () => {
-		const textarea = field();
-		expect(textarea).toBeTruthy();
-
-		const style = textarea.style;
-		expect(style.left).toBe("120px");
-		expect(style.top).toBe("80px");
-		expect(style.fontSize).toBe("30px");
-		expect(style.color).toBe("rgb(211, 47, 47)");
+	test("the field is where the text is, in the font of the text", async () => {
+		expect(field().style.left).toBe("120px");
+		expect(field().style.top).toBe("160px");
+		expect(field().style.fontSize).toBe("30px");
+		await mount({ font: "mono" });
+		expect(field().style.fontFamily).toContain("JetBrains Mono");
 	});
 
-	test("renders markdown toolbar above editor", () => {
-		const toolbarEl = toolbar() as HTMLElement;
-		expect(toolbarEl).toBeTruthy();
-
-		const style = toolbarEl.style;
-		expect(style.left).toBe("120px");
-		expect(style.top).toBe("44px"); // y - 36
+	test("the toolbar is over the field and has the formatting buttons", () => {
+		expect(toolbar().getAttribute("role")).toBe("toolbar");
+		expect(toolbar().classList.contains("above")).toBe(true);
+		for (const label of [
+			"Pogrubienie (Ctrl+B)",
+			"Kursywa (Ctrl+I)",
+			"Przekreślenie (Ctrl+D)",
+			"Kod (Ctrl+E)",
+			"Styl wiersza",
+			"Lista punktowana",
+			"Lista numerowana",
+			"Cytat",
+			"Ściąga Markdown",
+		])
+			expect(button(label), label).toBeTruthy();
 	});
 
-	test("renders help button next to editor", () => {
-		const helpBtn = helpButton();
-		expect(helpBtn).toBeTruthy();
-
-		const style = helpBtn.style;
-		// Should be positioned to the right of the editor
-		expect(parseInt(style.left, 10)).toBeGreaterThan(120);
-		expect(style.top).toBe("80px");
+	test("the toolbar goes under the field when there is no room over it", async () => {
+		await mount({ y: 20 });
+		expect(toolbar().classList.contains("below")).toBe(true);
 	});
 
-	test("toolbar has all formatting buttons", () => {
-		const buttons = toolbar()?.querySelectorAll(".markdown-toolbar-btn") ?? [];
-		expect(buttons.length).toBe(7); // B, I, S, code, list, H1, H2
+	test("bold, italic, strike and code wrap the selected text", async () => {
+		for (const [label, text] of [
+			["Pogrubienie (Ctrl+B)", "ala **ma** kota"],
+			["Kursywa (Ctrl+I)", "ala *ma* kota"],
+			["Przekreślenie (Ctrl+D)", "ala ~~ma~~ kota"],
+			["Kod (Ctrl+E)", "ala `ma` kota"],
+		]) {
+			select("ala ma kota", 4, 6);
+			await click(button(label));
+			expect(field().value, label).toBe(text);
+		}
+	});
 
-		const boldBtn = Array.from(buttons).find((b) =>
-			b.textContent?.includes("B"),
+	test("a button is pressed while the cursor is in that format, and a second press undoes it", async () => {
+		select("ala ma kota", 4, 6);
+		await click(button("Pogrubienie (Ctrl+B)"));
+		expect(button("Pogrubienie (Ctrl+B)").getAttribute("aria-pressed")).toBe(
+			"true",
 		);
-		const italicBtn = Array.from(buttons).find((b) =>
-			b.textContent?.includes("I"),
+		expect(button("Kursywa (Ctrl+I)").getAttribute("aria-pressed")).toBe(
+			"false",
 		);
-		const strikethroughBtn = Array.from(buttons).find((b) =>
-			b.textContent?.includes("S"),
-		);
-		const codeBtn = Array.from(buttons).find((b) =>
-			b.textContent?.includes("`"),
-		);
-		const listBtn = Array.from(buttons).find((b) =>
-			b.textContent?.includes("-"),
-		);
-
-		expect(boldBtn).toBeTruthy();
-		expect(italicBtn).toBeTruthy();
-		expect(strikethroughBtn).toBeTruthy();
-		expect(codeBtn).toBeTruthy();
-		expect(listBtn).toBeTruthy();
+		await click(button("Pogrubienie (Ctrl+B)"));
+		expect(field().value).toBe("ala ma kota");
 	});
 
-	test("bold button wraps selected text with **", async () => {
-		const textarea = field();
+	test("with no selection the word under the cursor is formatted", async () => {
+		select("ala ma kota", 5);
+		await click(button("Pogrubienie (Ctrl+B)"));
+		expect(field().value).toBe("ala **ma** kota");
+	});
+
+	test("Ctrl+B and Ctrl+I work from the keyboard", async () => {
+		select("ala ma kota", 4, 6);
 		await act(async () => {
-			textarea.value = "test text";
-			textarea.selectionStart = 0;
-			textarea.selectionEnd = 4;
-		});
-
-		const boldBtn = toolbar()?.querySelectorAll(".markdown-toolbar-btn")[0];
-		act(() => {
-			boldBtn?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-		});
-
-		expect(textarea.value).toBe("**test** text");
-		expect(textarea.selectionStart).toBe(2);
-		expect(textarea.selectionEnd).toBe(6);
-	});
-
-	test("italic button wraps selected text with *", async () => {
-		const textarea = field();
-		await act(async () => {
-			textarea.value = "test text";
-			textarea.selectionStart = 5;
-			textarea.selectionEnd = 9;
-		});
-
-		const italicBtn = toolbar()?.querySelectorAll(".markdown-toolbar-btn")[1];
-		act(() => {
-			italicBtn?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-		});
-
-		expect(textarea.value).toBe("test *text*");
-	});
-
-	test("format button inserts tags at cursor when no selection", async () => {
-		const textarea = field();
-		await act(async () => {
-			textarea.value = "test";
-			textarea.selectionStart = 2;
-			textarea.selectionEnd = 2;
-		});
-
-		const boldBtn = toolbar()?.querySelectorAll(".markdown-toolbar-btn")[0];
-		act(() => {
-			boldBtn?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-		});
-
-		expect(textarea.value).toBe("te****st");
-		expect(textarea.selectionStart).toBe(4);
-		expect(textarea.selectionEnd).toBe(4);
-	});
-
-	test("keyboard shortcuts work for formatting", async () => {
-		const textarea = field();
-
-		// Test Ctrl+B for bold
-		await act(async () => {
-			textarea.value = "test";
-			textarea.selectionStart = 0;
-			textarea.selectionEnd = 4;
-		});
-
-		act(() => {
-			const event = new KeyboardEvent("keydown", {
-				key: "b",
-				ctrlKey: true,
-				bubbles: true,
-				cancelable: true,
-			});
-			textarea.dispatchEvent(event);
-		});
-
-		expect(textarea.value).toBe("**test**");
-
-		// Test Ctrl+I for italic
-		await act(async () => {
-			textarea.value = "test";
-			textarea.selectionStart = 0;
-			textarea.selectionEnd = 4;
-		});
-
-		act(() => {
-			const event = new KeyboardEvent("keydown", {
-				key: "i",
-				ctrlKey: true,
-				bubbles: true,
-				cancelable: true,
-			});
-			textarea.dispatchEvent(event);
-		});
-
-		expect(textarea.value).toBe("*test*");
-	});
-
-	test("committing text calls onCommit with the text", () => {
-		const textarea = field();
-		textarea.value = "hello world";
-
-		act(() => {
-			const event = new KeyboardEvent("keydown", {
-				key: "Enter",
-				bubbles: true,
-				cancelable: true,
-			});
-			textarea.dispatchEvent(event);
-		});
-
-		expect(onCommit).toHaveBeenCalledWith("hello world");
-	});
-
-	test("cancel button calls onCancel", () => {
-		const textarea = field();
-
-		act(() => {
-			const event = new KeyboardEvent("keydown", {
-				key: "Escape",
-				bubbles: true,
-				cancelable: true,
-			});
-			textarea.dispatchEvent(event);
-		});
-
-		expect(onCancel).toHaveBeenCalled();
-	});
-
-	test("list button inserts list item", async () => {
-		const textarea = field();
-		await act(async () => {
-			textarea.value = "";
-			textarea.selectionStart = 0;
-			textarea.selectionEnd = 0;
-		});
-
-		const listBtn = toolbar()?.querySelectorAll(".markdown-toolbar-btn")[4]; // 5th button
-		act(() => {
-			listBtn?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-		});
-
-		expect(textarea.value).toBe("- ");
-	});
-
-	test("H1 button adds # at line start", async () => {
-		const textarea = field();
-		await act(async () => {
-			textarea.value = "Nagłówek";
-			textarea.selectionStart = 0;
-			textarea.selectionEnd = 0;
-		});
-
-		const h1Btn = toolbar()?.querySelectorAll(".markdown-toolbar-btn")[5]; // 6th button
-		act(() => {
-			h1Btn?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-		});
-
-		expect(textarea.value).toBe("# Nagłówek");
-	});
-
-	test("H2 button adds ## at line start", async () => {
-		const textarea = field();
-		await act(async () => {
-			textarea.value = "Podnagłówek";
-			textarea.selectionStart = 0;
-			textarea.selectionEnd = 0;
-		});
-
-		const h2Btn = toolbar()?.querySelectorAll(".markdown-toolbar-btn")[6]; // 7th button
-		act(() => {
-			h2Btn?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-		});
-
-		expect(textarea.value).toBe("## Podnagłówek");
-	});
-
-	describe("with initial text", () => {
-		beforeEach(async () => {
-			await act(async () => {
-				render(
-					<MarkdownTextEditor
-						x={0}
-						y={0}
-						fontSize={20}
-						color="#000"
-						initialText="initial text"
-						onCommit={onCommit}
-						onCancel={onCancel}
-					/>,
-					root,
-				);
-			});
-		});
-
-		test("starts with initial text", () => {
-			expect(field().value).toBe("initial text");
-		});
-	});
-
-	describe("as an area", () => {
-		beforeEach(async () => {
-			await act(async () => {
-				render(
-					<MarkdownTextEditor
-						x={120}
-						y={80}
-						fontSize={30}
-						color="#d32f2f"
-						width={300}
-						minHeight={90}
-						onCommit={onCommit}
-						onCancel={onCancel}
-					/>,
-					root,
-				);
-			});
-		});
-
-		test("textarea has width and minHeight", () => {
-			const textarea = field();
-			const style = textarea.style;
-			expect(style.width).toBe("300px");
-			expect(style.minHeight).toBe("90px");
-		});
-
-		test("Enter inserts newline instead of committing", () => {
-			const textarea = field();
-			textarea.value = "line1";
-
-			act(() => {
-				const event = new KeyboardEvent("keydown", {
-					key: "Enter",
+			field().dispatchEvent(
+				new KeyboardEvent("keydown", {
+					key: "b",
+					ctrlKey: true,
 					bubbles: true,
-					cancelable: true,
-				});
-				textarea.dispatchEvent(event);
-			});
-
-			// Should not have committed
-			expect(onCommit).not.toHaveBeenCalled();
+				}),
+			);
 		});
+		expect(field().value).toBe("ala **ma** kota");
+		select("ala ma kota", 0, 3);
+		await act(async () => {
+			field().dispatchEvent(
+				new KeyboardEvent("keydown", {
+					key: "i",
+					metaKey: true,
+					bubbles: true,
+				}),
+			);
+		});
+		expect(field().value).toBe("*ala* ma kota");
+	});
 
-		test("Ctrl+Enter commits the text", () => {
-			const textarea = field();
-			textarea.value = "hello";
+	test("the style menu makes the line a heading, and Tekst takes it away", async () => {
+		select("ala", 1);
+		await click(button("Styl wiersza"));
+		const h1 = [...root.querySelectorAll("[role=option]")].find(
+			(o) => o.textContent === "Nagłówek 1",
+		) as HTMLElement;
+		await click(h1);
+		expect(field().value).toBe("# ala");
+		expect(root.querySelector("[role=listbox]")).toBeNull(); // the menu closed
+		expect(button("Styl wiersza").textContent).toContain("Nagłówek 1");
+		await click(button("Styl wiersza"));
+		const plain = [...root.querySelectorAll("[role=option]")].find(
+			(o) => o.textContent === "Tekst",
+		) as HTMLElement;
+		await click(plain);
+		expect(field().value).toBe("ala");
+	});
 
-			act(() => {
-				const event = new KeyboardEvent("keydown", {
+	test("the list and quote buttons mark every selected line", async () => {
+		select("a\nb", 0, 3);
+		await click(button("Lista punktowana"));
+		expect(field().value).toBe("- a\n- b");
+		await click(button("Lista numerowana"));
+		expect(field().value).toBe("1. a\n2. b");
+		await click(button("Cytat"));
+		expect(field().value).toBe("> a\n> b");
+	});
+
+	test("Enter at the end of a list item starts the next one, in an area", async () => {
+		await mount({ width: 300 });
+		select("- a", 3);
+		const e = new KeyboardEvent("keydown", {
+			key: "Enter",
+			bubbles: true,
+			cancelable: true,
+		});
+		await act(async () => {
+			field().dispatchEvent(e);
+		});
+		expect(e.defaultPrevented).toBe(true);
+		expect(field().value).toBe("- a\n- ");
+		expect(field().selectionStart).toBe(field().value.length);
+	});
+
+	test("Enter outside a list is left alone", async () => {
+		await mount({ width: 300 });
+		select("abc", 3);
+		const e = new KeyboardEvent("keydown", {
+			key: "Enter",
+			bubbles: true,
+			cancelable: true,
+		});
+		await act(async () => {
+			field().dispatchEvent(e);
+		});
+		expect(e.defaultPrevented).toBe(false);
+	});
+
+	test("the cheat sheet opens and closes", async () => {
+		await click(button("Ściąga Markdown"));
+		expect(root.querySelector(".tb-menu.help")?.textContent).toContain(
+			"**tekst**",
+		);
+		await click(button("Ściąga Markdown"));
+		expect(root.querySelector(".tb-menu.help")).toBeNull();
+	});
+
+	test("pressing the toolbar does not take the focus from the text", async () => {
+		const e = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
+		button("Kursywa (Ctrl+I)").dispatchEvent(e);
+		expect(e.defaultPrevented).toBe(true);
+	});
+
+	test("moving to the toolbar does not end the text, leaving does", async () => {
+		await mount({ initialText: "ala" });
+		await act(async () => {
+			field().dispatchEvent(
+				new FocusEvent("blur", {
+					relatedTarget: button("Kursywa (Ctrl+I)"),
+				}),
+			);
+		});
+		expect(onCommit).not.toHaveBeenCalled();
+		await act(async () => {
+			field().dispatchEvent(new FocusEvent("blur"));
+		});
+		expect(onCommit).toHaveBeenCalledWith("ala");
+	});
+
+	test("Ctrl+Enter keeps the text of an area", async () => {
+		await mount({ width: 300, initialText: "ala" });
+		await act(async () => {
+			field().dispatchEvent(
+				new KeyboardEvent("keydown", {
 					key: "Enter",
 					ctrlKey: true,
 					bubbles: true,
-					cancelable: true,
-				});
-				textarea.dispatchEvent(event);
-			});
-
-			expect(onCommit).toHaveBeenCalledWith("hello");
+				}),
+			);
 		});
+		expect(onCommit).toHaveBeenCalledWith("ala");
+	});
+});
+
+describe("the toolbar's font, size and colour (R-101)", () => {
+	let root: HTMLElement;
+	const format = (): TextFormat => ({
+		font: "sans",
+		size: 24,
+		color: "#111111",
+		colors: ["#111111", "#d32f2f", "#1976d2", "#388e3c", "#f57c00"],
+		display: (c) => c,
+		onFont: vi.fn(),
+		onSize: vi.fn(),
+		onColor: vi.fn(),
+	});
+	const button = (label: string) =>
+		root.querySelector(`[aria-label="${label}"]`) as HTMLButtonElement;
+	const click = async (el: Element) => {
+		await act(async () => {
+			(el as HTMLElement).click();
+		});
+	};
+	const mount = async (f: TextFormat | undefined) => {
+		await act(async () => {
+			render(
+				<MarkdownTextEditor
+					x={120}
+					y={160}
+					fontSize={24}
+					color="#111"
+					format={f}
+					onCommit={vi.fn()}
+					onCancel={vi.fn()}
+				/>,
+				root,
+			);
+		});
+	};
+
+	beforeEach(() => {
+		root = document.createElement("div");
+		document.body.append(root);
+	});
+	afterEach(() => {
+		render(null, root);
+		root.remove();
+	});
+
+	test("without a format there is no font, size or colour, only the formatting", async () => {
+		await mount(undefined);
+		expect(button("Czcionka")).toBeNull();
+		expect(button("Rozmiar czcionki")).toBeNull();
+		expect(button("Kolor tekstu")).toBeNull();
+		expect(button("Kursywa (Ctrl+I)")).toBeTruthy();
+	});
+
+	test("the font list shows each font in its own face and picks one", async () => {
+		const f = format();
+		await mount(f);
+		expect(button("Czcionka").textContent).toContain("Inter");
+		await click(button("Czcionka"));
+		const items = [...root.querySelectorAll<HTMLElement>("[role=option]")];
+		expect(items.map((i) => i.textContent)).toEqual([
+			"Inter",
+			"Lora",
+			"Caveat",
+			"JetBrains Mono",
+		]);
+		expect(items[2].style.fontFamily).toContain("Caveat");
+		await click(items[2]);
+		expect(f.onFont).toHaveBeenCalledWith("hand");
+		expect(root.querySelector("[role=listbox]")).toBeNull();
+	});
+
+	test("the size has minus, plus and a list of sizes", async () => {
+		const f = format();
+		await mount(f);
+		expect(button("Rozmiar czcionki").textContent).toContain("24");
+		await click(button("Zwiększ rozmiar"));
+		expect(f.onSize).toHaveBeenLastCalledWith(28);
+		await click(button("Zmniejsz rozmiar"));
+		expect(f.onSize).toHaveBeenLastCalledWith(20);
+		await click(button("Rozmiar czcionki"));
+		const sizes = [...root.querySelectorAll<HTMLElement>("[role=option]")];
+		expect(sizes.map((s) => s.textContent)).toContain("72");
+		await click(sizes.find((s) => s.textContent === "48") as HTMLElement);
+		expect(f.onSize).toHaveBeenLastCalledWith(48);
+	});
+
+	test("the colour button shows the colour and opens the palette", async () => {
+		const f = format();
+		await mount(f);
+		const bar = root.querySelector(".tb-bar") as HTMLElement;
+		expect(bar.style.background).toBeTruthy();
+		await click(button("Kolor tekstu"));
+		const red = root.querySelector(
+			'[aria-label="text color #d32f2f"]',
+		) as HTMLElement;
+		expect(red).toBeTruthy();
+		await click(red);
+		expect(f.onColor).toHaveBeenCalledWith("#d32f2f");
+	});
+
+	test("a press outside the toolbar closes its menu", async () => {
+		await mount(format());
+		await click(button("Czcionka"));
+		expect(root.querySelector("[role=listbox]")).not.toBeNull();
+		await act(async () => {
+			document.body.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+		});
+		expect(root.querySelector("[role=listbox]")).toBeNull();
+	});
+});
+
+describe("stepSize", () => {
+	test("goes along the list of sizes, and stops at its ends", () => {
+		expect(stepSize(24, 1)).toBe(28);
+		expect(stepSize(24, -1)).toBe(20);
+		expect(stepSize(61, 1)).toBe(64);
+		expect(stepSize(61, -1)).toBe(56);
+		expect(stepSize(96, 1)).toBe(96);
+		expect(stepSize(8, -1)).toBe(8);
+	});
+});
+
+describe("the grip that widens the field (R-101)", () => {
+	let root: HTMLElement;
+	beforeEach(() => {
+		root = document.createElement("div");
+		document.body.append(root);
+		// jsdom has no pointer capture: the grip asks the element for it.
+		const held = new Set<number>();
+		HTMLElement.prototype.setPointerCapture = (id: number) => {
+			held.add(id);
+		};
+		HTMLElement.prototype.hasPointerCapture = (id: number) => held.has(id);
+		HTMLElement.prototype.releasePointerCapture = (id: number) => {
+			held.delete(id);
+		};
+	});
+	afterEach(() => {
+		render(null, root);
+		root.remove();
+	});
+
+	test("dragging it reports the new width, and the last one as final", async () => {
+		const onWidth = vi.fn();
+		await act(async () => {
+			render(
+				<MarkdownTextEditor
+					x={100}
+					y={160}
+					fontSize={24}
+					color="#111"
+					width={200}
+					onWidth={onWidth}
+					onCommit={vi.fn()}
+					onCancel={vi.fn()}
+				/>,
+				root,
+			);
+		});
+		const grip = root.querySelector(".text-grip") as HTMLElement;
+		expect(grip.style.left).toBe("293px"); // the right edge, 100 + 200, less half the grip
+		const ev = (type: string, clientX: number) => {
+			const e = new MouseEvent(type, {
+				bubbles: true,
+				cancelable: true,
+				clientX,
+			});
+			Object.defineProperty(e, "pointerId", { value: 1 });
+			return e;
+		};
+		await act(async () => {
+			grip.dispatchEvent(ev("pointerdown", 300));
+			grip.dispatchEvent(ev("pointermove", 400));
+		});
+		expect(onWidth).toHaveBeenLastCalledWith(300, false);
+		await act(async () => {
+			grip.dispatchEvent(ev("pointerup", 450));
+		});
+		expect(onWidth).toHaveBeenLastCalledWith(350, true);
+	});
+
+	test("it is never narrower than a few letters", async () => {
+		const onWidth = vi.fn();
+		await act(async () => {
+			render(
+				<MarkdownTextEditor
+					x={100}
+					y={160}
+					fontSize={24}
+					color="#111"
+					width={200}
+					onWidth={onWidth}
+					onCommit={vi.fn()}
+					onCancel={vi.fn()}
+				/>,
+				root,
+			);
+		});
+		const grip = root.querySelector(".text-grip") as HTMLElement;
+		const down = new MouseEvent("pointerdown", { bubbles: true });
+		Object.defineProperty(down, "pointerId", { value: 1 });
+		const move = new MouseEvent("pointermove", { bubbles: true, clientX: 10 });
+		Object.defineProperty(move, "pointerId", { value: 1 });
+		await act(async () => {
+			grip.dispatchEvent(down);
+			grip.dispatchEvent(move);
+		});
+		expect(onWidth).toHaveBeenLastCalledWith(60, false);
+	});
+
+	test("there is no grip when the width cannot be changed", async () => {
+		await act(async () => {
+			render(
+				<MarkdownTextEditor
+					x={100}
+					y={160}
+					fontSize={24}
+					color="#111"
+					onCommit={vi.fn()}
+					onCancel={vi.fn()}
+				/>,
+				root,
+			);
+		});
+		expect(root.querySelector(".text-grip")).toBeNull();
 	});
 });

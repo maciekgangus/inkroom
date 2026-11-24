@@ -123,6 +123,25 @@ describe("the text tool makes an area (R-044)", () => {
 		});
 	});
 
+	test("a new text keeps the font chosen in the toolbar while it was typed (R-101)", () => {
+		c.addText("ala", 100, 120, 200, { font: "hand" });
+		expect(board.strokes[0].font).toBe("hand");
+		c.addText("ola", 100, 120, 200);
+		expect(board.strokes[1].font).toBeUndefined();
+	});
+
+	test("the width of a selected text is changed as a style, as one step of undo (R-101)", () => {
+		c.addText("ala ma kota", 100, 120);
+		const id = board.strokes[0].id;
+		c.select(id);
+		expect(board.strokes[0].width).toBeUndefined();
+		c.setProps({ width: 150 });
+		expect(board.strokes[0].width).toBe(150);
+		expect(board.strokes[0].fontSize).toBeUndefined(); // only the width changed
+		c.undo();
+		expect(board.strokes[0].width).toBeUndefined();
+	});
+
 	test("without a style it takes the current settings, as before", () => {
 		c.addText("ala", 100, 120);
 		expect(board.strokes[0]).toMatchObject({ color: "#111", size: 5 });

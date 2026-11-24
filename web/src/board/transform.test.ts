@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import type { Stroke } from "./board";
+import { textBox } from "./text";
 import {
 	centerOf,
 	elementCorners,
@@ -358,7 +359,9 @@ describe("scaleElBy (free scaling)", () => {
 			fontSize: 20,
 			points: pts([0, 0]),
 		};
-		expect(scaleElBy(text, [0, 0], 4, 1, 0).fontSize).toBeCloseTo(40);
+		expect(scaleElBy(text, [0, 0], 8, 2, 0).fontSize).toBeCloseTo(80);
+		// a side handle (only the width changes) leaves the font alone (R-101)
+		expect(scaleElBy(text, [0, 0], 4, 1, 0).fontSize).toBe(20);
 	});
 });
 
@@ -398,11 +401,21 @@ describe("scaling a text area (R-044)", () => {
 		).toBeGreaterThanOrEqual(20);
 	});
 
-	test("a text at a point scales as before: only the font", () => {
+	test("a side handle on a text at a point makes it an area: width only, the font stays (R-101)", () => {
+		const point: Stroke = { ...area, width: undefined, text: "ala" };
+		const box = textBox(point);
+		const w = box.maxX - box.minX;
+		const out = scaleElBy(point, [box.minX, 80], 1.5, 1, 0);
+		expect(out.fontSize).toBe(20);
+		expect(out.width).toBeCloseTo(w * 1.5);
+		expect(out.points[0][0]).toBeCloseTo(box.minX);
+	});
+
+	test("a corner on a text at a point scales the font, as before", () => {
 		const point: Stroke = { ...area, width: undefined };
-		const out = scaleElBy(point, [100, 80], 1.5, 1, 0);
+		const out = scaleElBy(point, [100, 50], 2, 2, 0);
 		expect(out.width).toBeUndefined();
-		expect(out.fontSize).toBeCloseTo(20 * Math.sqrt(1.5));
+		expect(out.fontSize).toBeCloseTo(40);
 	});
 });
 
