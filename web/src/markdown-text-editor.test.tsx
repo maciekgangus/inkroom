@@ -146,7 +146,7 @@ describe("MarkdownTextEditor", () => {
 			boldBtn?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 		});
 
-		expect(textarea.value).toBe("te** **test");
+		expect(textarea.value).toBe("te****st");
 		expect(textarea.selectionStart).toBe(4);
 		expect(textarea.selectionEnd).toBe(4);
 	});

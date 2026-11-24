@@ -58,11 +58,7 @@ export function MarkdownTextEditor({
 	const helpButtonRef = useRef<HTMLButtonElement>(null);
 
 	// Format text with markdown tags at cursor position
-	const formatText = (
-		prefix: string,
-		suffix: string = prefix,
-		replaceSelection = true,
-	) => {
+	const formatText = (prefix: string, suffix: string = prefix) => {
 		const textarea = textareaRef.current;
 		if (!textarea) return;
 
@@ -76,7 +72,7 @@ export function MarkdownTextEditor({
 		let newCursorStart: number;
 		let newCursorEnd: number;
 
-		if (selectedText.length > 0 && replaceSelection) {
+		if (selectedText.length > 0) {
 			// Wrap selected text
 			newText = before + prefix + selectedText + suffix + after;
 			newCursorStart = start + prefix.length;
@@ -94,7 +90,29 @@ export function MarkdownTextEditor({
 		textarea.selectionStart = newCursorStart;
 		textarea.selectionEnd = newCursorEnd;
 		textarea.focus();
+		textarea.dispatchEvent(new Event("input", { bubbles: true }));
 	};
+
+	// Ctrl/Cmd+B, I, D, E format the selection.
+	useEffect(() => {
+		const textarea = textareaRef.current;
+		if (!textarea) return;
+		const marks: Record<string, string> = {
+			b: "**",
+			i: "*",
+			d: "~~",
+			e: "`",
+		};
+		const onKey = (e: KeyboardEvent) => {
+			if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+			const mark = marks[e.key.toLowerCase()];
+			if (!mark) return;
+			e.preventDefault();
+			formatText(mark, mark);
+		};
+		textarea.addEventListener("keydown", onKey);
+		return () => textarea.removeEventListener("keydown", onKey);
+	}, []);
 
 	// Toggle help visibility
 	const toggleHelp = (e: MouseEvent | TouchEvent) => {
@@ -294,6 +312,9 @@ export function MarkdownTextEditor({
 			{/* Markdown formatting toolbar */}
 			<div
 				class="markdown-toolbar"
+				role="toolbar"
+				aria-label="Formatowanie Markdown"
+				onMouseDown={(e) => e.preventDefault()}
 				style={{
 					position: "fixed",
 					zIndex: 2,
@@ -349,7 +370,7 @@ export function MarkdownTextEditor({
 					type="button"
 					title="Lista"
 					aria-label="Lista"
-					onClick={() => formatText("- ", "", false)}
+					onClick={() => formatText("- ", "")}
 					class="markdown-toolbar-btn"
 				>
 					-
@@ -426,6 +447,7 @@ export function MarkdownTextEditor({
 				initialText={initialText}
 				onCommit={onCommit}
 				onCancel={onCancel}
+				inputRef={textareaRef}
 			/>
 		</>
 	);

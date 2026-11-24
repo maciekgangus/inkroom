@@ -25,6 +25,8 @@ interface Props {
 	initialText?: string;
 	onCommit: (text: string) => void;
 	onCancel: () => void;
+	/** Lets a wrapper reach the field (the markdown toolbar). */
+	inputRef?: { current: HTMLTextAreaElement | null };
 }
 
 /** A text field placed on top of the board where a text is being typed. */
@@ -39,8 +41,10 @@ export function TextEditor({
 	initialText,
 	onCommit,
 	onCancel,
+	inputRef,
 }: Props) {
-	const ref = useRef<HTMLTextAreaElement>(null);
+	const ownRef = useRef<HTMLTextAreaElement>(null);
+	const ref = inputRef ?? ownRef;
 	const done = useRef(false);
 
 	const area = width !== undefined;
