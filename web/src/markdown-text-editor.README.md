@@ -14,7 +14,7 @@ This component provides an enhanced text input experience for the Inkroom whiteb
 ### Supported Markdown Syntax
 
 - **Bold**: `**text**` → **text**
-- *Italic*: `*text*` → *text*
+- _Italic_: `*text*` → _text_
 - ~~Strikethrough~~: `~~text~~` → ~~text~~
 - `Code`: `` `text` `` → `text`
 - Headers: `# Header 1`, `## Header 2`
@@ -43,44 +43,45 @@ This component provides an enhanced text input experience for the Inkroom whiteb
 import { MarkdownTextEditor } from "./markdown-text-editor";
 
 <MarkdownTextEditor
-    x={120}
-    y={80}
-    fontSize={30}
-    color="#d32f2f"
-    width={300}
-    minHeight={90}
-    onCommit={(text) => {
-        // Handle committed text with markdown
-        console.log(text);
-    }}
-    onCancel={() => {
-        // Handle cancel
-    }}
-    showHelpInitially={false} // Optional: show help on mount
-/>
+	x={120}
+	y={80}
+	fontSize={30}
+	color="#d32f2f"
+	width={300}
+	minHeight={90}
+	onCommit={(text) => {
+		// Handle committed text with markdown
+		console.log(text);
+	}}
+	onCancel={() => {
+		// Handle cancel
+	}}
+	showHelpInitially={false} // Optional: show help on mount
+/>;
 ```
 
 ## Props
 
-| Prop | Type | Required | Description |
-|------|------|----------|-------------|
-| x | number | Yes | Screen X position of editor |
-| y | number | Yes | Screen Y position of editor |
-| fontSize | number | Yes | Font size in pixels |
-| color | string | Yes | Text color |
-| width | number | No | Width for area mode (R-044) |
-| minHeight | number | No | Minimum height for area mode |
-| onResize | () => void | No | Called when field size changes |
-| initialText | string | No | Initial text when editing existing |
-| onCommit | (text: string) => void | Yes | Called when text is committed |
-| onCancel | () => void | Yes | Called when editing is cancelled |
-| showHelpInitially | boolean | No | Show help popup on mount |
+| Prop              | Type                   | Required | Description                        |
+| ----------------- | ---------------------- | -------- | ---------------------------------- |
+| x                 | number                 | Yes      | Screen X position of editor        |
+| y                 | number                 | Yes      | Screen Y position of editor        |
+| fontSize          | number                 | Yes      | Font size in pixels                |
+| color             | string                 | Yes      | Text color                         |
+| width             | number                 | No       | Width for area mode (R-044)        |
+| minHeight         | number                 | No       | Minimum height for area mode       |
+| onResize          | () => void             | No       | Called when field size changes     |
+| initialText       | string                 | No       | Initial text when editing existing |
+| onCommit          | (text: string) => void | Yes      | Called when text is committed      |
+| onCancel          | () => void             | Yes      | Called when editing is cancelled   |
+| showHelpInitially | boolean                | No       | Show help popup on mount           |
 
 ## Implementation Notes
 
 ### Styling
 
 The component uses the existing design tokens from the application:
+
 - `--bg`, `--surface`, `--border`, `--text`, `--muted`, `--accent`, etc.
 - `--radius`, `--radius-lg` for border radius
 - `--shadow` for box shadows
@@ -104,6 +105,7 @@ The toolbar and help popup use a semi-transparent background with backdrop blur 
 ## Testing
 
 The component includes comprehensive tests covering:
+
 - Rendering with correct position and size
 - Toolbar button functionality
 - Keyboard shortcuts
@@ -112,6 +114,7 @@ The component includes comprehensive tests covering:
 - Area mode behavior
 
 Run tests with:
+
 ```bash
 npm test -- markdown-text-editor.test.tsx
 ```
@@ -128,6 +131,7 @@ npm test -- markdown-text-editor.test.tsx
 ## Future Enhancements
 
 Possible future improvements:
+
 - Add more Markdown features (tables, blockquotes, etc.)
 - Syntax highlighting for code blocks
 - Live preview of formatted text
