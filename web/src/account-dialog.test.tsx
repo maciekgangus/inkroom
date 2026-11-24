@@ -173,7 +173,8 @@ describe("AccountDialog (R-085)", () => {
 		expect(init.method).toBe("PUT");
 		expect(JSON.parse(init.body)).toEqual({ avatar: "fox" });
 		expect(onAvatar).toHaveBeenCalledWith("fox");
-		// Chosen: the grid folds away.
+		// Chosen: the grid folds away (once the save has come back and the dialog has re-rendered).
+		await act(async () => {});
 		expect(q(".avatar-grid")).toBeNull();
 	});
 

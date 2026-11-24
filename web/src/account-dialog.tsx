@@ -238,7 +238,7 @@ export function AccountDialog({
 				</div>
 
 				{picking && (
-					<div class="avatar-grid" role="group" aria-label="Awatary">
+					<div class="avatar-grid">
 						<button
 							type="button"
 							aria-label="Bez awatara"
