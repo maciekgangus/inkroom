@@ -40,6 +40,7 @@ Stos: serwer w Go (`server/`), klient w TypeScript + Vite + Preact (`web/`). Ser
 - Praca przez PR (każdy agent we własnym worktree, korzeń zostaje na `main`): gałąź z `origin/main`, małe commity, PR (`gh pr create`), merge dopiero po zielonym jobie `test`. Joby `image` i `scan` (Trivy) działają tylko na `main` i tagach, więc PR ich nie sprawdza: po merge obejrzyj przebieg (`gh run list -R maciekgangus/inkroom`) i napraw od razu, bo czerwony `scan` zablokuje też wydanie z tagu. Przed `gh pr create` funkcji z interfejsem hook przypomina o ręcznym przejściu przez `/test-server`.
 - Na tej maszynie `git push` nie ma poświadczeń HTTPS: `git -c credential.helper='!gh auth git-credential' push -u origin <gałąź>`. Push zmian w `.github/workflows/` wymaga tokena `gh` z zakresem `workflow` (`gh auth refresh -h github.com -s workflow`, robi to użytkownik).
 - Sekrety w `.env`, nigdy w obrazach ani w repo. Logi i metryki (Loki, Prometheus, Grafana) działają na osobnej maszynie, przy aplikacji zostaje tylko agent Alloy (ADR 0022 do 0024).
+- Hook `.claude/hooks/pr-evidence-gate.sh` blokuje `gh pr create`, gdy zmiana dotyka kodu klienta (`web/src`, poza testami), a w `docs/screenshots/<gałąź>/` nie ma PNG nowszych niż ostatni commit (gałąź z `/` zamieniona na `-`). Przed PR-em: `/test-server`, przejście funkcji w przeglądarce, zrzuty do tego katalogu i w opisie PR.
 - Plugin lub serwer MCP dodawaj dopiero pod konkretny problem, a po dodaniu sprawdź `/context`.
 
 ## Role agentów i skille
