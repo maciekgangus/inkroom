@@ -116,8 +116,13 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: read
+      packages: read
     steps:
+      # The image is private: without a login Trivy cannot pull it (UNAUTHORIZED).
       - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
         with:
           image-ref: ${{ env.IMAGE }}:sha-${{ github.sha }}
           format: table
