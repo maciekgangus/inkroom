@@ -39,10 +39,10 @@ wchodzą sobie w drogę):
 
 | Co | Adres |
 |---|---|
-| Grafana (dashboard „Inkroom” jako strona główna) | http://127.0.0.1:3100, login `admin` / `local-test` |
+| Grafana (dashboard „Inkroom” jako strona główna) | http://192.168.0.51:3100 (z LAN), login `admin` / `local-test` |
 | Prometheus | http://127.0.0.1:9190 |
 | Loki (API, do `curl`) | http://127.0.0.1:3200 |
-| Atrapa Telegrama (alerty) | http://127.0.0.1:9199, plik `~/.cache/inkroom-test-server-8099/sink/received.jsonl` |
+| Atrapa Telegrama (alerty) | http://192.168.0.51:9199 (z LAN), plik `~/.cache/inkroom-test-server-8099/sink/received.jsonl` |
 | Metryki aplikacji | http://127.0.0.1:9099/metrics (w trybie `--logs` nasłuchują na wszystkich interfejsach, żeby Prometheus w kontenerze je widział; to dane techniczne bez danych osobowych) |
 
 Przy `--logs` podaj użytkownikowi także te adresy. Przewodnik testów krok po kroku:
@@ -54,14 +54,22 @@ Przy `--logs` podaj użytkownikowi także te adresy. Przewodnik testów krok po 
    w razie wątpliwości zapytaj, o którą gałąź chodzi). Przy pracy w kilku worktree podaj inny port,
    żeby się nie zatrzymywały nawzajem. **Od teraz testowanie funkcji idzie z logami: uruchamiaj
    z `--logs`** (poza zmianami czysto wizualnymi, gdzie wystarczy sam serwer).
-2. Przekaż użytkownikowi adresy z wyniku (localhost i LAN) oraz konto testowe:
+2. **Użytkownik nie siedzi na tej maszynie:** to VM (adres w LAN `192.168.0.51`), a on wchodzi z
+   innego komputera albo iPada. Podawaj mu zawsze adres LAN z wyniku (`http://192.168.0.51:<port>`),
+   nigdy `localhost` ani `127.0.0.1`. Skrypt sam ustawia `BIND_ADDR=0.0.0.0:<port>`. Jeśli wyjątkowo
+   stawiasz serwer aplikacji ręcznie (inny build, zrzuty, e2e, które ma oglądać użytkownik), też ustaw
+   `BIND_ADDR=0.0.0.0:<port>`: serwer z kontem testowym bez `BIND_ADDR` odmawia startu, a
+   `127.0.0.1` jest dla użytkownika nieosiągalne. Przed podaniem adresu sprawdź go z tej maszyny:
+   `curl -fs http://192.168.0.51:<port>/healthz`. Metryki zostają na `127.0.0.1`.
+3. Przekaż użytkownikowi ten adres oraz konto testowe:
    `test@example.test` / `test-user-1234` (logowanie także samą nazwą `test`). To publiczne konto
    deweloperskie z `CLAUDE.md`, więc można je podać.
-3. Rejestracja na `/register` działa z testową captchą Cloudflare (widżet wymaga internetu).
-4. Na iPadzie po LAN może być potrzebne otwarcie portu: `sudo firewall-cmd --add-port=<port>/tcp`
+4. Rejestracja na `/register` działa z testową captchą Cloudflare (widżet wymaga internetu).
+5. Na tej VM procesor nie ma AVX, więc `npm run build` (vite, rolldown) kończy się „Illegal instruction” i skrypt staje na budowaniu klienta. Naprawa jest po stronie Proxmoxa (typ procesora `host`); do tego czasu powiedz o tym użytkownikowi zamiast udawać, że serwer działa.
+6. Na iPadzie po LAN może być potrzebne otwarcie portu: `sudo firewall-cmd --add-port=<port>/tcp`
    (bez `--permanent`); podpowiedz to, ale nie uruchamiaj `sudo` sam.
-5. Nie czytaj ani nie zmieniaj plików `.env`; skrypt ich nie używa.
-6. Nie zostawiaj serwera ani stosu włączonych bez wiedzy użytkownika: po teście zapytaj, czy
+7. Nie czytaj ani nie zmieniaj plików `.env`; skrypt ich nie używa.
+8. Nie zostawiaj serwera ani stosu włączonych bez wiedzy użytkownika: po teście zapytaj, czy
    zatrzymać (`stop` zatrzymuje oba i kasuje dane stosu), albo zatrzymaj, gdy o to poprosi.
 
 ## Lista kontrolna logów przy każdym teście funkcji

@@ -136,11 +136,12 @@ E
 }
 
 logs_urls() {
+	ip=$(lan_ip)
 	echo "  log stack (containers):"
-	echo "    Grafana:     http://127.0.0.1:$GRAFANA_PORT   (admin / local-test; dashboard \"Inkroom\" is the home page)"
+	echo "    Grafana:     http://${ip:-127.0.0.1}:$GRAFANA_PORT   (admin / local-test; dashboard \"Inkroom\" is the home page; LAN)"
 	echo "    Prometheus:  http://127.0.0.1:$PROM_PORT"
 	echo "    Loki (API):  http://127.0.0.1:$LOKI_PORT   (query with curl; do not use Grafana's proxy for checks)"
-	echo "    fake Telegram (alerts): http://127.0.0.1:$SINK_PORT   (the file: $STATE/sink/received.jsonl)"
+	echo "    fake Telegram (alerts): http://${ip:-127.0.0.1}:$SINK_PORT   (the file: $STATE/sink/received.jsonl)"
 	echo "    stop:        $0 logs stop $PORT   (the whole thing: $0 stop $PORT)"
 }
 
@@ -172,10 +173,10 @@ logs_stop() {
 }
 
 urls() {
-	echo "  on this PC:  http://localhost:$PORT"
-	echo "  metrics:     http://127.0.0.1:$METRICS_PORT/metrics   (internal port, same machine only)"
 	ip=$(lan_ip)
-	[ -n "$ip" ] && echo "  on the LAN:  http://$ip:$PORT   (an iPad on the same Wi-Fi; port may need: sudo firewall-cmd --add-port=$PORT/tcp)"
+	[ -n "$ip" ] && echo "  for the user (LAN, PC and iPad): http://$ip:$PORT   (give this one; with a firewall: sudo firewall-cmd --add-port=$PORT/tcp)"
+	echo "  on this machine: http://localhost:$PORT"
+	echo "  metrics:     http://127.0.0.1:$METRICS_PORT/metrics   (internal port, same machine only)"
 	echo "  account:     test@example.test / test-user-1234  (login: test@example.test or test)"
 	echo "  registering: works with Cloudflare's test captcha (needs internet for the widget)"
 	echo "  from:        $ROOT"
@@ -199,8 +200,10 @@ start_server() {
 	# be loopback only (metrics hold no personal data; the firewall decides about the LAN).
 	if [ -n "$WITH_LOGS" ]; then metrics_addr="0.0.0.0:$METRICS_PORT"; else metrics_addr="127.0.0.1:$METRICS_PORT"; fi
 	# The public dev account of the project (see CLAUDE.md) and Cloudflare's published Turnstile
-	# test keys, so nothing secret is involved.
-	DATA_DIR="$STATE/data" PORT="$PORT" STATIC_DIR="$ROOT/web/dist" METRICS_ADDR="$metrics_addr" \
+	# test keys, so nothing secret is involved. The user tests from another computer over the LAN
+	# (this is a VM), so the app listens on all interfaces: BIND_ADDR says so on purpose, since a
+	# seeded account refuses the default all-interfaces bind (main.go, listenAddr).
+	BIND_ADDR="0.0.0.0:$PORT" DATA_DIR="$STATE/data" PORT="$PORT" STATIC_DIR="$ROOT/web/dist" METRICS_ADDR="$metrics_addr" \
 		ADMIN_DEV_OPEN=1 SEED_USER_EMAIL=test@example.test SEED_USER_PASSWORD=test-user-1234 \
 		TURNSTILE_SITE_KEY=1x00000000000000000000AA TURNSTILE_SECRET=1x0000000000000000000000000000000AA \
 		nohup "$STATE/server" >>"$LOG" 2>&1 &

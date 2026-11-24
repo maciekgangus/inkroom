@@ -67,7 +67,7 @@ services:
   grafana:
     image: ${GRAFANA_IMAGE}
     ports:
-      - "127.0.0.1:${GRAFANA_PORT}:3000"
+      - "0.0.0.0:${GRAFANA_PORT}:3000" # the user opens it from another computer (LAN)
     environment:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: local-test
@@ -92,7 +92,7 @@ services:
     image: ${SINK_IMAGE}
     command: python /sink.py
     ports:
-      - "127.0.0.1:${SINK_PORT}:9199"
+      - "0.0.0.0:${SINK_PORT}:9199" # the user opens it from another computer (LAN)
     volumes:
       - ${REPO}/.claude/skills/test-server/logs/sink.py:/sink.py:ro,z
       - ${STATE}/sink:/sink:z
