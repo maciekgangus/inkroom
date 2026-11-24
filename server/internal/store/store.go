@@ -155,6 +155,8 @@ var migrations = []migration{
 	stmt("ALTER TABLE users ADD COLUMN shortcuts TEXT NOT NULL DEFAULT '{}'"),
 	// The Google account an account is signed in with (R-063, ADR 0018); '' for none.
 	addGoogleSub,
+	// The calendar: lessons, series, unavailability and requests to move a lesson (R-104 to R-108, ADR 0025).
+	stmt(calendarSchema),
 }
 
 func addGoogleSub(tx *sql.Tx) error {

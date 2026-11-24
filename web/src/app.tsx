@@ -3,6 +3,7 @@ import { syncAccountShortcuts } from "./account-shortcuts";
 import * as api from "./api";
 import { AuthForms, RegisterPage } from "./auth-forms";
 import { BoardView, newId } from "./board-view";
+import { CalendarPage } from "./calendar-page";
 import { FeedbackButton } from "./feedback-button";
 import { ADMIN_NAME, isReservedName } from "./names";
 import { Panel } from "./panel";
@@ -12,6 +13,7 @@ import { UpdateBanner } from "./update-banner";
 
 const BOARD_PATH = /^\/b\/([0-9a-f]{32})$/;
 const REGISTER_PATH = "/register";
+const CALENDAR_PATH = "/calendar";
 const NAME_KEY = "inkroom.name";
 const AUTHOR_KEY = "inkroom.authorId";
 
@@ -61,6 +63,8 @@ export function App({
 				/>
 			) : path === REGISTER_PATH ? (
 				<RegisterPage navigate={navigate} />
+			) : path === CALENDAR_PATH ? (
+				<CalendarPage navigate={navigate} />
 			) : (
 				<Home navigate={navigate} search={search} />
 			)}

@@ -132,6 +132,7 @@ export function Panel({ account, navigate, onLogout }: Props) {
 					<Logo />
 				</h1>
 				<span class="row">
+					<a href="/calendar">Kalendarz</a>
 					<button
 						type="button"
 						class="chip"
