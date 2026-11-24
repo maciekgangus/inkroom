@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
+import { closeOnDismiss } from "./dismiss";
+import { Icon } from "./icon";
 
 /** The same limit as the server's (100 characters). */
 const MAX_LENGTH = 100;
@@ -9,10 +11,44 @@ interface Props {
 	editable: boolean;
 	/** Saves a new name; a rejection means it failed and the old name stays. */
 	onRename: (name: string) => Promise<void>;
+	/** On a phone the name hides behind a button and opens in a small card (R-110). */
+	folded?: boolean;
 }
 
-/** The name of the board at the top left; the owner clicks it to change it. */
-export function BoardTitle({ name, editable, onRename }: Props) {
+/** The name of the board in the top bar, or behind a button on a phone (R-110). */
+export function BoardTitle({ folded, ...props }: Props) {
+	const [open, setOpen] = useState(false);
+	useEffect(
+		() =>
+			open
+				? closeOnDismiss(".board-title-fold", () => setOpen(false))
+				: undefined,
+		[open],
+	);
+	if (!folded) return <TitleField {...props} />;
+	return (
+		<div class="board-title-fold">
+			<button
+				type="button"
+				class="board-menu"
+				aria-label="Nazwa tablicy"
+				aria-expanded={open}
+				title={props.name}
+				onClick={() => setOpen(!open)}
+			>
+				<Icon name="file" />
+			</button>
+			{open && (
+				<div class="board-title-pop">
+					<TitleField {...props} />
+				</div>
+			)}
+		</div>
+	);
+}
+
+/** The name of the board; the owner clicks it to change it. */
+function TitleField({ name, editable, onRename }: Omit<Props, "folded">) {
 	const [editing, setEditing] = useState(false);
 	const [draft, setDraft] = useState(name);
 	const [error, setError] = useState("");

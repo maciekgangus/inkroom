@@ -41,10 +41,8 @@
 	gap: 8px;
 	min-height: 40px;
 	padding-left: 8px;
-	font-size: 11px;
+	font-size: 12px;
 	font-weight: 600;
-	letter-spacing: 0.06em;
-	text-transform: uppercase;
 	color: var(--muted);
 	cursor: grab;
 	touch-action: none;
@@ -73,10 +71,8 @@
 .prop-label {
 	flex: 0 0 100%;
 	padding: 2px 8px 0;
-	font-size: 11px;
+	font-size: 12px;
 	font-weight: 600;
-	letter-spacing: 0.06em;
-	text-transform: uppercase;
 	color: var(--muted);
 }
 /* A group of controls, as a group of the wide bar: 2px apart, a 1px rule before the next. */

@@ -22,6 +22,28 @@ export function currentLayout(): ToolbarLayout {
 	return "full";
 }
 
+/** A phone: too narrow for the board's name in the top bar, so it folds into a button (R-110). */
+const PHONE = "(max-width: 600px)";
+
+/** Whether the screen is a phone's now. */
+export function isPhone(): boolean {
+	return matches(PHONE);
+}
+
+/** Whether the screen is a phone's, kept up to date when it is resized or turned. */
+export function usePhone(): boolean {
+	const [phone, setPhone] = useState(isPhone);
+	useEffect(() => {
+		if (typeof matchMedia !== "function") return;
+		const list = matchMedia(PHONE);
+		const update = () => setPhone(isPhone());
+		list.addEventListener("change", update);
+		update();
+		return () => list.removeEventListener("change", update);
+	}, []);
+	return phone;
+}
+
 /** The layout, kept up to date when the window is resized or the tablet is turned. */
 export function useToolbarLayout(): ToolbarLayout {
 	const [layout, setLayout] = useState(currentLayout);

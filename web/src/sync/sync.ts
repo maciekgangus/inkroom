@@ -20,6 +20,8 @@ export interface Peer {
 	muted?: boolean;
 	/** The id of the person whose view this one follows (R-093). */
 	follows?: string;
+	/** The picture of the person's account (R-111). */
+	avatar?: string;
 }
 
 export interface RemoteCursor {
@@ -259,11 +261,12 @@ export class SyncClient {
 	private setPeers(raw: unknown[]): void {
 		this.peersIn = raw.flatMap((p) => {
 			if (typeof p !== "object" || p === null) return [];
-			const { id, name, muted, follows } = p as {
+			const { id, name, muted, follows, avatar } = p as {
 				id?: unknown;
 				name?: unknown;
 				muted?: unknown;
 				follows?: unknown;
+				avatar?: unknown;
 			};
 			if (typeof id !== "string" || typeof name !== "string") return [];
 			return [
@@ -272,6 +275,7 @@ export class SyncClient {
 					name,
 					...(muted === true ? { muted } : {}),
 					...(typeof follows === "string" && follows ? { follows } : {}),
+					...(typeof avatar === "string" && avatar ? { avatar } : {}),
 				},
 			];
 		});

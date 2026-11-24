@@ -81,13 +81,26 @@ h1 {
 	letter-spacing: -0.02em;
 }
 h2 {
-	margin: 32px 0 12px;
-	font-family: var(--mono);
-	font-size: 12px;
-	font-weight: 500;
-	letter-spacing: 0.08em;
-	text-transform: uppercase;
-	color: var(--muted);
+	margin: 36px 0 12px;
+	font-size: 17px;
+	font-weight: 650;
+	letter-spacing: -0.01em;
+	color: var(--text);
+}
+/* What the browser draws itself still speaks the palette: selection, caret, scrollbars, numbers. */
+::selection {
+	background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+input,
+textarea {
+	caret-color: var(--accent);
+}
+:root {
+	scrollbar-color: var(--grid-strong) transparent;
+}
+a {
+	color: var(--accent);
+	text-underline-offset: 3px;
 }
 button {
 	min-width: 40px;
@@ -162,13 +175,47 @@ input::placeholder {
 	width: auto;
 }
 .chip {
-	padding: 4px 10px;
+	gap: 8px;
+	padding: 0 14px 0 4px;
 	border: 1px solid var(--border);
 	border-radius: 999px;
 	background: var(--surface);
-	font-family: var(--mono);
-	font-size: 12px;
-	color: var(--muted);
+	font-size: 14px;
+	color: var(--text);
+}
+.chip-avatar {
+	display: grid;
+	place-items: center;
+	width: 30px;
+	height: 30px;
+	border-radius: 50%;
+	background: var(--accent-soft);
+	color: var(--accent);
+	font-size: 13px;
+	font-weight: 650;
+	text-transform: uppercase;
+}
+/* A link that goes somewhere in the app (the calendar, back home) looks like the buttons beside it. */
+.nav-link {
+	display: inline-flex;
+	align-items: center;
+	box-sizing: border-box;
+	height: 40px;
+	padding: 0 14px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--surface);
+	color: var(--text);
+	font-size: 15px;
+	font-weight: 500;
+	text-decoration: none;
+}
+.nav-link:hover {
+	background: var(--surface-hover);
+}
+.nav-link:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
 }
 .error {
 	color: var(--danger);
@@ -380,10 +427,8 @@ input::placeholder {
 	gap: 6px;
 }
 .filter-label {
-	font-size: 11px;
+	font-size: 12px;
 	font-weight: 600;
-	letter-spacing: 0.06em;
-	text-transform: uppercase;
 	color: var(--muted);
 }
 .segmented {
@@ -457,6 +502,11 @@ input::placeholder {
 	background: #fff;
 	border: 1px solid var(--border);
 	overflow: hidden;
+}
+/* The picture is drawn as the light sheet; dark mode swaps black and white ink like the board does. */
+:root[data-theme="dark"] .preview-box {
+	border-color: transparent;
+	filter: invert(0.92) hue-rotate(180deg);
 }
 /* While the picture is on its way a soft band runs over the empty frame. */
 .preview-box.loading {
@@ -596,8 +646,8 @@ a.open-link {
 	font-size: 13px;
 }
 .board .muted {
-	font-family: var(--mono);
-	font-size: 12px;
+	font-size: 13px;
+	font-variant-numeric: tabular-nums;
 }
 .board button {
 	height: 36px;
@@ -1092,8 +1142,8 @@ canvas {
 }
 .zoom .level {
 	width: 64px;
-	font-family: var(--mono);
-	font-size: 13px;
+	font-size: 14px;
+	font-variant-numeric: tabular-nums;
 }
 .text-editor {
 	position: fixed;
@@ -1311,10 +1361,8 @@ canvas {
 }
 .shape-group-title {
 	padding: 4px 6px;
-	font-size: 11px;
+	font-size: 12px;
 	font-weight: 600;
-	letter-spacing: 0.05em;
-	text-transform: uppercase;
 	color: var(--muted);
 }
 .shape-grid {
@@ -1829,10 +1877,8 @@ button.participant {
 .settings-title,
 .settings-list .slider-title {
 	margin-top: 4px;
-	font-size: 11px;
+	font-size: 12px;
 	font-weight: 600;
-	letter-spacing: 0.05em;
-	text-transform: uppercase;
 	color: var(--muted);
 }
 .settings-colors {
@@ -1928,10 +1974,8 @@ button.participant {
 .account-title,
 .account-label {
 	margin: 0;
-	font-size: 11px;
+	font-size: 12px;
 	font-weight: 600;
-	letter-spacing: 0.06em;
-	text-transform: uppercase;
 	color: var(--muted);
 }
 .account-close {
@@ -2584,4 +2628,281 @@ button.participant {
 
 :root[data-theme="dark"] .markdown-help-footer {
 	color: var(--muted);
+}
+
+/*
+ * A phone: the rail of a tablet held upright (R-082) made to fit a narrow screen. The name clears
+ * the mark in the corner and gives way to the people and buttons on its right, and the bottom bars
+ * stack instead of lying over each other.
+ */
+@media (max-width: 600px) {
+	.topbar.rail {
+		left: 60px;
+		right: 8px;
+		width: auto;
+		max-width: none;
+		margin: 0;
+		flex-wrap: nowrap;
+		justify-content: flex-start;
+	}
+	.topbar.rail .board-title {
+		flex: 1 1 auto;
+		width: auto;
+		min-width: 0;
+	}
+	.corner {
+		flex-direction: row;
+	}
+	.feedback-form,
+	.feedback-thanks {
+		bottom: 76px;
+	}
+	.backgrounds {
+		left: 128px;
+	}
+	.zoom {
+		bottom: 68px;
+	}
+	.minimap {
+		bottom: 124px;
+	}
+	.panel {
+		padding-bottom: 120px;
+	}
+}
+
+/* Account pictures (R-111): Fluent Emoji on a soft disc, in the panel, the account window and on
+   the board, where the disc is the person's colour and shows round the picture as a ring. */
+.chip-avatar img {
+	width: 24px;
+	height: 24px;
+}
+.participant-picture {
+	display: block;
+	width: 22px;
+	height: 22px;
+	pointer-events: none;
+}
+/* In the account window the avatar itself is the button that changes it: a disc with the picture
+   or the letter, and a small pencil badge on its edge. */
+.account-dialog .account-avatar {
+	position: relative;
+	width: 56px;
+	min-width: 56px;
+	height: 56px;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	background: var(--accent-soft);
+	color: var(--accent);
+	font-size: 22px;
+	font-weight: 650;
+}
+.account-dialog .account-avatar:hover:not(:disabled) {
+	background: var(--accent-soft);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.account-dialog .account-avatar[aria-expanded="true"] {
+	box-shadow: 0 0 0 2px var(--accent);
+}
+.account-avatar img {
+	width: 40px;
+	height: 40px;
+}
+.account-avatar-edit {
+	position: absolute;
+	right: -2px;
+	bottom: -2px;
+	display: grid;
+	place-items: center;
+	width: 22px;
+	height: 22px;
+	border: 1px solid var(--border);
+	border-radius: 50%;
+	background: var(--surface);
+	color: var(--icon);
+	box-shadow: var(--shadow);
+}
+.account-dialog .account-avatar-edit svg {
+	width: 12px;
+	height: 12px;
+}
+/* The pictures: a tray under the header, an even grid of square cells, four rows and then scrolling. */
+.avatar-grid {
+	display: grid;
+	grid-template-columns: repeat(6, 1fr);
+	gap: 4px;
+	max-height: 236px;
+	margin: 0 0 16px;
+	padding: 6px;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	border-radius: var(--radius);
+	background: var(--bg);
+	scrollbar-width: thin;
+}
+.account-dialog .avatar-grid button {
+	width: 100%;
+	min-width: 0;
+	height: auto;
+	aspect-ratio: 1;
+	padding: 0;
+	border: 1px solid transparent;
+	border-radius: var(--radius);
+	background: transparent;
+}
+.account-dialog .avatar-grid button:hover:not(:disabled) {
+	background: var(--surface);
+}
+.account-dialog .avatar-grid button[aria-pressed="true"] {
+	border-color: var(--accent);
+	background: var(--accent-soft);
+}
+.avatar-grid img,
+.avatar-letter {
+	width: 34px;
+	height: 34px;
+}
+.avatar-letter {
+	display: grid;
+	place-items: center;
+	border-radius: 50%;
+	background: var(--accent-soft);
+	color: var(--accent);
+	font-size: 15px;
+	font-weight: 650;
+}
+
+/* On a phone the board's name waits behind a button and opens in a small card (R-110). */
+.board-title-fold {
+	position: relative;
+	flex: none;
+}
+.board-title-pop {
+	position: absolute;
+	top: calc(100% + 8px);
+	left: 0;
+	z-index: 3;
+}
+.topbar .board-title-pop .board-title {
+	width: min(280px, calc(100vw - 80px));
+}
+
+/* A touch screen (R-110): the tools are a little smaller, 36px with 18px icons, so the bars and the
+   rail fit better; the colour well keeps its own size. */
+@media (pointer: coarse) {
+	.toolbar button:not(.swatch),
+	.zoom button,
+	.backgrounds button,
+	.corner button,
+	.board-menu {
+		width: 36px;
+		min-width: 36px;
+		height: 36px;
+	}
+	/* The settings button shows the colour and the width side by side: it keeps its own width. */
+	.toolbar button.settings-button {
+		width: auto;
+		min-width: 56px;
+	}
+	.toolbar button:not(.swatch) svg,
+	.zoom button svg,
+	.backgrounds button svg,
+	.corner button svg,
+	.board-menu svg {
+		width: 18px;
+		height: 18px;
+	}
+	.zoom .level {
+		width: 56px;
+	}
+}
+
+/*
+ * Motion: one quiet voice for everything that appears. Menus and popovers open from where they
+ * hang (a fade and a small scale), windows rise a few pixels, a pressed button gives a little.
+ * Short (at most 180ms) and only opacity and scale, so nothing waits for it and the canvas is never
+ * touched. The individual `scale` and `translate` properties are used, never `transform`, which
+ * many of these boxes already use to position themselves. Nothing moves for reduced motion.
+ * The object menu does not animate: it opens on every selection and must stand still at once (R-060).
+ */
+@media (prefers-reduced-motion: no-preference) {
+	button {
+		transition:
+			background 0.12s,
+			border-color 0.12s,
+			box-shadow 0.12s,
+			scale 0.08s;
+	}
+	button:active:not(:disabled) {
+		scale: 0.96;
+	}
+	.context-menu,
+	.shape-list,
+	.style-list,
+	.stroke-popover,
+	.settings-list,
+	.color-popover,
+	.share-said,
+	.feedback-form,
+	.feedback-thanks,
+	.avatar-grid,
+	.board-title-pop {
+		animation: pop-in 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
+		transform-origin: top center;
+	}
+	.feedback-form,
+	.feedback-thanks {
+		transform-origin: bottom left;
+	}
+	.shortcuts-backdrop {
+		animation: fade-in 160ms ease-out;
+	}
+	.shortcuts-dialog {
+		animation: rise-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+	}
+	.toast {
+		animation: rise-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+	}
+	/* The one entrance of a page: the card of the login, registration and guest name forms. */
+	.center form {
+		animation: rise-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+	}
+	/* Somebody joins the board: their chip pops in once (the chips are keyed by person). */
+	.participant {
+		animation: pop-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
+	}
+	/* A picture in the grid leans in under the pointer: a small pleasure while choosing. */
+	.avatar-grid button img {
+		transition: scale 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+	}
+	.avatar-grid button:hover img {
+		scale: 1.12;
+	}
+	/* A new picture lands in the header with a small pop. */
+	.account-avatar img {
+		animation: pop-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
+	}
+	::view-transition-old(root),
+	::view-transition-new(root) {
+		animation-duration: 220ms;
+	}
+}
+@keyframes pop-in {
+	from {
+		opacity: 0;
+		scale: 0.96;
+	}
+}
+@keyframes fade-in {
+	from {
+		opacity: 0;
+	}
+}
+@keyframes rise-in {
+	from {
+		opacity: 0;
+		translate: 0 6px;
+		scale: 0.98;
+	}
 }

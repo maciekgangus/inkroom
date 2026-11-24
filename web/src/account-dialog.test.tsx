@@ -146,6 +146,67 @@ describe("AccountDialog (R-085)", () => {
 		expect(q(".account-method")?.textContent).toContain("Google");
 	});
 
+	test("choosing an avatar saves it at once and reports it (R-111)", async () => {
+		const onAvatar = vi.fn<(avatar: string) => void>();
+		await act(async () =>
+			render(
+				<AccountDialog
+					account={{ email: "ann@example.com", username: "ann" }}
+					onClose={onClose}
+					onDeleted={onDeleted}
+					onAvatar={onAvatar}
+				/>,
+				root,
+			),
+		);
+		expect(q(".avatar-grid")).toBeNull();
+		await act(async () =>
+			q<HTMLButtonElement>(
+				".account-avatar[aria-label='Wybierz awatar']",
+			)?.click(),
+		);
+		const fox = q<HTMLButtonElement>(".avatar-grid button[aria-label='Lis']");
+		expect(fox).not.toBeNull();
+		await act(async () => fox?.click());
+		const [url, init] = fetchMock.mock.calls[0];
+		expect(url).toBe("/api/account/avatar");
+		expect(init.method).toBe("PUT");
+		expect(JSON.parse(init.body)).toEqual({ avatar: "fox" });
+		expect(onAvatar).toHaveBeenCalledWith("fox");
+		// Chosen: the grid folds away.
+		expect(q(".avatar-grid")).toBeNull();
+	});
+
+	test("an account with an avatar shows its picture, and it can go back to the letter (R-111)", async () => {
+		const onAvatar = vi.fn<(avatar: string) => void>();
+		await act(async () =>
+			render(
+				<AccountDialog
+					account={{ email: "ann@example.com", username: "ann", avatar: "owl" }}
+					onClose={onClose}
+					onDeleted={onDeleted}
+					onAvatar={onAvatar}
+				/>,
+				root,
+			),
+		);
+		expect(q(".account-avatar img")?.getAttribute("src")).toBe(
+			"/avatars/owl.svg",
+		);
+		await act(async () =>
+			q<HTMLButtonElement>(
+				".account-avatar[aria-label='Zmień awatar']",
+			)?.click(),
+		);
+		await act(async () =>
+			q<HTMLButtonElement>(
+				".avatar-grid button[aria-label='Bez awatara']",
+			)?.click(),
+		);
+		expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ avatar: "" });
+		expect(onAvatar).toHaveBeenCalledWith("");
+	});
+
 	test("the password button waits for a valid form and the hint says why", async () => {
 		await show();
 		const button = () =>

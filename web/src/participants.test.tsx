@@ -3,7 +3,10 @@ import { describe, expect, test, vi } from "vitest";
 import { cursorColor } from "./cursor-colors";
 import { Participants } from "./participants";
 
-const mount = (peers: { id: string; name: string }[], selfId = "me") => {
+const mount = (
+	peers: { id: string; name: string; avatar?: string }[],
+	selfId = "me",
+) => {
 	const root = document.createElement("div");
 	render(<Participants peers={peers} selfId={selfId} />, root);
 	return root;
@@ -21,6 +24,21 @@ describe("Participants (R-046)", () => {
 			{ id: "b1", name: "bob" },
 		]);
 		expect(chips(root).map((c) => c.textContent)).toEqual(["A", "B"]);
+	});
+
+	test("a person with a known avatar shows the picture instead of the letter (R-111)", () => {
+		const root = mount([
+			{ id: "a1", name: "Ann", avatar: "fox" },
+			{ id: "b1", name: "Bob", avatar: "../../evil" },
+		]);
+		const [ann, bob] = chips(root);
+		expect(ann.querySelector("img")?.getAttribute("src")).toBe(
+			"/avatars/fox.svg",
+		);
+		expect(ann.textContent).toBe("");
+		// An id that is not on the list is not used in an address: the letter stays.
+		expect(bob.querySelector("img")).toBeNull();
+		expect(bob.textContent).toBe("B");
 	});
 
 	test("the name is the tooltip and the accessible name", () => {

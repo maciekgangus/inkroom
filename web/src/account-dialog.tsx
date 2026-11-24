@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { Account } from "./api";
 import * as api from "./api";
+import { AVATARS, avatarUrl } from "./avatars";
 import { Icon } from "./icon";
 
 const FOCUSABLE =
@@ -81,11 +82,14 @@ export function AccountDialog({
 	account,
 	onClose,
 	onDeleted,
+	onAvatar,
 }: {
 	account: Account;
 	onClose: () => void;
 	/** Called once the account is gone; the caller goes back to the logged-out screen. */
 	onDeleted: () => void;
+	/** Called with the picture once it is saved ("" for none, R-111). */
+	onAvatar?: (avatar: string) => void;
 }) {
 	const hasPassword = account.hasPassword !== false;
 	const [current, setCurrent] = useState("");
@@ -93,6 +97,8 @@ export function AccountDialog({
 	const [note, setNote] = useState("");
 	const [error, setError] = useState("");
 	const [deleting, setDeleting] = useState(false);
+	const [picking, setPicking] = useState(false);
+	const picture = avatarUrl(account.avatar);
 	const [confirm, setConfirm] = useState("");
 	const dialog = useRef<HTMLDivElement>(null);
 
@@ -148,6 +154,17 @@ export function AccountDialog({
 			setError(api.errorMessage(e));
 		}
 	};
+	const chooseAvatar = async (avatar: string) => {
+		setNote("");
+		setError("");
+		try {
+			await api.setAvatar(avatar);
+			onAvatar?.(avatar);
+			setPicking(false);
+		} catch (e) {
+			setError(api.errorMessage(e));
+		}
+	};
 	const remove = async () => {
 		setError("");
 		try {
@@ -193,9 +210,23 @@ export function AccountDialog({
 				</div>
 
 				<div class="account-who">
-					<span class="account-avatar" aria-hidden="true">
-						{account.username.charAt(0).toUpperCase()}
-					</span>
+					<button
+						type="button"
+						class="account-avatar"
+						aria-label={picture ? "Zmień awatar" : "Wybierz awatar"}
+						title={picture ? "Zmień awatar" : "Wybierz awatar"}
+						aria-expanded={picking}
+						onClick={() => setPicking(!picking)}
+					>
+						{picture ? (
+							<img src={picture} alt="" />
+						) : (
+							account.username.charAt(0).toUpperCase()
+						)}
+						<span class="account-avatar-edit" aria-hidden="true">
+							<Icon name="pen" />
+						</span>
+					</button>
 					<div class="account-id">
 						<strong>{account.username}</strong>
 						{account.email && <span class="muted">{account.email}</span>}
@@ -205,6 +236,34 @@ export function AccountDialog({
 						{hasPassword ? "Hasło" : "Konto Google"}
 					</span>
 				</div>
+
+				{picking && (
+					<div class="avatar-grid" role="group" aria-label="Awatary">
+						<button
+							type="button"
+							aria-label="Bez awatara"
+							title="Bez awatara (pierwsza litera)"
+							aria-pressed={!picture}
+							onClick={() => chooseAvatar("")}
+						>
+							<span class="avatar-letter" aria-hidden="true">
+								{account.username.charAt(0).toUpperCase()}
+							</span>
+						</button>
+						{AVATARS.map((a) => (
+							<button
+								key={a.id}
+								type="button"
+								aria-label={a.label}
+								title={a.label}
+								aria-pressed={account.avatar === a.id}
+								onClick={() => chooseAvatar(a.id)}
+							>
+								<img src={`/avatars/${a.id}.svg`} alt="" loading="lazy" />
+							</button>
+						))}
+					</div>
+				)}
 
 				{hasPassword && (
 					<form
