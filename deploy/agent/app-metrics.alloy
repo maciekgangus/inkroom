@@ -1,0 +1,11 @@
+// The app's own metrics (/metrics on the port that is not published and not routed by the tunnel,
+// ADR 0022) are scraped here, on the app's machine, and pushed to Prometheus on the other one
+// (ADR 0024). `up{job="app"}` is the series the alert "Aplikacja nie odpowiada" reads: when the
+// app, this agent or the whole machine is gone, it stops arriving and the alert fires.
+// Not loaded by the local test server, where Prometheus scrapes the native test process itself.
+prometheus.scrape "app" {
+  job_name        = "app"
+  targets         = [{ "__address__" = coalesce(sys.env("APP_METRICS_ADDR"), "app:9100"), "service" = "app" }]
+  scrape_interval = "15s"
+  forward_to      = [prometheus.remote_write.local.receiver]
+}

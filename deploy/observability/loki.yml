@@ -1,5 +1,5 @@
 # Loki: the logs of every container, kept 30 days on a named volume (ADR 0023). One process, files on
-# disk, no object store. Nothing here is reachable from outside the compose network.
+# disk, no object store. The agent pushes to port 3100, published on the LAN address only (ADR 0024).
 auth_enabled: false
 
 server:

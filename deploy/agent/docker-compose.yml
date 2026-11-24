@@ -1,0 +1,60 @@
+# The log and metric agent, on the machine that runs the app (ADR 0024). A compose project of its
+# own, apart from the app's (deploy/docker-compose.yml), so the app never depends on it and the nightly
+# update never touches it. It only reads and pushes: the logs of the app's containers through the
+# Docker socket, the metrics of the host and of the containers, and the app's /metrics, all to Loki
+# and Prometheus on the other machine (deploy/observability/). Start it with `docker compose up -d`
+# in this folder, with a .env beside it (env.template).
+name: inkroom-agent
+
+services:
+  alloy:
+    image: grafana/alloy:v1.21.3
+    command:
+      - run
+      - --server.http.listen-addr=127.0.0.1:12345
+      - --storage.path=/var/lib/alloy/data
+      # No usage report to grafana.com (it only logs a WARN every time, the egress is blocked).
+      - --disable-reporting
+      # The whole folder: config.alloy and app-metrics.alloy.
+      - /etc/alloy/
+    # root and the Docker socket: whoever controls this container controls the host (ADR 0023,
+    # "Gniazdo Dockera"). The pinned official image, no published port.
+    user: "0:0"
+    pid: host
+    environment:
+      # The app's compose project (the folder name of the app's deploy copy, "workdir" on the server;
+      # `docker compose ls` shows it) and the network it creates (<project>_default), where `app` is
+      # reachable by name.
+      LOG_PROJECT_FILTER: com.docker.compose.project=${APP_PROJECT:-workdir}
+      APP_METRICS_ADDR: app:9100
+      LOKI_URL: ${LOKI_URL:?set LOKI_URL in .env (e.g. http://192.168.0.60:3100, the machine of deploy/observability)}
+      PROMETHEUS_URL: ${PROMETHEUS_URL:?set PROMETHEUS_URL in .env (e.g. http://192.168.0.60:9090)}
+    volumes:
+      - alloy_data:/var/lib/alloy/data
+      - ./config.alloy:/etc/alloy/config.alloy:ro,z
+      - ./app-metrics.alloy:/etc/alloy/app-metrics.alloy:ro,z
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /:/host:ro,rslave
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    networks:
+      - app
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    mem_limit: 384m
+    restart: unless-stopped
+
+networks:
+  app:
+    # Created by the app's project; the agent joins it only to scrape app:9100.
+    name: ${APP_NETWORK:-workdir_default}
+    external: true
+
+volumes:
+  alloy_data:
