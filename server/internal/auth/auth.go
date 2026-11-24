@@ -431,7 +431,7 @@ func readCredentials(w http.ResponseWriter, r *http.Request) (credentials, bool)
 func respondUser(w http.ResponseWriter, status int, u store.User) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]any{"email": u.Email, "username": u.Username, "hasPassword": u.Hash != ""})
+	_ = json.NewEncoder(w).Encode(map[string]any{"email": u.Email, "username": u.Username, "hasPassword": u.Hash != "", "avatar": u.Avatar})
 }
 
 func fail(w http.ResponseWriter, status int, msg string) {

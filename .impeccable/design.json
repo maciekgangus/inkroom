@@ -1,0 +1,283 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-24T20:40:30.091252+00:00",
+  "title": "Design System: Inkroom",
+  "extensions": {
+    "colorMeta": {
+      "nib-indigo": {
+        "role": "primary",
+        "displayName": "Nib Indigo",
+        "tonalRamp": [
+          "#1e1e6e",
+          "#2c2c9e",
+          "#3d3dce",
+          "#5b5bf0",
+          "#7c7cf5",
+          "#a3a3f8",
+          "#c9c9fb",
+          "#ececff"
+        ]
+      },
+      "nib-indigo-soft": {
+        "role": "primary",
+        "displayName": "Nib Indigo Soft"
+      },
+      "brand-ink": {
+        "role": "primary",
+        "displayName": "Brand Ink (logo only)"
+      },
+      "cool-paper": {
+        "role": "neutral",
+        "displayName": "Cool Paper",
+        "tonalRamp": [
+          "#0e0f13",
+          "#17181d",
+          "#2b2d37",
+          "#6c7080",
+          "#b9bdd0",
+          "#e4e4ea",
+          "#f1f1f4",
+          "#f7f7f9"
+        ]
+      },
+      "sheet-white": {
+        "role": "neutral",
+        "displayName": "Sheet White"
+      },
+      "hairline": {
+        "role": "neutral",
+        "displayName": "Hairline"
+      },
+      "ink-text": {
+        "role": "neutral",
+        "displayName": "Ink Text"
+      },
+      "pencil-grey": {
+        "role": "neutral",
+        "displayName": "Pencil Grey"
+      },
+      "signal-red": {
+        "role": "error",
+        "displayName": "Signal Red"
+      },
+      "night-desk": {
+        "role": "neutral",
+        "displayName": "Night Desk (dark page)"
+      },
+      "night-sheet": {
+        "role": "neutral",
+        "displayName": "Night Sheet (dark surface)"
+      },
+      "nib-indigo-night": {
+        "role": "primary",
+        "displayName": "Nib Indigo, night"
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Title of a standalone page."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Panel section headings and dialog titles."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Fields and running text; 16px floor for inputs on iPad."
+      },
+      "control": {
+        "displayName": "Control",
+        "purpose": "Button labels."
+      },
+      "small": {
+        "displayName": "Small",
+        "purpose": "Dates, sizes, zoom level, with tabular figures."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Small sentence-case names over a group of controls."
+      },
+      "formula": {
+        "displayName": "Formula",
+        "purpose": "Function formulas of the coordinate plane only."
+      }
+    },
+    "shadows": [
+      {
+        "name": "island",
+        "value": "0 1px 2px #10122008, 0 8px 24px #10122014",
+        "purpose": "Every floating island, popover, dialog, the auth card and a tile on hover."
+      },
+      {
+        "name": "island-night",
+        "value": "0 1px 2px #0006, 0 8px 24px #0009",
+        "purpose": "The same in dark mode."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out-soft",
+        "value": "cubic-bezier(0.2, 0.8, 0.2, 1)",
+        "purpose": "Every entrance."
+      },
+      {
+        "name": "pop-in",
+        "value": "150ms: opacity 0 to 1, scale 0.96 to 1",
+        "purpose": "Menus and popovers."
+      },
+      {
+        "name": "rise-in",
+        "value": "180ms: opacity 0 to 1, translate 0 6px to 0, scale 0.98 to 1",
+        "purpose": "Dialogs, toasts; 220ms for the auth card."
+      },
+      {
+        "name": "press",
+        "value": "80ms: scale 0.96",
+        "purpose": "A pressed button."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "phone",
+        "value": "600px"
+      },
+      {
+        "name": "tablet-portrait",
+        "value": "860px"
+      },
+      {
+        "name": "compact-bar",
+        "value": "1500px"
+      },
+      {
+        "name": "rail",
+        "value": "(orientation: portrait) and (pointer: coarse)"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one main action of a view, filled with ink.",
+      "html": "<button class=\"ds-btn-primary\">Utwórz tablicę</button>",
+      "css": ".ds-btn-primary{height:40px;padding:0 14px;border:1px solid #0f1117;border-radius:12px;background:#0f1117;color:#fff;font:500 15px Inter, system-ui, sans-serif;cursor:pointer;transition:opacity .12s,scale .08s}.ds-btn-primary:hover{opacity:.86}.ds-btn-primary:active{scale:.96}.ds-btn-primary:focus-visible{outline:2px solid #5b5bf0;outline-offset:2px}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Every other action, and navigation links in the header.",
+      "html": "<button class=\"ds-btn\">Wyloguj</button>",
+      "css": ".ds-btn{height:40px;padding:0 14px;border:1px solid #e4e4ea;border-radius:12px;background:#fff;color:#0f1117;font:500 15px Inter, system-ui, sans-serif;cursor:pointer;transition:background .12s,scale .08s}.ds-btn:hover{background:#f1f1f4}.ds-btn:active{scale:.96}.ds-btn:focus-visible{outline:2px solid #5b5bf0;outline-offset:2px}"
+    },
+    {
+      "name": "Tool Island",
+      "kind": "custom",
+      "refersTo": "floating-island",
+      "description": "Frosted island of 40px tools over the canvas; the active tool is tinted indigo.",
+      "html": "<div class=\"ds-island\"><button class=\"ds-tool\" aria-label=\"Zaznacz\"><svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linejoin=\"round\"><path d=\"M5 4l13 6-6 2-2 6z\"/></svg></button><button class=\"ds-tool ds-on\" aria-label=\"Pióro\"><svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\"><path d=\"M4 20h4L19 9l-4-4L4 16z\"/></svg></button><span class=\"ds-sep\"></span><button class=\"ds-tool\" aria-label=\"Cofnij\"><svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\"><path d=\"M9 14L4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3\"/></svg></button></div>",
+      "css": ".ds-island{display:inline-flex;align-items:center;gap:2px;padding:6px;border:1px solid #e4e4ea;border-radius:18px;background:color-mix(in srgb,#fff 85%,transparent);backdrop-filter:blur(12px);box-shadow:0 1px 2px #10122008,0 8px 24px #10122014}.ds-tool{display:grid;place-items:center;width:40px;height:40px;border:0;border-radius:12px;background:transparent;color:#3d4150;cursor:pointer;transition:background .12s,scale .08s}.ds-tool:hover{background:#f1f1f4}.ds-tool:active{scale:.96}.ds-tool.ds-on{background:#ececff;color:#5b5bf0}.ds-sep{width:1px;height:24px;margin:0 6px;background:#e4e4ea}"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "44px field with an indigo focus ring and caret.",
+      "html": "<input class=\"ds-input\" placeholder=\"Nazwa tablicy\">",
+      "css": ".ds-input{height:44px;width:280px;padding:0 14px;border:1px solid #e4e4ea;border-radius:12px;background:#fff;color:#0f1117;font:400 16px Inter, system-ui, sans-serif;caret-color:#5b5bf0}.ds-input::placeholder{color:#6c7080;opacity:.7}.ds-input:focus-visible{outline:2px solid #5b5bf0;outline-offset:2px}"
+    },
+    {
+      "name": "Account Chip",
+      "kind": "chip",
+      "refersTo": "chip-account",
+      "description": "Round pill with an initial (or avatar) and the username.",
+      "html": "<button class=\"ds-chip\"><span class=\"ds-av\">T</span>test</button>",
+      "css": ".ds-chip{display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 14px 0 4px;border:1px solid #e4e4ea;border-radius:999px;background:#fff;color:#0f1117;font:500 14px Inter, system-ui, sans-serif;cursor:pointer}.ds-chip:hover{background:#f1f1f4}.ds-av{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:#ececff;color:#5b5bf0;font-weight:650;font-size:13px}"
+    },
+    {
+      "name": "Filter Pill",
+      "kind": "chip",
+      "refersTo": "pill-filter-selected",
+      "description": "Segmented choices; the selected one is tinted indigo.",
+      "html": "<div class=\"ds-pills\"><button class=\"ds-pill ds-on\">Wszystkie</button><button class=\"ds-pill\">Moje</button><button class=\"ds-pill\">Udostępnione</button></div>",
+      "css": ".ds-pills{display:flex;gap:6px}.ds-pill{height:36px;padding:0 14px;border:1px solid #e4e4ea;border-radius:999px;background:#fff;color:#3d4150;font:500 14px Inter, system-ui, sans-serif;cursor:pointer}.ds-pill:hover{background:#f1f1f4}.ds-pill.ds-on{border-color:#5b5bf0;background:#ececff;color:#5b5bf0}"
+    },
+    {
+      "name": "Board Tile",
+      "kind": "card",
+      "refersTo": "card-board-tile",
+      "description": "A board in the panel: 4:3 preview, name, date and size, actions.",
+      "html": "<div class=\"ds-tile\"><div class=\"ds-prev\"></div><strong>Fizyka: kinematyka</strong><span class=\"ds-meta\">24.11.2026 · 20:02</span></div>",
+      "css": ".ds-tile{display:flex;flex-direction:column;gap:8px;width:220px;padding:10px;border:1px solid #e4e4ea;border-radius:18px;background:#fff;color:#0f1117;font:400 15px Inter, system-ui, sans-serif;transition:box-shadow .15s}.ds-tile:hover{box-shadow:0 1px 2px #10122008,0 8px 24px #10122014}.ds-tile strong{font-weight:600}.ds-prev{aspect-ratio:4/3;border:1px solid #e4e4ea;border-radius:12px;background:#fff}.ds-meta{font-size:13px;color:#6c7080;font-variant-numeric:tabular-nums}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Quiet Desk",
+    "overview": "Inkroom is a desk with a sheet of paper and one pen of indigo ink. A tutor on a PC and a student on an iPad draw on the same sheet in real time, and everything around the sheet steps back so the drawing stays in front. The paper is cool, never cream. Instruments float above the sheet as small frosted islands. Colour is mostly absent: the one indigo of the brand's pen nib marks what is active, chosen or focused, and nothing else.\n\nThis is an Operate surface: people come to teach and learn, not to admire the interface. Ambition shows as precision and restraint. Controls are generous targets for a finger or a stylus (40px tools, 44px fields on touch), labels are short Polish words in sentence case, and the layout changes its shape to fit the device: a wide bar on a PC, a compact bar on a smaller window, a rail down the left edge on a tablet held upright.\n\nDark mode is a night desk, not an inverted page. The board turns a deep blue-black, default black ink is painted in the light violet of the logo, white ink is painted black, and the indigo lifts to a lighter tone so it still reads as the same pen.",
+    "keyCharacteristics": [
+      "One accent (nib indigo) on a cool grey-white paper; everything else is neutral.",
+      "Floating, frosted islands over a full-bleed drawing canvas.",
+      "Two radii only: 12px for controls, 18px for containers and islands.",
+      "One typeface (Inter) in three working weights; monospace only for formulas.",
+      "Sentence-case labels, never tracked uppercase.",
+      "Touch-first sizing, since the main student device is a tablet with a stylus."
+    ],
+    "rules": [
+      {
+        "name": "The One Ink Rule",
+        "body": "Indigo means \"this is on, chosen, or focused\". If an element is not in one of those states, it is not indigo. Primary actions are filled with Ink Text, not with indigo.",
+        "section": "colors"
+      },
+      {
+        "name": "The Cool Paper Rule",
+        "body": "Backgrounds stay cool and nearly white (or blue-black at night). No cream, beige or warm tints anywhere.",
+        "section": "colors"
+      },
+      {
+        "name": "The Swap, Don't Invert Rule",
+        "body": "In dark mode stored black ink is painted light violet (`nib-indigo-night`) and stored white is painted black. Every other ink colour stays as drawn. Board previews are shown as a dark sheet with light ink, never as a white rectangle.",
+        "section": "colors"
+      },
+      {
+        "name": "The Sentence Case Rule",
+        "body": "Labels and headings are written as sentences. No uppercase, no letter-spacing on small labels, no eyebrow above a heading.",
+        "section": "typography"
+      },
+      {
+        "name": "The Mono Means Maths Rule",
+        "body": "Monospace is for formulas and the digits of the maths tools. Dates, sizes and the zoom level use Inter with tabular figures.",
+        "section": "typography"
+      },
+      {
+        "name": "The Float Over Ink Rule",
+        "body": "Only things above the drawing float (islands, popovers, dialogs). Content on a page (tiles, forms) is flat and bordered, and lifts only in response to the pointer.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** keep indigo for active, selected and focused states only (The One Ink Rule).",
+      "**Do** use 12px corners for controls and 18px for containers, and nothing in between.",
+      "**Do** make every tool and button at least 40px, and fields and touch pills 44px.",
+      "**Do** write labels in sentence-case Polish, as short as the action (\"Utwórz tablicę\", \"Wyloguj\", \"Zmień hasło\").",
+      "**Do** float tools over the canvas as frosted islands with the single Island shadow.",
+      "**Do** show dates, sizes and zoom in Inter with tabular figures.",
+      "**Do** design both themes together: Night Desk, Night Sheet and the lighter indigo for dark mode.",
+      "**Do** give a dead end a way out (the missing-board page links back home).",
+      "**Do** keep motion under 220ms, opacity and scale only, and switch it off for reduced motion."
+    ],
+    "donts": [
+      "**Don't** use tracked uppercase labels or eyebrows above headings.",
+      "**Don't** use monospace for anything except formulas and maths digits.",
+      "**Don't** fill large areas or primary buttons with indigo.",
+      "**Don't** add warm, cream or beige backgrounds, gradients, or gradient text.",
+      "**Don't** put a coloured bar down one side of a card; use the full Hairline border or the indigo tint.",
+      "**Don't** add a second, heavier shadow or hard offset shadows.",
+      "**Don't** let islands overlap each other or the canvas tools on any screen from 375px up.",
+      "**Don't** show a light, white board preview on the dark theme.",
+      "**Don't** animate anything on the drawing canvas or anything that delays a stroke or a tool switch."
+    ]
+  }
+}

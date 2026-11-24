@@ -60,7 +60,7 @@ import { currentTheme, displayColor, useTheme } from "./theme";
 import { toolCursor } from "./tool-cursor";
 import { rememberColor, restoreStart, switchTool } from "./tool-style";
 import { COLORS, QUICK_COLORS, SIZES, Toolbar } from "./toolbar";
-import { useToolbarLayout } from "./toolbar-layout";
+import { usePhone, useToolbarLayout } from "./toolbar-layout";
 import { versionWatch } from "./version";
 import { ZoomControls } from "./zoom-controls";
 
@@ -190,6 +190,7 @@ export function BoardView({
 	const peerName = (id?: string) =>
 		id ? peers.find((p) => p.id === id)?.name : undefined;
 	const toolbarLayout = useToolbarLayout();
+	const phone = usePhone();
 	/**
 	 * When the last paste (or duplicate) ended. Copying many elements is heavy, and a held Ctrl+V or
 	 * Ctrl+D or a quick second press would queue more of them behind it: while one is under way, or
@@ -1253,6 +1254,7 @@ export function BoardView({
 			>
 				<BoardTitle
 					name={title}
+					folded={phone}
 					editable={!!onRename}
 					onRename={async (n) => {
 						await onRename?.(n);

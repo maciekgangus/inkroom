@@ -61,6 +61,8 @@ export interface Account {
 	username: string;
 	/** False for an account that signs in only with Google (R-063, R-085). */
 	hasPassword?: boolean;
+	/** The picture shown instead of the first letter (R-111); "" or missing for none. */
+	avatar?: string;
 }
 
 /** The logged-in account, or null when logged out. */
@@ -115,6 +117,10 @@ export const getShortcuts = () =>
 
 export const putShortcuts = (shortcuts: Record<string, string>) =>
 	request<void>("PUT", "/api/account/shortcuts", { shortcuts });
+
+/** Sets the account's picture, or none with "" (R-111). */
+export const setAvatar = (avatar: string) =>
+	request<void>("PUT", "/api/account/avatar", { avatar });
 
 export const logout = () => request<void>("POST", "/api/logout", {});
 

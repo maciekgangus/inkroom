@@ -1,6 +1,9 @@
 import { render } from "preact";
 import "@fontsource/inter/latin-400.css";
 import "@fontsource/inter/latin-ext-400.css";
+// The real semibold for names and headings, so the browser does not fake a bold from the 400.
+import "@fontsource/inter/latin-600.css";
+import "@fontsource/inter/latin-ext-600.css";
 import "./style.css";
 import { App } from "./app";
 import { installErrorReporting } from "./error-report";

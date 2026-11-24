@@ -136,27 +136,71 @@ describe("BoardTitle (R-045)", () => {
 		const button = root.querySelector(".board-title button") as HTMLElement;
 		expect(button.title).toContain(long);
 	});
-});
 
-describe("the tick next to the field", () => {
-	test("saves the name, like Enter", async () => {
-		const onRename = vi.fn(async () => {});
-		const root = document.createElement("div");
-		document.body.append(root);
-		await act(async () => {
-			render(<BoardTitle name="Matma" editable onRename={onRename} />, root);
+	describe("folded on a phone (R-110)", () => {
+		const mountFolded = (editable = true) =>
+			act(() =>
+				render(
+					<BoardTitle
+						name="Matma"
+						editable={editable}
+						onRename={onRename}
+						folded
+					/>,
+					root,
+				),
+			);
+		const fold = () =>
+			root.querySelector(
+				"button[aria-label='Nazwa tablicy']",
+			) as HTMLButtonElement | null;
+
+		test("only a button shows, and it opens the name", async () => {
+			await mountFolded(false);
+			expect(fold()).not.toBeNull();
+			expect(fold()?.title).toBe("Matma");
+			expect(root.querySelector(".board-title .name")).toBeNull();
+			await act(() => fold()?.click());
+			expect(root.querySelector(".board-title .name")?.textContent).toBe(
+				"Matma",
+			);
+			await act(() => {
+				dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+			});
+			expect(root.querySelector(".board-title .name")).toBeNull();
 		});
-		await act(async () => {
-			(root.querySelector("button.name") as HTMLElement).click();
+
+		test("the owner renames the board inside it", async () => {
+			await mountFolded(true);
+			await act(() => fold()?.click());
+			await open();
+			await type("Fizyka");
+			await key("Enter");
+			await flush();
+			expect(onRename).toHaveBeenCalledWith("Fizyka");
 		});
-		const input = root.querySelector("input") as HTMLInputElement;
-		await act(async () => {
-			input.value = "Fizyka";
-			input.dispatchEvent(new Event("input", { bubbles: true }));
+	});
+
+	describe("the tick next to the field", () => {
+		test("saves the name, like Enter", async () => {
+			const onRename = vi.fn(async () => {});
+			const root = document.createElement("div");
+			document.body.append(root);
+			await act(async () => {
+				render(<BoardTitle name="Matma" editable onRename={onRename} />, root);
+			});
+			await act(async () => {
+				(root.querySelector("button.name") as HTMLElement).click();
+			});
+			const input = root.querySelector("input") as HTMLInputElement;
+			await act(async () => {
+				input.value = "Fizyka";
+				input.dispatchEvent(new Event("input", { bubbles: true }));
+			});
+			await act(async () => {
+				(root.querySelector('[aria-label="save name"]') as HTMLElement).click();
+			});
+			expect(onRename).toHaveBeenCalledWith("Fizyka");
 		});
-		await act(async () => {
-			(root.querySelector('[aria-label="save name"]') as HTMLElement).click();
-		});
-		expect(onRename).toHaveBeenCalledWith("Fizyka");
 	});
 });

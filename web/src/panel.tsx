@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { AccountDialog } from "./account-dialog";
 import type { Account, BoardSummary } from "./api";
 import * as api from "./api";
+import { avatarUrl } from "./avatars";
 import {
 	type BoardFilter,
 	DEFAULT_FILTER,
@@ -31,10 +32,12 @@ interface Props {
 	account: Account;
 	navigate: (to: string) => void;
 	onLogout: () => void;
+	/** The account changed in the account window (its picture, R-111). */
+	onAccount?: (account: Account) => void;
 }
 
 /** The logged-in user's home: own boards, boards they were invited to, and creating new ones. */
-export function Panel({ account, navigate, onLogout }: Props) {
+export function Panel({ account, navigate, onLogout, onAccount }: Props) {
 	const [accountOpen, setAccountOpen] = useState(false);
 	const [owned, setOwned] = useState<BoardSummary[] | null>(null);
 	const [visited, setVisited] = useState<BoardSummary[]>([]);
@@ -132,13 +135,22 @@ export function Panel({ account, navigate, onLogout }: Props) {
 					<Logo />
 				</h1>
 				<span class="row">
-					<a href="/calendar">Kalendarz</a>
+					<a class="nav-link" href="/calendar">
+						Kalendarz
+					</a>
 					<button
 						type="button"
 						class="chip"
 						title="Konto"
 						onClick={() => setAccountOpen(true)}
 					>
+						<span class="chip-avatar" aria-hidden="true">
+							{avatarUrl(account.avatar) ? (
+								<img src={avatarUrl(account.avatar) ?? ""} alt="" />
+							) : (
+								account.username.charAt(0)
+							)}
+						</span>
 						{account.username}
 					</button>
 					<button type="button" onClick={logout}>
@@ -151,6 +163,7 @@ export function Panel({ account, navigate, onLogout }: Props) {
 					account={account}
 					onClose={() => setAccountOpen(false)}
 					onDeleted={onLogout}
+					onAvatar={(avatar) => onAccount?.({ ...account, avatar })}
 				/>
 			)}
 			{error && (

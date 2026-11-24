@@ -205,6 +205,33 @@ describe("SyncClient", () => {
 			]);
 		});
 
+		test("peers carry the picture of their account (R-111)", () => {
+			const onPeers = vi.fn();
+			const c = new SyncClient(board, {
+				createSocket: () => {
+					const s = new FakeSocket();
+					sockets.push(s);
+					return s;
+				},
+				onUpdate,
+				onPeers,
+				self: { authorId: "me", name: "Ola" },
+			});
+			c.connect();
+			connectAndJoin();
+			sock().receive({
+				t: "peers",
+				peers: [
+					{ id: "a", name: "A", avatar: "fox" },
+					{ id: "b", name: "B", avatar: 7 },
+				],
+			});
+			expect(onPeers).toHaveBeenLastCalledWith([
+				{ id: "a", name: "A", avatar: "fox" },
+				{ id: "b", name: "B" },
+			]);
+		});
+
 		test("a refusal or an end calls back and is not asked for again after a reconnect", () => {
 			const onRefused = vi.fn();
 			const onEnded = vi.fn();

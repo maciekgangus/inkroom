@@ -74,6 +74,33 @@ export function displayColor(color: string, theme: Theme): string {
 	return color;
 }
 
+type WithTransition = Document & {
+	startViewTransition?: (update: () => Promise<void>) => unknown;
+};
+
+/**
+ * Switches the theme with a short cross-fade where the browser can (View Transitions), and at
+ * once where it cannot or the user asked for less motion. The fade waits two frames, so the
+ * board's canvas is already painted in the new colours when it starts.
+ */
+function switchTheme(theme: Theme): void {
+	const doc = document as WithTransition;
+	const calm = globalThis.matchMedia?.(
+		"(prefers-reduced-motion: reduce)",
+	).matches;
+	if (!doc.startViewTransition || calm) {
+		setTheme(theme);
+		return;
+	}
+	doc.startViewTransition(
+		() =>
+			new Promise<void>((done) => {
+				setTheme(theme);
+				requestAnimationFrame(() => requestAnimationFrame(() => done()));
+			}),
+	);
+}
+
 /** A button that switches between the light and the dark theme. */
 export function ThemeToggle() {
 	const dark = useTheme() === "dark";
@@ -83,7 +110,7 @@ export function ThemeToggle() {
 			aria-label="toggle theme"
 			aria-pressed={dark}
 			title={dark ? "Tryb jasny" : "Tryb ciemny"}
-			onClick={() => setTheme(dark ? "light" : "dark")}
+			onClick={() => switchTheme(dark ? "light" : "dark")}
 		>
 			<Icon name={dark ? "sun" : "moon"} />
 		</button>

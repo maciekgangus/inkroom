@@ -1,3 +1,4 @@
+import { avatarUrl } from "./avatars";
 import { cursorColor } from "./cursor-colors";
 import type { Peer } from "./sync/sync";
 
@@ -58,6 +59,13 @@ export function Participants({
 				const mark = p.muted ? (
 					<span class="muted-mark" aria-hidden="true" />
 				) : null;
+				// The account's picture on a disc of the person's colour, or the first letter (R-111).
+				const picture = avatarUrl(p.avatar);
+				const face = picture ? (
+					<img class="participant-picture" src={picture} alt="" />
+				) : (
+					initial(p.name)
+				);
 				if ((onSelect || onFollow) && p.id !== selfId) {
 					return (
 						<li key={p.id} class="participant-slot">
@@ -73,7 +81,7 @@ export function Participants({
 									onSelect(p, { x: r.right - 220, y: r.bottom + 8 });
 								}}
 							>
-								{initial(p.name)}
+								{face}
 								{mark}
 							</button>
 						</li>
@@ -81,7 +89,7 @@ export function Participants({
 				}
 				return (
 					<li key={p.id} {...common}>
-						{initial(p.name)}
+						{face}
 						{mark}
 					</li>
 				);

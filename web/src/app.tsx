@@ -116,6 +116,7 @@ function Home({
 			account={account}
 			navigate={navigate}
 			onLogout={() => setAccount(null)}
+			onAccount={setAccount}
 		/>
 	);
 }
@@ -165,6 +166,9 @@ function BoardPage({
 				<p class="muted">
 					Link jest nieprawidłowy albo tablica została usunięta.
 				</p>
+				<a class="nav-link" href="/">
+					Przejdź do strony głównej
+				</a>
 			</main>
 		);
 	}

@@ -122,6 +122,15 @@ func (h *Hub) SetName(boardID, value string) {
 	}
 }
 
+// SetAvatar passes a person's saved new picture to every board they are on (R-111).
+func (h *Hub) SetAvatar(person, avatar string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for _, r := range h.rooms {
+		r.SetAvatar(person, avatar)
+	}
+}
+
 // Delete disconnects everyone from the board and discards unsaved changes.
 func (h *Hub) Delete(boardID string) {
 	h.mu.Lock()

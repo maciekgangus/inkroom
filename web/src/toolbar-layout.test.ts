@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { currentLayout } from "./toolbar-layout";
+import { currentLayout, isPhone } from "./toolbar-layout";
 
 const screen = (opts: { portraitTouch: boolean; narrow: boolean }) =>
 	vi.stubGlobal("matchMedia", (q: string) => ({
@@ -28,6 +28,17 @@ describe("toolbar layout (R-082)", () => {
 	test("a wide window keeps the full bar as it is", () => {
 		screen({ portraitTouch: false, narrow: false });
 		expect(currentLayout()).toBe("full");
+	});
+
+	test("a screen narrower than 600px is a phone (R-110)", () => {
+		vi.stubGlobal("matchMedia", (q: string) => ({
+			matches: q === "(max-width: 600px)",
+		}));
+		expect(isPhone()).toBe(true);
+		vi.stubGlobal("matchMedia", () => ({ matches: false }));
+		expect(isPhone()).toBe(false);
+		vi.stubGlobal("matchMedia", undefined);
+		expect(isPhone()).toBe(false);
 	});
 
 	test("without matchMedia (tests, old browsers) the bar is the full one", () => {
