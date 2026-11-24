@@ -1,0 +1,13 @@
+# Ignore directory-based tooling files
+.claude/
+.archify/
+
+# Ignore node_modules
+node_modules/
+
+# Ignore build output
+dist/
+public/
+
+# Ignore test results
+test-results/

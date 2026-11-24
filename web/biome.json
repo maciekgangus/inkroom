@@ -13,7 +13,9 @@
 			"!**/node_modules",
 			"!**/dist",
 			"!**/public",
-			"!**/test-results"
+			"!**/test-results",
+			"!**/.claude",
+			"!**/.archify"
 		]
 	},
 	"formatter": {
