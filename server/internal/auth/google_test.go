@@ -300,6 +300,7 @@ func TestGoogleOffWhenNotConfigured(t *testing.T) {
 func TestGoogleRedirectFromTheRequestWithoutPublicURL(t *testing.T) {
 	s, f, _ := googleService(t)
 	s.Google.PublicURL = ""
+	s.TrustProxyHeaders = true // behind the proxy, as in deploy
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "http://ink.example/api/auth/google/start", nil)
 	req.Header.Set("X-Forwarded-Proto", "https")

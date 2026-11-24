@@ -38,6 +38,8 @@ type app struct {
 	// person and an address from flooding it (R-098).
 	clientLog                  *slog.Logger
 	clientLimit, clientIPLimit *rateLimiter
+	// imageIPLimit keeps one address from flooding the image upload (security audit 2026-11).
+	imageIPLimit *rateLimiter
 }
 
 // newApp wires the services together. Call Close before closing the store.
@@ -52,6 +54,7 @@ func newApp(staticDir string, st *store.Store) *app {
 		clientLog:     logx.For("client"),
 		clientLimit:   newRateLimiter(time.Now, clientErrorsPerHour, time.Hour, clientLimiterKeys),
 		clientIPLimit: newRateLimiter(time.Now, clientIPsPerHour, time.Hour, clientLimiterKeys),
+		imageIPLimit:  newRateLimiter(time.Now, maxImageUploadsPerIP, imageUploadWindow, clientLimiterKeys),
 	}
 }
 
@@ -141,7 +144,7 @@ func (a *app) Handler() http.Handler {
 	mux.HandleFunc("GET /register", index)
 	mux.HandleFunc("GET /b/{id}", index)
 	mux.Handle("/", http.FileServer(http.Dir(a.staticDir)))
-	return logx.Middleware(mux, logx.Options{})
+	return secureHeaders(logx.Middleware(mux, logx.Options{}))
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

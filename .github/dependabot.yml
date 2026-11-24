@@ -1,0 +1,25 @@
+# Automatic update PRs (security audit 2026-11). Actions are pinned to commit SHAs in the
+# workflows, so these PRs move the pins; docker base images are pinned to versions in the
+# Dockerfile and deploy compose.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      weekly: monday
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      weekly: monday
+  - package-ecosystem: docker
+    directory: /deploy
+    schedule:
+      weekly: monday
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      weekly: monday
+  - package-ecosystem: gomod
+    directory: /server
+    schedule:
+      weekly: monday

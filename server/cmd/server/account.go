@@ -39,6 +39,8 @@ func (a *app) changePassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Błąd serwera")
 		return
 	}
+	// A new password ends the account's other sessions; only this one stays (security audit 2026-11).
+	_ = a.st.DeleteOtherSessions(u.ID, a.auth.SessionTokenHash(r))
 	w.WriteHeader(http.StatusNoContent)
 }
 

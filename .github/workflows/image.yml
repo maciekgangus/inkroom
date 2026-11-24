@@ -16,6 +16,11 @@ concurrency:
   group: image-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# Every job gets read-only by default; only the image job adds packages: write (security audit
+# 2026-11).
+permissions:
+  contents: read
+
 env:
   IMAGE: ghcr.io/${{ github.repository }}
 
@@ -23,9 +28,9 @@ jobs:
   test:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: server/go.mod
           cache-dependency-path: server/go.sum
@@ -46,7 +51,7 @@ jobs:
           COMPOSE_FILE=deploy/docker-compose.yml:deploy/docker-compose.selinux.yml docker compose config --quiet
           (unset TUNNEL_TOKEN R2_BUCKET; ! docker compose -f deploy/docker-compose.yml config --quiet)
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: npm
@@ -68,18 +73,18 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
           images: ${{ env.IMAGE }}
           # latest is only ever a release: the branch builds are :main and :sha-<commit>.
@@ -91,7 +96,7 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
 
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           platforms: linux/amd64
@@ -102,3 +107,20 @@ jobs:
             VERSION=${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # Scans the published image for known vulnerabilities (security audit 2026-11). Fails on
+  # unfixed CRITICAL/HIGH, so a bad base image blocks the release until it is fixed.
+  scan:
+    needs: image
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE }}:sha-${{ github.sha }}
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"

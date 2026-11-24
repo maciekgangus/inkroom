@@ -60,11 +60,11 @@ func randomString(n int) string {
 	return base64.RawURLEncoding.EncodeToString(raw)
 }
 
-func (g *Google) redirectURI(r *http.Request) string {
+func (g *Google) redirectURI(r *http.Request, secure bool) string {
 	base := strings.TrimRight(g.PublicURL, "/")
 	if base == "" {
 		scheme := "http"
-		if isSecure(r) {
+		if secure {
 			scheme = "https"
 		}
 		base = scheme + "://" + r.Host
@@ -108,7 +108,7 @@ func (s *Service) GoogleStart(w http.ResponseWriter, r *http.Request) {
 	sum := sha256.Sum256([]byte(verifier))
 	q := url.Values{
 		"client_id":             {s.Google.ClientID},
-		"redirect_uri":          {s.Google.redirectURI(r)},
+		"redirect_uri":          {s.Google.redirectURI(r, s.isSecure(r))},
 		"response_type":         {"code"},
 		"scope":                 {"openid email profile"},
 		"state":                 {state},
@@ -119,7 +119,7 @@ func (s *Service) GoogleStart(w http.ResponseWriter, r *http.Request) {
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name: googleCookie, Value: state, Path: googlePath, MaxAge: int(googleStateTTL.Seconds()),
-		HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: isSecure(r),
+		HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: s.isSecure(r),
 	})
 	http.Redirect(w, r, s.Google.endpoint(s.Google.AuthURL, googleAuthURL)+"?"+q.Encode(), http.StatusFound)
 }
@@ -132,7 +132,7 @@ func (s *Service) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// The cookie is spent whatever happens.
-	http.SetCookie(w, &http.Cookie{Name: googleCookie, Value: "", Path: googlePath, MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: isSecure(r)})
+	http.SetCookie(w, &http.Cookie{Name: googleCookie, Value: "", Path: googlePath, MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: s.isSecure(r)})
 	back := func(reason string) { http.Redirect(w, r, "/?google="+reason, http.StatusFound) }
 
 	state := r.URL.Query().Get("state")
@@ -193,7 +193,7 @@ func (s *Service) googleExchange(r *http.Request, code string, p pendingGoogle) 
 	}
 	resp, err := client.PostForm(g.endpoint(g.TokenURL, googleTokenURL), url.Values{
 		"code": {code}, "client_id": {g.ClientID}, "client_secret": {g.ClientSecret},
-		"redirect_uri": {g.redirectURI(r)}, "grant_type": {"authorization_code"}, "code_verifier": {p.verifier},
+		"redirect_uri": {g.redirectURI(r, s.isSecure(r))}, "grant_type": {"authorization_code"}, "code_verifier": {p.verifier},
 	})
 	if err != nil {
 		return claims, err

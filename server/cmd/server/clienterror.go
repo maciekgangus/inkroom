@@ -59,7 +59,7 @@ func (a *app) clientError(w http.ResponseWriter, r *http.Request) {
 	if loggedIn {
 		who = "u:" + strconv.FormatInt(u.ID, 10)
 	}
-	if !a.clientIPLimit.allow(auth.ClientIP(r)) || (loggedIn && !a.clientLimit.allow(who)) {
+	if !a.clientIPLimit.allow(a.auth.ClientIP(r)) || (loggedIn && !a.clientLimit.allow(who)) {
 		writeError(w, http.StatusTooManyRequests, "Za dużo zgłoszeń")
 		return
 	}

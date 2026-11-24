@@ -4,10 +4,17 @@ services:
   app:
     build: .
     ports:
-      - "${PORT:-8080}:8080"
+      # Loopback only: a local instance must not be reachable from the network (security audit
+      # 2026-11). The dev override (docker-compose.override.yml) sets ADMIN_DEV_OPEN, which the
+      # server refuses to expose publicly.
+      - "127.0.0.1:${PORT:-8080}:8080"
     env_file:
       - path: .env
         required: false
+    environment:
+      # Explicit bind inside the container, so the server's dev-switch guard (listenAddr) knows
+      # this bind was chosen on purpose and does not force loopback.
+      BIND_ADDR: "0.0.0.0:8080"
     volumes:
       - data:/data
     restart: unless-stopped

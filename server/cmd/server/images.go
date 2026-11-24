@@ -4,12 +4,20 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/maciekgangus/inkroom/server/internal/store"
 )
 
 // maxImageBytes is the largest accepted upload; the client shrinks photos well below it (ADR 0007).
 const maxImageBytes = 5 << 20
+
+// One address may upload at most maxImageUploadsPerIP images per imageUploadWindow, so a board
+// link alone cannot be used to fill the disk (security audit 2026-11).
+const (
+	maxImageUploadsPerIP = 30
+	imageUploadWindow    = 10 * time.Minute
+)
 
 // allowedImageTypes are sniffed from the bytes, never taken from the client. SVG is left out on
 // purpose: it can carry scripts.
@@ -25,6 +33,10 @@ var allowedImageTypes = map[string]bool{
 func (a *app) uploadImage(w http.ResponseWriter, r *http.Request) {
 	board, ok := a.boardFromURL(w, r)
 	if !ok {
+		return
+	}
+	if !a.imageIPLimit.allow(a.auth.ClientIP(r)) {
+		writeError(w, http.StatusTooManyRequests, "Za dużo obrazów, spróbuj później")
 		return
 	}
 	data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxImageBytes))
@@ -44,6 +56,10 @@ func (a *app) uploadImage(w http.ResponseWriter, r *http.Request) {
 	}
 	id := newBoardID() // 128 random bits, also fine as an image id
 	if err := a.st.SaveImage(id, board.ID, mime, data); err != nil {
+		if errors.Is(err, store.ErrQuota) {
+			writeError(w, http.StatusInsufficientStorage, "Tablica nie ma już miejsca na obraz")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "Błąd serwera")
 		return
 	}
