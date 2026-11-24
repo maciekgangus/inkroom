@@ -33,6 +33,7 @@ type User struct {
 	Email    string
 	Username string // the public name, as typed (R-053)
 	Hash     string // argon2id hash
+	Avatar   string // the picture chosen for the account (R-111); "" for the first letter
 }
 
 // Board is a saved board.
@@ -157,6 +158,8 @@ var migrations = []migration{
 	addGoogleSub,
 	// The calendar: lessons, series, unavailability and requests to move a lesson (R-104 to R-108, ADR 0025).
 	stmt(calendarSchema),
+	// The picture an account shows on boards instead of its first letter (R-111); '' for none.
+	stmt("ALTER TABLE users ADD COLUMN avatar TEXT NOT NULL DEFAULT ''"),
 }
 
 func addGoogleSub(tx *sql.Tx) error {
@@ -411,11 +414,11 @@ func (s *Store) CreateAccount(email, username, hash string) (User, error) {
 	return User{ID: id, Email: email, Username: username, Hash: hash}, nil
 }
 
-const userCols = "id, email, username, hash"
+const userCols = "id, email, username, hash, avatar"
 
 func scanUser(sc interface{ Scan(...any) error }) (User, error) {
 	var u User
-	err := sc.Scan(&u.ID, &u.Email, &u.Username, &u.Hash)
+	err := sc.Scan(&u.ID, &u.Email, &u.Username, &u.Hash, &u.Avatar)
 	return u, notFound(err)
 }
 
@@ -442,7 +445,7 @@ func (s *Store) CreateSession(tokenHash string, userID int64, expires time.Time)
 
 // SessionUser returns the user of a live session, or ErrNotFound if missing or expired.
 func (s *Store) SessionUser(tokenHash string, now time.Time) (User, error) {
-	return scanUser(s.db.QueryRow(`SELECT u.id, u.email, u.username, u.hash FROM sessions s JOIN users u ON u.id = s.user_id
+	return scanUser(s.db.QueryRow(`SELECT u.id, u.email, u.username, u.hash, u.avatar FROM sessions s JOIN users u ON u.id = s.user_id
 		WHERE s.token_hash = ? AND s.expires_at > ?`, tokenHash, unix(now)))
 }
 
@@ -899,6 +902,11 @@ func (s *Store) Shortcuts(userID int64) (string, error) {
 	var js string
 	err := s.db.QueryRow("SELECT shortcuts FROM users WHERE id = ?", userID).Scan(&js)
 	return js, notFound(err)
+}
+
+// SetAvatar sets the picture of an account (R-111); the caller has checked it is a known one.
+func (s *Store) SetAvatar(userID int64, avatar string) error {
+	return s.mustAffect(s.db.Exec("UPDATE users SET avatar = ? WHERE id = ?", avatar, userID))
 }
 
 // SetShortcuts replaces the account's own keyboard shortcuts (a JSON object).

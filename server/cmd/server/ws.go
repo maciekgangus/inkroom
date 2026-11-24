@@ -63,6 +63,9 @@ func (a *app) serveWS(w http.ResponseWriter, r *http.Request) {
 	// Drawing rights belong to the person the server recognises, not to the id the client states.
 	user, loggedIn := a.auth.User(r)
 	client.SetPerson(a.person(r, user, loggedIn, client.ID), loggedIn && user.ID == board.OwnerID)
+	if loggedIn && client.Name != store.ReservedName {
+		client.Avatar = user.Avatar // the Administrator shows no account's picture
+	}
 	rm, err := a.hub.Join(boardID, client)
 	if err != nil {
 		logx.From(r.Context()).Error("joining board", "board", logx.Ref(boardID), "err", err)

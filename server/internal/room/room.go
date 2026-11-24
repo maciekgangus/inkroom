@@ -33,6 +33,9 @@ type Client struct {
 	Person string
 	Owner  bool
 
+	// Avatar is the picture of the account behind the connection (R-111), "" for its first letter.
+	Avatar string
+
 	once sync.Once
 }
 
@@ -221,6 +224,23 @@ func (r *Room) SetName(value string) {
 	defer r.mu.Unlock()
 	b, _ := json.Marshal(map[string]string{"t": "name", "value": value})
 	r.broadcastLocked(b, nil)
+}
+
+// SetAvatar shows a person's new picture (R-111) on their connections and tells everyone, if the
+// person is on the board. The caller has already saved it.
+func (r *Room) SetAvatar(person, avatar string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	changed := false
+	for c := range r.clients {
+		if c.Person == person && c.Name != store.ReservedName {
+			c.Avatar = avatar
+			changed = changed || c.ID != ""
+		}
+	}
+	if changed {
+		r.broadcastLocked(r.peersLocked(), nil)
+	}
 }
 
 // Handle applies one message from c. An error means the client misbehaved. It takes ownership
@@ -492,6 +512,7 @@ func (r *Room) peersLocked() []byte {
 		Muted bool   `json:"muted,omitempty"`
 		// Follows is the id of the person whose view this one follows (R-093).
 		Follows string `json:"follows,omitempty"`
+		Avatar  string `json:"avatar,omitempty"` // R-111
 	}
 	seen := map[string]bool{}
 	peers := []peer{}
@@ -500,7 +521,7 @@ func (r *Room) peersLocked() []byte {
 			continue
 		}
 		seen[c.ID] = true
-		peers = append(peers, peer{ID: c.ID, Name: c.Name, Muted: !r.canDraw(c), Follows: r.followsOfLocked(c.ID)})
+		peers = append(peers, peer{ID: c.ID, Name: c.Name, Muted: !r.canDraw(c), Follows: r.followsOfLocked(c.ID), Avatar: c.Avatar})
 	}
 	sort.Slice(peers, func(i, j int) bool {
 		if peers[i].Name != peers[j].Name {
