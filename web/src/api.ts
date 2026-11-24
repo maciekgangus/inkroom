@@ -246,3 +246,101 @@ export function sendFeedback(note: {
 }): Promise<void> {
 	return request("POST", "/api/feedback", note);
 }
+
+/** A lesson in the calendar (R-104); `role` is what the caller is in it. */
+export interface Lesson {
+	id: number;
+	title: string;
+	start: string;
+	end: string;
+	status: "scheduled" | "done" | "cancelled";
+	teacher: string;
+	student: string;
+	role: "teacher" | "student";
+	seriesId?: number;
+	boardId?: string;
+	note: string;
+	homework: string;
+}
+
+export interface Unavailable {
+	id: number;
+	start: string;
+	end: string;
+	note: string;
+}
+
+/** A request to move a lesson (R-107); `mine`: sent by the caller. */
+export interface MoveRequest {
+	id: number;
+	lessonId: number;
+	lessonTitle: string;
+	from: string;
+	mine: boolean;
+	start: string;
+	end: string;
+	note: string;
+}
+
+export interface CalendarData {
+	lessons: Lesson[];
+	unavailable: Unavailable[];
+	requests: MoveRequest[];
+}
+
+export const getCalendar = (from: Date, to: Date) =>
+	request<CalendarData>(
+		"GET",
+		`/api/calendar?from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}`,
+	);
+
+export const createLesson = (l: {
+	title: string;
+	student: string;
+	start: string;
+	end: string;
+}) => request<Lesson>("POST", "/api/lessons", l);
+
+/** A weekly series (R-105): `start` is a local date, slot times are local to `zone`. */
+export const createSeries = (s: {
+	title: string;
+	student: string;
+	start: string;
+	intervalWeeks: number;
+	slots: { day: number; time: string; minutes: number }[];
+	count: number;
+	zone: string;
+}) => request<{ id: number; lessons: number }>("POST", "/api/series", s);
+
+export const updateLesson = (
+	id: number,
+	patch: Partial<
+		Pick<Lesson, "title" | "start" | "end" | "status" | "note" | "homework">
+	>,
+) => request<Lesson>("PATCH", `/api/lessons/${id}`, patch);
+
+export const deleteLesson = (id: number) =>
+	request<void>("DELETE", `/api/lessons/${id}`);
+
+/** Links a new board (no id) or one of the caller's boards to the lesson (R-108). */
+export const linkLessonBoard = (id: number, boardId?: string) =>
+	request<Lesson>("POST", `/api/lessons/${id}/board`, { boardId });
+
+export const requestMove = (
+	id: number,
+	r: { start: string; end: string; note: string },
+) => request<MoveRequest>("POST", `/api/lessons/${id}/requests`, r);
+
+export const answerRequest = (
+	id: number,
+	answer: "accept" | "reject" | "cancel",
+) => request<void>("POST", `/api/requests/${id}/${answer}`, {});
+
+export const addUnavailable = (u: {
+	start: string;
+	end: string;
+	note: string;
+}) => request<Unavailable>("POST", "/api/unavailability", u);
+
+export const deleteUnavailable = (id: number) =>
+	request<void>("DELETE", `/api/unavailability/${id}`);
