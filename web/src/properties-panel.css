@@ -215,9 +215,9 @@
 		display: none;
 	}
 }
-.properties button.swatch,
-.properties button.swatch:hover:not(:disabled),
-.properties button.swatch:active {
+:is(.properties, .tb-menu) button.swatch,
+:is(.properties, .tb-menu) button.swatch:hover:not(:disabled),
+:is(.properties, .tb-menu) button.swatch:active {
 	position: relative;
 	display: grid;
 	place-items: center;
@@ -230,7 +230,7 @@
 	background: transparent;
 	color: var(--muted);
 }
-.properties .swatch::before {
+:is(.properties, .tb-menu) .swatch::before {
 	content: "";
 	grid-area: 1 / 1;
 	box-sizing: border-box;
@@ -243,40 +243,41 @@
 		transform 0.08s,
 		box-shadow 0.12s;
 }
-.properties .swatch > svg {
+:is(.properties, .tb-menu) .swatch > svg {
 	grid-area: 1 / 1;
 	position: relative;
 	width: 14px;
 	height: 14px;
 	pointer-events: none;
 }
-.properties .swatch.active::before,
-.properties .swatch[aria-expanded="true"]::before {
+:is(.properties, .tb-menu) .swatch.active::before,
+:is(.properties, .tb-menu) .swatch[aria-expanded="true"]::before {
 	box-shadow:
 		inset 0 0 0 1px color-mix(in srgb, var(--text) 18%, transparent),
 		0 0 0 3px var(--surface),
 		0 0 0 5px var(--accent);
 }
 @media (hover: hover) {
-	.properties .swatch:hover::before {
+	:is(.properties, .tb-menu) .swatch:hover::before {
 		transform: scale(1.12);
 	}
 }
 /* No fill: an empty dot with the crossed square. */
-.properties .swatch.none::before {
+:is(.properties, .tb-menu) .swatch.none::before {
 	background: var(--surface);
 }
-.properties .swatch.none > svg {
+:is(.properties, .tb-menu) .swatch.none > svg {
 	width: 16px;
 	height: 16px;
 }
 /* Any other colour: a dashed ring with a plus, or a dot in that colour. */
-.properties .swatch.custom:not(.own)::before {
+:is(.properties, .tb-menu) .swatch.custom:not(.own)::before {
 	border: 1.5px dashed var(--muted);
 	background: transparent;
 	box-shadow: none;
 }
-.properties .swatch.custom:not(.own)[aria-expanded="true"]::before {
+:is(.properties, .tb-menu)
+	.swatch.custom:not(.own)[aria-expanded="true"]::before {
 	box-shadow:
 		0 0 0 3px var(--surface),
 		0 0 0 5px var(--accent);
@@ -315,7 +316,7 @@
 	width: 18px;
 	height: 18px;
 }
-.properties button.swatch {
+:is(.properties, .tb-menu) button.swatch {
 	margin: 0;
 }
 .properties .dot {
@@ -593,14 +594,14 @@
 	.prop-group.sliders .slider-icon {
 		height: 44px;
 	}
-	.properties button.swatch,
-	.properties button.swatch:hover:not(:disabled),
-	.properties button.swatch:active {
+	:is(.properties, .tb-menu) button.swatch,
+	:is(.properties, .tb-menu) button.swatch:hover:not(:disabled),
+	:is(.properties, .tb-menu) button.swatch:active {
 		width: 44px;
 		min-width: 44px;
 		height: 44px;
 	}
-	.properties .swatch::before {
+	:is(.properties, .tb-menu) .swatch::before {
 		width: 28px;
 		height: 28px;
 	}

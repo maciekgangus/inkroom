@@ -98,7 +98,7 @@ const LIST_ICON = "M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01";
 const NUM_ICON =
 	"M10 6h10M10 12h10M10 18h10M4 4.5l1.5-.8V9M4 14.5c.4-.8 2.3-.9 2.3.4 0 .8-1 1.2-2.3 2.6h2.4";
 const QUOTE_ICON =
-	"M5 8h4v4c0 2.5-1 3.700-3.500 4.500M14 8h4v4c0 2.500-1 3.700-3.500 4.500";
+	"M5 7h5v5c0 2.5-1 3.7-3.5 4.500M14 7h5v5c0 2.5-1 3.7-3.5 4.500";
 
 /**
  * The bar over a text being typed (R-101), laid out like a word processor's: font, size, then
@@ -151,11 +151,13 @@ export function TextToolbar({
 
 	// Over the field when there is room, under it when not; menus open away from the field.
 	const above = y > 72;
-	const room = above ? y - 80 : window.innerHeight - bottom - 80;
+	const room = above ? y - 76 : window.innerHeight - bottom - 76;
+	const left = Math.max(8, Math.min(x, window.innerWidth - 600));
 	const style = {
-		left: `max(8px, min(${x}px, calc(100vw - 600px)))`,
+		left: `${left}px`,
+		maxWidth: `${window.innerWidth - left - 8}px`,
 		top: `${above ? y - 8 : bottom + 8}px`,
-		"--room": `${Math.max(120, room)}px`,
+		"--room": `${Math.max(140, room)}px`,
 	};
 
 	return (

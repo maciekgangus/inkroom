@@ -2442,6 +2442,7 @@ button.participant {
 	align-items: center;
 	gap: 2px 4px;
 	max-width: calc(100vw - 16px);
+	box-sizing: border-box;
 	padding: 4px;
 	border: 1px solid var(--border);
 	border-radius: var(--radius-lg, 10px);
@@ -2599,13 +2600,17 @@ button.participant {
 .tb-item {
 	display: block;
 	width: 100%;
-	padding: 6px 10px;
+	min-width: 0;
+	height: auto;
+	padding: 4px 10px;
+	font-weight: 400;
 	border: 0;
 	border-radius: 5px;
 	background: transparent;
 	color: var(--text);
 	font: inherit;
 	font-size: 15px;
+	line-height: 24px;
 	text-align: left;
 	white-space: nowrap;
 	cursor: pointer;
@@ -2637,8 +2642,19 @@ button.participant {
 .tb-item.style-h3 {
 	font-weight: 600;
 }
+.tb-menu.color-menu,
+.tb-menu.help {
+	left: auto;
+	right: 0;
+}
 .tb-menu.color-menu {
-	padding: 8px;
+	padding: 6px;
+	width: max-content;
+}
+@media (pointer: coarse) {
+	.tb-item {
+		padding: 8px 12px;
+	}
 }
 .tb-menu.help {
 	width: 300px;
