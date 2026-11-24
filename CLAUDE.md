@@ -38,6 +38,8 @@ Stos: serwer w Go (`server/`), klient w TypeScript + Vite + Preact (`web/`). Kom
 - Lokalnie `docker compose up` ładuje `docker-compose.override.yml`, który tworzy publiczne konto testowe (`test@example.test`, hasło w tym pliku). Na serwerze uruchamiać z jawnym `-f docker-compose.yml`, żeby tego konta tam nie było.
 - Rejestracja wymaga captchy Cloudflare Turnstile (ADR 0013): lokalnie `docker-compose.override.yml` ma opublikowane klucze testowe, na serwerze trzeba ustawić `TURNSTILE_SITE_KEY` i `TURNSTILE_SECRET` w `.env` (bez sekretu rejestracja jest zamknięta). Logowanie: e-mail lub nazwa użytkownika; konto testowe `test@example.test` loguje się też jako `test`.
 - Obraz i wydania (ADR 0014): GitHub Actions testuje i publikuje `ghcr.io/maciekgangus/inkroom` (`:main` i `:sha-<commit>` z `main`, `:latest` i `:X.Y.Z` z tagu `vX.Y.Z`); serwer śledzi `:latest`. **Merge do `main` niczego nie wdraża**: wydanie to `git tag -a vX.Y.Z -m "opis" && git push origin vX.Y.Z` (dokładny opis, cofanie i kopiowanie folderu `deploy/`: `docs/wydawanie-wersji.md`). Homelab: `deploy/README.md`, ADR 0003 i 0016; skrypty testują `sh deploy/test-update.sh` i `sh scripts/test-backup.sh`.
+- Praca przez PR (każdy agent we własnym worktree, korzeń zostaje na `main`): gałąź z `origin/main`, małe commity, PR (`gh pr create`), merge dopiero po zielonym jobie `test`. Joby `image` i `scan` (Trivy) działają tylko na `main` i tagach, więc PR ich nie sprawdza: po merge obejrzyj przebieg (`gh run list -R maciekgangus/inkroom`) i napraw od razu, bo czerwony `scan` zablokuje też wydanie z tagu. Przed `gh pr create` funkcji z interfejsem hook przypomina o ręcznym przejściu przez `/test-server`.
+- Na tej maszynie `git push` nie ma poświadczeń HTTPS: `git -c credential.helper='!gh auth git-credential' push -u origin <gałąź>`. Push zmian w `.github/workflows/` wymaga tokena `gh` z zakresem `workflow` (`gh auth refresh -h github.com -s workflow`, robi to użytkownik).
 - Wdrożenie: docker compose, najpierw lokalnie, później na domowym VPS (ADR 0002). Sekrety w `.env`, nigdy w obrazach ani w repo.
 - Plugin lub serwer MCP dodawaj dopiero pod konkretny problem, a po dodaniu sprawdź `/context`.
 
@@ -46,7 +48,7 @@ Kalendarz jest w tej samej bazie SQLite i na tym samym koncie co tablice. Nie ma
 - `server/internal/calendar/series.go`: rozwija regułę serii na zajęcia (strefa IANA, godzina trzyma się po zmianie czasu, najwyżej 200).
 - `server/internal/store/calendar.go`: tabele `lessons`, `lesson_series`, `unavailability`, `lesson_requests`. Konflikt terminu (`ErrConflict`) sprawdza się w tej samej transakcji co zapis; zajęcia odwołane nie blokują terminu.
 - `server/cmd/server/lessons.go`: API (`/api/calendar`, `/api/lessons`, `/api/series`, `/api/unavailability`, `/api/requests`). Zmienia i usuwa tylko prowadzący, prośbę o zmianę terminu składa każda strona.
-- Klient: `web/src/calendar-page.tsx` (trasa `/calendar`), na razie bez projektu graficznego.
+- Klient: `web/src/calendar-page.tsx` (trasa `/calendar`) to tymczasowa, goła strona, żeby backend dało się obejrzeć. Klient kalendarza będzie pisany od nowa po projekcie graficznym, więc **nie piszemy do niego testów** do tego czasu; testy Go backendu kalendarza są obowiązkowe (zasada 4).
 - Migracje dopisuje się wyłącznie na końcu listy `migrations` w `store.go`.
 - Ekorepetycje (stary projekt w Pythonie) są poza repozytorium, w `~/ekorepetycje-wzor`, tylko jako wzór funkcji. Strona główna, kontakt, czat AI, AWS i Terraform są poza zakresem (R-109).
 
