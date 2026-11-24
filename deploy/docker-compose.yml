@@ -123,6 +123,8 @@ services:
       - run
       - --server.http.listen-addr=0.0.0.0:12345
       - --storage.path=/var/lib/alloy/data
+      # No usage report to grafana.com (it only logs a WARN every time, the egress is blocked).
+      - --disable-reporting
       - /etc/alloy/config.alloy
     user: "0:0"
     pid: host

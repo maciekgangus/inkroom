@@ -69,6 +69,17 @@ loki.process "logs" {
     source   = "level"
     template = "{{ $v := \"\" }}{{ if .Value }}{{ $v = ToUpper .Value }}{{ else if .logfmt_level }}{{ $v = ToUpper .logfmt_level }}{{ else if .cf_level }}{{ $v = .cf_level }}{{ end }}{{ if eq $v \"ERR\" }}ERROR{{ else if eq $v \"FTL\" }}ERROR{{ else if eq $v \"FATAL\" }}ERROR{{ else if eq $v \"PANIC\" }}ERROR{{ else if eq $v \"WRN\" }}WARN{{ else if eq $v \"WARNING\" }}WARN{{ else if eq $v \"INF\" }}INFO{{ else if eq $v \"DBG\" }}DEBUG{{ else }}{{ $v }}{{ end }}"
   }
+  // cloudflared logs ERR when a browser gives up on a request it started (a board preview left
+  // while loading, a tab closed): "canceled by remote with error code 0", "context canceled",
+  // "ended abruptly". Nothing is wrong on our side, so these are WARN and do not page. Real
+  // failures (origin unreachable, connection to the edge terminated) stay ERROR.
+  stage.match {
+    selector = "{service=\"cloudflared\"} |~ \"canceled by remote with error code 0|context canceled|ended abruptly\""
+    stage.template {
+      source   = "level"
+      template = "WARN"
+    }
+  }
   stage.labels {
     values = {
       level   = "level",
