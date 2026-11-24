@@ -17,8 +17,8 @@ import { LABEL_PX, PLANE_CELL, type PlaneLook, partsOf } from "./shape-parts";
 import { isPolygonKind } from "./shapes";
 import { strokeOptions } from "./stroke-style";
 import { isFreehand } from "./style";
-import { fontSizeOf, LINE_HEIGHT, textLines } from "./text";
-import { TEXT_FONT_FAMILY, textFont } from "./text-wrap";
+import { layoutOf } from "./text";
+import { fontKeyOf, TEXT_FONT_FAMILY, textFont } from "./text-wrap";
 import { centerOf } from "./transform";
 import type { Rect, Viewport } from "./viewport";
 
@@ -387,6 +387,84 @@ function drawPlane(
 	ctx.textBaseline = "alphabetic";
 }
 
+/**
+ * Draws a text element (R-044, R-102): each line of its layout, a run at a time in the run's font.
+ * The first line sits where a text field puts it (R-081): the line is centred on its content
+ * area, the font's own ascent and descent. The baseline is placed from those, not with
+ * textBaseline "top", which browsers (Safari on an iPad) put at different heights.
+ */
+function drawText(
+	ctx: CanvasRenderingContext2D,
+	s: Stroke,
+	color: string,
+): void {
+	ctx.fillStyle = color;
+	const [x, y] = s.points[0];
+	const family = fontKeyOf(s.font);
+	/** Where the baseline is below the top of a line of a font size, by that size. */
+	const firsts = new Map<number, number>();
+	const firstOf = (fs: number, h: number): number => {
+		const kept = firsts.get(fs);
+		if (kept !== undefined) return kept;
+		ctx.font = textFont(fs, family);
+		const m = ctx.measureText("Mg");
+		const ascent = m.fontBoundingBoxAscent;
+		const descent = m.fontBoundingBoxDescent;
+		let first: number;
+		if (typeof ascent === "number" && typeof descent === "number") {
+			ctx.textBaseline = "alphabetic";
+			first = (h - (ascent + descent)) / 2 + ascent;
+		} else {
+			ctx.textBaseline = "top";
+			first = (h - fs) / 2;
+		}
+		firsts.set(fs, first);
+		return first;
+	};
+	for (const line of layoutOf(s).lines) {
+		const top = y + line.y;
+		const base = top + firstOf(line.fs, line.h);
+		if (line.quote) {
+			ctx.save();
+			ctx.globalAlpha *= 0.5;
+			ctx.fillRect(
+				x + line.fs * 0.25,
+				top,
+				Math.max(2, line.fs * 0.12),
+				line.h,
+			);
+			ctx.restore();
+		}
+		if (line.marker) {
+			ctx.font = line.marker.font;
+			ctx.fillText(line.marker.text, x + line.marker.x, base);
+		}
+		for (const run of line.runs) {
+			if (run.code) {
+				ctx.save();
+				ctx.globalAlpha *= 0.14;
+				ctx.fillRect(
+					x + run.x - 2,
+					top + line.h * 0.1,
+					run.w + 4,
+					line.h * 0.8,
+				);
+				ctx.restore();
+			}
+			ctx.font = run.font;
+			ctx.fillText(run.text, x + run.x, base);
+			if (run.strike) {
+				ctx.fillRect(
+					x + run.x,
+					base - line.fs * 0.3,
+					run.w,
+					Math.max(1, line.fs / 16),
+				);
+			}
+		}
+	}
+}
+
 /** Draws one element in `color` (and `fill`, for shapes); `path` is its (cached) path, unused for text. */
 function drawElement(
 	ctx: CanvasRenderingContext2D,
@@ -398,29 +476,7 @@ function drawElement(
 ): void {
 	withLook(ctx, s, () => {
 		if (s.kind === "text") {
-			const fs = fontSizeOf(s);
-			ctx.fillStyle = color;
-			ctx.font = textFont(fs);
-			const [x, y] = s.points[0];
-			const lineHeight = fs * LINE_HEIGHT;
-			// Where a text field puts the first line (R-081): the line is centred on its content
-			// area, the font's own ascent and descent. The baseline is placed from those, not with
-			// textBaseline "top", which browsers (Safari on an iPad) put at different heights.
-			const m = ctx.measureText("Mg");
-			const ascent = m.fontBoundingBoxAscent;
-			const descent = m.fontBoundingBoxDescent;
-			let first: number;
-			if (typeof ascent === "number" && typeof descent === "number") {
-				ctx.textBaseline = "alphabetic";
-				first = (lineHeight - (ascent + descent)) / 2 + ascent;
-			} else {
-				ctx.textBaseline = "top";
-				first = (lineHeight - fs) / 2;
-			}
-			// A text area is wrapped to its width (R-044), a text at a point keeps its own lines.
-			textLines(s).forEach((line, i) => {
-				ctx.fillText(line, x, y + i * lineHeight + first);
-			});
+			drawText(ctx, s, color);
 		} else if (path && isFilled(s)) {
 			ctx.fillStyle = color;
 			ctx.fill(path);
