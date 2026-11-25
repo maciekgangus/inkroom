@@ -60,6 +60,8 @@ const ICONS = {
 	download: "M12 4v11M7 11l5 5 5-5M5 20h14",
 	record:
 		"M12 8a4 4 0 1 0 0 8a4 4 0 0 0 0-8ZM12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18Z",
+	play: "M8 5v14l11-7Z",
+	pause: "M8 5v14M16 5v14",
 	film: "M4 5h16v14H4ZM8 5v14M16 5v14M4 9h4M4 15h4M16 9h4M16 15h4",
 	image:
 		"M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1ZM8.5 10a1.5 1.5 0 1 0 0-3a1.5 1.5 0 0 0 0 3ZM20 15l-5-5L5 20",

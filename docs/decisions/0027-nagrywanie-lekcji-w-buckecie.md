@@ -1,6 +1,6 @@
 # 0027. Nagrywanie lekcji: bucket S3 (R2) i dysk serwera jako zapas
 
-- Status: accepted
+- Status: accepted (obiekty zmienione przez ADR 0028: dźwięk i oś zdarzeń zamiast wideo z ekranu; bucket, podpisane adresy, dysk jako zapas i reszta tej decyzji obowiązują)
 - Data: 2026-11-25
 
 ## Kontekst

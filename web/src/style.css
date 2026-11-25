@@ -3141,3 +3141,102 @@ button.participant {
 	white-space: normal;
 	width: 260px;
 }
+
+/* The player of a recorded lesson (R-114): a title and a way back at the top, the controls below. */
+.replay-top {
+	position: fixed;
+	top: 12px;
+	left: 72px;
+	z-index: 1;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	max-width: calc(100vw - 88px);
+}
+.replay-back {
+	flex: none;
+}
+.replay-back,
+.replay-name {
+	padding: 9px 14px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: color-mix(in srgb, var(--surface) 85%, transparent);
+	-webkit-backdrop-filter: blur(12px);
+	backdrop-filter: blur(12px);
+	box-shadow: var(--shadow);
+	font-size: 14px;
+	text-decoration: none;
+	color: var(--text);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.replay-bar {
+	position: fixed;
+	bottom: 16px;
+	left: 50%;
+	z-index: 1;
+	transform: translateX(-50%);
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	width: min(720px, calc(100vw - 24px));
+	box-sizing: border-box;
+	padding: 8px 14px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: color-mix(in srgb, var(--surface) 90%, transparent);
+	-webkit-backdrop-filter: blur(12px);
+	backdrop-filter: blur(12px);
+	box-shadow: var(--shadow);
+}
+.replay-play {
+	flex: none;
+	width: 40px;
+	height: 40px;
+	padding: 0;
+}
+.replay-time {
+	flex: none;
+	font-size: 13px;
+	font-variant-numeric: tabular-nums;
+	color: var(--muted);
+}
+.replay-seek {
+	flex: 1 1 auto;
+	min-width: 0;
+	height: auto;
+	padding: 0;
+	border: 0;
+	accent-color: var(--accent);
+}
+.replay-rate {
+	flex: none;
+	height: 36px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--surface);
+	color: var(--text);
+}
+.replay-note {
+	position: fixed;
+	bottom: 80px;
+	left: 50%;
+	transform: translateX(-50%);
+	z-index: 1;
+	padding: 8px 12px;
+	border: 1px solid var(--danger);
+	border-radius: var(--radius-lg);
+	background: var(--surface);
+	font-size: 13px;
+}
+/* On a narrow screen the corner buttons (a note, the theme) take the bottom left: the bar goes above them. */
+@media (max-width: 640px) {
+	.replay-bar {
+		bottom: 84px;
+	}
+	.replay-note {
+		bottom: 148px;
+	}
+}

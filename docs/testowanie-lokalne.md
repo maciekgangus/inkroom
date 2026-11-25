@@ -206,6 +206,6 @@ Adres bucketu musi być osiągalny z przeglądarki (stąd adres LAN, nie `localh
 komputera). Test pakietu na prawdziwym S3:
 `RECSTORE_TEST_S3="http://localhost:8333,inkroom,testkey,testsecret1234" go test ./internal/recstore -run TestS3 -v`.
 
-Przechwytywanie ekranu działa tylko na https albo `localhost`. Z innego komputera po `http://192.168.0.51:8099`
-przycisk „Nagrywaj” się nie pokaże, dopóki w Chrome nie dodasz tego adresu w
-`chrome://flags/#unsafely-treat-insecure-origin-as-secure`.
+Mikrofon (a więc nagrywanie) działa tylko na https albo `localhost`. Z innego komputera po
+`http://192.168.0.51:8099` kliknięcie „Nagrywaj” powie, że strona jest po http, dopóki w Chrome nie dodasz
+tego adresu (i adresu bucketu) w `chrome://flags/#unsafely-treat-insecure-origin-as-secure`.
