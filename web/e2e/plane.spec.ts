@@ -30,6 +30,12 @@ test("the eraser leaves the plane and takes only what is drawn on it (R-084)", a
 	await page.locator("[aria-label='plane']").tap();
 	await page.mouse.click(420, 420);
 	await expect.poll(() => ink(page)).toBeGreaterThan(0);
+	// the fonts of its labels (the italic x and y) have loaded and the board has drawn them
+	await page.evaluate(() => document.fonts.ready);
+	await page.evaluate(
+		() =>
+			new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
+	);
 	const planeOnly = await darkInk(page);
 	await page.locator("[aria-label='pen']").tap();
 	await pen(page, [300, 500], [520, 500]);

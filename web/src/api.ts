@@ -174,15 +174,31 @@ export async function boardPreviewPicture(
 }
 
 /** Hands the owner's picture of a board version to the server, so the next tile skips drawing. */
+/**
+ * The bytes of a base64 data URL as a Blob, decoded here: the page's CSP leaves data: out of
+ * connect-src, so fetch(data:) is refused (R-088).
+ */
+function dataUrlBlob(dataUrl: string): Blob {
+	const comma = dataUrl.indexOf(",");
+	const type = dataUrl.slice(5, comma).split(";")[0] || "image/png";
+	const raw = atob(dataUrl.slice(comma + 1));
+	const bytes = new Uint8Array(raw.length);
+	for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+	return new Blob([bytes], { type });
+}
+
 export async function storePreviewPicture(
 	id: string,
 	tag: string,
 	dataUrl: string,
 ): Promise<void> {
-	const body = await (await fetch(dataUrl)).blob();
 	const res = await fetch(
 		`/api/boards/${id}/preview.png?tag=${encodeURIComponent(tag)}`,
-		{ method: "PUT", headers: { "Content-Type": "image/png" }, body },
+		{
+			method: "PUT",
+			headers: { "Content-Type": "image/png" },
+			body: dataUrlBlob(dataUrl),
+		},
 	);
 	if (!res.ok) throw new ApiError(res.status, `Błąd ${res.status}`);
 }
