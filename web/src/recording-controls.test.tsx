@@ -84,6 +84,38 @@ describe("RecordingControls (R-112)", () => {
 		expect(btn("Nagrywaj")).not.toBeNull();
 	});
 
+	test("after the stop it says it is saving, until the end of the recording is on the server", async () => {
+		let done: () => void = () => {};
+		const stop = vi.fn().mockReturnValue(new Promise<void>((r) => (done = r)));
+		const start = vi.fn().mockResolvedValue({ stop });
+		const onRecording = vi.fn();
+		act(() =>
+			render(
+				<RecordingControls
+					source={source}
+					boardId="b"
+					canRecord
+					start={start}
+					onRecording={onRecording}
+				/>,
+				root,
+			),
+		);
+		act(() => btn("Nagrywaj").click());
+		await flush();
+		act(() => btn("Zakończ nagrywanie").click());
+		await flush();
+		// Nobody can start a new one, or be told it is done, while the last part is on its way.
+		expect(btn("Nagrywaj")).toBeNull();
+		const saving = btn("Zapisuję nagranie") as HTMLButtonElement;
+		expect(saving.disabled).toBe(true);
+		expect(root.textContent).toContain("Zapisuję");
+		expect(onRecording).toHaveBeenLastCalledWith(false); // the red dot is off at once
+		done();
+		await flush();
+		expect(btn("Nagrywaj")).not.toBeNull();
+	});
+
 	test("says why when recording cannot start", async () => {
 		const start = vi
 			.fn()

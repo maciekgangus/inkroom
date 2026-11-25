@@ -522,6 +522,30 @@ func (a *app) downloadRecording(w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(w, r, "", info.ModTime(), f)
 }
 
+// renameRecording changes the name shown in the list and in the player; only the owner does.
+func (a *app) renameRecording(w http.ResponseWriter, r *http.Request) {
+	rec, ok := a.ownedRecording(w, r)
+	if !ok {
+		return
+	}
+	var body struct {
+		Name string `json:"name"`
+	}
+	if !readBody(w, r, &body) {
+		return
+	}
+	name := strings.TrimSpace(body.Name)
+	if name == "" || utf8.RuneCountInString(name) > maxRecordingName {
+		writeError(w, http.StatusBadRequest, "Nazwa musi mieć od 1 do 100 znaków")
+		return
+	}
+	if err := a.st.RenameRecording(rec.ID, name); err != nil {
+		writeError(w, http.StatusInternalServerError, "Błąd serwera")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // deleteRecording removes the video and then its description; if the store refuses, the
 // description stays so the owner can try again.
 func (a *app) deleteRecording(w http.ResponseWriter, r *http.Request) {

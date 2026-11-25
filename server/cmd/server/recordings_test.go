@@ -782,3 +782,44 @@ func TestPageMayPlayAudioFromTheBucket(t *testing.T) {
 		t.Errorf("CSP = %q", got)
 	}
 }
+
+// --- renaming (R-113) ----------------------------------------------------------------------------
+
+func TestTheOwnerRenamesARecording(t *testing.T) {
+	srv, _, _ := testApp(t)
+	owner := register(t, srv, "a@example.com")
+	board := createBoard(t, srv, owner, "Matma")
+	rec := startRecording(t, srv, board, &owner, "audio/webm")
+
+	if got := status(call(t, srv, "PATCH", recPath(board, rec, ""), `{"name":"  Ułamki, lekcja 3  "}`, &owner)); got != http.StatusNoContent {
+		t.Fatalf("rename = %d", got)
+	}
+	list := decodeList(t, call(t, srv, "GET", "/api/boards/"+board+"/recordings", "", nil))
+	if len(list) != 1 || list[0]["name"] != "Ułamki, lekcja 3" {
+		t.Errorf("list = %v", list)
+	}
+}
+
+func TestOnlyTheOwnerRenamesAndTheNameIsChecked(t *testing.T) {
+	srv, _, _ := testApp(t)
+	owner := register(t, srv, "a@example.com")
+	other := register(t, srv, "b@example.com")
+	board := createBoard(t, srv, owner, "Matma")
+	rec := startRecording(t, srv, board, &owner, "audio/webm")
+
+	if got := status(call(t, srv, "PATCH", recPath(board, rec, ""), `{"name":"X"}`, &other)); got != http.StatusForbidden {
+		t.Errorf("rename by another account = %d, want 403", got)
+	}
+	if got := status(call(t, srv, "PATCH", recPath(board, rec, ""), `{"name":"X"}`, nil)); got != http.StatusUnauthorized {
+		t.Errorf("rename by a guest = %d, want 401", got)
+	}
+	for _, name := range []string{"", "   ", strings.Repeat("x", maxRecordingName+1)} {
+		if got := status(call(t, srv, "PATCH", recPath(board, rec, ""), fmt.Sprintf(`{"name":%q}`, name), &owner)); got != http.StatusBadRequest {
+			t.Errorf("name %q = %d, want 400", name, got)
+		}
+	}
+	list := decodeList(t, call(t, srv, "GET", "/api/boards/"+board+"/recordings", "", &owner))
+	if list[0]["name"] != "Lekcja" {
+		t.Errorf("a refused rename changed the name: %v", list[0]["name"])
+	}
+}

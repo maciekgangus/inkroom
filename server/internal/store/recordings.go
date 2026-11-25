@@ -117,6 +117,11 @@ func (s *Store) FinishRecording(id string, durationMs, bytes int64) error {
 	return s.mustAffect(s.db.Exec("UPDATE recordings SET finished = 1, duration_ms = ?, bytes = ? WHERE id = ?", durationMs, bytes, id))
 }
 
+// RenameRecording gives a recording a new name.
+func (s *Store) RenameRecording(id, name string) error {
+	return s.mustAffect(s.db.Exec("UPDATE recordings SET name = ? WHERE id = ?", name, id))
+}
+
 // DeleteRecording removes the description of a recording.
 func (s *Store) DeleteRecording(id string) error {
 	return s.mustAffect(s.db.Exec("DELETE FROM recordings WHERE id = ?", id))

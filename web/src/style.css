@@ -3038,6 +3038,14 @@ button.participant {
 	border-color: var(--danger);
 	color: var(--danger);
 }
+.board-menu.saving {
+	width: auto;
+	gap: 6px;
+	padding: 0 12px;
+	display: inline-flex;
+	align-items: center;
+	color: var(--muted);
+}
 .board-menu.recording svg {
 	fill: currentColor;
 }
@@ -3211,13 +3219,44 @@ button.participant {
 	border: 0;
 	accent-color: var(--accent);
 }
-.replay-rate {
+.replay-rate-wrap {
+	position: relative;
 	flex: none;
-	height: 36px;
+	display: inline-flex;
+}
+/* A chevron drawn with borders, so it follows the theme's colours. */
+.replay-rate-wrap::after {
+	content: "";
+	position: absolute;
+	right: 13px;
+	top: 50%;
+	width: 6px;
+	height: 6px;
+	border-right: 2px solid var(--muted);
+	border-bottom: 2px solid var(--muted);
+	transform: translateY(-70%) rotate(45deg);
+	pointer-events: none;
+}
+.replay-rate {
+	height: 40px;
+	min-width: 72px;
+	padding: 0 32px 0 14px;
 	border: 1px solid var(--border);
-	border-radius: var(--radius);
+	border-radius: var(--radius-lg);
 	background: var(--surface);
 	color: var(--text);
+	font: inherit;
+	font-size: 14px;
+	appearance: none;
+	-webkit-appearance: none;
+	cursor: pointer;
+}
+.replay-rate:hover {
+	background: var(--surface-hover);
+}
+.replay-rate:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
 }
 .replay-note {
 	position: fixed;
@@ -3239,4 +3278,70 @@ button.participant {
 	.replay-note {
 		bottom: 148px;
 	}
+}
+
+/* The name of a recording, with a pen for the owner (R-113). */
+.name-view {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+.name-text {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.name-edit {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	min-width: 0;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: var(--muted);
+}
+.name-edit svg {
+	width: 15px;
+	height: 15px;
+}
+.name-field {
+	height: 34px;
+	min-width: 0;
+	width: 100%;
+	box-sizing: border-box;
+	padding: 0 10px;
+	font-size: 14px;
+}
+.name-error {
+	font-size: 12px;
+	color: var(--danger);
+	white-space: nowrap;
+}
+.replay-top .name-field {
+	width: 260px;
+	max-width: calc(100vw - 200px);
+}
+/* The name in the player's top bar is a chip like the "back" link, as high, with the pen inside it. */
+.replay-top .replay-back,
+.replay-top .replay-name {
+	box-sizing: border-box;
+	min-height: 38px;
+	display: inline-flex;
+	align-items: center;
+}
+.replay-top .replay-name {
+	padding-top: 0;
+	padding-bottom: 0;
+}
+.replay-top .replay-name.name-view:has(.name-edit) {
+	padding-right: 6px;
+}
+.recordings-pop .rec-name {
+	flex: 1 1 100%;
 }

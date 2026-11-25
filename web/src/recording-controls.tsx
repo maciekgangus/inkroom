@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import * as api from "./api";
 import { closeOnDismiss } from "./dismiss";
+import { EditableName } from "./editable-name";
 import { Icon } from "./icon";
 import { Portal } from "./portal";
 import {
@@ -54,7 +55,9 @@ export function RecordingControls({
 	onRecording,
 	start = startBoardRecording,
 }: Props) {
-	const [phase, setPhase] = useState<"idle" | "starting" | "recording">("idle");
+	const [phase, setPhase] = useState<
+		"idle" | "starting" | "recording" | "saving"
+	>("idle");
 	const [error, setError] = useState("");
 	/** A word that is not a failure: the limit is near, or was reached. */
 	const [note, setNote] = useState("");
@@ -107,14 +110,18 @@ export function RecordingControls({
 				),
 			MAX_RECORDING_MS,
 		);
-		const beforeUnload = (e: BeforeUnloadEvent) => e.preventDefault();
-		addEventListener("beforeunload", beforeUnload);
 		return () => {
 			clearInterval(tick);
 			clearTimeout(warn);
 			clearTimeout(limit);
-			removeEventListener("beforeunload", beforeUnload);
 		};
+	}, [phase]);
+	// Closing the tab while recording, or while the end of it is on its way, loses the recording.
+	useEffect(() => {
+		if (phase !== "recording" && phase !== "saving") return;
+		const beforeUnload = (e: BeforeUnloadEvent) => e.preventDefault();
+		addEventListener("beforeunload", beforeUnload);
+		return () => removeEventListener("beforeunload", beforeUnload);
 	}, [phase]);
 	// Everyone's red dot follows the phase; nothing is said before there was a recording.
 	const wasRecording = useRef(false);
@@ -139,7 +146,7 @@ export function RecordingControls({
 	const stop = async (why?: string) => {
 		const s = session.current;
 		session.current = undefined;
-		setPhase("idle");
+		setPhase("saving"); // the last part and the end of the log are still to be sent
 		setNote(why ?? "");
 		try {
 			await s?.stop();
@@ -147,6 +154,7 @@ export function RecordingControls({
 			setNote("");
 			setError(api.errorMessage(e));
 		}
+		setPhase("idle");
 		if (open) void reload();
 	};
 	stopRef.current = stop;
@@ -177,20 +185,34 @@ export function RecordingControls({
 	};
 
 	const recording = phase === "recording";
+	const saving = phase === "saving";
 	return (
 		<>
 			{canRecord && (
 				<div class="share-wrap">
 					<button
 						type="button"
-						class={`board-menu${recording ? " recording" : ""}`}
-						aria-label={recording ? "Zakończ nagrywanie" : "Nagrywaj"}
-						title={recording ? "Zakończ nagrywanie" : "Nagrywaj lekcję"}
-						disabled={phase === "starting"}
+						class={`board-menu${recording ? " recording" : ""}${saving ? " saving" : ""}`}
+						aria-label={
+							saving
+								? "Zapisuję nagranie"
+								: recording
+									? "Zakończ nagrywanie"
+									: "Nagrywaj"
+						}
+						title={
+							saving
+								? "Zapisuję nagranie…"
+								: recording
+									? "Zakończ nagrywanie"
+									: "Nagrywaj lekcję"
+						}
+						disabled={phase === "starting" || saving}
 						onClick={toggle}
 					>
 						<Icon name="record" />
 						{recording && <span class="rec-time">{clock(seconds * 1000)}</span>}
+						{saving && <span class="rec-time">Zapisuję…</span>}
 					</button>
 					{error && (
 						<span class="share-said rec-note" role="alert">
@@ -246,7 +268,15 @@ export function RecordingControls({
 								<ul>
 									{list.map((r) => (
 										<li key={r.id}>
-											<span class="rec-name">{r.name}</span>
+											<EditableName
+												class="rec-name"
+												name={r.name}
+												editable={!!canDelete}
+												onSave={async (name) => {
+													await api.renameRecording(boardId, r.id, name);
+													await reload();
+												}}
+											/>
 											<span class="muted rec-meta">
 												{new Date(r.createdAt).toLocaleDateString("pl-PL")}
 												{" · "}

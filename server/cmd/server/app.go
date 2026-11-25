@@ -132,6 +132,7 @@ func (a *app) Handler() http.Handler {
 	mux.HandleFunc("GET /api/boards/{id}/recordings/{rec}/files/{name...}", a.recordingFile)
 	mux.HandleFunc("POST /api/boards/{id}/recordings/{rec}/finish", a.finishRecording)
 	mux.HandleFunc("GET /api/boards/{id}/recordings/{rec}", a.downloadRecording)
+	mux.HandleFunc("PATCH /api/boards/{id}/recordings/{rec}", a.renameRecording)
 	mux.HandleFunc("DELETE /api/boards/{id}/recordings/{rec}", a.deleteRecording)
 	mux.HandleFunc("GET /api/calendar", a.getCalendar)
 	mux.HandleFunc("POST /api/lessons", a.createLesson)

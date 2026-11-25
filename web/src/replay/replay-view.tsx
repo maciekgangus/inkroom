@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "preact/hooks";
+import * as api from "../api";
 import type { Background } from "../board/background";
 import { CanvasRenderer } from "../board/canvas-renderer";
 import { ImageCache } from "../board/image-cache";
 import { Viewport } from "../board/viewport";
 import { Cursors } from "../cursors";
+import { EditableName } from "../editable-name";
 import { Icon } from "../icon";
 import { clock } from "../recording-controls";
 import type { LogEvent } from "../recording-log";
@@ -73,6 +75,9 @@ export function ReplayView({ boardId, recId }: Props) {
 	const [time, setTime] = useState(0);
 	const [rate, setRate] = useState(1);
 	const [audioError, setAudioError] = useState(false);
+	/** The recording's name (the owner may change it) and whether the viewer is the board's owner. */
+	const [name, setName] = useState("");
+	const [owner, setOwner] = useState(false);
 	const theme = useTheme();
 	const committedRef = useRef<HTMLCanvasElement>(null);
 	const liveRef = useRef<HTMLCanvasElement>(null);
@@ -95,7 +100,21 @@ export function ReplayView({ boardId, recId }: Props) {
 		};
 	}, [boardId, recId]);
 
+	useEffect(() => {
+		let gone = false;
+		api.boardInfo(boardId).then(
+			(info) => !gone && setOwner(!!info?.owner),
+			() => {},
+		);
+		return () => {
+			gone = true;
+		};
+	}, [boardId]);
+
 	const ready = loaded && "engine" in loaded ? loaded : null;
+	useEffect(() => {
+		if (ready) setName(ready.index.name);
+	}, [ready]);
 	const duration = ready
 		? Math.max(ready.index.durationMs, ready.engine.lastEventMs)
 		: 0;
@@ -253,9 +272,19 @@ export function ReplayView({ boardId, recId }: Props) {
 				<a class="replay-back" href={`/b/${boardId}`}>
 					← Tablica
 				</a>
-				<span class="replay-name">
-					{ready ? ready.index.name : "Wczytywanie…"}
-				</span>
+				{ready ? (
+					<EditableName
+						class="replay-name"
+						name={name || ready.index.name}
+						editable={owner}
+						onSave={async (next) => {
+							await api.renameRecording(boardId, recId, next);
+							setName(next);
+						}}
+					/>
+				) : (
+					<span class="replay-name">Wczytywanie…</span>
+				)}
 			</div>
 			{ready && (
 				<>
@@ -289,22 +318,24 @@ export function ReplayView({ boardId, recId }: Props) {
 							value={Math.round(time)}
 							onInput={(e) => seek(Number(e.currentTarget.value))}
 						/>
-						<select
-							class="replay-rate"
-							aria-label="Prędkość"
-							value={String(rate)}
-							onChange={(e) => {
-								const r = Number(e.currentTarget.value);
-								setRate(r);
-								if (audioRef.current) audioRef.current.playbackRate = r;
-							}}
-						>
-							{RATES.map((r) => (
-								<option key={r} value={String(r)}>
-									{String(r).replace(".", ",")}×
-								</option>
-							))}
-						</select>
+						<span class="replay-rate-wrap">
+							<select
+								class="replay-rate"
+								aria-label="Prędkość"
+								value={String(rate)}
+								onChange={(e) => {
+									const r = Number(e.currentTarget.value);
+									setRate(r);
+									if (audioRef.current) audioRef.current.playbackRate = r;
+								}}
+							>
+								{RATES.map((r) => (
+									<option key={r} value={String(r)}>
+										{String(r).replace(".", ",")}×
+									</option>
+								))}
+							</select>
+						</span>
 					</section>
 					{audioError && (
 						<div class="replay-note" role="alert">

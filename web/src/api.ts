@@ -408,6 +408,9 @@ export const finishRecording = (
 		durationMs,
 	});
 
+export const renameRecording = (boardId: string, id: string, name: string) =>
+	request<void>("PATCH", `/api/boards/${boardId}/recordings/${id}`, { name });
+
 export const deleteRecording = (boardId: string, id: string) =>
 	request<void>("DELETE", `/api/boards/${boardId}/recordings/${id}`);
 
