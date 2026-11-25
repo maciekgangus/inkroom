@@ -3,6 +3,8 @@ import { clamp } from "./clamp";
 import { type PlaneFn, sanitizeFns } from "./functions";
 import { hasInside, isPolygonKind } from "./shapes";
 import { fontSizeFor, fontSizeOf } from "./text";
+import { FONT_KEYS, type FontKey, fontKeyOf } from "./text-wrap";
+import { MIN_AREA_WIDTH } from "./transform";
 
 export type Dash = "solid" | "dashed" | "dotted" | "natural";
 
@@ -13,6 +15,10 @@ export interface StylePatch {
 	size?: number;
 	/** Font size in px (4 to 400), for texts only. */
 	fontSize?: number;
+	/** Font family of a text (R-101). */
+	font?: FontKey;
+	/** Width of a text area in board units (R-101); makes a text at a point an area. */
+	width?: number;
 	dash?: Dash;
 	/** A colour, or null to remove the fill. */
 	fill?: string | null;
@@ -68,6 +74,14 @@ export function applyStyle(el: Stroke, patch: StylePatch): Stroke {
 	}
 	if (patch.fontSize !== undefined && el.kind === "text")
 		out.fontSize = clamp(patch.fontSize, 4, 400);
+	if (patch.font !== undefined && el.kind === "text") {
+		// Inter is the default and is not stored.
+		if (patch.font === "sans" || !FONT_KEYS.includes(patch.font))
+			delete out.font;
+		else out.font = patch.font;
+	}
+	if (patch.width !== undefined && el.kind === "text")
+		out.width = Math.max(MIN_AREA_WIDTH, patch.width);
 	if (patch.dash !== undefined && dashFits(el, patch.dash)) {
 		if (patch.dash === "solid") delete out.dash;
 		else out.dash = patch.dash;
@@ -136,6 +150,7 @@ export function styleOf(els: Stroke[]): {
 	color: string;
 	size: number;
 	fontSize: number;
+	font: FontKey;
 	dash: Dash;
 	fill: string | null;
 	opacity: number;
@@ -146,6 +161,7 @@ export function styleOf(els: Stroke[]): {
 		color: e.color,
 		size: e.size,
 		fontSize: e.kind === "text" ? fontSizeOf(e) : 0,
+		font: fontKeyOf(e.font),
 		dash: e.dash ?? "solid",
 		fill: e.fill ?? null,
 		opacity: e.opacity ?? 1,

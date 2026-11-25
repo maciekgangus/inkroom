@@ -67,6 +67,8 @@ export interface Stroke {
 	opacity?: number;
 	/** Font size of a text in board units; missing means the size table value. */
 	fontSize?: number;
+	/** Font family of a text (R-101): sans (Inter, the default), serif, hand or mono. */
+	font?: "sans" | "serif" | "hand" | "mono";
 	/**
 	 * Free vertices of a polygon shape (R-047): the outline as fractions of its box, which replace
 	 * the outline the kind would give. The box still scales, turns and moves it all as one.

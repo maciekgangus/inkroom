@@ -147,6 +147,7 @@ describe("styleOf", () => {
 			color: "#abc",
 			size: 10,
 			fontSize: 0,
+			font: "sans",
 			dash: "dashed",
 			fill: "#0f0",
 			opacity: 0.5,
@@ -159,6 +160,7 @@ describe("styleOf", () => {
 			color: "#111",
 			size: 4,
 			fontSize: 0,
+			font: "sans",
 			dash: "solid",
 			fill: null,
 			opacity: 1,
@@ -181,6 +183,23 @@ describe("sliders (R-031)", () => {
 		expect(applyStyle(text, { fontSize: 1 }).fontSize).toBe(4);
 		expect(applyStyle(text, { fontSize: 9999 }).fontSize).toBe(400);
 		expect(applyStyle(rect, { fontSize: 33 }).fontSize).toBeUndefined();
+	});
+
+	test("a font family applies to a text only, and an unknown one is ignored (R-101)", () => {
+		expect(applyStyle(text, { font: "mono" }).font).toBe("mono");
+		expect(
+			applyStyle({ ...text, font: "hand" }, { font: "sans" }).font,
+		).toBeUndefined();
+		expect(applyStyle(text, { font: "nope" as never }).font).toBeUndefined();
+		expect(applyStyle(rect, { font: "mono" }).font).toBeUndefined();
+		expect(styleOf([{ ...text, font: "serif" }]).font).toBe("serif");
+		expect(styleOf([text]).font).toBe("sans");
+	});
+
+	test("a width applies to a text and makes it an area, never narrower than a few letters", () => {
+		expect(applyStyle(text, { width: 300 }).width).toBe(300);
+		expect(applyStyle(text, { width: 1 }).width).toBe(20);
+		expect(applyStyle(rect, { width: 300 }).width).toBeUndefined();
 	});
 
 	test("styleOf reports the font size of a text", () => {

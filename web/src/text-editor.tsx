@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "preact/hooks";
 import { LINE_HEIGHT } from "./board/text";
+import { FONT_FAMILIES, type FontKey } from "./board/text-wrap";
 
 interface Props {
 	/** Screen position of the text's top-left corner. */
@@ -25,6 +26,8 @@ interface Props {
 	initialText?: string;
 	onCommit: (text: string) => void;
 	onCancel: () => void;
+	/** The font family of the text (R-101); Inter when not given. */
+	font?: FontKey;
 	/** Lets a wrapper reach the field (the markdown toolbar). */
 	inputRef?: { current: HTMLTextAreaElement | null };
 }
@@ -42,6 +45,7 @@ export function TextEditor({
 	onCommit,
 	onCancel,
 	inputRef,
+	font,
 }: Props) {
 	const ownRef = useRef<HTMLTextAreaElement>(null);
 	const ref = inputRef ?? ownRef;
@@ -63,7 +67,7 @@ export function TextEditor({
 	// biome-ignore lint/correctness/useExhaustiveDependencies: fit reads the props listed here
 	useEffect(() => {
 		if (ref.current) fit(ref.current);
-	}, [fontSize, width, minHeight]);
+	}, [fontSize, width, minHeight, font]);
 
 	// Enter, Escape and a blur can all arrive for one editing session; only the first counts.
 	const finish = (commit: boolean) => {
@@ -87,6 +91,7 @@ export function TextEditor({
 				top: `${y}px`,
 				fontSize: `${fontSize}px`,
 				lineHeight: LINE_HEIGHT,
+				...(font ? { fontFamily: FONT_FAMILIES[font].css } : {}),
 				color,
 				...(area
 					? { width: `${width}px`, minHeight: `${minHeight ?? 0}px` }
@@ -117,9 +122,9 @@ export function TextEditor({
 				}
 			}}
 			onBlur={(e) => {
-				// Moving to the panel of tools next to the field does not end the text.
+				// Moving to the panel of tools or the toolbar next to the field does not end the text.
 				const next = e.relatedTarget as HTMLElement | null;
-				if (next?.closest?.(".properties")) return;
+				if (next?.closest?.(".properties, .text-toolbar")) return;
 				finish(true);
 			}}
 		/>

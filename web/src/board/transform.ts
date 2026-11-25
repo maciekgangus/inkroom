@@ -6,7 +6,7 @@ import type { Rect } from "./viewport";
 type Vec = [number, number];
 
 /** The narrowest a text area can be made, in board units. */
-const MIN_AREA_WIDTH = 20;
+export const MIN_AREA_WIDTH = 20;
 
 /**
  * The box around an element's geometry before its rotation, with no padding. Rotation
@@ -164,7 +164,7 @@ export function scaleElBy(
 	let nc: Vec;
 	let lx: number;
 	let ly: number;
-	/** A side handle on a text area: only the width changes, the text reflows (R-044). */
+	/** A side handle on a text: only the width changes, the text reflows; a text at a point becomes an area (R-044, R-101). */
 	let widthOnly = false;
 	if (kx === ky) {
 		nc = [
@@ -187,7 +187,7 @@ export function scaleElBy(
 		const near = (a: number, b: number) => Math.abs(a - b) < 1e-6;
 		const even = Math.sqrt(kx * ky);
 		const aligned = near(rel, 0) || near(rel, Math.PI);
-		if (el.kind === "text" && el.width !== undefined && ky === 1 && aligned) {
+		if (el.kind === "text" && ky === 1 && aligned) {
 			[lx, ly] = [kx, 1];
 			widthOnly = true;
 		} else if (el.kind === "circle" || el.kind === "text") {
@@ -209,9 +209,9 @@ export function scaleElBy(
 	const text = widthOnly
 		? scaled
 		: { ...scaled, fontSize: fontSizeOf(el) * Math.sqrt(lx * ly) };
-	return el.width === undefined
-		? text
-		: { ...text, width: Math.max(MIN_AREA_WIDTH, el.width * lx) };
+	if (el.width === undefined && !widthOnly) return text;
+	const was = el.width ?? textBox(el).maxX - textBox(el).minX;
+	return { ...text, width: Math.max(MIN_AREA_WIDTH, was * lx) };
 }
 
 function wrapAngle(a: number): number {

@@ -27,8 +27,13 @@ import { LaserTrails } from "./board/laser";
 import { contentBounds, fitView } from "./board/minimap";
 import { loadShape } from "./board/shapes";
 import { applyStyle, type StylePatch } from "./board/style";
-import { fontSizeFor, fontSizeOf, fontsChanged } from "./board/text";
-import { textFont } from "./board/text-wrap";
+import {
+	fontSizeFor,
+	fontSizeOf,
+	fontsChanged,
+	setFontReadyHandler,
+} from "./board/text";
+import { fontKeyOf, textFont } from "./board/text-wrap";
 import { createViewSaver } from "./board/view-saver";
 import { clampScale, type Rect, Viewport } from "./board/viewport";
 import { stepZoom, wheelZoomFactor } from "./board/zoom";
@@ -56,6 +61,7 @@ import { ShareButton } from "./share-button";
 import { applyToolShortcut, colorForKey, dropsSelection } from "./shortcuts";
 import { ShortcutsDialog } from "./shortcuts-dialog";
 import { type Peer, type SocketLike, SyncClient } from "./sync/sync";
+import type { TextFormat } from "./text-toolbar";
 import { currentTheme, displayColor, useTheme } from "./theme";
 import { toolCursor } from "./tool-cursor";
 import { rememberColor, restoreStart, switchTool } from "./tool-style";
@@ -309,6 +315,8 @@ export function BoardView({
 			fontsChanged();
 			canvas.fontsChanged();
 		});
+		// A font a text uses (R-101) is fetched when the first text in it is laid out.
+		setFontReadyHandler(() => canvas.fontsChanged());
 		const sync = new SyncClient(board, {
 			createSocket: connect,
 			self: { authorId, name },
@@ -926,6 +934,7 @@ export function BoardView({
 		document.addEventListener("touchmove", prevent, { passive: false });
 
 		return () => {
+			setFontReadyHandler(null);
 			cancelAnimationFrame(anim.raf);
 			cancelAnimationFrame(followRaf);
 			clearTimeout(noticeTimer);
@@ -1139,11 +1148,13 @@ export function BoardView({
 	const selectionKey = (ctl.current?.selection ?? [])
 		.map((s) => s.id)
 		.join(",");
-	const panelElements = typing
-		? [draft as Stroke]
-		: ctl.current?.busy || Date.now() < viewMovingUntil.current
+	// While a text is typed or edited its toolbar is over the field, in place of the panel (R-101).
+	const panelElements =
+		typing || editingText
 			? []
-			: (ctl.current?.selection ?? []);
+			: ctl.current?.busy || Date.now() < viewMovingUntil.current
+				? []
+				: (ctl.current?.selection ?? []);
 	const panelAnchor =
 		typing || editingText
 			? (editorRect ?? draftBox)
@@ -1166,6 +1177,18 @@ export function BoardView({
 				.querySelector<HTMLTextAreaElement>("textarea.text-editor")
 				?.focus();
 	};
+
+	/** What the toolbar over a text changes about it: font, size and colour (R-101). */
+	const formatOf = (st: Stroke): TextFormat => ({
+		font: fontKeyOf(st.font),
+		size: fontSizeOf(st),
+		color: st.color,
+		colors: COLORS,
+		display: (c) => displayColor(c, currentTheme()),
+		onFont: (font) => changeStyle({ font }, false),
+		onSize: (fontSize) => changeStyle({ fontSize }, false),
+		onColor: (color) => changeStyle({ color }, false),
+	});
 
 	return (
 		<>
@@ -1190,6 +1213,11 @@ export function BoardView({
 					}
 					fontSize={fontSizeOf(liveText ?? editingText) * viewport.scale}
 					color={displayColor((liveText ?? editingText).color, currentTheme())}
+					font={fontKeyOf((liveText ?? editingText).font)}
+					format={formatOf(liveText ?? editingText)}
+					onWidth={(px, final) =>
+						changeStyle({ width: px / viewport.scale }, !final)
+					}
 					onResize={bump}
 					width={
 						(liveText ?? editingText).width === undefined
@@ -1225,6 +1253,14 @@ export function BoardView({
 						viewport.scale
 					}
 					color={displayColor(draft?.color ?? settings.color, theme)}
+					font={fontKeyOf(draft?.font)}
+					format={draft ? formatOf(draft) : undefined}
+					onWidth={(px) =>
+						setTextAt({
+							...textAt,
+							area: { w: px / viewport.scale, h: textAt.area?.h ?? 0 },
+						})
+					}
 					onResize={bump}
 					width={textAt.area ? textAt.area.w * viewport.scale : undefined}
 					minHeight={textAt.area ? textAt.area.h * viewport.scale : undefined}
@@ -1233,6 +1269,7 @@ export function BoardView({
 							color: draft?.color,
 							size: draft?.size,
 							fontSize: draft?.fontSize,
+							font: draft?.font,
 							opacity: draft?.opacity,
 						});
 						setTextAt(null);

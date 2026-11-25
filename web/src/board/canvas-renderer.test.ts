@@ -328,6 +328,72 @@ describe("text sits where a text field puts it, in every browser (R-081)", () =>
 	});
 });
 
+describe("Markdown text on the canvas (R-102)", () => {
+	const draw = (content: string) => {
+		const calls: { k: string; font: string; args: unknown[] }[] = [];
+		const state: Record<string, unknown> = {};
+		const ctx = new Proxy(state, {
+			get: (t, k) => {
+				if (k === "measureText")
+					return () => ({
+						width: 10,
+						fontBoundingBoxAscent: 12,
+						fontBoundingBoxDescent: 4,
+					});
+				if (k === "fillText" || k === "fillRect")
+					return (...args: unknown[]) =>
+						calls.push({ k: String(k), font: String(t.font), args });
+				if (k in t) return t[k as string];
+				return () => ctx;
+			},
+			set: (t, k, v) => {
+				t[k as string] = v;
+				return true;
+			},
+		}) as unknown as CanvasRenderingContext2D;
+		const el = {
+			id: "m",
+			authorId: "a",
+			color: "#111",
+			size: 4,
+			z: 1,
+			kind: "text",
+			text: content,
+			fontSize: 20,
+			points: [[100, 50, 0.5]],
+		} as Stroke;
+		paintElements(
+			ctx,
+			[el],
+			{ minX: -1e9, minY: -1e9, maxX: 1e9, maxY: 1e9 },
+			null,
+		);
+		return calls;
+	};
+
+	test("a bold word is drawn in a bold font, on the same baseline as the rest", () => {
+		const texts = draw("a **b** c").filter((c) => c.k === "fillText");
+		expect(texts.map((c) => c.args[0])).toEqual(["a ", "b", " c"]);
+		expect(texts[1].font).toContain("600");
+		expect(texts[0].font).not.toContain("600");
+		expect(new Set(texts.map((c) => c.args[2])).size).toBe(1);
+		// no marker is ever drawn
+		expect(texts.some((c) => String(c.args[0]).includes("*"))).toBe(false);
+	});
+
+	test("a strike is a thin bar across the word, a list item has its bullet", () => {
+		const struck = draw("~~gone~~");
+		expect(struck.some((c) => c.k === "fillRect")).toBe(true);
+		const list = draw("- item").filter((c) => c.k === "fillText");
+		expect(list.map((c) => c.args[0])).toEqual(["•", "item"]);
+	});
+
+	test("a plain text is still one fillText a line", () => {
+		const texts = draw("a\nb").filter((c) => c.k === "fillText");
+		expect(texts.map((c) => c.args[0])).toEqual(["a", "b"]);
+	});
+});
+
 describe("the coordinate plane on the canvas (R-084)", () => {
 	const plane = {
 		id: "pl",
