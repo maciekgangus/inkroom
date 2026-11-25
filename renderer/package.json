@@ -1,0 +1,12 @@
+{
+	"name": "inkroom-renderer",
+	"private": true,
+	"type": "module",
+	"description": "Renders a recorded lesson to an MP4 video in the background (R-115, ADR 0029)",
+	"scripts": {
+		"render": "node render.mjs"
+	},
+	"dependencies": {
+		"playwright": "1.65.0"
+	}
+}

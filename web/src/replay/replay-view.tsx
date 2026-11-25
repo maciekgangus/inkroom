@@ -8,51 +8,12 @@ import { Cursors } from "../cursors";
 import { EditableName } from "../editable-name";
 import { Icon } from "../icon";
 import { clock } from "../recording-controls";
-import type { LogEvent } from "../recording-log";
 import { currentTheme, displayColor, useTheme } from "../theme";
 import { fitCamera } from "./camera";
-import { BG, BOARD, LIVE, ReplayEngine, type Snapshot } from "./engine";
-
-/** What `GET .../play` answers: where the sound and the event log are (R-114). */
-interface PlayIndex {
-	v: number;
-	name: string;
-	durationMs: number;
-	mime: string;
-	audio: string;
-	snapshot: string;
-	segments: string[];
-}
+import { BG, BOARD, LIVE, type ReplayEngine } from "./engine";
+import { load, type PlayIndex } from "./load";
 
 const RATES = [0.5, 1, 1.5, 2];
-
-async function getJSON<T>(url: string): Promise<T> {
-	const res = await fetch(url, { cache: "no-store" });
-	if (!res.ok) {
-		let message = `Błąd ${res.status}`;
-		try {
-			message = ((await res.json()) as { error?: string }).error ?? message;
-		} catch {
-			// not JSON: the status will do
-		}
-		throw new Error(message);
-	}
-	return (await res.json()) as T;
-}
-
-/** Reads the index, the starting state and every segment of the log (a missing segment is empty). */
-async function load(boardId: string, recId: string) {
-	const index = await getJSON<PlayIndex>(
-		`/api/boards/${boardId}/recordings/${recId}/play`,
-	);
-	const [snapshot, segments] = await Promise.all([
-		getJSON<Snapshot>(index.snapshot),
-		Promise.all(
-			index.segments.map((u) => getJSON<LogEvent[]>(u).catch(() => [])),
-		),
-	]);
-	return { index, engine: new ReplayEngine(snapshot, segments.flat()) };
-}
 
 interface Props {
 	boardId: string;

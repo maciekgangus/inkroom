@@ -7,6 +7,7 @@ import { CalendarPage } from "./calendar-page";
 import { FeedbackButton } from "./feedback-button";
 import { ADMIN_NAME, isReservedName } from "./names";
 import { Panel } from "./panel";
+import { RenderPage } from "./replay/render-page";
 import { ReplayView } from "./replay/replay-view";
 import type { SocketLike } from "./sync/sync";
 import { ThemeToggle } from "./theme";
@@ -60,7 +61,11 @@ export function App({
 	return (
 		<>
 			{replay ? (
-				<ReplayView boardId={replay[1]} recId={replay[2]} />
+				new URLSearchParams(search).has("render") ? (
+					<RenderPage boardId={replay[1]} recId={replay[2]} />
+				) : (
+					<ReplayView boardId={replay[1]} recId={replay[2]} />
+				)
 			) : match ? (
 				<BoardPage
 					id={match[1]}
