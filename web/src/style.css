@@ -2603,13 +2603,13 @@ button.participant {
 	min-width: 0;
 	height: auto;
 	padding: 4px 10px;
-	font-weight: 400;
 	border: 0;
 	border-radius: 5px;
 	background: transparent;
 	color: var(--text);
 	font: inherit;
 	font-size: 15px;
+	font-weight: 400;
 	line-height: 24px;
 	text-align: left;
 	white-space: nowrap;
