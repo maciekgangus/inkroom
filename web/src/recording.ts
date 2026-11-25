@@ -12,6 +12,19 @@ const MIME_TYPES = [
 	"video/webm",
 ];
 
+/**
+ * What the picture costs. A steady 30 frames a second and a bitrate well above the browser's
+ * default (about 2.5 Mb/s, which smears a board that is panned fast) keep motion clean; the size
+ * is capped at Full HD so a big monitor does not make the encoder drop frames. 5 Mb/s is about
+ * 40 MB a minute (the teacher's upload must keep up). Raise FRAME_RATE to 60 for smoother panning
+ * if the computer can encode it.
+ */
+const FRAME_RATE = 30;
+const VIDEO_BITS_PER_SECOND = 5_000_000;
+const AUDIO_BITS_PER_SECOND = 128_000;
+const MAX_WIDTH = 1920;
+const MAX_HEIGHT = 1080;
+
 /** How often MediaRecorder hands over a chunk, in ms. */
 const CHUNK_MS = 3000;
 
@@ -121,7 +134,13 @@ export async function startScreenRecording(
 	if (!mime) throw new Error("Ta przeglądarka nie nagrywa ekranu");
 	let screen: MediaStream;
 	try {
-		screen = await navigator.mediaDevices.getDisplayMedia({ video: true });
+		screen = await navigator.mediaDevices.getDisplayMedia({
+			video: {
+				frameRate: { ideal: FRAME_RATE, max: FRAME_RATE },
+				width: { max: MAX_WIDTH },
+				height: { max: MAX_HEIGHT },
+			},
+		});
 	} catch {
 		throw new Error("Nie wybrano ekranu do nagrywania");
 	}
@@ -132,6 +151,9 @@ export async function startScreenRecording(
 		for (const t of screen.getTracks()) t.stop();
 		throw new Error("Brak dostępu do mikrofonu");
 	}
+	// A board that is drawn on and panned is motion first: the encoder keeps the frame rate up
+	// rather than the sharpness of a single frame.
+	for (const t of screen.getVideoTracks()) t.contentHint = "motion";
 	const stream = new MediaStream([
 		...screen.getVideoTracks(),
 		...mic.getAudioTracks(),
@@ -160,7 +182,11 @@ export async function startScreenRecording(
 		throw e;
 	}
 
-	const recorder = new MediaRecorder(stream, { mimeType: mime });
+	const recorder = new MediaRecorder(stream, {
+		mimeType: mime,
+		videoBitsPerSecond: VIDEO_BITS_PER_SECOND,
+		audioBitsPerSecond: AUDIO_BITS_PER_SECOND,
+	});
 	const startedAt = Date.now();
 	const cutter = new PartCutter(partSize);
 	let partNo = 0;

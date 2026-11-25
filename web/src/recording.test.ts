@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { PartCutter, uploadPart } from "./recording";
+import { PartCutter, startScreenRecording, uploadPart } from "./recording";
 
 const blob = (n: number, ch = "x") => new Blob([ch.repeat(n)]);
 const text = (b: Blob) => b.text();
@@ -110,5 +110,82 @@ describe("uploadPart (R-094)", () => {
 			.mockImplementation(address);
 		await uploadPart(addr, part, wait);
 		expect(addr).toHaveBeenCalledTimes(2);
+	});
+});
+
+describe("startScreenRecording: smooth motion (R-094)", () => {
+	afterEach(() => vi.unstubAllGlobals());
+
+	/** A browser that records what it was asked for. */
+	function fakeBrowser() {
+		const seen: {
+			display?: MediaStreamConstraints;
+			recorder?: MediaRecorderOptions;
+			videoHint?: string;
+		} = {};
+		const track = (kind: string) => ({
+			kind,
+			stop() {},
+			addEventListener() {},
+			set contentHint(v: string) {
+				if (kind === "video") seen.videoHint = v;
+			},
+		});
+		const video = track("video");
+		const audio = track("audio");
+		vi.stubGlobal("navigator", {
+			mediaDevices: {
+				getDisplayMedia: async (c: MediaStreamConstraints) => {
+					seen.display = c;
+					return {
+						getTracks: () => [video],
+						getVideoTracks: () => [video],
+					};
+				},
+				getUserMedia: async () => ({
+					getTracks: () => [audio],
+					getAudioTracks: () => [audio],
+				}),
+			},
+		});
+		vi.stubGlobal("MediaStream", class {});
+		vi.stubGlobal(
+			"MediaRecorder",
+			class {
+				static isTypeSupported = (t: string) => t === "video/webm";
+				state = "recording";
+				constructor(_s: unknown, o: MediaRecorderOptions) {
+					seen.recorder = o;
+				}
+				start() {}
+				stop() {}
+			},
+		);
+		vi.stubGlobal(
+			"fetch",
+			vi.fn().mockResolvedValue(
+				new Response(JSON.stringify({ id: "r", partSize: 10 }), {
+					status: 201,
+				}),
+			),
+		);
+		return seen;
+	}
+
+	test("asks the screen for 30 frames a second at most Full HD, and the recorder for a generous bitrate", async () => {
+		const seen = fakeBrowser();
+		await startScreenRecording("b", () => {});
+		const video = seen.display?.video as MediaTrackConstraints;
+		expect(video.frameRate).toEqual({ ideal: 30, max: 30 });
+		expect(video.width).toEqual({ max: 1920 });
+		expect(video.height).toEqual({ max: 1080 });
+		expect(seen.recorder?.videoBitsPerSecond).toBe(5_000_000);
+		expect(seen.recorder?.audioBitsPerSecond).toBe(128_000);
+	});
+
+	test("tells the encoder the picture is in motion, not a still to keep sharp", async () => {
+		const seen = fakeBrowser();
+		await startScreenRecording("b", () => {});
+		expect(seen.videoHint).toBe("motion");
 	});
 });
