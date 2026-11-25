@@ -1,0 +1,18 @@
+{
+  "boardId": "demo-board-1",
+  "title": "Lekcja demo - rownania kwadratowe",
+  "elements": [
+    { "id": "e1", "kind": "stroke", "authorId": "student", "color": "#1a1a1a", "size": 4, "z": 1001,
+      "points": [[100, 100, 0.9], [125, 96, 0.8], [150, 100, 0.9], [175, 97, 0.8]] },
+    { "id": "e2", "kind": "line", "authorId": "student", "color": "#1a1a1a", "size": 4, "z": 1002,
+      "points": [[90, 116, 1], [185, 116, 1]] },
+    { "id": "e3", "kind": "stroke", "authorId": "student", "color": "#1a1a1a", "size": 4, "z": 1003,
+      "points": [[105, 132, 0.9], [130, 128, 0.8], [155, 133, 0.9]] },
+    { "id": "e4", "kind": "text", "authorId": "tutor", "color": "#b00020", "size": 24, "z": 1010,
+      "text": "ulamek", "points": [[210, 100, 0]] },
+    { "id": "e5", "kind": "stroke", "authorId": "student", "color": "#1a1a1a", "size": 4, "z": 1004,
+      "points": [[400, 100, 0.9], [415, 100, 0.9], [428, 128, 0.8], [445, 160, 0.9], [460, 190, 0.8]] },
+    { "id": "e6", "kind": "stroke", "authorId": "student", "color": "#1a1a1a", "size": 4, "z": 1005,
+      "points": [[480, 100, 0.9], [495, 102, 0.9], [500, 130, 0.8], [530, 160, 0.9]] }
+  ]
+}
