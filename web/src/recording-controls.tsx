@@ -3,7 +3,11 @@ import * as api from "./api";
 import { closeOnDismiss } from "./dismiss";
 import { Icon } from "./icon";
 import { Portal } from "./portal";
-import { type Session, startScreenRecording } from "./recording";
+import {
+	type RecordingSource,
+	type Session,
+	startBoardRecording,
+} from "./recording";
 
 /** One recording lasts at most 1 h 15 min; five minutes before, the owner is warned (R-094). */
 export const MAX_RECORDING_MS = 75 * 60_000;
@@ -25,27 +29,30 @@ export function megabytes(bytes: number): string {
 
 interface Props {
 	boardId: string;
-	/** Shows the record button: the owner of the board, on a computer (R-094). */
+	/** Shows the record button: the owner of the board (R-113). */
 	canRecord: boolean;
+	/** What the recording takes from the board: its state, and its events while it lasts. */
+	source: RecordingSource;
 	/** Shows a delete button on each recording: the owner of the board. */
 	canDelete?: boolean;
 	/** Told when recording starts (true) and ends (false), for everyone's red dot. */
 	onRecording?: (on: boolean) => void;
 	/** Starts a recording; a test hands in a stand-in. */
-	start?: typeof startScreenRecording;
+	start?: typeof startBoardRecording;
 }
 
 /**
- * Recording a lesson (R-094): a "Nagrywaj" button that turns into the red "Zakończ nagrywanie"
+ * Recording a lesson (R-113): a "Nagrywaj" button that turns into the red "Zakończ nagrywanie"
  * with the time, and a "Nagrania" button opening the list of this board's recordings with a
- * download link each, and for the owner a delete button. Anyone with the board sees the list.
+ * link to the player each, and for the owner a delete button. Anyone with the board sees the list.
  */
 export function RecordingControls({
 	boardId,
 	canRecord,
+	source,
 	canDelete,
 	onRecording,
-	start = startScreenRecording,
+	start = startBoardRecording,
 }: Props) {
 	const [phase, setPhase] = useState<"idle" | "starting" | "recording">("idle");
 	const [error, setError] = useState("");
@@ -151,7 +158,7 @@ export function RecordingControls({
 		if (phase === "recording") return stop();
 		setPhase("starting");
 		try {
-			session.current = await start(boardId, ended);
+			session.current = await start(boardId, source, ended);
 			setPhase("recording");
 		} catch (e) {
 			setPhase("idle");
@@ -248,9 +255,7 @@ export function RecordingControls({
 											</span>
 											<span class="rec-actions">
 												{r.finished && (
-													<a href={api.recordingUrl(boardId, r.id)} download>
-														Pobierz
-													</a>
+													<a href={`/b/${boardId}/r/${r.id}`}>Odtwórz</a>
 												)}
 												{canDelete &&
 													(confirming === r.id ? (

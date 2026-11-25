@@ -1,54 +1,36 @@
 import * as api from "./api";
-import { hasFinePointer } from "./pointer";
+import type { Background } from "./board/background";
+import type { Stroke } from "./board/board";
+import type { Rect } from "./board/viewport";
+import { EventLog, LOG_VERSION } from "./recording-log";
 
-// Lesson recording, stage 1 (R-112): the screen and the microphone of the person who records go
-// to the server in chunks, as the browser produces them.
+// Recording a lesson (R-113, ADR 0028): the sound of the person who records and the log of what
+// happens on the board go to the server as the browser produces them. No picture of the screen is
+// made, so nothing but the microphone is asked for.
 
-/** MP4 where the browser can record it, WebM otherwise (R-094); the user never chooses. */
+/** The sound: MP4/AAC where the browser can record it, WebM/Opus otherwise; the user never chooses. */
 const MIME_TYPES = [
-	"video/mp4;codecs=avc1.42E01E,mp4a.40.2",
-	"video/webm;codecs=vp9,opus",
-	"video/webm;codecs=vp8,opus",
-	"video/webm",
+	"audio/mp4;codecs=mp4a.40.2",
+	"audio/webm;codecs=opus",
+	"audio/webm",
 ];
-
-/**
- * What the picture costs. A steady 30 frames a second and a bitrate well above the browser's
- * default (about 2.5 Mb/s, which smears a board that is panned fast) keep motion clean; the size
- * is capped at Full HD so a big monitor does not make the encoder drop frames. 5 Mb/s is about
- * 40 MB a minute (the teacher's upload must keep up). Raise FRAME_RATE to 60 for smoother panning
- * if the computer can encode it.
- */
-const FRAME_RATE = 30;
-const VIDEO_BITS_PER_SECOND = 5_000_000;
-const AUDIO_BITS_PER_SECOND = 128_000;
-const MAX_WIDTH = 1920;
-const MAX_HEIGHT = 1080;
+const AUDIO_BITS_PER_SECOND = 64_000; // plenty for a voice: about 30 MB an hour
 
 /** How often MediaRecorder hands over a chunk, in ms. */
 const CHUNK_MS = 3000;
+/** How often a segment of the event log is sent, in ms. */
+export const SEGMENT_MS = 10_000;
 
 /** The first container the browser can record, if any. */
-function recordingMime(): string | undefined {
+function audioMime(): string | undefined {
 	if (typeof MediaRecorder === "undefined") return undefined;
 	return MIME_TYPES.find((t) => MediaRecorder.isTypeSupported(t));
-}
-
-/**
- * Whether this device gets the record button: a computer (a tablet's Safari cannot capture the
- * screen). Whether the browser can is not asked here: a page over plain http hides screen capture
- * from the browser, and a button that is missing without a word is worse than one that explains
- * itself when pressed (see startScreenRecording).
- */
-export function canRecordScreen(): boolean {
-	return hasFinePointer();
 }
 
 /** An error whose message is for the user and that no retry would cure. */
 class Refused extends Error {}
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
 /**
  * Cuts the chunks MediaRecorder hands over into parts of exactly `size` bytes: S3 wants parts of
  * at least 5 MiB, and R2 wants all of them but the last to be of one size.
@@ -119,52 +101,49 @@ export interface Session {
 	stop(): Promise<void>;
 }
 
+/** The first object of the log: the state of the board when the recording began. */
+export interface Snapshot {
+	strokes: Stroke[];
+	background: Background;
+	/** The board rectangle in view and the size of the window it was shown in. */
+	view: Rect;
+	win: { w: number; h: number };
+}
+
+/** What the recorder needs from the board (given by the board view). */
+export interface RecordingSource {
+	/** The state of the board now. */
+	snapshot(): Snapshot;
+	/** Starts feeding events into `log`; returns the function that stops it. */
+	attach(log: EventLog): () => void;
+}
+
 /**
- * Asks for a screen (a window, a tab or the whole screen) and the microphone, and starts
- * recording them. `onEnd` is called when the recording stops by itself: the person stopped sharing
- * in the browser's bar, or sending failed (then with the reason).
+ * Starts recording: the microphone and the event log of the board. `onEnd` is called when the
+ * recording stops by itself: sending failed, or the microphone went away (then with the reason).
  */
-export async function startScreenRecording(
+export async function startBoardRecording(
 	boardId: string,
+	source: RecordingSource,
 	onEnd: (error?: string) => void,
 ): Promise<Session> {
-	if (typeof navigator.mediaDevices?.getDisplayMedia !== "function") {
+	if (typeof navigator.mediaDevices?.getUserMedia !== "function") {
 		throw new Error(
 			isSecureContext
-				? "Ta przeglądarka nie udostępnia ekranu do nagrywania"
-				: "Nagrywanie ekranu działa tylko na stronie https albo localhost, a ta jest po http",
+				? "Ta przeglądarka nie udostępnia mikrofonu"
+				: "Nagrywanie działa tylko na stronie https albo localhost (mikrofon), a ta jest po http",
 		);
 	}
-	const mime = recordingMime();
-	if (!mime) throw new Error("Ta przeglądarka nie nagrywa wideo");
-	let screen: MediaStream;
-	try {
-		screen = await navigator.mediaDevices.getDisplayMedia({
-			video: {
-				frameRate: { ideal: FRAME_RATE, max: FRAME_RATE },
-				width: { max: MAX_WIDTH },
-				height: { max: MAX_HEIGHT },
-			},
-		});
-	} catch {
-		throw new Error("Nie wybrano ekranu do nagrywania");
-	}
+	const mime = audioMime();
+	if (!mime) throw new Error("Ta przeglądarka nie nagrywa dźwięku");
 	let mic: MediaStream;
 	try {
 		mic = await navigator.mediaDevices.getUserMedia({ audio: true });
 	} catch {
-		for (const t of screen.getTracks()) t.stop();
 		throw new Error("Brak dostępu do mikrofonu");
 	}
-	// A board that is drawn on and panned is motion first: the encoder keeps the frame rate up
-	// rather than the sharpness of a single frame.
-	for (const t of screen.getVideoTracks()) t.contentHint = "motion";
-	const stream = new MediaStream([
-		...screen.getVideoTracks(),
-		...mic.getAudioTracks(),
-	]);
 	const release = () => {
-		for (const t of [...screen.getTracks(), ...mic.getTracks()]) t.stop();
+		for (const t of mic.getTracks()) t.stop();
 	};
 
 	let id: string;
@@ -187,59 +166,90 @@ export async function startScreenRecording(
 		throw e;
 	}
 
-	const recorder = new MediaRecorder(stream, {
+	const recorder = new MediaRecorder(mic, {
 		mimeType: mime,
-		videoBitsPerSecond: VIDEO_BITS_PER_SECOND,
 		audioBitsPerSecond: AUDIO_BITS_PER_SECOND,
 	});
-	const startedAt = Date.now();
 	const cutter = new PartCutter(partSize);
 	let partNo = 0;
+	let segment = 0;
 	let failure: Error | undefined;
-	// Parts go one after another; a failure ends sending for good.
+	// Everything goes one after another, so the sound is in order; a failure ends sending for good.
 	let sending: Promise<void> = Promise.resolve();
-	const enqueue = (part: Blob) => {
-		const n = ++partNo;
+	const queue = (send: () => Promise<void>) => {
 		sending = sending.then(async () => {
 			if (failure) return;
 			try {
-				await uploadPart(() => api.recordingPart(boardId, id, n), part);
+				await send();
 			} catch (err) {
 				failure = err instanceof Error ? err : new Error("Błąd");
 				void endByItself();
 			}
 		});
 	};
+	const sendPart = (part: Blob) => {
+		const n = ++partNo;
+		queue(() => uploadPart(() => api.recordingPart(boardId, id, n), part));
+	};
+	const sendSegment = (n: number, data: unknown) => {
+		const body = new Blob([JSON.stringify(data)]);
+		queue(() => uploadPart(() => api.recordingEvents(boardId, id, n), body));
+	};
+
+	let t0 = performance.now();
+	let log: EventLog | undefined;
+	let detach: (() => void) | undefined;
+	let timer: ReturnType<typeof setInterval> | undefined;
+	// The log begins when the sound does, so a time in the log is a time in the recording.
+	recorder.onstart = () => {
+		t0 = performance.now();
+		log = new EventLog(() => performance.now());
+		sendSegment(0, { v: LOG_VERSION, ...source.snapshot() });
+		detach = source.attach(log);
+		timer = setInterval(
+			() => sendSegment(++segment, log?.take() ?? []),
+			SEGMENT_MS,
+		);
+	};
+	recorder.ondataavailable = (e) => {
+		for (const part of cutter.push(e.data)) sendPart(part);
+	};
+	const stopped = new Promise<void>((resolve) => {
+		recorder.onstop = () => resolve();
+	});
+
 	let ending: Promise<void> | undefined;
 	const stop = () => {
 		ending ??= (async () => {
+			clearInterval(timer);
+			detach?.();
 			if (recorder.state !== "inactive") recorder.stop();
 			await stopped;
 			release();
 			const tail = cutter.rest(); // the last chunk comes right after stop()
-			if (tail) enqueue(tail);
+			if (tail) sendPart(tail);
+			sendSegment(++segment, log?.take() ?? []);
 			await sending;
-			await api.finishRecording(boardId, id, Date.now() - startedAt);
+			await api.finishRecording(
+				boardId,
+				id,
+				Math.round(performance.now() - t0),
+			);
 			if (failure) throw failure;
 		})();
 		return ending;
 	};
-	// The recording ends without the person pressing stop: they stopped sharing in the browser's
-	// bar, or sending failed.
+	// The recording ends without the person pressing stop: sending failed, or the microphone left.
 	const endByItself = () =>
 		stop().then(
 			() => onEnd(),
 			(e) => onEnd(e instanceof Error ? e.message : "Błąd"),
 		);
-	recorder.ondataavailable = (e) => {
-		for (const part of cutter.push(e.data)) enqueue(part);
-	};
-	const stopped = new Promise<void>((resolve) => {
-		recorder.onstop = () => resolve();
-	});
-	screen.getVideoTracks()[0]?.addEventListener("ended", () => {
-		void endByItself();
-	});
+	for (const track of mic.getAudioTracks()) {
+		track.addEventListener("ended", () => {
+			void endByItself();
+		});
+	}
 	recorder.start(CHUNK_MS);
 	return { stop };
 }

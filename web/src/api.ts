@@ -392,6 +392,13 @@ export const recordingPart = (boardId: string, id: string, n: number) =>
 		`/api/boards/${boardId}/recordings/${id}/parts/${n}`,
 	);
 
+/** Where to send segment n of the event log of a recording; 0 is the starting state (R-113). */
+export const recordingEvents = (boardId: string, id: string, n: number) =>
+	request<{ url: string; method: string }>(
+		"POST",
+		`/api/boards/${boardId}/recordings/${id}/events/${n}`,
+	);
+
 export const finishRecording = (
 	boardId: string,
 	id: string,
@@ -406,7 +413,3 @@ export const deleteRecording = (boardId: string, id: string) =>
 
 export const listRecordings = (boardId: string) =>
 	request<Recording[]>("GET", `/api/boards/${boardId}/recordings`);
-
-/** The address of a recording; the server answers it with the file or sends on to the bucket. */
-export const recordingUrl = (boardId: string, id: string) =>
-	`/api/boards/${boardId}/recordings/${id}`;

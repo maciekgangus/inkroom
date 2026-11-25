@@ -9,9 +9,10 @@ const deleteRecording = vi.hoisted(() => vi.fn());
 vi.mock("./api", () => ({
 	listRecordings,
 	deleteRecording,
-	recordingUrl: (b: string, id: string) => `/api/boards/${b}/recordings/${id}`,
 	errorMessage: (e: unknown) => (e instanceof Error ? e.message : "Błąd"),
 }));
+
+const source = { snapshot: () => ({}), attach: () => () => {} } as never;
 
 const rec = (over: Partial<Recording> = {}): Recording => ({
 	id: "r1",
@@ -42,11 +43,16 @@ describe("RecordingControls (R-112)", () => {
 
 	test("the record button is only there where the device can record", () => {
 		act(() =>
-			render(<RecordingControls boardId="b" canRecord={false} />, root),
+			render(
+				<RecordingControls source={source} boardId="b" canRecord={false} />,
+				root,
+			),
 		);
 		expect(btn("Nagrywaj")).toBeNull();
 		expect(btn("Nagrania")).not.toBeNull();
-		act(() => render(<RecordingControls boardId="b" canRecord />, root));
+		act(() =>
+			render(<RecordingControls source={source} boardId="b" canRecord />, root),
+		);
 		expect(btn("Nagrywaj")).not.toBeNull();
 	});
 
@@ -54,11 +60,19 @@ describe("RecordingControls (R-112)", () => {
 		const stop = vi.fn().mockResolvedValue(undefined);
 		const start = vi.fn().mockResolvedValue({ stop });
 		act(() =>
-			render(<RecordingControls boardId="b" canRecord start={start} />, root),
+			render(
+				<RecordingControls
+					source={source}
+					boardId="b"
+					canRecord
+					start={start}
+				/>,
+				root,
+			),
 		);
 		act(() => btn("Nagrywaj").click());
 		await flush();
-		expect(start).toHaveBeenCalledWith("b", expect.any(Function));
+		expect(start).toHaveBeenCalledWith("b", source, expect.any(Function));
 		expect(btn("Zakończ nagrywanie").classList.contains("recording")).toBe(
 			true,
 		);
@@ -75,7 +89,15 @@ describe("RecordingControls (R-112)", () => {
 			.fn()
 			.mockRejectedValue(new Error("Brak dostępu do mikrofonu"));
 		act(() =>
-			render(<RecordingControls boardId="b" canRecord start={start} />, root),
+			render(
+				<RecordingControls
+					source={source}
+					boardId="b"
+					canRecord
+					start={start}
+				/>,
+				root,
+			),
 		);
 		act(() => btn("Nagrywaj").click());
 		await flush();
@@ -87,12 +109,20 @@ describe("RecordingControls (R-112)", () => {
 
 	test("returns to idle and shows the reason when the recording ends by itself", async () => {
 		let end: (why?: string) => void = () => {};
-		const start = vi.fn().mockImplementation(async (_b, onEnd) => {
+		const start = vi.fn().mockImplementation(async (_b, _s, onEnd) => {
 			end = onEnd;
 			return { stop: vi.fn() };
 		});
 		act(() =>
-			render(<RecordingControls boardId="b" canRecord start={start} />, root),
+			render(
+				<RecordingControls
+					source={source}
+					boardId="b"
+					canRecord
+					start={start}
+				/>,
+				root,
+			),
 		);
 		act(() => btn("Nagrywaj").click());
 		await flush();
@@ -110,6 +140,7 @@ describe("RecordingControls (R-112)", () => {
 		act(() =>
 			render(
 				<RecordingControls
+					source={source}
 					boardId="b"
 					canRecord
 					start={start}
@@ -133,7 +164,15 @@ describe("RecordingControls (R-112)", () => {
 			const stop = vi.fn().mockResolvedValue(undefined);
 			const start = vi.fn().mockResolvedValue({ stop });
 			act(() =>
-				render(<RecordingControls boardId="b" canRecord start={start} />, root),
+				render(
+					<RecordingControls
+						source={source}
+						boardId="b"
+						canRecord
+						start={start}
+					/>,
+					root,
+				),
 			);
 			await act(async () => {
 				btn("Nagrywaj").click();
@@ -166,7 +205,10 @@ describe("RecordingControls (R-112)", () => {
 	test("only the owner may delete, and only after a second press (R-019)", async () => {
 		listRecordings.mockResolvedValue([rec()]);
 		act(() =>
-			render(<RecordingControls boardId="b" canRecord={false} />, root),
+			render(
+				<RecordingControls source={source} boardId="b" canRecord={false} />,
+				root,
+			),
 		);
 		act(() => btn("Nagrania").click());
 		await flush();
@@ -177,7 +219,12 @@ describe("RecordingControls (R-112)", () => {
 
 		act(() =>
 			render(
-				<RecordingControls boardId="b" canRecord={false} canDelete />,
+				<RecordingControls
+					source={source}
+					boardId="b"
+					canRecord={false}
+					canDelete
+				/>,
 				root,
 			),
 		);
@@ -204,7 +251,10 @@ describe("RecordingControls (R-112)", () => {
 	test("a recording still in progress has no download link", async () => {
 		listRecordings.mockResolvedValue([rec({ finished: false, bytes: 0 })]);
 		act(() =>
-			render(<RecordingControls boardId="b" canRecord={false} />, root),
+			render(
+				<RecordingControls source={source} boardId="b" canRecord={false} />,
+				root,
+			),
 		);
 		act(() => btn("Nagrania").click());
 		await flush();
@@ -214,10 +264,13 @@ describe("RecordingControls (R-112)", () => {
 		);
 	});
 
-	test("lists the recordings of the board with a download link each", async () => {
+	test("lists the recordings of the board with a link to the player each (R-114)", async () => {
 		listRecordings.mockResolvedValue([rec(), rec({ id: "r2", name: "Druga" })]);
 		act(() =>
-			render(<RecordingControls boardId="b" canRecord={false} />, root),
+			render(
+				<RecordingControls source={source} boardId="b" canRecord={false} />,
+				root,
+			),
 		);
 		act(() => btn("Nagrania").click());
 		await flush();
@@ -226,10 +279,10 @@ describe("RecordingControls (R-112)", () => {
 			...document.querySelectorAll<HTMLAnchorElement>(".recordings-pop a"),
 		];
 		expect(links.map((a) => a.getAttribute("href"))).toEqual([
-			"/api/boards/b/recordings/r1",
-			"/api/boards/b/recordings/r2",
+			"/b/b/r/r1",
+			"/b/b/r/r2",
 		]);
-		expect(links.every((a) => a.hasAttribute("download"))).toBe(true);
+		expect(links.map((a) => a.textContent)).toEqual(["Odtwórz", "Odtwórz"]);
 		const text = document.querySelector(".recordings-pop")?.textContent ?? "";
 		expect(text).toContain("1:05");
 		expect(text).toContain("12 MB");
@@ -237,7 +290,10 @@ describe("RecordingControls (R-112)", () => {
 
 	test("says so when there are no recordings", async () => {
 		act(() =>
-			render(<RecordingControls boardId="b" canRecord={false} />, root),
+			render(
+				<RecordingControls source={source} boardId="b" canRecord={false} />,
+				root,
+			),
 		);
 		act(() => btn("Nagrania").click());
 		await flush();

@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import {
-	canRecordScreen,
 	PartCutter,
-	startScreenRecording,
+	type RecordingSource,
+	SEGMENT_MS,
+	startBoardRecording,
 	uploadPart,
 } from "./recording";
+import type { EventLog } from "./recording-log";
 
 const blob = (n: number, ch = "x") => new Blob([ch.repeat(n)]);
 const text = (b: Blob) => b.text();
@@ -118,108 +120,200 @@ describe("uploadPart (R-094)", () => {
 	});
 });
 
-describe("startScreenRecording: smooth motion (R-094)", () => {
-	afterEach(() => vi.unstubAllGlobals());
+describe("startBoardRecording (R-113)", () => {
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		vi.useRealTimers();
+	});
 
-	/** A browser that records what it was asked for. */
-	function fakeBrowser() {
-		const seen: {
-			display?: MediaStreamConstraints;
-			recorder?: MediaRecorderOptions;
-			videoHint?: string;
-		} = {};
-		const track = (kind: string) => ({
-			kind,
-			stop() {},
+	/** A browser and a server that remember what they were asked. */
+	function fake(
+		opts: { secure?: boolean; mic?: "ok" | "denied" | "none" } = {},
+	) {
+		vi.useFakeTimers();
+		const calls: { method: string; url: string; body?: string }[] = [];
+		const stopped: string[] = [];
+		let recorder: {
+			ondataavailable?: (e: { data: Blob }) => void;
+			onstart?: () => void;
+			onstop?: () => void;
+			state: string;
+			options?: MediaRecorderOptions;
+		} = { state: "inactive" };
+		const track = {
+			stop: () => stopped.push("mic"),
 			addEventListener() {},
-			set contentHint(v: string) {
-				if (kind === "video") seen.videoHint = v;
-			},
-		});
-		const video = track("video");
-		const audio = track("audio");
-		vi.stubGlobal("navigator", {
-			mediaDevices: {
-				getDisplayMedia: async (c: MediaStreamConstraints) => {
-					seen.display = c;
-					return {
-						getTracks: () => [video],
-						getVideoTracks: () => [video],
-					};
-				},
-				getUserMedia: async () => ({
-					getTracks: () => [audio],
-					getAudioTracks: () => [audio],
-				}),
-			},
-		});
-		vi.stubGlobal("MediaStream", class {});
+		};
+		const displayCalls: unknown[] = [];
+		vi.stubGlobal("isSecureContext", opts.secure ?? true);
+		vi.stubGlobal(
+			"navigator",
+			opts.mic === "none"
+				? {}
+				: {
+						mediaDevices: {
+							getDisplayMedia: (c: unknown) => displayCalls.push(c),
+							getUserMedia: async (c: unknown) => {
+								calls.push({ method: "MIC", url: JSON.stringify(c) });
+								if (opts.mic === "denied") throw new Error("denied");
+								return {
+									getTracks: () => [track],
+									getAudioTracks: () => [track],
+								};
+							},
+						},
+					},
+		);
 		vi.stubGlobal(
 			"MediaRecorder",
 			class {
-				static isTypeSupported = (t: string) => t === "video/webm";
-				state = "recording";
+				static isTypeSupported = (t: string) => t.startsWith("audio/webm");
+				state = "inactive";
+				ondataavailable?: (e: { data: Blob }) => void;
+				onstart?: () => void;
+				onstop?: () => void;
 				constructor(_s: unknown, o: MediaRecorderOptions) {
-					seen.recorder = o;
+					recorder = this as never;
+					(recorder as { options?: MediaRecorderOptions }).options = o;
 				}
-				start() {}
-				stop() {}
+				start() {
+					this.state = "recording";
+					queueMicrotask(() => this.onstart?.());
+				}
+				stop() {
+					this.state = "inactive";
+					queueMicrotask(() => this.onstop?.());
+				}
 			},
 		);
-		vi.stubGlobal(
-			"fetch",
-			vi.fn().mockResolvedValue(
-				new Response(JSON.stringify({ id: "r", partSize: 10 }), {
-					status: 201,
-				}),
-			),
-		);
-		return seen;
+		vi.stubGlobal("fetch", async (url: string, init: RequestInit = {}) => {
+			const method = init.method ?? "GET";
+			const body =
+				init.body instanceof Blob
+					? await init.body.text()
+					: (init.body as string | undefined);
+			calls.push({ method, url, body });
+			const json = (v: unknown) =>
+				new Response(JSON.stringify(v), { status: 200 });
+			if (url.endsWith("/recordings")) return json({ id: "r1", partSize: 10 });
+			if (/\/events\/\d+$/.test(url) && method === "POST")
+				return json({
+					url: `/put-events/${url.split("/").pop()}`,
+					method: "PUT",
+				});
+			if (/\/parts\/\d+$/.test(url) && method === "POST")
+				return json({
+					url: `/put-part/${url.split("/").pop()}`,
+					method: "PUT",
+				});
+			return new Response(null, { status: 204 });
+		});
+		let log: EventLog | undefined;
+		let detached = false;
+		const source: RecordingSource = {
+			snapshot: () => ({
+				strokes: [{ id: "s0" }] as never,
+				background: "grid",
+				view: { minX: 0, minY: 0, maxX: 800, maxY: 600 },
+				win: { w: 800, h: 600 },
+			}),
+			attach: (l) => {
+				log = l;
+				return () => {
+					detached = true;
+				};
+			},
+		};
+		return {
+			calls,
+			stopped,
+			displayCalls,
+			source,
+			recorder: () => recorder,
+			log: () => log,
+			detached: () => detached,
+		};
 	}
+	const puts = (
+		calls: { method: string; url: string; body?: string }[],
+		prefix: string,
+	) => calls.filter((c) => c.method === "PUT" && c.url.startsWith(prefix));
 
-	test("asks the screen for 30 frames a second at most Full HD, and the recorder for a generous bitrate", async () => {
-		const seen = fakeBrowser();
-		await startScreenRecording("b", () => {});
-		const video = seen.display?.video as MediaTrackConstraints;
-		expect(video.frameRate).toEqual({ ideal: 30, max: 30 });
-		expect(video.width).toEqual({ max: 1920 });
-		expect(video.height).toEqual({ max: 1080 });
-		expect(seen.recorder?.videoBitsPerSecond).toBe(5_000_000);
-		expect(seen.recorder?.audioBitsPerSecond).toBe(128_000);
+	test("asks for the microphone only: no screen, no window to pick", async () => {
+		const f = fake();
+		await startBoardRecording("b", f.source, () => {});
+		expect(f.displayCalls).toEqual([]);
+		expect(f.calls[0]).toEqual({
+			method: "MIC",
+			url: JSON.stringify({ audio: true }),
+		});
+		expect(f.recorder().options?.mimeType).toMatch(/^audio\/webm/);
 	});
 
-	test("tells the encoder the picture is in motion, not a still to keep sharp", async () => {
-		const seen = fakeBrowser();
-		await startScreenRecording("b", () => {});
-		expect(seen.videoHint).toBe("motion");
+	test("sends the starting state, then a segment of the log every few seconds, then the end", async () => {
+		const f = fake();
+		const session = await startBoardRecording("b", f.source, () => {});
+		await vi.advanceTimersByTimeAsync(0);
+		// The starting state is segment 0, taken when the sound begins.
+		const first = puts(f.calls, "/put-events/0");
+		expect(first).toHaveLength(1);
+		const snap = JSON.parse(first[0].body as string);
+		expect(snap).toMatchObject({
+			v: 1,
+			background: "grid",
+			strokes: [{ id: "s0" }],
+			win: { w: 800, h: 600 },
+		});
+
+		f.log()?.message({ t: "remove", id: "x" }, false);
+		await vi.advanceTimersByTimeAsync(SEGMENT_MS);
+		const seg1 = puts(f.calls, "/put-events/1");
+		expect(seg1).toHaveLength(1);
+		expect(JSON.parse(seg1[0].body as string)).toEqual([
+			[expect.any(Number), "r", "x"],
+		]);
+
+		f.log()?.message({ t: "remove", id: "y" }, false);
+		const done = session.stop();
+		await vi.advanceTimersByTimeAsync(0);
+		await done;
+		expect(f.detached()).toBe(true);
+		expect(
+			JSON.parse(puts(f.calls, "/put-events/2")[0].body as string),
+		).toEqual([[expect.any(Number), "r", "y"]]);
+		const finish = f.calls.find((c) => c.url.endsWith("/finish"));
+		expect(
+			JSON.parse(finish?.body as string).durationMs,
+		).toBeGreaterThanOrEqual(SEGMENT_MS);
+		expect(f.stopped).toContain("mic");
 	});
-});
 
-describe("when the browser cannot capture the screen (R-094)", () => {
-	afterEach(() => vi.unstubAllGlobals());
-
-	test("a page over plain http says why: the browser hides screen capture there", async () => {
-		vi.stubGlobal("navigator", {}); // no mediaDevices on an insecure page
-		vi.stubGlobal("isSecureContext", false);
-		await expect(startScreenRecording("b", () => {})).rejects.toThrow("https");
+	test("the sound goes in parts of the size the server named, the last one shorter", async () => {
+		const f = fake();
+		const session = await startBoardRecording("b", f.source, () => {});
+		await vi.advanceTimersByTimeAsync(0);
+		f.recorder().ondataavailable?.({ data: new Blob(["x".repeat(25)]) }); // 25 bytes, parts of 10
+		const done = session.stop();
+		await vi.advanceTimersByTimeAsync(0);
+		await done;
+		const sizes = puts(f.calls, "/put-part/").map(
+			(c) => (c.body as string).length,
+		);
+		expect(sizes).toEqual([10, 10, 5]);
 	});
 
-	test("a secure page whose browser has no screen capture says so", async () => {
-		vi.stubGlobal("navigator", { mediaDevices: {} });
-		vi.stubGlobal("isSecureContext", true);
-		await expect(startScreenRecording("b", () => {})).rejects.toThrow(
-			"nie udostępnia ekranu",
+	test("a page over plain http says why: the browser hides the microphone there", async () => {
+		const f = fake({ secure: false, mic: "none" });
+		await expect(startBoardRecording("b", f.source, () => {})).rejects.toThrow(
+			"https",
 		);
 	});
 
-	test("the button is for any computer, whatever the page: the reason comes on the click", () => {
-		vi.stubGlobal("matchMedia", () => ({ matches: true }));
-		vi.stubGlobal("navigator", {});
-		expect(canRecordScreen()).toBe(true);
-	});
-
-	test("a tablet or a phone has no button", () => {
-		vi.stubGlobal("matchMedia", () => ({ matches: false }));
-		expect(canRecordScreen()).toBe(false);
+	test("a refused microphone creates no recording", async () => {
+		const f = fake({ mic: "denied" });
+		await expect(startBoardRecording("b", f.source, () => {})).rejects.toThrow(
+			"mikrofonu",
+		);
+		expect(f.calls.some((c) => c.url.endsWith("/recordings"))).toBe(false);
 	});
 });

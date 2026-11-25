@@ -56,7 +56,7 @@ import { loadPdf } from "./pdf/loader";
 import { PdfProgress } from "./pdf-progress";
 import { hasFinePointer } from "./pointer";
 import { PropertiesPanel } from "./properties-panel";
-import { canRecordScreen } from "./recording";
+import type { RecordingSource } from "./recording";
 import { RecordingControls } from "./recording-controls";
 import { loadSnapShapes } from "./shape-snap";
 import { ShareButton } from "./share-button";
@@ -1195,6 +1195,32 @@ export function BoardView({
 		onColor: (color) => changeStyle({ color }, false),
 	});
 
+	// What a recording of this lesson takes from the board (R-113): its state when the sound begins,
+	// and, until it ends, every event of the sync client and the view we look at, about 20 times a
+	// second (the log keeps only the changes).
+	const recordingSource: RecordingSource = {
+		snapshot: () => ({
+			strokes: boardRef.current?.strokes ?? [],
+			background,
+			view: viewport.worldRect(innerWidth, innerHeight),
+			win: { w: innerWidth, h: innerHeight },
+		}),
+		attach: (log) => {
+			syncRef.current?.setTap((m, outgoing) => log.message(m, outgoing));
+			const look = () =>
+				log.view(viewport.worldRect(innerWidth, innerHeight), {
+					w: innerWidth,
+					h: innerHeight,
+				});
+			look();
+			const timer = setInterval(look, 50);
+			return () => {
+				clearInterval(timer);
+				syncRef.current?.setTap(null);
+			};
+		},
+	};
+
 	return (
 		<>
 			<div class="board-bg" data-background={background} />
@@ -1360,7 +1386,8 @@ export function BoardView({
 				<ShareButton boardId={boardId} title={title} />
 				<RecordingControls
 					boardId={boardId}
-					canRecord={!!owner && canRecordScreen()}
+					canRecord={!!owner}
+					source={recordingSource}
 					canDelete={owner}
 					onRecording={(on) => syncRef.current?.setRecording(on)}
 				/>

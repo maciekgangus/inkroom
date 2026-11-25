@@ -124,6 +124,10 @@ export class SyncClient {
 	private laserScheduled = false;
 	private following = ""; // id of the person whose view we follow (R-093)
 	private recording = false; // we record the lesson (R-094): told again after a reconnect
+	/** Sees every message in and out while a lesson is recorded (R-113); null the rest of the time. */
+	private tap:
+		| ((m: { t: string } & Record<string, unknown>, outgoing: boolean) => void)
+		| null = null;
 	private viewOut: Rect | null = null; // our latest view not yet sent
 	private viewLastSent = Number.NEGATIVE_INFINITY;
 	private viewSent: Rect | null = null; // what we last sent: an unchanged view is not sent again
@@ -349,6 +353,21 @@ export class SyncClient {
 		});
 	}
 
+	/**
+	 * Lets `fn` see every message that comes from the server and every one we send, for the event
+	 * log of a recorded lesson (R-113); null stops it. Costs nothing while it is not set.
+	 */
+	setTap(
+		fn:
+			| ((
+					m: { t: string } & Record<string, unknown>,
+					outgoing: boolean,
+			  ) => void)
+			| null,
+	): void {
+		this.tap = fn;
+	}
+
 	/** Tells everyone whether we record the lesson now, for their red dot (R-094). */
 	setRecording(on: boolean): void {
 		this.recording = on;
@@ -474,7 +493,9 @@ export class SyncClient {
 	}
 
 	private send(msg: object): void {
-		if (this.isOpen && this.socket) this.socket.send(JSON.stringify(msg));
+		if (!this.isOpen || !this.socket) return;
+		this.socket.send(JSON.stringify(msg));
+		this.tap?.(msg as { t: string } & Record<string, unknown>, true);
 	}
 
 	private receive(data: string): void {
@@ -499,6 +520,7 @@ export class SyncClient {
 			return;
 		}
 		this.lastIn = this.now();
+		this.tap?.(m as unknown as { t: string } & Record<string, unknown>, false);
 		switch (m.t) {
 			case "background":
 				if (isBackground(m.value)) this.opts.onBackground?.(m.value);

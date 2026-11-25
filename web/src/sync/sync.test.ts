@@ -259,6 +259,29 @@ describe("SyncClient", () => {
 			]);
 		});
 
+		test("a tap sees what comes in and what goes out, and only while it is set (R-113)", () => {
+			connectAndJoin();
+			const seen: [string, boolean][] = [];
+			client.setTap((m, outgoing) => seen.push([m.t, outgoing]));
+			sock().receive({ t: "remove", id: "x" });
+			client.liveUpdate({
+				id: "s1",
+				authorId: "me",
+				color: "#111",
+				size: 4,
+				z: 1,
+				points: [[1, 1, 1]],
+			});
+			flush();
+			expect(seen).toEqual([
+				["remove", false],
+				["live", true],
+			]);
+			client.setTap(null);
+			sock().receive({ t: "remove", id: "y" });
+			expect(seen).toHaveLength(2);
+		});
+
 		test("recording is announced and stopped, and announced again after a reconnect", () => {
 			connectAndJoin();
 			client.setRecording(true);
