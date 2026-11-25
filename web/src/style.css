@@ -3064,8 +3064,9 @@ button.participant {
 	list-style: none;
 }
 .recordings-pop li {
-	display: grid;
-	grid-template-columns: 1fr auto;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
 	gap: 2px 12px;
 	padding: 8px 0;
 	border-bottom: 1px solid var(--border);
@@ -3077,9 +3078,14 @@ button.participant {
 	font-size: 12px;
 }
 .recordings-pop .rec-name {
+	flex: 1 1 100%;
+	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+.recordings-pop .rec-meta {
+	flex: 1 1 auto;
 }
 .recordings-pop p {
 	margin: 4px 0;
@@ -3112,8 +3118,7 @@ button.participant {
 	}
 }
 .recordings-pop .rec-actions {
-	grid-row: 1 / span 2;
-	grid-column: 2;
+	margin-left: auto;
 	display: flex;
 	align-items: center;
 	gap: 8px;

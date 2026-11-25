@@ -186,3 +186,26 @@ w Explore zwraca logi, (3) „Test” kontaktu daje wiadomość w Telegramie, (4
 - **Inny system hosta:** VM to Debian z innym układem katalogów Dockera i wersją jądra niż Fedora tutaj;
   po wdrożeniu sprawdź, że panele hosta i kontenerów mają dane (lista w sekcji 8).
 - **Telegram, Cloudflare Access i `logs.<domena>`:** wymagają Twoich kont, sprawdzasz po wdrożeniu.
+
+## Nagrywanie lekcji z lokalnym bucketem S3 (R-094)
+
+Bez ustawień `RECORDINGS_S3_*` nagrania idą na dysk serwera. Żeby sprawdzić drogę przez bucket (części
+podpisanymi adresami prosto z przeglądarki), postaw lokalny S3, np. SeaweedFS:
+```sh
+cat > /tmp/s3.json <<'JSON'
+{"identities":[{"name":"inkroom","credentials":[{"accessKey":"testkey","secretKey":"testsecret1234"}],"actions":["Admin","Read","Write","List","Tagging"]}]}
+JSON
+docker run -d --name inkroom-s3 -p 8333:8333 -v /tmp/s3.json:/etc/seaweedfs/s3.json \
+  chrislusf/seaweedfs server -s3 -s3.config=/etc/seaweedfs/s3.json -dir=/data
+curl -X PUT --aws-sigv4 "aws:amz:auto:s3" --user testkey:testsecret1234 http://localhost:8333/inkroom   # bucket
+RECORDINGS_S3_ENDPOINT=http://192.168.0.51:8333 RECORDINGS_S3_BUCKET=inkroom \
+RECORDINGS_S3_ACCESS_KEY=testkey RECORDINGS_S3_SECRET_KEY=testsecret1234 \
+  FRESH=1 sh .claude/skills/test-server/server.sh start 8099
+```
+Adres bucketu musi być osiągalny z przeglądarki (stąd adres LAN, nie `localhost`, jeśli testujesz z innego
+komputera). Test pakietu na prawdziwym S3:
+`RECSTORE_TEST_S3="http://localhost:8333,inkroom,testkey,testsecret1234" go test ./internal/recstore -run TestS3 -v`.
+
+Przechwytywanie ekranu działa tylko na https albo `localhost`. Z innego komputera po `http://192.168.0.51:8099`
+przycisk „Nagrywaj” się nie pokaże, dopóki w Chrome nie dodasz tego adresu w
+`chrome://flags/#unsafely-treat-insecure-origin-as-secure`.

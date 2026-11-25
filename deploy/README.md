@@ -361,6 +361,34 @@ Kolejność ma znaczenie (stos najpierw, żeby agent miał dokąd pisać):
 - Gniazdo Dockera (`/var/run/docker.sock`) jest montowane do agenta, żeby czytać logi kontenerów: kto przejmie ten kontener, ma uprawnienia roota na maszynie aplikacji. Obraz jest przypięty do wersji i nie ma opublikowanego portu (ADR 0023). Stos nie ma gniazda Dockera.
 - Porty 3100 i 9090 stosu nie mają logowania: są otwarte tylko na adresie LAN. Nie przekierowuj ich z routera.
 
+## 12. Nagrania lekcji (R-094, ADR 0027)
+
+Prowadzący (twórca tablicy) nagrywa ekran i mikrofon na komputerze; przeglądarka wysyła wideo **prosto do
+bucketu** podpisanymi adresami, więc nie przechodzi ono przez serwer ani tunel (Cloudflare ogranicza wideo
+przez swoje proxy na darmowym planie, a R2 pozwala). Bez ustawień bucketu aplikacja zapisuje nagrania na
+dysku serwera (`/data/recordings`), co nadaje się tylko do prób: wideo przechodzi wtedy przez tunel, nie ma
+limitu miejsca ani kopii.
+
+**Jednorazowo w Cloudflare** (drugi bucket, nie ten z kopiami bazy):
+1. R2, **Create bucket**, np. `inkroom-recordings`.
+2. R2, **Manage API tokens**: uprawnienie **Object Read & Write**, zakres **tylko ten bucket**.
+3. W buckecie, **Settings**, **CORS Policy** (przeglądarka wysyła porcje spod adresu aplikacji):
+   ```json
+   [{"AllowedOrigins": ["https://inkroom.lesniakmaciek.dev"], "AllowedMethods": ["GET", "PUT"],
+     "AllowedHeaders": ["*"], "MaxAgeSeconds": 3600}]
+   ```
+4. W buckecie, **Settings**, **Object lifecycle rules**: reguła „Abort incomplete multipart uploads” po kilku
+   dniach (porzucone przesyłanie bez końca zajmuje miejsce, dopóki ktoś go nie zakończy; serwer sam kończy
+   te, które ucichły na 15 minut, ale reguła łapie resztę).
+5. W `.env`: `RECORDINGS_S3_ENDPOINT` (`<ACCOUNT_ID>.r2.cloudflarestorage.com`), `RECORDINGS_S3_BUCKET`,
+   `RECORDINGS_S3_ACCESS_KEY`, `RECORDINGS_S3_SECRET_KEY`. Wszystkie cztery albo żadne (przy części aplikacja
+   odmawia startu). `docker compose up -d`.
+
+**Sprawdzenie:** w logu aplikacji nie ma ostrzeżenia „RECORDINGS_S3_* is not set”; na tablicy przycisk
+„Nagrywaj”, kilkadziesiąt sekund nagrania (porcje są po 5 MiB), „Zakończ nagrywanie”, na liście „Nagrania”
+„Pobierz”. Nagrania zrobione wcześniej na dysku zostają dostępne (nagranie pamięta, gdzie leży).
+Zamiana dostawcy (np. Google Cloud Storage przez interfejs S3) to zmiana tych czterech zmiennych.
+
 ## Gdy coś nie działa
 
 | Objaw | Co sprawdzić |

@@ -240,7 +240,7 @@ export function RecordingControls({
 									{list.map((r) => (
 										<li key={r.id}>
 											<span class="rec-name">{r.name}</span>
-											<span class="muted">
+											<span class="muted rec-meta">
 												{new Date(r.createdAt).toLocaleDateString("pl-PL")}
 												{" · "}
 												{r.finished ? clock(r.durationMs) : "w toku"}
