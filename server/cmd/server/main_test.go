@@ -24,7 +24,7 @@ func startApp(t *testing.T, dbPath, staticDir string) (*httptest.Server, *app, s
 	}
 	a := newApp(staticDir, st)
 	a.auth.Captcha = testCaptcha{}
-	a.configureRecordings(t.TempDir())
+	a.configureRecordings(t.TempDir(), nil)
 	srv := httptest.NewServer(a.Handler())
 	t.Cleanup(func() {
 		srv.Close()

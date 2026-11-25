@@ -16,6 +16,7 @@ import (
 
 	"github.com/maciekgangus/inkroom/server/internal/logx"
 	"github.com/maciekgangus/inkroom/server/internal/metrics"
+	"github.com/maciekgangus/inkroom/server/internal/recstore"
 	"github.com/maciekgangus/inkroom/server/internal/store"
 )
 
@@ -50,7 +51,15 @@ func main() {
 	defer st.Close()
 
 	a := newApp(getenv("STATIC_DIR", "../web/dist"), st)
-	a.configureRecordings(filepath.Join(dataDir, "recordings"))
+	var bucket recstore.Backend
+	if s3, err := recordingBucket(os.Getenv); err != nil {
+		fatal("recording bucket settings", err)
+	} else if s3 != nil {
+		bucket, a.bucketOrigin = s3, s3.Origin
+	} else {
+		slog.Warn("RECORDINGS_S3_* is not set: lesson recordings are kept on this server's disk")
+	}
+	a.configureRecordings(filepath.Join(dataDir, "recordings"), bucket)
 	a.configureCaptcha(os.Getenv("TURNSTILE_SITE_KEY"), os.Getenv("TURNSTILE_SECRET"))
 	if os.Getenv("TURNSTILE_SECRET") == "" {
 		slog.Warn("TURNSTILE_SECRET is not set: registration is closed")
@@ -85,6 +94,7 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	go a.runRecordingSweeper(ctx)
 	metricsSrv := startMetrics()
 	go func() {
 		<-ctx.Done()

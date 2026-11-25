@@ -5,12 +5,12 @@ import (
 	"log/slog"
 	"net/http"
 	"path/filepath"
-	"sync"
 	"time"
 
 	"github.com/maciekgangus/inkroom/server/internal/auth"
 	"github.com/maciekgangus/inkroom/server/internal/cfaccess"
 	"github.com/maciekgangus/inkroom/server/internal/logx"
+	"github.com/maciekgangus/inkroom/server/internal/recstore"
 	"github.com/maciekgangus/inkroom/server/internal/room"
 	"github.com/maciekgangus/inkroom/server/internal/store"
 )
@@ -41,9 +41,12 @@ type app struct {
 	clientLimit, clientIPLimit *rateLimiter
 	// imageIPLimit keeps one address from flooding the image upload (security audit 2026-11).
 	imageIPLimit *rateLimiter
-	// recDir holds the lesson recordings (R-112); recMu keeps two chunks of one file from interleaving.
-	recDir string
-	recMu  sync.Mutex
+	// The stores of lesson recordings by name, the one that takes new recordings, the disk one in
+	// particular, and the origin of the bucket if there is one (the page's CSP must allow it).
+	recBackends  map[string]recstore.Backend
+	recNew       string
+	recDisk      *recstore.Disk
+	bucketOrigin string
 }
 
 // newApp wires the services together. Call Close before closing the store.
@@ -121,9 +124,11 @@ func (a *app) Handler() http.Handler {
 	mux.HandleFunc("GET /api/boards/{id}/images/{image}", a.getImage)
 	mux.HandleFunc("POST /api/boards/{id}/recordings", a.startRecording)
 	mux.HandleFunc("GET /api/boards/{id}/recordings", a.listRecordings)
-	mux.HandleFunc("PUT /api/boards/{id}/recordings/{rec}/chunk", a.recordingChunk)
+	mux.HandleFunc("POST /api/boards/{id}/recordings/{rec}/parts/{n}", a.recordingPart)
+	mux.HandleFunc("PUT /api/boards/{id}/recordings/{rec}/parts/{n}", a.putRecordingPart)
 	mux.HandleFunc("POST /api/boards/{id}/recordings/{rec}/finish", a.finishRecording)
 	mux.HandleFunc("GET /api/boards/{id}/recordings/{rec}", a.downloadRecording)
+	mux.HandleFunc("DELETE /api/boards/{id}/recordings/{rec}", a.deleteRecording)
 	mux.HandleFunc("GET /api/calendar", a.getCalendar)
 	mux.HandleFunc("POST /api/lessons", a.createLesson)
 	mux.HandleFunc("PATCH /api/lessons/{id}", a.updateLesson)
@@ -168,7 +173,7 @@ func (a *app) Handler() http.Handler {
 	mux.HandleFunc("GET /b/{id}", index)
 	mux.HandleFunc("GET /calendar", index)
 	mux.Handle("/", http.FileServer(http.Dir(a.staticDir)))
-	return secureHeaders(logx.Middleware(mux, logx.Options{}))
+	return secureHeaders(pageCSP(a.bucketOrigin), logx.Middleware(mux, logx.Options{}))
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

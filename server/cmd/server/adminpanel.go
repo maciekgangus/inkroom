@@ -143,14 +143,14 @@ func (a *app) adminDeleteUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Błąd serwera")
 		return
 	}
-	var files []string
+	var recs []store.Recording
 	for _, b := range boards {
 		a.hub.Delete(b.ID) // disconnect everyone and drop unsaved changes first
-		files = append(files, a.recordingFiles(b.ID)...)
+		recs = append(recs, a.recordingsOnBoards(b.ID)...)
 	}
 	err = a.st.DeleteUser(id)
 	if err == nil {
-		removeFiles(files)
+		a.removeRecordings(recs)
 	}
 	a.adminDone(w, err)
 }
@@ -205,10 +205,10 @@ func (a *app) adminDeleteBoard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.hub.Delete(b.ID) // disconnect everyone and drop unsaved changes first
-	files := a.recordingFiles(b.ID)
+	recs := a.recordingsOnBoards(b.ID)
 	err := a.st.DeleteBoard(b.ID)
 	if err == nil {
-		removeFiles(files)
+		a.removeRecordings(recs)
 	}
 	a.adminDone(w, err)
 }

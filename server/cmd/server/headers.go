@@ -1,6 +1,9 @@
 package main
 
-import "net/http"
+import (
+	"net/http"
+	"strings"
+)
 
 // contentSecurityPolicy is the app's CSP (security audit 2026-11): only own scripts, plus the
 // Cloudflare Turnstile captcha hosts its widget needs. style-src keeps 'unsafe-inline' because
@@ -16,16 +19,25 @@ const contentSecurityPolicy = "default-src 'self'; " +
 	"worker-src 'self' blob:; " +
 	"object-src 'none'; base-uri 'self'; form-action 'self'"
 
+// pageCSP is the CSP with the origin of the recordings bucket added to what the page may connect
+// to, because the browser sends the parts of a recording straight to it (R-094); "" adds nothing.
+func pageCSP(bucketOrigin string) string {
+	if bucketOrigin == "" {
+		return contentSecurityPolicy
+	}
+	return strings.Replace(contentSecurityPolicy, "connect-src 'self' ", "connect-src 'self' "+bucketOrigin+" ", 1)
+}
+
 // secureHeaders adds the security headers every response should carry (security audit 2026-11):
 // no sniffing, no framing (the board links must not be clickjacked into an iframe), a strict
-// referrer policy and the CSP above.
-func secureHeaders(next http.Handler) http.Handler {
+// referrer policy and the given CSP.
+func secureHeaders(csp string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
-		h.Set("Content-Security-Policy", contentSecurityPolicy)
+		h.Set("Content-Security-Policy", csp)
 		next.ServeHTTP(w, r)
 	})
 }

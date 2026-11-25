@@ -122,10 +122,13 @@ type Room struct {
 
 // presence is what a connected client has shown to the others and must be taken back on leaving.
 type presence struct {
-	live     map[string]struct{} // ids of its unfinished "live" strokes
-	cursors  map[string]struct{} // ids under which it published a cursor
-	follows  string              // id of the person whose view it follows (R-093), or ""
-	lastView time.Time           // when it last showed its view, to keep floods out
+	live    map[string]struct{} // ids of its unfinished "live" strokes
+	cursors map[string]struct{} // ids under which it published a cursor
+	follows string              // id of the person whose view it follows (R-093), or ""
+	// recording is set while the owner records the lesson (R-094): kept in memory only and shown
+	// to everyone in the list of people; it goes with the connection.
+	recording bool
+	lastView  time.Time // when it last showed its view, to keep floods out
 }
 
 // minViewGap is the shortest time between two views of one client that are passed on. The
@@ -169,6 +172,7 @@ type message struct {
 	Name   string          `json:"name"`
 	Hidden bool            `json:"hidden"`
 	Draw   bool            `json:"draw"`
+	On     bool            `json:"on"`
 	Stroke json.RawMessage `json:"stroke"`
 }
 
@@ -401,6 +405,17 @@ func (r *Room) Handle(c *Client, raw []byte) error {
 		r.tellFollowersLocked(was)
 		r.tellFollowersLocked(m.ID)
 		r.followChangedLocked(c)
+	case "recording":
+		// The owner records the lesson (R-094): everyone sees a red dot. Never stored, and only
+		// the owner records, so nobody else can light the dot.
+		p := r.clients[c]
+		if !c.Owner || p == nil || p.recording == m.On {
+			return nil
+		}
+		p.recording = m.On
+		if c.ID != "" {
+			r.broadcastLocked(r.peersLocked(), nil)
+		}
 	case "view":
 		// The visible rectangle of a presenter: relayed to their followers only, never stored. It
 		// is not drawing, so it needs no right to draw. Nobody following means nothing is sent.
@@ -513,6 +528,14 @@ func (r *Room) peersLocked() []byte {
 		// Follows is the id of the person whose view this one follows (R-093).
 		Follows string `json:"follows,omitempty"`
 		Avatar  string `json:"avatar,omitempty"` // R-111
+		// Recording is true while this person records the lesson (R-094).
+		Recording bool `json:"recording,omitempty"`
+	}
+	recording := map[string]bool{} // a person with two tabs records in either
+	for c, p := range r.clients {
+		if p.recording {
+			recording[c.ID] = true
+		}
 	}
 	seen := map[string]bool{}
 	peers := []peer{}
@@ -521,7 +544,7 @@ func (r *Room) peersLocked() []byte {
 			continue
 		}
 		seen[c.ID] = true
-		peers = append(peers, peer{ID: c.ID, Name: c.Name, Muted: !r.canDraw(c), Follows: r.followsOfLocked(c.ID), Avatar: c.Avatar})
+		peers = append(peers, peer{ID: c.ID, Name: c.Name, Muted: !r.canDraw(c), Follows: r.followsOfLocked(c.ID), Avatar: c.Avatar, Recording: recording[c.ID]})
 	}
 	sort.Slice(peers, func(i, j int) bool {
 		if peers[i].Name != peers[j].Name {

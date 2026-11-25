@@ -1,37 +1,78 @@
 package main
 
 import (
+	"context"
 	"errors"
-	"io"
 	"log/slog"
 	"mime"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/maciekgangus/inkroom/server/internal/logx"
+	"github.com/maciekgangus/inkroom/server/internal/recstore"
 	"github.com/maciekgangus/inkroom/server/internal/store"
 )
 
-// Lesson recording, stage 1 (R-112): the browser records the screen and the microphone and sends
-// the video in chunks to this server, which appends them to a file in recDir. Anyone logged in
-// may record, list and download; only the one who started a recording adds to it. The bucket of
-// R-094 replaces this later.
+// Lesson recording (R-094, R-112). Only the board's owner records. The browser cuts the video into
+// parts of recstore.PartSize and asks for the address of each: with a bucket (R2) that is a signed
+// address of the bucket, so the video never passes through this server; without one it is this
+// server's own address, and the part is written into a file. The list and the download need only
+// access to the board.
 
 const (
-	maxRecordingChunk = 32 << 20 // one chunk is a few seconds of video; this only stops abuse
-	maxRecordingName  = 100
+	maxRecordingName = 100
+	// partTTL is how long the address of a part stays valid; downloadTTL, the address of a download.
+	partTTL     = 15 * time.Minute
+	downloadTTL = 5 * time.Minute
+	// maxRecordingAge is the 1 h 15 min a recording may last plus five minutes to send its last
+	// parts: later no part is accepted (the client ends it by itself at 1 h 15 min).
+	maxRecordingAge = 80 * time.Minute
+	// idleRecording is how long an unfinished recording may be silent before the server finishes it
+	// with the parts that arrived; the sweep runs every sweepEvery.
+	idleRecording = 15 * time.Minute
+	sweepEvery    = 5 * time.Minute
+	// A call to the bucket gives up after this long.
+	bucketTimeout = 30 * time.Second
 )
 
-// recordingTypes are the containers MediaRecorder produces, with the extension of the file kept.
+// recordingTypes are the containers MediaRecorder produces, with the extension of the object kept.
 var recordingTypes = map[string]string{"video/webm": ".webm", "video/mp4": ".mp4"}
 
-// configureRecordings sets the directory the lesson recordings are written to (R-112).
-func (a *app) configureRecordings(dir string) { a.recDir = dir }
+// configureRecordings sets where the video goes: `bucket` when given (new recordings are kept
+// there), otherwise the directory `dir`. The directory is always known, so recordings made
+// without a bucket stay reachable after one is set up.
+func (a *app) configureRecordings(dir string, bucket recstore.Backend) {
+	disk := &recstore.Disk{Dir: dir}
+	a.recDisk = disk
+	a.recBackends = map[string]recstore.Backend{disk.Name(): disk}
+	a.recNew = disk.Name()
+	if bucket != nil {
+		a.recBackends[bucket.Name()] = bucket
+		a.recNew = bucket.Name()
+	}
+}
+
+// recordingBucket connects to the bucket named in RECORDINGS_S3_* (R2: the endpoint is
+// <account>.r2.cloudflarestorage.com). It returns nil, nil when none is set, and an error when
+// the settings are only partly there.
+func recordingBucket(getenv func(string) string) (*recstore.S3, error) {
+	endpoint, bucket := getenv("RECORDINGS_S3_ENDPOINT"), getenv("RECORDINGS_S3_BUCKET")
+	key, secret := getenv("RECORDINGS_S3_ACCESS_KEY"), getenv("RECORDINGS_S3_SECRET_KEY")
+	if endpoint == "" && bucket == "" && key == "" && secret == "" {
+		return nil, nil
+	}
+	if endpoint == "" || bucket == "" || key == "" || secret == "" {
+		return nil, errors.New("RECORDINGS_S3_ENDPOINT, _BUCKET, _ACCESS_KEY and _SECRET_KEY must all be set")
+	}
+	return recstore.NewS3(endpoint, bucket, key, secret, getenv("RECORDINGS_S3_REGION"))
+}
+
+// recDir is the directory of the disk store.
+func (a *app) recDir() string { return a.recDisk.Dir }
 
 // recordingType reduces "video/webm;codecs=vp9,opus" to a known container; ok is false for others.
 func recordingType(s string) (typ string, ok bool) {
@@ -41,65 +82,38 @@ func recordingType(s string) (typ string, ok bool) {
 	return typ, ok
 }
 
-func (a *app) recordingPath(r store.Recording) string {
-	return filepath.Join(a.recDir, r.ID+recordingTypes[r.Mime])
+func recordingKey(r store.Recording) string { return r.ID + recordingTypes[r.Mime] }
+
+func (a *app) backendOf(r store.Recording) (recstore.Backend, bool) {
+	b, ok := a.recBackends[r.Storage]
+	return b, ok
 }
 
-// recordingFiles lists the files of every recording of the boards, to be removed with them.
-func (a *app) recordingFiles(boardIDs ...string) []string {
-	var paths []string
-	for _, id := range boardIDs {
-		recs, err := a.st.RecordingsOf(id)
-		if err != nil {
-			slog.Warn("listing recordings to remove", "err", err)
-			continue
-		}
-		for _, r := range recs {
-			paths = append(paths, a.recordingPath(r))
-		}
-	}
-	return paths
-}
-
-// removeFiles deletes files once the rows that described them are gone.
-func removeFiles(paths []string) {
-	for _, p := range paths {
-		if err := os.Remove(p); err != nil && !errors.Is(err, os.ErrNotExist) {
-			slog.Warn("removing a recording file", "err", err)
-		}
-	}
-}
-
-// recordingRequest checks the caller is logged in and finds the recording named in the URL on the
-// board named in the URL.
-func (a *app) recordingRequest(w http.ResponseWriter, r *http.Request) (store.User, store.Recording, bool) {
-	u, ok := a.auth.User(r)
+// ownedRecording loads the recording named in the URL on the board named in the URL and checks
+// that the caller owns the board.
+func (a *app) ownedRecording(w http.ResponseWriter, r *http.Request) (store.Recording, bool) {
+	board, ok := a.ownedBoard(w, r)
 	if !ok {
-		writeError(w, http.StatusUnauthorized, "Nie jesteś zalogowany")
-		return store.User{}, store.Recording{}, false
+		return store.Recording{}, false
 	}
-	b, ok := a.boardFromURL(w, r)
-	if !ok {
-		return store.User{}, store.Recording{}, false
-	}
-	rec, err := a.st.Recording(b.ID, r.PathValue("rec"))
+	return a.recordingOf(w, board.ID, r.PathValue("rec"))
+}
+
+func (a *app) recordingOf(w http.ResponseWriter, boardID, id string) (store.Recording, bool) {
+	rec, err := a.st.Recording(boardID, id)
 	if err != nil {
 		storeFail(w, err, "Nie ma takiego nagrania")
-		return store.User{}, store.Recording{}, false
+		return store.Recording{}, false
 	}
-	return u, rec, true
+	return rec, true
 }
 
 func (a *app) startRecording(w http.ResponseWriter, r *http.Request) {
-	u, ok := a.auth.User(r)
-	if !ok {
-		writeError(w, http.StatusUnauthorized, "Nie jesteś zalogowany")
-		return
-	}
-	board, ok := a.boardFromURL(w, r)
+	board, ok := a.ownedBoard(w, r)
 	if !ok {
 		return
 	}
+	u, _ := a.auth.User(r)
 	var body struct {
 		Name string `json:"name"`
 		Mime string `json:"mime"`
@@ -119,89 +133,103 @@ func (a *app) startRecording(w http.ResponseWriter, r *http.Request) {
 	if utf8.RuneCountInString(name) > maxRecordingName {
 		name = string([]rune(name)[:maxRecordingName])
 	}
-	if err := os.MkdirAll(a.recDir, 0o755); err != nil {
-		slog.Error("creating the recordings directory", "err", err)
-		writeError(w, http.StatusInternalServerError, "Błąd serwera")
+	backend := a.recBackends[a.recNew]
+	now := time.Now()
+	rec := store.Recording{ID: newBoardID(), BoardID: board.ID, UserID: u.ID, Name: name, Mime: typ, Storage: backend.Name(), CreatedAt: now, UpdatedAt: now}
+	ctx, cancel := context.WithTimeout(r.Context(), bucketTimeout)
+	defer cancel()
+	uploadID, err := backend.Start(ctx, recordingKey(rec), typ)
+	if err != nil {
+		slog.Error("starting a recording upload", "storage", backend.Name(), "err", err)
+		writeError(w, http.StatusBadGateway, "Magazyn nagrań jest niedostępny")
 		return
 	}
-	rec := store.Recording{ID: newBoardID(), BoardID: board.ID, UserID: u.ID, Name: name, Mime: typ, CreatedAt: time.Now()}
+	rec.UploadID = uploadID
 	if err := a.st.CreateRecording(rec); err != nil {
+		_ = backend.Remove(ctx, recordingKey(rec), uploadID, false)
 		writeError(w, http.StatusInternalServerError, "Błąd serwera")
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]string{"id": rec.ID})
+	writeJSON(w, http.StatusCreated, map[string]any{"id": rec.ID, "partSize": recstore.PartSize})
 }
 
-// recordingChunk appends the body to the file when `offset` is where the file ends. A chunk that
-// was already stored (the answer got lost) or one after a gap gets 409 with the current size, so
-// the client knows where to go on and the file never holds a chunk twice.
-func (a *app) recordingChunk(w http.ResponseWriter, r *http.Request) {
-	u, rec, ok := a.recordingRequest(w, r)
+// openForParts finds the recording a part is for and checks it still takes parts.
+func (a *app) openForParts(w http.ResponseWriter, r *http.Request) (store.Recording, int, bool) {
+	rec, ok := a.ownedRecording(w, r)
 	if !ok {
-		return
+		return rec, 0, false
 	}
-	if rec.UserID != u.ID {
-		writeError(w, http.StatusForbidden, "To nie Twoje nagranie")
-		return
+	n, err := strconv.Atoi(r.PathValue("n"))
+	if err != nil || n < 1 || n > recstore.MaxParts {
+		writeError(w, http.StatusBadRequest, "Nieprawidłowy numer części")
+		return rec, 0, false
 	}
 	if rec.Finished {
 		writeError(w, http.StatusConflict, "Nagranie jest już zakończone")
-		return
+		return rec, 0, false
 	}
-	offset, err := strconv.ParseInt(r.URL.Query().Get("offset"), 10, 64)
-	if err != nil || offset < 0 {
-		writeError(w, http.StatusBadRequest, "Nieprawidłowe żądanie")
-		return
+	if time.Since(rec.CreatedAt) > maxRecordingAge {
+		writeError(w, http.StatusConflict, "Nagranie przekroczyło limit czasu")
+		return rec, 0, false
 	}
-	data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxRecordingChunk))
-	if err != nil {
-		var tooBig *http.MaxBytesError
-		if errors.As(err, &tooBig) {
-			writeError(w, http.StatusRequestEntityTooLarge, "Porcja nagrania jest za duża")
-		} else {
-			writeError(w, http.StatusBadRequest, "Nieprawidłowe żądanie")
-		}
-		return
-	}
-
-	a.recMu.Lock()
-	defer a.recMu.Unlock()
-	f, err := os.OpenFile(a.recordingPath(rec), os.O_CREATE|os.O_RDWR, 0o644)
-	if err != nil {
-		slog.Error("opening a recording file", "err", err)
+	if err := a.st.TouchRecording(rec.ID, time.Now()); err != nil {
 		writeError(w, http.StatusInternalServerError, "Błąd serwera")
-		return
+		return rec, 0, false
 	}
-	defer f.Close()
-	info, err := f.Stat()
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Błąd serwera")
-		return
-	}
-	if size := info.Size(); size != offset {
-		writeJSON(w, http.StatusConflict, map[string]int64{"size": size})
-		return
-	}
-	if _, err := f.WriteAt(data, offset); err != nil {
-		_ = f.Truncate(offset) // no half chunk: the retry starts at the same place
-		slog.Error("writing a recording chunk", "err", err)
-		writeError(w, http.StatusInternalServerError, "Błąd serwera")
-		return
-	}
-	if err := a.st.SetRecordingBytes(rec.ID, offset+int64(len(data))); err != nil {
-		writeError(w, http.StatusInternalServerError, "Błąd serwera")
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
+	return rec, n, true
 }
 
-func (a *app) finishRecording(w http.ResponseWriter, r *http.Request) {
-	u, rec, ok := a.recordingRequest(w, r)
+// recordingPart tells where to send part n: the bucket's signed address, or this server's own.
+func (a *app) recordingPart(w http.ResponseWriter, r *http.Request) {
+	rec, n, ok := a.openForParts(w, r)
 	if !ok {
 		return
 	}
-	if rec.UserID != u.ID {
-		writeError(w, http.StatusForbidden, "To nie Twoje nagranie")
+	backend, ok := a.backendOf(rec)
+	if !ok {
+		writeError(w, http.StatusInternalServerError, "Błąd serwera")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), bucketTimeout)
+	defer cancel()
+	url, err := backend.PartURL(ctx, recordingKey(rec), rec.UploadID, n, partTTL)
+	if err != nil {
+		slog.Error("signing a part address", "err", err)
+		writeError(w, http.StatusBadGateway, "Magazyn nagrań jest niedostępny")
+		return
+	}
+	if url == "" {
+		url = "/api/boards/" + rec.BoardID + "/recordings/" + rec.ID + "/parts/" + strconv.Itoa(n)
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"url": url, "method": "PUT"})
+}
+
+// putRecordingPart takes a part into the file, for recordings kept on this server's disk. The
+// same part again (a retry) overwrites itself.
+func (a *app) putRecordingPart(w http.ResponseWriter, r *http.Request) {
+	rec, n, ok := a.openForParts(w, r)
+	if !ok {
+		return
+	}
+	if rec.Storage != a.recDisk.Name() {
+		http.NotFound(w, r) // the bucket takes the parts, not this server
+		return
+	}
+	err := a.recDisk.WritePart(recordingKey(rec), n, r.Body)
+	switch {
+	case errors.Is(err, recstore.ErrPartTooBig):
+		writeError(w, http.StatusRequestEntityTooLarge, "Część nagrania jest za duża")
+	case err != nil:
+		slog.Error("writing a recording part", "err", err)
+		writeError(w, http.StatusInternalServerError, "Błąd serwera")
+	default:
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func (a *app) finishRecording(w http.ResponseWriter, r *http.Request) {
+	rec, ok := a.ownedRecording(w, r)
+	if !ok {
 		return
 	}
 	var body struct {
@@ -210,20 +238,39 @@ func (a *app) finishRecording(w http.ResponseWriter, r *http.Request) {
 	if !readBody(w, r, &body) {
 		return
 	}
-	if body.DurationMs < 0 {
-		body.DurationMs = 0
+	if rec.Finished {
+		w.WriteHeader(http.StatusNoContent)
+		return
 	}
-	a.recMu.Lock()
-	defer a.recMu.Unlock()
-	var size int64
-	if info, err := os.Stat(a.recordingPath(rec)); err == nil {
-		size = info.Size()
-	}
-	if err := a.st.FinishRecording(rec.ID, body.DurationMs, size); err != nil {
-		writeError(w, http.StatusInternalServerError, "Błąd serwera")
+	a.finish(r.Context(), w, rec, max(body.DurationMs, 0))
+}
+
+// finish joins the parts that arrived and closes the recording; with no part there is nothing to
+// keep and the recording is dropped.
+func (a *app) finish(ctx context.Context, w http.ResponseWriter, rec store.Recording, durationMs int64) {
+	if err := a.complete(ctx, rec, durationMs); err != nil {
+		writeError(w, http.StatusBadGateway, "Magazyn nagrań jest niedostępny")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *app) complete(ctx context.Context, rec store.Recording, durationMs int64) error {
+	backend, ok := a.backendOf(rec)
+	if !ok {
+		return errors.New("unknown storage " + rec.Storage)
+	}
+	ctx, cancel := context.WithTimeout(ctx, bucketTimeout)
+	defer cancel()
+	size, err := backend.Complete(ctx, recordingKey(rec), rec.UploadID)
+	if errors.Is(err, recstore.ErrNoParts) {
+		return a.st.DeleteRecording(rec.ID)
+	}
+	if err != nil {
+		slog.Error("finishing a recording upload", "storage", rec.Storage, "err", err)
+		return err
+	}
+	return a.st.FinishRecording(rec.ID, durationMs, size)
 }
 
 type recordingJSON struct {
@@ -237,10 +284,6 @@ type recordingJSON struct {
 }
 
 func (a *app) listRecordings(w http.ResponseWriter, r *http.Request) {
-	if _, ok := a.auth.User(r); !ok {
-		writeError(w, http.StatusUnauthorized, "Nie jesteś zalogowany")
-		return
-	}
 	board, ok := a.boardFromURL(w, r)
 	if !ok {
 		return
@@ -258,14 +301,43 @@ func (a *app) listRecordings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-// downloadRecording sends the file as an attachment. ServeContent gives it Range support, so a
-// download can resume.
+// downloadRecording sends the person to a signed address of the bucket (valid a few minutes, so
+// the video never passes through this server or the tunnel), or, for a recording on this server's
+// disk, sends the file as an attachment (with Range support, so a download can resume).
 func (a *app) downloadRecording(w http.ResponseWriter, r *http.Request) {
-	_, rec, ok := a.recordingRequest(w, r)
+	board, ok := a.boardFromURL(w, r)
 	if !ok {
 		return
 	}
-	f, err := os.Open(a.recordingPath(rec))
+	rec, ok := a.recordingOf(w, board.ID, r.PathValue("rec"))
+	if !ok {
+		return
+	}
+	if !rec.Finished {
+		writeError(w, http.StatusConflict, "Nagranie jeszcze trwa")
+		return
+	}
+	backend, ok := a.backendOf(rec)
+	if !ok {
+		writeError(w, http.StatusInternalServerError, "Błąd serwera")
+		return
+	}
+	filename := fileName(rec.Name) + recordingTypes[rec.Mime]
+	ctx, cancel := context.WithTimeout(r.Context(), bucketTimeout)
+	defer cancel()
+	url, err := backend.DownloadURL(ctx, recordingKey(rec), filename, rec.Mime, downloadTTL)
+	if err != nil {
+		slog.Error("signing a download address", "err", err)
+		writeError(w, http.StatusBadGateway, "Magazyn nagrań jest niedostępny")
+		return
+	}
+	h := w.Header()
+	h.Set("Cache-Control", "private, no-store")
+	if url != "" {
+		http.Redirect(w, r, url, http.StatusFound)
+		return
+	}
+	f, err := a.recDisk.Open(recordingKey(rec))
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -276,16 +348,97 @@ func (a *app) downloadRecording(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	h := w.Header()
 	h.Set("Content-Type", rec.Mime)
 	h.Set("X-Content-Type-Options", "nosniff")
-	h.Set("Cache-Control", "private, no-store")
-	disposition := mime.FormatMediaType("attachment", map[string]string{"filename": fileName(rec.Name) + recordingTypes[rec.Mime]})
+	disposition := mime.FormatMediaType("attachment", map[string]string{"filename": filename})
 	if disposition == "" {
 		disposition = "attachment"
 	}
 	h.Set("Content-Disposition", disposition)
 	http.ServeContent(w, r, "", info.ModTime(), f)
+}
+
+// deleteRecording removes the video and then its description; if the store refuses, the
+// description stays so the owner can try again.
+func (a *app) deleteRecording(w http.ResponseWriter, r *http.Request) {
+	rec, ok := a.ownedRecording(w, r)
+	if !ok {
+		return
+	}
+	if err := a.removeVideo(r.Context(), rec); err != nil {
+		writeError(w, http.StatusBadGateway, "Magazyn nagrań jest niedostępny")
+		return
+	}
+	if err := a.st.DeleteRecording(rec.ID); err != nil && !errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusInternalServerError, "Błąd serwera")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *app) removeVideo(ctx context.Context, rec store.Recording) error {
+	backend, ok := a.backendOf(rec)
+	if !ok {
+		return nil // a store that is gone from the settings: nothing to reach
+	}
+	ctx, cancel := context.WithTimeout(ctx, bucketTimeout)
+	defer cancel()
+	return backend.Remove(ctx, recordingKey(rec), rec.UploadID, rec.Finished)
+}
+
+// recordingsOnBoards lists the recordings of boards that are about to be deleted, so their video
+// can be removed once the boards are gone (the rows go with the boards).
+func (a *app) recordingsOnBoards(boardIDs ...string) []store.Recording {
+	var out []store.Recording
+	for _, id := range boardIDs {
+		recs, err := a.st.RecordingsOf(id)
+		if err != nil {
+			slog.Warn("listing recordings to remove", "err", err)
+			continue
+		}
+		out = append(out, recs...)
+	}
+	return out
+}
+
+// removeRecordings removes the video of recordings whose boards are gone.
+func (a *app) removeRecordings(recs []store.Recording) {
+	for _, rec := range recs {
+		if err := a.removeVideo(context.Background(), rec); err != nil {
+			slog.Warn("removing a recording's video", "storage", rec.Storage, "err", err)
+		}
+	}
+}
+
+// sweepRecordings finishes the recordings that went silent (a closed tab, lost network) with the
+// parts that did arrive, and drops those that never got one.
+func (a *app) sweepRecordings(ctx context.Context, now time.Time) {
+	idle, err := a.st.IdleRecordings(now.Add(-idleRecording))
+	if err != nil {
+		slog.Warn("looking for idle recordings", "err", err)
+		return
+	}
+	for _, rec := range idle {
+		// The length is not known: it lasted until the last sign of life.
+		if err := a.complete(ctx, rec, rec.UpdatedAt.Sub(rec.CreatedAt).Milliseconds()); err != nil {
+			slog.Warn("finishing an idle recording", "err", err)
+		}
+	}
+}
+
+// runRecordingSweeper sweeps until ctx ends.
+func (a *app) runRecordingSweeper(ctx context.Context) {
+	defer logx.Recover("recording-sweeper")
+	tick := time.NewTicker(sweepEvery)
+	defer tick.Stop()
+	for {
+		a.sweepRecordings(ctx, time.Now())
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+		}
+	}
 }
 
 // fileName turns a recording's name into something safe to offer as a file name.
