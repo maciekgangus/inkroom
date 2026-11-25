@@ -24,6 +24,9 @@ Opcja 3. **Robotnik** (`renderer/`, własny obraz i usługa w `deploy/docker-com
 
 **Etapy:** (1) prototyp robotnika na istniejącym nagraniu: tryb renderowania strony, kodowanie, ffmpeg, pomiar czasu i rozmiaru; (2) protokół zleceń, kolumny, wysyłanie, stan na liście i „Pobierz wideo”, kontener w `deploy/`; (3) renderowanie w trakcie nagrywania; (4) miksowanie ścieżek uczestników razem z R-116.
 
+## Pomiary prototypu (etap 1)
+VM 4 vCPU, 720p, 30 kl./s, 2 Mb/s, H.264 programowo. Prosta tablica (16 s): 2 s renderowania, 8,4 razy szybciej niż czas rzeczywisty; MP4 ma oba strumienie (H.264 i AAC) po 16,3 s i dekoduje się bez błędów. Bardzo gęsta godzina (syntetyczna: 4000 pociągnięć, 305 tys. zdarzeń, kamera i kursor w ciągłym ruchu, więc żadna klatka się nie powtarza), pierwsze 20 minut: 13 minut renderowania (1,5 raza szybciej niż czas rzeczywisty), średnio 1,5 rdzenia (szczyt 2), do 2,1 GB pamięci (wszystkie procesy Chromium, z całą godziną logu w pamięci), 292 MB wideo. Wniosek: renderowanie w trakcie nagrywania nadąża (1,5 raza szybciej niż czas rzeczywisty), ale potrzebuje 1,5 do 2 rdzeni i do 3 GB pamięci kontenera; typowa lekcja z długimi nieruchomymi fragmentami wyjdzie wyraźnie szybciej i lżej. Nie wykonano jeszcze pełnej godziny; znane usprawnienia (nierysowanie klatki, gdy nic się nie zmieniło, niższy bitrate) są w etapie 2.
+
 ## Konsekwencje
 - Nowy kontener (Chromium plus ffmpeg, rzędu setek MB), nowy kod robotnika w Node (osobne testy) i wewnętrzny port aplikacji.
 - Film jest tym samym obrazem co odtwarzacz z osi zdarzeń, bo korzysta z tego samego silnika i renderera.
