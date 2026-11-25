@@ -33,7 +33,7 @@ import {
 	fontsChanged,
 	setFontReadyHandler,
 } from "./board/text";
-import { fontKeyOf, textFont } from "./board/text-wrap";
+import { fontKeyOf, TEXT_FONT_FAMILY, textFont } from "./board/text-wrap";
 import { createViewSaver } from "./board/view-saver";
 import { clampScale, type Rect, Viewport } from "./board/viewport";
 import { stepZoom, wheelZoomFactor } from "./board/zoom";
@@ -308,10 +308,13 @@ export function BoardView({
 		const canvas = new CanvasRenderer(committed, live, viewport, images);
 		canvas.ink = (c) => displayColor(c, currentTheme());
 		rendererRef.current = canvas;
-		// The text font is bundled; once it has loaded the texts are measured and drawn again.
-		void Promise.all(
-			["a", "ł"].map((sample) => document.fonts?.load(textFont(16), sample)),
-		).then(() => {
+		// The text font is bundled; once it has loaded the texts are measured and drawn again. The
+		// italic face draws the x and y of a coordinate plane (R-084): drawn before it is there,
+		// the letters would be a slanted regular until something else repainted the board.
+		void Promise.all([
+			...["a", "ł"].map((sample) => document.fonts?.load(textFont(16), sample)),
+			document.fonts?.load(`italic 500 16px ${TEXT_FONT_FAMILY}`, "xy"),
+		]).then(() => {
 			fontsChanged();
 			canvas.fontsChanged();
 		});
