@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"mime"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -35,12 +36,17 @@ const (
 	// with the parts that arrived; the sweep runs every sweepEvery.
 	idleRecording = 15 * time.Minute
 	sweepEvery    = 5 * time.Minute
+	// The event log: the most segments (about one every 10 s for 80 minutes, with room to spare) and
+	// the largest object (the starting state of a big board).
+	maxEventSegments = 2000
+	maxEventObject   = 64 << 20
 	// A call to the bucket gives up after this long.
 	bucketTimeout = 30 * time.Second
 )
 
-// recordingTypes are the containers MediaRecorder produces, with the extension of the object kept.
-var recordingTypes = map[string]string{"video/webm": ".webm", "video/mp4": ".mp4"}
+// recordingTypes are the containers MediaRecorder produces for the sound (R-113), with the
+// extension of the object kept.
+var recordingTypes = map[string]string{"audio/webm": ".webm", "audio/mp4": ".mp4"}
 
 // configureRecordings sets where the video goes: `bucket` when given (new recordings are kept
 // there), otherwise the directory `dir`. The directory is always known, so recordings made
@@ -82,7 +88,16 @@ func recordingType(s string) (typ string, ok bool) {
 	return typ, ok
 }
 
-func recordingKey(r store.Recording) string { return r.ID + recordingTypes[r.Mime] }
+// All the files of a recording live under "<id>/", so one prefix removes them (ADR 0028).
+func recordingKey(r store.Recording) string { return r.ID + "/audio" + recordingTypes[r.Mime] }
+
+// eventKey is segment n of the event log; 0 is the state of the board when the recording began.
+func eventKey(recID string, n int) string {
+	if n == 0 {
+		return recID + "/snapshot.json"
+	}
+	return recID + "/events/" + strconv.Itoa(n) + ".json"
+}
 
 func (a *app) backendOf(r store.Recording) (recstore.Backend, bool) {
 	b, ok := a.recBackends[r.Storage]
@@ -153,14 +168,15 @@ func (a *app) startRecording(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]any{"id": rec.ID, "partSize": recstore.PartSize})
 }
 
-// openForParts finds the recording a part is for and checks it still takes parts.
-func (a *app) openForParts(w http.ResponseWriter, r *http.Request) (store.Recording, int, bool) {
+// openForParts finds the recording a part (or a segment of the event log) is for and checks it
+// still takes them and that its number lies in lo..hi.
+func (a *app) openForParts(w http.ResponseWriter, r *http.Request, lo, hi int) (store.Recording, int, bool) {
 	rec, ok := a.ownedRecording(w, r)
 	if !ok {
 		return rec, 0, false
 	}
 	n, err := strconv.Atoi(r.PathValue("n"))
-	if err != nil || n < 1 || n > recstore.MaxParts {
+	if err != nil || n < lo || n > hi {
 		writeError(w, http.StatusBadRequest, "Nieprawidłowy numer części")
 		return rec, 0, false
 	}
@@ -181,7 +197,7 @@ func (a *app) openForParts(w http.ResponseWriter, r *http.Request) (store.Record
 
 // recordingPart tells where to send part n: the bucket's signed address, or this server's own.
 func (a *app) recordingPart(w http.ResponseWriter, r *http.Request) {
-	rec, n, ok := a.openForParts(w, r)
+	rec, n, ok := a.openForParts(w, r, 1, recstore.MaxParts)
 	if !ok {
 		return
 	}
@@ -207,7 +223,7 @@ func (a *app) recordingPart(w http.ResponseWriter, r *http.Request) {
 // putRecordingPart takes a part into the file, for recordings kept on this server's disk. The
 // same part again (a retry) overwrites itself.
 func (a *app) putRecordingPart(w http.ResponseWriter, r *http.Request) {
-	rec, n, ok := a.openForParts(w, r)
+	rec, n, ok := a.openForParts(w, r, 1, recstore.MaxParts)
 	if !ok {
 		return
 	}
@@ -225,6 +241,154 @@ func (a *app) putRecordingPart(w http.ResponseWriter, r *http.Request) {
 	default:
 		w.WriteHeader(http.StatusNoContent)
 	}
+}
+
+// recordingEvents tells where to send segment n of the event log: the bucket's signed address,
+// or this server's own. Segment 0 is the starting state; 1, 2, ... follow about every 10 s.
+func (a *app) recordingEvents(w http.ResponseWriter, r *http.Request) {
+	rec, n, ok := a.openForParts(w, r, 0, maxEventSegments)
+	if !ok {
+		return
+	}
+	backend, ok := a.backendOf(rec)
+	if !ok {
+		writeError(w, http.StatusInternalServerError, "Błąd serwera")
+		return
+	}
+	if err := a.st.NoteSegment(rec.ID, n); err != nil {
+		writeError(w, http.StatusInternalServerError, "Błąd serwera")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), bucketTimeout)
+	defer cancel()
+	url, err := backend.PutURL(ctx, eventKey(rec.ID, n), partTTL)
+	if err != nil {
+		slog.Error("signing an events address", "err", err)
+		writeError(w, http.StatusBadGateway, "Magazyn nagrań jest niedostępny")
+		return
+	}
+	if url == "" {
+		url = "/api/boards/" + rec.BoardID + "/recordings/" + rec.ID + "/events/" + strconv.Itoa(n)
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"url": url, "method": "PUT"})
+}
+
+// putRecordingEvents takes a segment of the event log into a file, for recordings kept on this
+// server's disk.
+func (a *app) putRecordingEvents(w http.ResponseWriter, r *http.Request) {
+	rec, n, ok := a.openForParts(w, r, 0, maxEventSegments)
+	if !ok {
+		return
+	}
+	if rec.Storage != a.recDisk.Name() {
+		http.NotFound(w, r) // the bucket takes the events, not this server
+		return
+	}
+	err := a.recDisk.WriteObject(eventKey(rec.ID, n), r.Body, maxEventObject)
+	switch {
+	case errors.Is(err, recstore.ErrTooBig):
+		writeError(w, http.StatusRequestEntityTooLarge, "Segment zapisu jest za duży")
+	case err != nil:
+		slog.Error("writing an events segment", "err", err)
+		writeError(w, http.StatusInternalServerError, "Błąd serwera")
+	default:
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// playRecording is the index the player starts from: where the sound, the starting state and
+// every segment of the event log can be read (signed addresses of the bucket, or this server's).
+func (a *app) playRecording(w http.ResponseWriter, r *http.Request) {
+	board, ok := a.boardFromURL(w, r)
+	if !ok {
+		return
+	}
+	rec, ok := a.recordingOf(w, board.ID, r.PathValue("rec"))
+	if !ok {
+		return
+	}
+	if !rec.Finished {
+		writeError(w, http.StatusConflict, "Nagranie jeszcze trwa")
+		return
+	}
+	backend, ok := a.backendOf(rec)
+	if !ok {
+		writeError(w, http.StatusInternalServerError, "Błąd serwera")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), bucketTimeout)
+	defer cancel()
+	address := func(key, name string) (string, error) {
+		url, err := backend.GetURL(ctx, key, downloadTTL*3)
+		if err != nil || url != "" {
+			return url, err
+		}
+		return "/api/boards/" + rec.BoardID + "/recordings/" + rec.ID + "/files/" + name, nil
+	}
+	audio, err := address(recordingKey(rec), "audio")
+	snapshot, err2 := address(eventKey(rec.ID, 0), "snapshot")
+	segments := make([]string, 0, rec.Segments)
+	for n := 1; n <= rec.Segments && err == nil && err2 == nil; n++ {
+		var u string
+		u, err = address(eventKey(rec.ID, n), "events/"+strconv.Itoa(n))
+		segments = append(segments, u)
+	}
+	if err != nil || err2 != nil {
+		slog.Error("signing playback addresses", "err", errors.Join(err, err2))
+		writeError(w, http.StatusBadGateway, "Magazyn nagrań jest niedostępny")
+		return
+	}
+	w.Header().Set("Cache-Control", "private, no-store")
+	writeJSON(w, http.StatusOK, map[string]any{
+		"v": 1, "name": rec.Name, "durationMs": rec.DurationMs, "mime": rec.Mime,
+		"audio": audio, "snapshot": snapshot, "segments": segments,
+	})
+}
+
+// recordingFileNames are the files of a recording the app serves itself (disk store) and the
+// objects they are.
+var recordingFileName = regexp.MustCompile(`^(audio|snapshot|events/[1-9][0-9]{0,3})$`)
+
+// recordingFile serves one file of a recording kept on this server's disk. The names are matched
+// strictly, so nothing outside the recording's own files can be asked for.
+func (a *app) recordingFile(w http.ResponseWriter, r *http.Request) {
+	board, ok := a.boardFromURL(w, r)
+	if !ok {
+		return
+	}
+	rec, ok := a.recordingOf(w, board.ID, r.PathValue("rec"))
+	if !ok {
+		return
+	}
+	name := r.PathValue("name")
+	if rec.Storage != a.recDisk.Name() || !recordingFileName.MatchString(name) {
+		http.NotFound(w, r)
+		return
+	}
+	key, ctype := recordingKey(rec), rec.Mime
+	switch {
+	case name == "snapshot":
+		key, ctype = eventKey(rec.ID, 0), "application/json"
+	case strings.HasPrefix(name, "events/"):
+		n, _ := strconv.Atoi(strings.TrimPrefix(name, "events/"))
+		key, ctype = eventKey(rec.ID, n), "application/json"
+	}
+	f, err := a.recDisk.Open(key)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	h := w.Header()
+	h.Set("Content-Type", ctype)
+	h.Set("X-Content-Type-Options", "nosniff")
+	h.Set("Cache-Control", "private, no-store")
+	http.ServeContent(w, r, "", info.ModTime(), f)
 }
 
 func (a *app) finishRecording(w http.ResponseWriter, r *http.Request) {
@@ -383,7 +547,10 @@ func (a *app) removeVideo(ctx context.Context, rec store.Recording) error {
 	}
 	ctx, cancel := context.WithTimeout(ctx, bucketTimeout)
 	defer cancel()
-	return backend.Remove(ctx, recordingKey(rec), rec.UploadID, rec.Finished)
+	if err := backend.Remove(ctx, recordingKey(rec), rec.UploadID, rec.Finished); err != nil {
+		return err
+	}
+	return backend.RemoveAll(ctx, rec.ID+"/") // the event log and every other file of it
 }
 
 // recordingsOnBoards lists the recordings of boards that are about to be deleted, so their video

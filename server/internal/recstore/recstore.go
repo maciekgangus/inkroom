@@ -31,6 +31,8 @@ var (
 	ErrPartTooBig = errors.New("part too big")
 	// ErrBadKey is an object name that would leave the store's directory.
 	ErrBadKey = errors.New("bad key")
+	// ErrTooBig is an object larger than the limit given for it.
+	ErrTooBig = errors.New("object too big")
 )
 
 // Backend is what the app needs from a store. A store that takes parts straight from the browser
@@ -50,6 +52,12 @@ type Backend interface {
 	Remove(ctx context.Context, key, uploadID string, completed bool) error
 	// DownloadURL is where the browser GETs the object as an attachment named `filename`.
 	DownloadURL(ctx context.Context, key, filename, mime string, ttl time.Duration) (string, error)
+	// PutURL is where the browser PUTs a whole small object (a segment of the event log), valid
+	// for ttl; GetURL is where it reads one back. Both are "" for the disk store.
+	PutURL(ctx context.Context, key string, ttl time.Duration) (string, error)
+	GetURL(ctx context.Context, key string, ttl time.Duration) (string, error)
+	// RemoveAll deletes every object whose key starts with prefix (all of a recording's files).
+	RemoveAll(ctx context.Context, prefix string) error
 }
 
 // Disk keeps each recording as one file in Dir; a part is written at its place in the file.
@@ -57,11 +65,17 @@ type Disk struct{ Dir string }
 
 func (d *Disk) Name() string { return "disk" }
 
+// path is where an object lives. A key may hold slashes (a recording's files share a prefix), but
+// never leaves the directory.
 func (d *Disk) path(key string) (string, error) {
-	if key == "" || key == "." || key == ".." || strings.ContainsAny(key, `/\`) {
+	if key == "" || strings.Contains(key, `\`) || strings.HasPrefix(key, "/") {
 		return "", ErrBadKey
 	}
-	return filepath.Join(d.Dir, key), nil
+	p := filepath.Join(d.Dir, filepath.FromSlash(key))
+	if rel, err := filepath.Rel(d.Dir, p); err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", ErrBadKey
+	}
+	return p, nil
 }
 
 func (d *Disk) Start(context.Context, string, string) (string, error) {
@@ -93,7 +107,7 @@ func (d *Disk) WritePart(key string, n int, r io.Reader) error {
 	if len(data) > PartSize {
 		return ErrPartTooBig
 	}
-	if err := os.MkdirAll(d.Dir, 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		return err
 	}
 	f, err := os.OpenFile(p, os.O_CREATE|os.O_WRONLY, 0o644)
@@ -105,6 +119,38 @@ func (d *Disk) WritePart(key string, n int, r io.Reader) error {
 		return err
 	}
 	return f.Close()
+}
+
+func (d *Disk) PutURL(context.Context, string, time.Duration) (string, error) { return "", nil }
+
+func (d *Disk) GetURL(context.Context, string, time.Duration) (string, error) { return "", nil }
+
+// WriteObject stores a whole object of at most max bytes, replacing what was there.
+func (d *Disk) WriteObject(key string, r io.Reader, max int64) error {
+	p, err := d.path(key)
+	if err != nil {
+		return err
+	}
+	data, err := io.ReadAll(io.LimitReader(r, max+1))
+	if err != nil {
+		return err
+	}
+	if int64(len(data)) > max {
+		return ErrTooBig
+	}
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(p, data, 0o644)
+}
+
+// RemoveAll deletes a recording's directory (prefix "<id>/"); what is gone already is fine.
+func (d *Disk) RemoveAll(_ context.Context, prefix string) error {
+	p, err := d.path(strings.TrimSuffix(prefix, "/"))
+	if err != nil {
+		return err
+	}
+	return os.RemoveAll(p)
 }
 
 func (d *Disk) Complete(_ context.Context, key, _ string) (int64, error) {

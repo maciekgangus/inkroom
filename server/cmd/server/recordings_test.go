@@ -29,6 +29,7 @@ type fakeBucket struct {
 	started      []string // key
 	completed    []string
 	removed      []string // "key completed=bool"
+	prefixes     []string // removed with everything under them
 	completeSize int64
 	completeErr  error
 	startErr     error
@@ -60,6 +61,18 @@ func (f *fakeBucket) Remove(_ context.Context, key, _ string, completed bool) er
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.removed = append(f.removed, fmt.Sprintf("%s completed=%v", key, completed))
+	return nil
+}
+func (f *fakeBucket) PutURL(_ context.Context, key string, _ time.Duration) (string, error) {
+	return "https://bucket.test/" + key + "?put", nil
+}
+func (f *fakeBucket) GetURL(_ context.Context, key string, _ time.Duration) (string, error) {
+	return "https://bucket.test/" + key + "?get", nil
+}
+func (f *fakeBucket) RemoveAll(_ context.Context, prefix string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.prefixes = append(f.prefixes, prefix)
 	return nil
 }
 func (f *fakeBucket) DownloadURL(_ context.Context, key, filename, mime string, _ time.Duration) (string, error) {
@@ -144,7 +157,7 @@ func TestRecordingOnDiskIsSentInPartsAndDownloaded(t *testing.T) {
 	srv, _, _ := testApp(t)
 	owner := register(t, srv, "a@example.com")
 	board := createBoard(t, srv, owner, "Matma")
-	rec := startRecording(t, srv, board, &owner, "video/webm;codecs=vp9,opus")
+	rec := startRecording(t, srv, board, &owner, "audio/webm;codecs=opus")
 
 	first := bytes.Repeat([]byte{'A'}, recstore.PartSize)
 	addr := partAddress(t, srv, board, rec, 1, &owner)
@@ -167,7 +180,7 @@ func TestRecordingOnDiskIsSentInPartsAndDownloaded(t *testing.T) {
 	if resp.StatusCode != http.StatusOK || !bytes.Equal(body, append(first, "tail"...)) {
 		t.Fatalf("download = %d, %d bytes", resp.StatusCode, len(body))
 	}
-	if ct := resp.Header.Get("Content-Type"); ct != "video/webm" {
+	if ct := resp.Header.Get("Content-Type"); ct != "audio/webm" {
 		t.Errorf("Content-Type = %q", ct)
 	}
 	if cd := resp.Header.Get("Content-Disposition"); !strings.HasPrefix(cd, "attachment") || !strings.Contains(cd, ".webm") {
@@ -191,13 +204,13 @@ func TestMP4RecordingKeepsItsType(t *testing.T) {
 	srv, _, _ := testApp(t)
 	owner := register(t, srv, "a@example.com")
 	board := createBoard(t, srv, owner, "Matma")
-	rec := startRecording(t, srv, board, &owner, "video/mp4;codecs=avc1.42E01E,mp4a.40.2")
+	rec := startRecording(t, srv, board, &owner, "audio/mp4;codecs=mp4a.40.2")
 	status(putTo(t, srv, partAddress(t, srv, board, rec, 1, &owner), []byte("x"), &owner))
 	finishRecording(t, srv, board, rec, 1000, &owner)
 	resp := call(t, srv, "GET", recPath(board, rec, ""), "", &owner)
 	resp.Body.Close()
-	if ct := resp.Header.Get("Content-Type"); ct != "video/mp4" {
-		t.Errorf("Content-Type = %q, want video/mp4", ct)
+	if ct := resp.Header.Get("Content-Type"); ct != "audio/mp4" {
+		t.Errorf("Content-Type = %q, want audio/mp4", ct)
 	}
 	if cd := resp.Header.Get("Content-Disposition"); !strings.Contains(cd, ".mp4") {
 		t.Errorf("Content-Disposition = %q", cd)
@@ -209,7 +222,7 @@ func TestOnlyTheBoardOwnerRecordsAndDeletes(t *testing.T) {
 	owner := register(t, srv, "a@example.com")
 	other := register(t, srv, "b@example.com")
 	board := createBoard(t, srv, owner, "Matma")
-	rec := startRecording(t, srv, board, &owner, "video/webm")
+	rec := startRecording(t, srv, board, &owner, "audio/webm")
 	status(putTo(t, srv, partAddress(t, srv, board, rec, 1, &owner), []byte("x"), &owner))
 
 	for name, who := range map[string]*user{"another account": &other, "a guest": nil} {
@@ -218,7 +231,7 @@ func TestOnlyTheBoardOwnerRecordsAndDeletes(t *testing.T) {
 			want = http.StatusUnauthorized
 		}
 		for what, resp := range map[string]*http.Response{
-			"start":   call(t, srv, "POST", "/api/boards/"+board+"/recordings", `{"mime":"video/webm"}`, who),
+			"start":   call(t, srv, "POST", "/api/boards/"+board+"/recordings", `{"mime":"audio/webm"}`, who),
 			"address": call(t, srv, "POST", recPath(board, rec, "/parts/1"), "", who),
 			"part":    putTo(t, srv, recPath(board, rec, "/parts/1"), []byte("evil"), who),
 			"finish":  call(t, srv, "POST", recPath(board, rec, "/finish"), `{"durationMs":1}`, who),
@@ -236,7 +249,7 @@ func TestEveryoneWithTheBoardListsAndDownloadsEvenAGuest(t *testing.T) {
 	srv, _, _ := testApp(t)
 	owner := register(t, srv, "a@example.com")
 	board := createBoard(t, srv, owner, "Matma")
-	rec := startRecording(t, srv, board, &owner, "video/webm")
+	rec := startRecording(t, srv, board, &owner, "audio/webm")
 	status(putTo(t, srv, partAddress(t, srv, board, rec, 1, &owner), []byte("hi"), &owner))
 	finishRecording(t, srv, board, rec, 1000, &owner)
 
@@ -255,7 +268,7 @@ func TestRecordingMustBeVideoOfAKnownType(t *testing.T) {
 	srv, _, _ := testApp(t)
 	u := register(t, srv, "a@example.com")
 	board := createBoard(t, srv, u, "Matma")
-	for _, mime := range []string{"", "text/html", "image/png", "video/x-flv"} {
+	for _, mime := range []string{"", "text/html", "image/png", "video/webm", "audio/x-flv"} {
 		if got := status(call(t, srv, "POST", "/api/boards/"+board+"/recordings", `{"mime":"`+mime+`"}`, &u)); got != http.StatusBadRequest {
 			t.Errorf("mime %q = %d, want 400", mime, got)
 		}
@@ -265,7 +278,7 @@ func TestRecordingMustBeVideoOfAKnownType(t *testing.T) {
 func TestRecordingOfAMissingBoardIsNotFound(t *testing.T) {
 	srv, _, _ := testApp(t)
 	u := register(t, srv, "a@example.com")
-	if got := status(call(t, srv, "POST", "/api/boards/"+strings.Repeat("0", 32)+"/recordings", `{"mime":"video/webm"}`, &u)); got != http.StatusNotFound {
+	if got := status(call(t, srv, "POST", "/api/boards/"+strings.Repeat("0", 32)+"/recordings", `{"mime":"audio/webm"}`, &u)); got != http.StatusNotFound {
 		t.Errorf("= %d, want 404", got)
 	}
 }
@@ -275,7 +288,7 @@ func TestRecordingIsReachedOnlyThroughItsOwnBoard(t *testing.T) {
 	u := register(t, srv, "a@example.com")
 	one := createBoard(t, srv, u, "Jeden")
 	two := createBoard(t, srv, u, "Dwa")
-	rec := startRecording(t, srv, one, &u, "video/webm")
+	rec := startRecording(t, srv, one, &u, "audio/webm")
 	status(putTo(t, srv, partAddress(t, srv, one, rec, 1, &u), []byte("x"), &u))
 
 	if got := status(call(t, srv, "GET", recPath(two, rec, ""), "", &u)); got != http.StatusNotFound {
@@ -296,7 +309,7 @@ func TestPartNumbersAndSizesAreChecked(t *testing.T) {
 	srv, _, _ := testApp(t)
 	u := register(t, srv, "a@example.com")
 	board := createBoard(t, srv, u, "Matma")
-	rec := startRecording(t, srv, board, &u, "video/webm")
+	rec := startRecording(t, srv, board, &u, "audio/webm")
 	for _, n := range []string{"0", "-1", "10001", "x"} {
 		if got := status(call(t, srv, "POST", recPath(board, rec, "/parts/"+n), "", &u)); got != http.StatusBadRequest {
 			t.Errorf("address of part %s = %d, want 400", n, got)
@@ -312,7 +325,7 @@ func TestNoPartAfterTheRecordingIsFinishedOrTooOld(t *testing.T) {
 	u := register(t, srv, "a@example.com")
 	board := createBoard(t, srv, u, "Matma")
 
-	done := startRecording(t, srv, board, &u, "video/webm")
+	done := startRecording(t, srv, board, &u, "audio/webm")
 	status(putTo(t, srv, partAddress(t, srv, board, done, 1, &u), []byte("x"), &u))
 	finishRecording(t, srv, board, done, 1, &u)
 	if got := status(call(t, srv, "POST", recPath(board, done, "/parts/2"), "", &u)); got != http.StatusConflict {
@@ -320,7 +333,7 @@ func TestNoPartAfterTheRecordingIsFinishedOrTooOld(t *testing.T) {
 	}
 
 	old := strings.Repeat("b", 32)
-	if err := a.st.CreateRecording(store.Recording{ID: old, BoardID: board, Name: "Stare", Mime: "video/webm", Storage: "disk",
+	if err := a.st.CreateRecording(store.Recording{ID: old, BoardID: board, Name: "Stare", Mime: "audio/webm", Storage: "disk",
 		CreatedAt: time.Now().Add(-maxRecordingAge - time.Minute)}); err != nil {
 		t.Fatal(err)
 	}
@@ -333,7 +346,7 @@ func TestFinishingWithNothingSentLeavesNoRecording(t *testing.T) {
 	srv, _, _ := testApp(t)
 	u := register(t, srv, "a@example.com")
 	board := createBoard(t, srv, u, "Matma")
-	rec := startRecording(t, srv, board, &u, "video/webm")
+	rec := startRecording(t, srv, board, &u, "audio/webm")
 	if got := finishRecording(t, srv, board, rec, 500, &u); got != http.StatusNoContent {
 		t.Fatalf("finish = %d", got)
 	}
@@ -346,7 +359,7 @@ func TestUnfinishedRecordingIsListedAsSuch(t *testing.T) {
 	srv, _, _ := testApp(t)
 	u := register(t, srv, "a@example.com")
 	board := createBoard(t, srv, u, "Matma")
-	rec := startRecording(t, srv, board, &u, "video/webm")
+	rec := startRecording(t, srv, board, &u, "audio/webm")
 	status(putTo(t, srv, partAddress(t, srv, board, rec, 1, &u), []byte("12345"), &u))
 	list := decodeList(t, call(t, srv, "GET", "/api/boards/"+board+"/recordings", "", &u))
 	if len(list) != 1 || list[0]["finished"] != false {
@@ -361,9 +374,9 @@ func TestDeletingARecordingRemovesItsFile(t *testing.T) {
 	srv, a, _ := testApp(t)
 	u := register(t, srv, "a@example.com")
 	board := createBoard(t, srv, u, "Matma")
-	rec := startRecording(t, srv, board, &u, "video/webm")
+	rec := startRecording(t, srv, board, &u, "audio/webm")
 	status(putTo(t, srv, partAddress(t, srv, board, rec, 1, &u), []byte("data"), &u))
-	file := filepath.Join(a.recDir(), rec+".webm")
+	file := filepath.Join(a.recDir(), rec+"/audio.webm")
 	if _, err := os.Stat(file); err != nil {
 		t.Fatalf("the file is not where it should be: %v", err)
 	}
@@ -382,13 +395,13 @@ func TestDeletingABoardRemovesItsRecordingFiles(t *testing.T) {
 	srv, a, _ := testApp(t)
 	u := register(t, srv, "a@example.com")
 	board := createBoard(t, srv, u, "Matma")
-	rec := startRecording(t, srv, board, &u, "video/webm")
+	rec := startRecording(t, srv, board, &u, "audio/webm")
 	status(putTo(t, srv, partAddress(t, srv, board, rec, 1, &u), []byte("data"), &u))
 
 	if got := status(call(t, srv, "DELETE", "/api/boards/"+board, "", &u)); got != http.StatusNoContent {
 		t.Fatalf("delete board = %d", got)
 	}
-	if _, err := os.Stat(filepath.Join(a.recDir(), rec+".webm")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(a.recDir(), rec+"/audio.webm")); !os.IsNotExist(err) {
 		t.Errorf("the file is still there: %v", err)
 	}
 }
@@ -398,10 +411,10 @@ func TestSweepFinishesIdleRecordingsAndDropsEmptyOnes(t *testing.T) {
 	u := register(t, srv, "a@example.com")
 	board := createBoard(t, srv, u, "Matma")
 
-	torn := startRecording(t, srv, board, &u, "video/webm") // the tab was closed after a part
+	torn := startRecording(t, srv, board, &u, "audio/webm") // the tab was closed after a part
 	status(putTo(t, srv, partAddress(t, srv, board, torn, 1, &u), []byte("abc"), &u))
-	empty := startRecording(t, srv, board, &u, "video/webm") // nothing ever arrived
-	fresh := startRecording(t, srv, board, &u, "video/webm") // still recording
+	empty := startRecording(t, srv, board, &u, "audio/webm") // nothing ever arrived
+	fresh := startRecording(t, srv, board, &u, "audio/webm") // still recording
 
 	later := time.Now().Add(idleRecording + time.Minute)
 	if err := a.st.TouchRecording(fresh, later); err != nil { // a part came just now
@@ -432,17 +445,17 @@ func TestWithABucketPartsGoStraightToIt(t *testing.T) {
 	bucket := withBucket(a)
 	owner := register(t, srv, "a@example.com")
 	board := createBoard(t, srv, owner, "Matma")
-	rec := startRecording(t, srv, board, &owner, "video/webm;codecs=vp9,opus")
-	key := rec + ".webm"
+	rec := startRecording(t, srv, board, &owner, "audio/webm;codecs=opus")
+	key := rec + "/audio.webm"
 
-	if len(bucket.started) != 1 || bucket.started[0] != key+" video/webm" {
+	if len(bucket.started) != 1 || bucket.started[0] != key+" audio/webm" {
 		t.Fatalf("upload started as %v", bucket.started)
 	}
 	want := fmt.Sprintf("https://bucket.test/%s?uploadId=upload-%s&partNumber=3", key, key)
 	if got := partAddress(t, srv, board, rec, 3, &owner); got != want {
 		t.Errorf("part address = %q, want %q", got, want)
 	}
-	// The app takes no video in this mode.
+	// The app takes no audio in this mode.
 	if got := status(putTo(t, srv, recPath(board, rec, "/parts/1"), []byte("x"), &owner)); got != http.StatusNotFound {
 		t.Errorf("a part sent to the app = %d, want 404", got)
 	}
@@ -464,7 +477,7 @@ func TestWithABucketDownloadIsASignedAddress(t *testing.T) {
 	withBucket(a)
 	owner := register(t, srv, "a@example.com")
 	board := createBoard(t, srv, owner, "Matma")
-	rec := startRecording(t, srv, board, &owner, "video/mp4")
+	rec := startRecording(t, srv, board, &owner, "audio/mp4")
 	finishRecording(t, srv, board, rec, 1000, &owner)
 
 	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
@@ -473,7 +486,7 @@ func TestWithABucketDownloadIsASignedAddress(t *testing.T) {
 		t.Fatal(err)
 	}
 	resp.Body.Close()
-	want := "https://bucket.test/" + rec + ".mp4?name=Lekcja.mp4&type=video/mp4"
+	want := "https://bucket.test/" + rec + "/audio.mp4?name=Lekcja.mp4&type=audio/mp4"
 	if resp.StatusCode != http.StatusFound || resp.Header.Get("Location") != want {
 		t.Errorf("= %d %q, want a redirect to %q", resp.StatusCode, resp.Header.Get("Location"), want)
 	}
@@ -487,13 +500,13 @@ func TestWithABucketDeleteRemovesTheObjectOrTheUpload(t *testing.T) {
 	bucket := withBucket(a)
 	owner := register(t, srv, "a@example.com")
 	board := createBoard(t, srv, owner, "Matma")
-	done := startRecording(t, srv, board, &owner, "video/webm")
+	done := startRecording(t, srv, board, &owner, "audio/webm")
 	finishRecording(t, srv, board, done, 1, &owner)
-	going := startRecording(t, srv, board, &owner, "video/webm")
+	going := startRecording(t, srv, board, &owner, "audio/webm")
 
 	status(call(t, srv, "DELETE", recPath(board, done, ""), "", &owner))
 	status(call(t, srv, "DELETE", recPath(board, going, ""), "", &owner))
-	want := []string{done + ".webm completed=true", going + ".webm completed=false"}
+	want := []string{done + "/audio.webm completed=true", going + "/audio.webm completed=false"}
 	if fmt.Sprint(bucket.removed) != fmt.Sprint(want) {
 		t.Errorf("removed %v, want %v", bucket.removed, want)
 	}
@@ -504,11 +517,11 @@ func TestWithABucketDeletingABoardRemovesItsObjects(t *testing.T) {
 	bucket := withBucket(a)
 	owner := register(t, srv, "a@example.com")
 	board := createBoard(t, srv, owner, "Matma")
-	rec := startRecording(t, srv, board, &owner, "video/webm")
+	rec := startRecording(t, srv, board, &owner, "audio/webm")
 	finishRecording(t, srv, board, rec, 1, &owner)
 
 	status(call(t, srv, "DELETE", "/api/boards/"+board, "", &owner))
-	if len(bucket.removed) != 1 || bucket.removed[0] != rec+".webm completed=true" {
+	if len(bucket.removed) != 1 || bucket.removed[0] != rec+"/audio.webm completed=true" {
 		t.Errorf("removed %v", bucket.removed)
 	}
 }
@@ -519,7 +532,7 @@ func TestWithABucketThatRefusesNothingIsLeftBehind(t *testing.T) {
 	bucket.startErr = errors.New("bucket down")
 	owner := register(t, srv, "a@example.com")
 	board := createBoard(t, srv, owner, "Matma")
-	if got := status(call(t, srv, "POST", "/api/boards/"+board+"/recordings", `{"mime":"video/webm"}`, &owner)); got != http.StatusBadGateway {
+	if got := status(call(t, srv, "POST", "/api/boards/"+board+"/recordings", `{"mime":"audio/webm"}`, &owner)); got != http.StatusBadGateway {
 		t.Errorf("start with the bucket down = %d, want 502", got)
 	}
 	if list := decodeList(t, call(t, srv, "GET", "/api/boards/"+board+"/recordings", "", &owner)); len(list) != 0 {
@@ -532,7 +545,7 @@ func TestSweepWithABucketCompletesTheTornUpload(t *testing.T) {
 	bucket := withBucket(a)
 	owner := register(t, srv, "a@example.com")
 	board := createBoard(t, srv, owner, "Matma")
-	rec := startRecording(t, srv, board, &owner, "video/webm")
+	rec := startRecording(t, srv, board, &owner, "audio/webm")
 
 	a.sweepRecordings(context.Background(), time.Now().Add(idleRecording+time.Minute))
 	if len(bucket.completed) != 1 {
@@ -545,7 +558,7 @@ func TestSweepWithABucketCompletesTheTornUpload(t *testing.T) {
 
 	// A bucket that has no part of it: the recording is dropped.
 	bucket.completeErr = recstore.ErrNoParts
-	empty := startRecording(t, srv, board, &owner, "video/webm")
+	empty := startRecording(t, srv, board, &owner, "audio/webm")
 	a.sweepRecordings(context.Background(), time.Now().Add(2*idleRecording))
 	for _, r := range decodeList(t, call(t, srv, "GET", "/api/boards/"+board+"/recordings", "", nil)) {
 		if r["id"] == empty {
@@ -578,6 +591,194 @@ func TestPageMayReachTheBucketOnlyWhenThereIsOne(t *testing.T) {
 	resp.Body.Close()
 	got := resp.Header.Get("Content-Security-Policy")
 	if !strings.Contains(got, "connect-src 'self' https://acct.r2.example ") {
+		t.Errorf("CSP = %q", got)
+	}
+}
+
+// --- the event log and the player's index (R-113, R-114) ------------------------------------------
+
+// putObject sends one object of the event log: segment n of the recording (0 is the starting state).
+func putEvents(t *testing.T, srv *httptest.Server, boardID, recID string, n int, body string, u *user) int {
+	t.Helper()
+	resp := call(t, srv, "POST", fmt.Sprintf("%s/%d", recPath(boardID, recID, "/events"), n), "", u)
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+	m := decode(t, resp)
+	return status(putTo(t, srv, m["url"].(string), []byte(body), u))
+}
+
+func playIndex(t *testing.T, srv *httptest.Server, boardID, recID string, u *user) map[string]any {
+	t.Helper()
+	resp := call(t, srv, "GET", recPath(boardID, recID, "/play"), "", u)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("play = %d", resp.StatusCode)
+	}
+	return decode(t, resp)
+}
+
+func TestEventLogOnDiskIsSentInSegmentsAndPlayedBack(t *testing.T) {
+	srv, _, _ := testApp(t)
+	owner := register(t, srv, "a@example.com")
+	board := createBoard(t, srv, owner, "Matma")
+	rec := startRecording(t, srv, board, &owner, "audio/webm")
+
+	if got := putEvents(t, srv, board, rec, 0, `{"v":1,"strokes":[]}`, &owner); got != http.StatusNoContent {
+		t.Fatalf("snapshot = %d", got)
+	}
+	status(putTo(t, srv, partAddress(t, srv, board, rec, 1, &owner), []byte("sound"), &owner))
+	for n := 1; n <= 2; n++ {
+		if got := putEvents(t, srv, board, rec, n, fmt.Sprintf(`[[%d,"a"]]`, n*10), &owner); got != http.StatusNoContent {
+			t.Fatalf("segment %d = %d", n, got)
+		}
+	}
+	// The index of a recording still going is not offered: it has no end yet.
+	if got := status(call(t, srv, "GET", recPath(board, rec, "/play"), "", nil)); got != http.StatusConflict {
+		t.Errorf("play of a recording in progress = %d, want 409", got)
+	}
+	finishRecording(t, srv, board, rec, 20000, &owner)
+
+	idx := playIndex(t, srv, board, rec, nil) // a guest: no cookie
+	if idx["v"] != float64(1) || idx["durationMs"] != float64(20000) || idx["mime"] != "audio/webm" || idx["name"] != "Lekcja" {
+		t.Errorf("index = %v", idx)
+	}
+	segs := idx["segments"].([]any)
+	if len(segs) != 2 {
+		t.Fatalf("segments = %v", segs)
+	}
+	read := func(address string) string {
+		resp := call(t, srv, "GET", address, "", nil)
+		b, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("GET %s = %d", address, resp.StatusCode)
+		}
+		return string(b)
+	}
+	if got := read(idx["snapshot"].(string)); got != `{"v":1,"strokes":[]}` {
+		t.Errorf("snapshot = %q", got)
+	}
+	if got := read(segs[1].(string)); got != `[[20,"a"]]` {
+		t.Errorf("segment 2 = %q", got)
+	}
+	if got := read(idx["audio"].(string)); got != "sound" {
+		t.Errorf("audio = %q", got)
+	}
+}
+
+func TestOnlyTheOwnerSendsEventsAndNumbersAreChecked(t *testing.T) {
+	srv, _, _ := testApp(t)
+	owner := register(t, srv, "a@example.com")
+	other := register(t, srv, "b@example.com")
+	board := createBoard(t, srv, owner, "Matma")
+	rec := startRecording(t, srv, board, &owner, "audio/webm")
+
+	if got := putEvents(t, srv, board, rec, 1, "[]", &other); got != http.StatusForbidden {
+		t.Errorf("events by another account = %d, want 403", got)
+	}
+	if got := putEvents(t, srv, board, rec, 1, "[]", nil); got != http.StatusUnauthorized {
+		t.Errorf("events by a guest = %d, want 401", got)
+	}
+	for _, n := range []string{"-1", "x", fmt.Sprint(maxEventSegments + 1)} {
+		if got := status(call(t, srv, "POST", recPath(board, rec, "/events/"+n), "", &owner)); got != http.StatusBadRequest {
+			t.Errorf("segment %s = %d, want 400", n, got)
+		}
+	}
+	status(putTo(t, srv, partAddress(t, srv, board, rec, 1, &owner), []byte("x"), &owner))
+	finishRecording(t, srv, board, rec, 1, &owner)
+	if got := status(call(t, srv, "POST", recPath(board, rec, "/events/1"), "", &owner)); got != http.StatusConflict {
+		t.Errorf("segment of a finished recording = %d, want 409", got)
+	}
+}
+
+func TestPlayFilesAreOnlyTheOnesOfThisRecording(t *testing.T) {
+	srv, _, _ := testApp(t)
+	owner := register(t, srv, "a@example.com")
+	board := createBoard(t, srv, owner, "Matma")
+	rec := startRecording(t, srv, board, &owner, "audio/webm")
+	putEvents(t, srv, board, rec, 0, "{}", &owner)
+	status(putTo(t, srv, partAddress(t, srv, board, rec, 1, &owner), []byte("x"), &owner))
+	finishRecording(t, srv, board, rec, 1, &owner)
+
+	for _, name := range []string{"..%2f..%2fetc%2fpasswd", "events/x", "events/-1", "voice/..", "other", "events/1/2", ""} {
+		if got := status(call(t, srv, "GET", recPath(board, rec, "/files/"+name), "", nil)); got != http.StatusNotFound {
+			t.Errorf("file %q = %d, want 404", name, got)
+		}
+	}
+	if got := status(call(t, srv, "GET", recPath(board, rec, "/files/snapshot"), "", nil)); got != http.StatusOK {
+		t.Errorf("snapshot file = %d", got)
+	}
+}
+
+func TestDeletingARecordingRemovesAllItsFiles(t *testing.T) {
+	srv, a, _ := testApp(t)
+	owner := register(t, srv, "a@example.com")
+	board := createBoard(t, srv, owner, "Matma")
+	rec := startRecording(t, srv, board, &owner, "audio/webm")
+	putEvents(t, srv, board, rec, 0, "{}", &owner)
+	putEvents(t, srv, board, rec, 1, "[]", &owner)
+	status(putTo(t, srv, partAddress(t, srv, board, rec, 1, &owner), []byte("x"), &owner))
+	finishRecording(t, srv, board, rec, 1, &owner)
+	if _, err := os.Stat(filepath.Join(a.recDir(), rec)); err != nil {
+		t.Fatalf("the recording's directory is missing: %v", err)
+	}
+	status(call(t, srv, "DELETE", recPath(board, rec, ""), "", &owner))
+	if _, err := os.Stat(filepath.Join(a.recDir(), rec)); !os.IsNotExist(err) {
+		t.Errorf("files are left behind: %v", err)
+	}
+}
+
+func TestWithABucketEventsAndPlaybackGoThroughSignedAddresses(t *testing.T) {
+	srv, a, _ := testApp(t)
+	withBucket(a)
+	owner := register(t, srv, "a@example.com")
+	board := createBoard(t, srv, owner, "Matma")
+	rec := startRecording(t, srv, board, &owner, "audio/webm")
+
+	resp := call(t, srv, "POST", recPath(board, rec, "/events/3"), "", &owner)
+	if got := decode(t, resp)["url"]; got != "https://bucket.test/"+rec+"/events/3.json?put" {
+		t.Errorf("events address = %v", got)
+	}
+	resp = call(t, srv, "POST", recPath(board, rec, "/events/0"), "", &owner)
+	if got := decode(t, resp)["url"]; got != "https://bucket.test/"+rec+"/snapshot.json?put" {
+		t.Errorf("snapshot address = %v", got)
+	}
+	// The app takes no events in this mode either.
+	if got := status(putTo(t, srv, recPath(board, rec, "/events/3"), []byte("[]"), &owner)); got != http.StatusNotFound {
+		t.Errorf("events sent to the app = %d, want 404", got)
+	}
+	finishRecording(t, srv, board, rec, 5000, &owner)
+
+	idx := playIndex(t, srv, board, rec, nil)
+	if idx["audio"] != "https://bucket.test/"+rec+"/audio.webm?get" || idx["snapshot"] != "https://bucket.test/"+rec+"/snapshot.json?get" {
+		t.Errorf("index = %v", idx)
+	}
+	segs := idx["segments"].([]any)
+	if len(segs) != 3 || segs[2] != "https://bucket.test/"+rec+"/events/3.json?get" {
+		t.Errorf("segments = %v", segs)
+	}
+}
+
+func TestWithABucketDeletingARecordingRemovesEverythingUnderItsPrefix(t *testing.T) {
+	srv, a, _ := testApp(t)
+	bucket := withBucket(a)
+	owner := register(t, srv, "a@example.com")
+	board := createBoard(t, srv, owner, "Matma")
+	rec := startRecording(t, srv, board, &owner, "audio/webm")
+	finishRecording(t, srv, board, rec, 1, &owner)
+	status(call(t, srv, "DELETE", recPath(board, rec, ""), "", &owner))
+	if len(bucket.prefixes) != 1 || bucket.prefixes[0] != rec+"/" {
+		t.Errorf("prefixes removed = %v", bucket.prefixes)
+	}
+}
+
+func TestPageMayPlayAudioFromTheBucket(t *testing.T) {
+	// The player's <audio> reads from the bucket: media-src must allow it, and only when there is one.
+	if strings.Contains(pageCSP(""), "media-src 'self' http") {
+		t.Fatal("the CSP names a bucket that is not there")
+	}
+	if got := pageCSP("https://acct.r2.example"); !strings.Contains(got, "media-src 'self' https://acct.r2.example") {
 		t.Errorf("CSP = %q", got)
 	}
 }

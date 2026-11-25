@@ -17,7 +17,8 @@ CREATE TABLE recordings (
 	updated_at INTEGER NOT NULL,
 	duration_ms INTEGER NOT NULL DEFAULT 0,
 	bytes INTEGER NOT NULL DEFAULT 0,
-	finished INTEGER NOT NULL DEFAULT 0
+	finished INTEGER NOT NULL DEFAULT 0,
+	segments INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX recordings_board ON recordings(board_id, created_at)`
 
@@ -37,14 +38,16 @@ type Recording struct {
 	DurationMs int64
 	Bytes      int64
 	Finished   bool
+	// Segments is the highest number of a segment of the event log that was asked for (R-113).
+	Segments int
 }
 
-const recordingCols = "id, board_id, COALESCE(user_id, 0), name, mime, storage, upload_id, created_at, updated_at, duration_ms, bytes, finished"
+const recordingCols = "id, board_id, COALESCE(user_id, 0), name, mime, storage, upload_id, created_at, updated_at, duration_ms, bytes, finished, segments"
 
 func scanRecording(row scanner) (Recording, error) {
 	var r Recording
 	var created, updated int64
-	err := row.Scan(&r.ID, &r.BoardID, &r.UserID, &r.Name, &r.Mime, &r.Storage, &r.UploadID, &created, &updated, &r.DurationMs, &r.Bytes, &r.Finished)
+	err := row.Scan(&r.ID, &r.BoardID, &r.UserID, &r.Name, &r.Mime, &r.Storage, &r.UploadID, &created, &updated, &r.DurationMs, &r.Bytes, &r.Finished, &r.Segments)
 	r.CreatedAt, r.UpdatedAt = time.Unix(created, 0), time.Unix(updated, 0)
 	return r, err
 }
@@ -101,6 +104,12 @@ func (s *Store) listRecordings(query string, args ...any) ([]Recording, error) {
 // TouchRecording notes that the upload is alive.
 func (s *Store) TouchRecording(id string, now time.Time) error {
 	return s.mustAffect(s.db.Exec("UPDATE recordings SET updated_at = ? WHERE id = ?", now.Unix(), id))
+}
+
+// NoteSegment records that segment n of the event log is being sent, so a recording that is
+// never finished by its owner still knows how many segments there may be to play.
+func (s *Store) NoteSegment(id string, n int) error {
+	return s.mustAffect(s.db.Exec("UPDATE recordings SET segments = MAX(segments, ?) WHERE id = ?", n, id))
 }
 
 // FinishRecording closes a recording with its length and final size.

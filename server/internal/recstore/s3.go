@@ -135,3 +135,45 @@ func (s *S3) DownloadURL(ctx context.Context, key, filename, mimeType string, tt
 	}
 	return u.String(), nil
 }
+
+func (s *S3) PutURL(ctx context.Context, key string, ttl time.Duration) (string, error) {
+	u, err := s.core.Presign(ctx, "PUT", s.bucket, key, ttl, nil)
+	if err != nil {
+		return "", err
+	}
+	return u.String(), nil
+}
+
+func (s *S3) GetURL(ctx context.Context, key string, ttl time.Duration) (string, error) {
+	u, err := s.core.Presign(ctx, "GET", s.bucket, key, ttl, nil)
+	if err != nil {
+		return "", err
+	}
+	return u.String(), nil
+}
+
+// RemoveAll deletes every object under prefix.
+func (s *S3) RemoveAll(ctx context.Context, prefix string) error {
+	objects := make(chan minio.ObjectInfo)
+	var listErr error
+	go func() {
+		defer close(objects)
+		for o := range s.core.Client.ListObjects(ctx, s.bucket, minio.ListObjectsOptions{Prefix: prefix, Recursive: true}) {
+			if o.Err != nil {
+				listErr = o.Err
+				return
+			}
+			objects <- o
+		}
+	}()
+	var first error
+	for e := range s.core.Client.RemoveObjects(ctx, s.bucket, objects, minio.RemoveObjectsOptions{}) {
+		if first == nil {
+			first = e.Err
+		}
+	}
+	if listErr != nil {
+		return listErr
+	}
+	return first
+}

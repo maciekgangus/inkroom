@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path"
 	"strings"
 	"testing"
 	"time"
@@ -78,10 +79,45 @@ func TestDiskRemoveDeletesTheFileAndForgivesAMissingOne(t *testing.T) {
 
 func TestDiskKeysCannotLeaveTheDirectory(t *testing.T) {
 	d := &Disk{Dir: t.TempDir()}
-	for _, k := range []string{"../x", "a/b", `a\b`, "", "."} {
+	for _, k := range []string{"../x", "a/../../x", "/abs", `a\b`, "", ".", "a/.."} {
 		if err := d.WritePart(k, 1, strings.NewReader("x")); !errors.Is(err, ErrBadKey) {
 			t.Errorf("key %q: %v", k, err)
 		}
+	}
+}
+
+func TestDiskKeepsAnObjectsOfARecordingUnderItsPrefix(t *testing.T) {
+	d := &Disk{Dir: t.TempDir()}
+	ctx := context.Background()
+	if err := d.WriteObject("rec1/events/3.json", strings.NewReader(`[1,2]`), 100); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.WritePart("rec1/audio.webm", 1, strings.NewReader("sound")); err != nil {
+		t.Fatal(err)
+	}
+	f, err := d.Open("rec1/events/3.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := io.ReadAll(f)
+	f.Close()
+	if string(got) != "[1,2]" {
+		t.Errorf("object = %q", got)
+	}
+	if err := d.WriteObject("rec1/events/4.json", strings.NewReader("12345"), 4); !errors.Is(err, ErrTooBig) {
+		t.Errorf("an object over the limit: %v", err)
+	}
+	if err := d.RemoveAll(ctx, "rec1/"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Open("rec1/audio.webm"); !os.IsNotExist(err) {
+		t.Errorf("the recording's audio is still there: %v", err)
+	}
+	if err := d.RemoveAll(ctx, "rec1/"); err != nil {
+		t.Errorf("removing what is gone: %v", err)
+	}
+	if err := d.RemoveAll(ctx, "../"); !errors.Is(err, ErrBadKey) {
+		t.Errorf("a prefix outside the directory: %v", err)
 	}
 }
 
@@ -91,8 +127,14 @@ func TestDiskHasNoDirectAddresses(t *testing.T) {
 	if u, err := d.PartURL(ctx, "k", "", 1, time.Minute); u != "" || err != nil {
 		t.Errorf("PartURL = %q, %v", u, err)
 	}
-	if u, err := d.DownloadURL(ctx, "k", "f.webm", "video/webm", time.Minute); u != "" || err != nil {
+	if u, err := d.DownloadURL(ctx, "k", "f.webm", "audio/webm", time.Minute); u != "" || err != nil {
 		t.Errorf("DownloadURL = %q, %v", u, err)
+	}
+	if u, err := d.PutURL(ctx, "k", time.Minute); u != "" || err != nil {
+		t.Errorf("PutURL = %q, %v", u, err)
+	}
+	if u, err := d.GetURL(ctx, "k", time.Minute); u != "" || err != nil {
+		t.Errorf("GetURL = %q, %v", u, err)
 	}
 }
 
@@ -109,7 +151,7 @@ func TestS3(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	key := "recstore-test/" + time.Now().Format("150405.000") + ".webm"
+	key := "recstore-test/" + time.Now().Format("150405.000") + "/audio.webm"
 	id, err := s.Start(ctx, key, "video/webm")
 	if err != nil || id == "" {
 		t.Fatalf("Start = %q, %v", id, err)
@@ -160,6 +202,44 @@ func TestS3(t *testing.T) {
 		resp.Body.Close()
 		if resp.StatusCode != http.StatusNotFound {
 			t.Errorf("download after Remove = %d, want 404", resp.StatusCode)
+		}
+	}
+
+	// Small objects (the events of a recording) under the same prefix go by a plain signed PUT.
+	obj := path.Dir(key) + "/events/1.json"
+	pu, err := s.PutURL(ctx, obj, time.Minute)
+	if err != nil || pu == "" {
+		t.Fatalf("PutURL = %q, %v", pu, err)
+	}
+	req, _ := http.NewRequest("PUT", pu, strings.NewReader(`[[0,"v"]]`))
+	presp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	presp.Body.Close()
+	if presp.StatusCode != http.StatusOK {
+		t.Fatalf("PUT object = %d", presp.StatusCode)
+	}
+	gu, err := s.GetURL(ctx, obj, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gresp, err := http.Get(gu)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gbody, _ := io.ReadAll(gresp.Body)
+	gresp.Body.Close()
+	if gresp.StatusCode != http.StatusOK || string(gbody) != `[[0,"v"]]` {
+		t.Fatalf("GET object = %d %q", gresp.StatusCode, gbody)
+	}
+	if err := s.RemoveAll(ctx, path.Dir(key)+"/"); err != nil {
+		t.Fatal(err)
+	}
+	if resp, _ := http.Get(gu); resp != nil {
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Errorf("object after RemoveAll = %d, want 404", resp.StatusCode)
 		}
 	}
 
