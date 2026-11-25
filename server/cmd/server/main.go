@@ -72,6 +72,9 @@ func main() {
 			slog.Warn("ADMIN_DEV_OPEN: the admin page is open to direct requests (development only)")
 		}
 	}
+	if v := os.Getenv("IMAGE_UPLOADS_PER_IP"); v != "" {
+		a.imageIPLimit = newRateLimiter(time.Now, imageUploadLimit(v), imageUploadWindow, clientLimiterKeys)
+	}
 	seedDevUser(a)
 	a.auth.TrustProxyHeaders = os.Getenv("TRUST_PROXY_HEADERS") == "1"
 	if !a.auth.TrustProxyHeaders {

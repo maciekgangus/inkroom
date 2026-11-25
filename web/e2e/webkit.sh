@@ -10,7 +10,7 @@ npm run build --silent
 DATA_DIR=$(mktemp -d)
 (cd ../server && go build -o "$DATA_DIR/server" ./cmd/server)
 DATA_DIR="$DATA_DIR" PORT=$PORT STATIC_DIR=../web/dist \
-	SEED_USER_EMAIL=e2e@example.test SEED_USER_PASSWORD=e2e-pass-12345 "$DATA_DIR/server" &
+	IMAGE_UPLOADS_PER_IP=100000 SEED_USER_EMAIL=e2e@example.test SEED_USER_PASSWORD=e2e-pass-12345 "$DATA_DIR/server" &
 SERVER=$!
 trap 'kill $SERVER 2>/dev/null; rm -rf "$DATA_DIR"' EXIT
 for _ in $(seq 1 60); do

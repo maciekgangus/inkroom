@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/maciekgangus/inkroom/server/internal/store"
@@ -13,11 +14,21 @@ import (
 const maxImageBytes = 5 << 20
 
 // One address may upload at most maxImageUploadsPerIP images per imageUploadWindow, so a board
-// link alone cannot be used to fill the disk (security audit 2026-11).
+// link alone cannot be used to fill the disk (security audit 2026-11). It is twice the 60 pages of
+// one PDF (R-056), which goes up as 60 images: a PDF and the pictures around it fit.
 const (
-	maxImageUploadsPerIP = 30
+	maxImageUploadsPerIP = 120
 	imageUploadWindow    = 10 * time.Minute
 )
+
+// imageUploadLimit is the limit set in IMAGE_UPLOADS_PER_IP, or the default when it is not a
+// positive number. The e2e suite raises it: all its tests upload from one address.
+func imageUploadLimit(env string) int {
+	if n, err := strconv.Atoi(env); err == nil && n > 0 {
+		return n
+	}
+	return maxImageUploadsPerIP
+}
 
 // allowedImageTypes are sniffed from the bytes, never taken from the client. SVG is left out on
 // purpose: it can carry scripts.

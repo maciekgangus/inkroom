@@ -32,7 +32,7 @@ export default defineConfig({
 	webServer: process.env.E2E_BASE_URL
 		? undefined
 		: {
-				command: `VITE_APP_VERSION=e2e-1 npm run build --silent && cd ../server && APP_VERSION=e2e-1 DATA_DIR=$(mktemp -d) PORT=${PORT} BIND_ADDR=0.0.0.0:${PORT} STATIC_DIR=../web/dist SEED_USER_EMAIL=e2e@example.test SEED_USER_PASSWORD=e2e-pass-12345 go run ./cmd/server`,
+				command: `VITE_APP_VERSION=e2e-1 npm run build --silent && cd ../server && APP_VERSION=e2e-1 IMAGE_UPLOADS_PER_IP=100000 DATA_DIR=$(mktemp -d) PORT=${PORT} BIND_ADDR=0.0.0.0:${PORT} STATIC_DIR=../web/dist SEED_USER_EMAIL=e2e@example.test SEED_USER_PASSWORD=e2e-pass-12345 go run ./cmd/server`,
 				cwd: "..",
 				url: `http://localhost:${PORT}/healthz`,
 				reuseExistingServer: false,
