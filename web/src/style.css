@@ -3046,11 +3046,9 @@ button.participant {
 	font-variant-numeric: tabular-nums;
 }
 .recordings-pop {
-	position: absolute;
-	top: calc(100% + 8px);
-	right: 0;
-	z-index: 3;
-	width: min(360px, calc(100vw - 32px));
+	position: fixed;
+	z-index: 4;
+	box-sizing: border-box;
 	max-height: 60vh;
 	overflow: auto;
 	padding: 8px 12px;

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import * as api from "./api";
 import { closeOnDismiss } from "./dismiss";
 import { Icon } from "./icon";
+import { Portal } from "./portal";
 import { type Session, startScreenRecording } from "./recording";
 
 /** The length of a recording as 1:05 or 1:02:05. */
@@ -41,6 +42,8 @@ export function RecordingControls({
 	const [seconds, setSeconds] = useState(0);
 	const session = useRef<Session | undefined>(undefined);
 	const [open, setOpen] = useState(false);
+	/** Where the list hangs (client pixels), taken from its button when it opens. */
+	const [at, setAt] = useState({ top: 0, left: 0, width: 360 });
 	const [list, setList] = useState<api.Recording[] | null>(null);
 
 	const reload = () =>
@@ -54,7 +57,9 @@ export function RecordingControls({
 	useEffect(
 		() =>
 			open
-				? closeOnDismiss(".recordings-wrap", () => setOpen(false))
+				? closeOnDismiss(".recordings-wrap, .recordings-pop", () =>
+						setOpen(false),
+					)
 				: undefined,
 		[open],
 	);
@@ -139,36 +144,57 @@ export function RecordingControls({
 					aria-label="Nagrania"
 					title="Nagrania"
 					aria-expanded={open}
-					onClick={() => setOpen(!open)}
+					onClick={(e) => {
+						// Outside the top bar, which is transformed and would clip or move it.
+						const r = e.currentTarget.getBoundingClientRect();
+						const width = Math.min(360, innerWidth - 16);
+						const left = Math.max(
+							8,
+							Math.min(r.right - width, innerWidth - width - 8),
+						);
+						setAt({ top: r.bottom + 8, left, width });
+						setOpen(!open);
+					}}
 				>
 					<Icon name="film" />
 				</button>
 				{open && (
-					<div class="recordings-pop" role="dialog" aria-label="Nagrania">
-						{list === null ? (
-							<p class="muted">Wczytywanie…</p>
-						) : list.length === 0 ? (
-							<p class="muted">Brak nagrań</p>
-						) : (
-							<ul>
-								{list.map((r) => (
-									<li key={r.id}>
-										<span class="rec-name">{r.name}</span>
-										<span class="muted">
-											{new Date(r.createdAt).toLocaleDateString("pl-PL")}
-											{" · "}
-											{r.finished ? clock(r.durationMs) : "w toku"}
-											{" · "}
-											{megabytes(r.bytes)}
-										</span>
-										<a href={api.recordingUrl(boardId, r.id)} download>
-											Pobierz
-										</a>
-									</li>
-								))}
-							</ul>
-						)}
-					</div>
+					<Portal>
+						<div
+							class="recordings-pop"
+							role="dialog"
+							aria-label="Nagrania"
+							style={{
+								top: `${at.top}px`,
+								left: `${at.left}px`,
+								width: `${at.width}px`,
+							}}
+						>
+							{list === null ? (
+								<p class="muted">Wczytywanie…</p>
+							) : list.length === 0 ? (
+								<p class="muted">Brak nagrań</p>
+							) : (
+								<ul>
+									{list.map((r) => (
+										<li key={r.id}>
+											<span class="rec-name">{r.name}</span>
+											<span class="muted">
+												{new Date(r.createdAt).toLocaleDateString("pl-PL")}
+												{" · "}
+												{r.finished ? clock(r.durationMs) : "w toku"}
+												{" · "}
+												{megabytes(r.bytes)}
+											</span>
+											<a href={api.recordingUrl(boardId, r.id)} download>
+												Pobierz
+											</a>
+										</li>
+									))}
+								</ul>
+							)}
+						</div>
+					</Portal>
 				)}
 			</div>
 		</>

@@ -112,14 +112,14 @@ describe("RecordingControls (R-112)", () => {
 		await flush();
 		expect(listRecordings).toHaveBeenCalledWith("b");
 		const links = [
-			...root.querySelectorAll<HTMLAnchorElement>(".recordings-pop a"),
+			...document.querySelectorAll<HTMLAnchorElement>(".recordings-pop a"),
 		];
 		expect(links.map((a) => a.getAttribute("href"))).toEqual([
 			"/api/boards/b/recordings/r1",
 			"/api/boards/b/recordings/r2",
 		]);
 		expect(links.every((a) => a.hasAttribute("download"))).toBe(true);
-		const text = root.querySelector(".recordings-pop")?.textContent ?? "";
+		const text = document.querySelector(".recordings-pop")?.textContent ?? "";
 		expect(text).toContain("1:05");
 		expect(text).toContain("12 MB");
 		expect(text).toContain("w toku");
@@ -131,7 +131,7 @@ describe("RecordingControls (R-112)", () => {
 		);
 		act(() => btn("Nagrania").click());
 		await flush();
-		expect(root.querySelector(".recordings-pop")?.textContent).toBe(
+		expect(document.querySelector(".recordings-pop")?.textContent).toBe(
 			"Brak nagrań",
 		);
 	});
