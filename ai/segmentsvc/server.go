@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -42,7 +43,10 @@ func (s *Server) handleSegment(w http.ResponseWriter, r *http.Request) {
 type segmentResult struct {
 	Segment
 	Latex string `json:"latex"`
-	Error string `json:"error,omitempty"`
+	// Verbatim is true when the segment held only text/image elements and
+	// Latex was filled from the manifest strings, without calling the model.
+	Verbatim bool   `json:"verbatim,omitempty"`
+	Error    string `json:"error,omitempty"`
 }
 
 type analyzeResponse struct {
@@ -75,6 +79,12 @@ func (s *Server) handleAnalyze(w http.ResponseWriter, r *http.Request) {
 	out := analyzeResponse{BoardID: m.BoardID, Model: s.Rec.Name(), Count: len(segs)}
 	for _, seg := range segs {
 		res := segmentResult{Segment: seg}
+		if text, ok := verbatimText(m, seg); ok {
+			res.Latex = text
+			res.Verbatim = true
+			out.Segments = append(out.Segments, res)
+			continue
+		}
 		img := RenderSegment(seg, m.Elements, render)
 		ctx, cancel := context.WithTimeout(r.Context(), 180*time.Second)
 		latex, err := s.Rec.Recognize(ctx, img, seg.ID)
@@ -87,6 +97,33 @@ func (s *Server) handleAnalyze(w http.ResponseWriter, r *http.Request) {
 		out.Segments = append(out.Segments, res)
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// verbatimText reports whether a segment holds only text/image elements, and
+// if so returns their strings joined in drawing order — no OCR needed.
+func verbatimText(m Manifest, seg Segment) (string, bool) {
+	byID := make(map[string]Element, len(m.Elements))
+	for _, e := range m.Elements {
+		byID[e.ID] = e
+	}
+	parts := make([]string, 0, len(seg.ElementIDs))
+	for _, id := range seg.ElementIDs {
+		e, ok := byID[id]
+		if !ok {
+			continue
+		}
+		if e.Kind == "text" {
+			parts = append(parts, e.Text)
+		} else if e.Kind != "image" && e.Kind != "" {
+			return "", false // a drawable element: needs the model
+		} else if e.Kind == "" && len(e.Points) > 1 {
+			return "", false // freehand stroke
+		}
+	}
+	if len(parts) == 0 {
+		return "", false
+	}
+	return strings.Join(parts, " "), true
 }
 
 func decodeManifest(w http.ResponseWriter, r *http.Request) (Manifest, error) {

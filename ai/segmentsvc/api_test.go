@@ -72,6 +72,46 @@ func TestAnalyzeEndToEnd(t *testing.T) {
 	}
 }
 
+func TestAnalyzeTextOnlySegmentIsVerbatim(t *testing.T) {
+	var calls atomic.Int32
+	modelSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("{\"choices\":[{\"message\":{\"content\":\"x\"}}]}"))
+	}))
+	defer modelSrv.Close()
+
+	m := Manifest{BoardID: "b1", Elements: []Element{
+		stroke("eq", 1, Point{0, 0, 1}, Point{30, 2, 1}),
+		{ID: "note", Kind: "text", Text: "wynik", Color: "#b00", Size: 24, Z: 2, Points: []Point{{500, 500, 0}}},
+	}}
+	srv := &Server{Rec: &UniMuMER{BaseURL: modelSrv.URL, Model: "m", Client: modelSrv.Client()}}
+	body, _ := json.Marshal(m)
+	req := httptest.NewRequest(http.MethodPost, "/api/analyze", strings.NewReader(string(body)))
+	rec := httptest.NewRecorder()
+	srv.routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
+	}
+	var resp analyzeResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Segments) != 2 {
+		t.Fatalf("want 2 segments, got %+v", resp.Segments)
+	}
+	for _, seg := range resp.Segments {
+		if len(seg.ElementIDs) == 1 && seg.ElementIDs[0] == "note" {
+			if !seg.Verbatim || seg.Latex != "wynik" {
+				t.Errorf("text segment should be verbatim, got %+v", seg)
+			}
+		}
+	}
+	if calls.Load() != 1 {
+		t.Errorf("model should be called once (only the stroke segment), got %d", calls.Load())
+	}
+}
+
 func TestSegmentEndpointNeedsNoModel(t *testing.T) {
 	srv := &Server{}
 	body, _ := json.Marshal(manifestTwoClusters())
