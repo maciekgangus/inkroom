@@ -186,7 +186,7 @@ export function RecordingControls({
 						{recording && <span class="rec-time">{clock(seconds * 1000)}</span>}
 					</button>
 					{error && (
-						<span class="share-said" role="alert">
+						<span class="share-said rec-note" role="alert">
 							{error}
 						</span>
 					)}

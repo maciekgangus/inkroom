@@ -35,15 +35,13 @@ function recordingMime(): string | undefined {
 }
 
 /**
- * Whether this device may record: a computer (a tablet's Safari cannot capture the screen) whose
- * browser can capture the screen and record video.
+ * Whether this device gets the record button: a computer (a tablet's Safari cannot capture the
+ * screen). Whether the browser can is not asked here: a page over plain http hides screen capture
+ * from the browser, and a button that is missing without a word is worse than one that explains
+ * itself when pressed (see startScreenRecording).
  */
 export function canRecordScreen(): boolean {
-	return (
-		hasFinePointer() &&
-		typeof navigator.mediaDevices?.getDisplayMedia === "function" &&
-		recordingMime() !== undefined
-	);
+	return hasFinePointer();
 }
 
 /** An error whose message is for the user and that no retry would cure. */
@@ -130,8 +128,15 @@ export async function startScreenRecording(
 	boardId: string,
 	onEnd: (error?: string) => void,
 ): Promise<Session> {
+	if (typeof navigator.mediaDevices?.getDisplayMedia !== "function") {
+		throw new Error(
+			isSecureContext
+				? "Ta przeglądarka nie udostępnia ekranu do nagrywania"
+				: "Nagrywanie ekranu działa tylko na stronie https albo localhost, a ta jest po http",
+		);
+	}
 	const mime = recordingMime();
-	if (!mime) throw new Error("Ta przeglądarka nie nagrywa ekranu");
+	if (!mime) throw new Error("Ta przeglądarka nie nagrywa wideo");
 	let screen: MediaStream;
 	try {
 		screen = await navigator.mediaDevices.getDisplayMedia({

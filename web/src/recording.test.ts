@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { PartCutter, startScreenRecording, uploadPart } from "./recording";
+import {
+	canRecordScreen,
+	PartCutter,
+	startScreenRecording,
+	uploadPart,
+} from "./recording";
 
 const blob = (n: number, ch = "x") => new Blob([ch.repeat(n)]);
 const text = (b: Blob) => b.text();
@@ -187,5 +192,34 @@ describe("startScreenRecording: smooth motion (R-094)", () => {
 		const seen = fakeBrowser();
 		await startScreenRecording("b", () => {});
 		expect(seen.videoHint).toBe("motion");
+	});
+});
+
+describe("when the browser cannot capture the screen (R-094)", () => {
+	afterEach(() => vi.unstubAllGlobals());
+
+	test("a page over plain http says why: the browser hides screen capture there", async () => {
+		vi.stubGlobal("navigator", {}); // no mediaDevices on an insecure page
+		vi.stubGlobal("isSecureContext", false);
+		await expect(startScreenRecording("b", () => {})).rejects.toThrow("https");
+	});
+
+	test("a secure page whose browser has no screen capture says so", async () => {
+		vi.stubGlobal("navigator", { mediaDevices: {} });
+		vi.stubGlobal("isSecureContext", true);
+		await expect(startScreenRecording("b", () => {})).rejects.toThrow(
+			"nie udostępnia ekranu",
+		);
+	});
+
+	test("the button is for any computer, whatever the page: the reason comes on the click", () => {
+		vi.stubGlobal("matchMedia", () => ({ matches: true }));
+		vi.stubGlobal("navigator", {});
+		expect(canRecordScreen()).toBe(true);
+	});
+
+	test("a tablet or a phone has no button", () => {
+		vi.stubGlobal("matchMedia", () => ({ matches: false }));
+		expect(canRecordScreen()).toBe(false);
 	});
 });
