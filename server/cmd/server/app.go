@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/maciekgangus/inkroom/server/internal/auth"
@@ -40,6 +41,9 @@ type app struct {
 	clientLimit, clientIPLimit *rateLimiter
 	// imageIPLimit keeps one address from flooding the image upload (security audit 2026-11).
 	imageIPLimit *rateLimiter
+	// recDir holds the lesson recordings (R-112); recMu keeps two chunks of one file from interleaving.
+	recDir string
+	recMu  sync.Mutex
 }
 
 // newApp wires the services together. Call Close before closing the store.
@@ -115,6 +119,11 @@ func (a *app) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/boards/{id}", a.deleteBoard)
 	mux.HandleFunc("POST /api/boards/{id}/images", a.uploadImage)
 	mux.HandleFunc("GET /api/boards/{id}/images/{image}", a.getImage)
+	mux.HandleFunc("POST /api/boards/{id}/recordings", a.startRecording)
+	mux.HandleFunc("GET /api/boards/{id}/recordings", a.listRecordings)
+	mux.HandleFunc("PUT /api/boards/{id}/recordings/{rec}/chunk", a.recordingChunk)
+	mux.HandleFunc("POST /api/boards/{id}/recordings/{rec}/finish", a.finishRecording)
+	mux.HandleFunc("GET /api/boards/{id}/recordings/{rec}", a.downloadRecording)
 	mux.HandleFunc("GET /api/calendar", a.getCalendar)
 	mux.HandleFunc("POST /api/lessons", a.createLesson)
 	mux.HandleFunc("PATCH /api/lessons/{id}", a.updateLesson)

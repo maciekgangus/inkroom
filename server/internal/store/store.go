@@ -160,6 +160,8 @@ var migrations = []migration{
 	stmt(calendarSchema),
 	// The picture an account shows on boards instead of its first letter (R-111); '' for none.
 	stmt("ALTER TABLE users ADD COLUMN avatar TEXT NOT NULL DEFAULT ''"),
+	// Lesson recordings kept on the app server's disk (R-112).
+	stmt(recordingsSchema),
 }
 
 func addGoogleSub(tx *sql.Tx) error {
