@@ -5,6 +5,10 @@ import { Icon } from "./icon";
 import { Portal } from "./portal";
 import { type Session, startScreenRecording } from "./recording";
 
+/** One recording lasts at most 1 h 15 min; five minutes before, the owner is warned (R-094). */
+export const MAX_RECORDING_MS = 75 * 60_000;
+export const WARN_BEFORE_MS = 5 * 60_000;
+
 /** The length of a recording as 1:05 or 1:02:05. */
 export function clock(ms: number): string {
 	const total = Math.max(0, Math.round(ms / 1000));
@@ -21,30 +25,40 @@ export function megabytes(bytes: number): string {
 
 interface Props {
 	boardId: string;
-	/** Shows the record button; the list of recordings is there either way (R-112). */
+	/** Shows the record button: the owner of the board, on a computer (R-094). */
 	canRecord: boolean;
+	/** Shows a delete button on each recording: the owner of the board. */
+	canDelete?: boolean;
+	/** Told when recording starts (true) and ends (false), for everyone's red dot. */
+	onRecording?: (on: boolean) => void;
 	/** Starts a recording; a test hands in a stand-in. */
 	start?: typeof startScreenRecording;
 }
 
 /**
- * Recording a lesson (R-112, stage 1): a "Nagrywaj" button that turns into the red "Zakończ
- * nagrywanie" with the time, and a "Nagrania" button opening the list of this board's recordings
- * with a download link each. The parent shows it to logged-in people only.
+ * Recording a lesson (R-094): a "Nagrywaj" button that turns into the red "Zakończ nagrywanie"
+ * with the time, and a "Nagrania" button opening the list of this board's recordings with a
+ * download link each, and for the owner a delete button. Anyone with the board sees the list.
  */
 export function RecordingControls({
 	boardId,
 	canRecord,
+	canDelete,
+	onRecording,
 	start = startScreenRecording,
 }: Props) {
 	const [phase, setPhase] = useState<"idle" | "starting" | "recording">("idle");
 	const [error, setError] = useState("");
+	/** A word that is not a failure: the limit is near, or was reached. */
+	const [note, setNote] = useState("");
 	const [seconds, setSeconds] = useState(0);
 	const session = useRef<Session | undefined>(undefined);
 	const [open, setOpen] = useState(false);
 	/** Where the list hangs (client pixels), taken from its button when it opens. */
 	const [at, setAt] = useState({ top: 0, left: 0, width: 360 });
 	const [list, setList] = useState<api.Recording[] | null>(null);
+	/** The recording asked "Na pewno usunąć?" about. */
+	const [confirming, setConfirming] = useState("");
 
 	const reload = () =>
 		api
@@ -64,7 +78,8 @@ export function RecordingControls({
 		[open],
 	);
 
-	// The timer, and a warning before the tab is closed with a recording running.
+	// The timer, the limit (a warning, then the end), and a warning before the tab is closed.
+	const stopRef = useRef<(why?: string) => Promise<void>>(async () => {});
 	useEffect(() => {
 		if (phase !== "recording") return;
 		const t0 = Date.now();
@@ -73,12 +88,35 @@ export function RecordingControls({
 			() => setSeconds(Math.floor((Date.now() - t0) / 1000)),
 			1000,
 		);
-		const warn = (e: BeforeUnloadEvent) => e.preventDefault();
-		addEventListener("beforeunload", warn);
+		const warn = setTimeout(
+			() =>
+				setNote("Nagranie skończy się samo za 5 minut (limit 1 godz. 15 min)"),
+			MAX_RECORDING_MS - WARN_BEFORE_MS,
+		);
+		const limit = setTimeout(
+			() =>
+				void stopRef.current(
+					"Osiągnięto limit 1 godz. 15 min: nagranie zapisane. Możesz zacząć kolejne.",
+				),
+			MAX_RECORDING_MS,
+		);
+		const beforeUnload = (e: BeforeUnloadEvent) => e.preventDefault();
+		addEventListener("beforeunload", beforeUnload);
 		return () => {
 			clearInterval(tick);
-			removeEventListener("beforeunload", warn);
+			clearTimeout(warn);
+			clearTimeout(limit);
+			removeEventListener("beforeunload", beforeUnload);
 		};
+	}, [phase]);
+	// Everyone's red dot follows the phase; nothing is said before there was a recording.
+	const wasRecording = useRef(false);
+	const tell = useRef(onRecording);
+	tell.current = onRecording; // the latest, without running the effect again for a new function
+	useEffect(() => {
+		const now = phase === "recording";
+		if (now || wasRecording.current) tell.current?.(now);
+		wasRecording.current = now;
 	}, [phase]);
 	// Leaving the board ends the recording (what is recorded is kept).
 	useEffect(() => () => void session.current?.stop().catch(() => {}), []);
@@ -86,30 +124,47 @@ export function RecordingControls({
 	const ended = (why?: string) => {
 		session.current = undefined;
 		setPhase("idle");
+		setNote("");
 		setError(why ?? "");
 		if (open) void reload();
 	};
+	/** Ends the recording on the owner's wish or at the limit, and says `why` if given. */
+	const stop = async (why?: string) => {
+		const s = session.current;
+		session.current = undefined;
+		setPhase("idle");
+		setNote(why ?? "");
+		try {
+			await s?.stop();
+		} catch (e) {
+			setNote("");
+			setError(api.errorMessage(e));
+		}
+		if (open) void reload();
+	};
+	stopRef.current = stop;
+
 	const toggle = async () => {
 		if (phase === "starting") return;
 		setError("");
-		if (phase === "recording") {
-			const s = session.current;
-			session.current = undefined;
-			setPhase("idle");
-			try {
-				await s?.stop();
-			} catch (e) {
-				setError(api.errorMessage(e));
-			}
-			if (open) void reload();
-			return;
-		}
+		setNote("");
+		if (phase === "recording") return stop();
 		setPhase("starting");
 		try {
 			session.current = await start(boardId, ended);
 			setPhase("recording");
 		} catch (e) {
 			setPhase("idle");
+			setError(api.errorMessage(e));
+		}
+	};
+
+	const remove = async (id: string) => {
+		setConfirming("");
+		try {
+			await api.deleteRecording(boardId, id);
+			await reload();
+		} catch (e) {
 			setError(api.errorMessage(e));
 		}
 	};
@@ -135,6 +190,11 @@ export function RecordingControls({
 							{error}
 						</span>
 					)}
+					{!error && note && (
+						<span class="share-said rec-note" role="status">
+							{note}
+						</span>
+					)}
 				</div>
 			)}
 			<div class="share-wrap recordings-wrap">
@@ -153,6 +213,7 @@ export function RecordingControls({
 							Math.min(r.right - width, innerWidth - width - 8),
 						);
 						setAt({ top: r.bottom + 8, left, width });
+						setConfirming("");
 						setOpen(!open);
 					}}
 				>
@@ -183,12 +244,35 @@ export function RecordingControls({
 												{new Date(r.createdAt).toLocaleDateString("pl-PL")}
 												{" · "}
 												{r.finished ? clock(r.durationMs) : "w toku"}
-												{" · "}
-												{megabytes(r.bytes)}
+												{r.finished && ` · ${megabytes(r.bytes)}`}
 											</span>
-											<a href={api.recordingUrl(boardId, r.id)} download>
-												Pobierz
-											</a>
+											<span class="rec-actions">
+												{r.finished && (
+													<a href={api.recordingUrl(boardId, r.id)} download>
+														Pobierz
+													</a>
+												)}
+												{canDelete &&
+													(confirming === r.id ? (
+														<button
+															type="button"
+															class="danger"
+															onClick={() => remove(r.id)}
+														>
+															Na pewno usunąć?
+														</button>
+													) : (
+														<button
+															type="button"
+															class="rec-delete"
+															aria-label="Usuń nagranie"
+															title="Usuń nagranie"
+															onClick={() => setConfirming(r.id)}
+														>
+															<Icon name="trash" />
+														</button>
+													))}
+											</span>
 										</li>
 									))}
 								</ul>

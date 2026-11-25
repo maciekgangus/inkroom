@@ -379,10 +379,18 @@ export interface Recording {
 }
 
 export const startRecording = (boardId: string, name: string, mime: string) =>
-	request<{ id: string }>("POST", `/api/boards/${boardId}/recordings`, {
-		name,
-		mime,
-	});
+	request<{ id: string; partSize: number }>(
+		"POST",
+		`/api/boards/${boardId}/recordings`,
+		{ name, mime },
+	);
+
+/** Where to send part n of a recording: an address of the bucket, or of this server. */
+export const recordingPart = (boardId: string, id: string, n: number) =>
+	request<{ url: string; method: string }>(
+		"POST",
+		`/api/boards/${boardId}/recordings/${id}/parts/${n}`,
+	);
 
 export const finishRecording = (
 	boardId: string,
@@ -393,9 +401,12 @@ export const finishRecording = (
 		durationMs,
 	});
 
+export const deleteRecording = (boardId: string, id: string) =>
+	request<void>("DELETE", `/api/boards/${boardId}/recordings/${id}`);
+
 export const listRecordings = (boardId: string) =>
 	request<Recording[]>("GET", `/api/boards/${boardId}/recordings`);
 
-/** The address of a recording; the server answers it as a download. */
+/** The address of a recording; the server answers it with the file or sends on to the bucket. */
 export const recordingUrl = (boardId: string, id: string) =>
 	`/api/boards/${boardId}/recordings/${id}`;

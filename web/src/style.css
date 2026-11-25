@@ -3081,11 +3081,58 @@ button.participant {
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
-.recordings-pop li a {
-	grid-row: 1 / span 2;
-	grid-column: 2;
-	align-self: center;
-}
 .recordings-pop p {
 	margin: 4px 0;
+}
+
+/* The red dot of a lesson being recorded, first in the list of people (R-094). */
+.participants .rec-indicator {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	flex: none;
+}
+.rec-dot {
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	background: var(--danger);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 25%, transparent);
+}
+@media (prefers-reduced-motion: no-preference) {
+	.rec-dot {
+		animation: rec-pulse 1.6s ease-in-out infinite;
+	}
+}
+@keyframes rec-pulse {
+	50% {
+		opacity: 0.45;
+	}
+}
+.recordings-pop .rec-actions {
+	grid-row: 1 / span 2;
+	grid-column: 2;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.recordings-pop .rec-delete {
+	width: 32px;
+	height: 32px;
+	min-width: 0;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: var(--muted);
+}
+.recordings-pop .danger {
+	min-height: 0;
+	padding: 4px 8px;
+	font-size: 13px;
+}
+.rec-note {
+	white-space: normal;
+	width: 260px;
 }

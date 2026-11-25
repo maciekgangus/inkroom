@@ -4,7 +4,7 @@ import { cursorColor } from "./cursor-colors";
 import { Participants } from "./participants";
 
 const mount = (
-	peers: { id: string; name: string; avatar?: string }[],
+	peers: { id: string; name: string; avatar?: string; recording?: boolean }[],
 	selfId = "me",
 ) => {
 	const root = document.createElement("div");
@@ -229,5 +229,21 @@ describe("Participants: colours and shape", () => {
 			expect(onSelect).toHaveBeenCalledOnce();
 			expect(onFollow).not.toHaveBeenCalled();
 		});
+	});
+
+	test("a red dot says the lesson is being recorded, for everyone (R-094)", () => {
+		const root = mount([
+			{ id: "a1", name: "Ann", recording: true },
+			{ id: "me", name: "Maciek" },
+		]);
+		const dot = root.querySelector("[role='status']") as HTMLElement;
+		expect(dot.getAttribute("aria-label")).toBe("Trwa nagrywanie");
+		expect(dot.title).toBe("Trwa nagrywanie");
+		expect(dot.querySelector(".rec-dot")).not.toBeNull();
+	});
+
+	test("no dot when nobody records", () => {
+		const root = mount([{ id: "a1", name: "Ann" }]);
+		expect(root.querySelector("[role='status']")).toBeNull();
 	});
 });

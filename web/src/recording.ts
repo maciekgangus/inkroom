@@ -39,39 +39,68 @@ class Refused extends Error {}
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
- * Sends one chunk to `url` at `offset`, the byte where the file on the server must end. A failed
- * try is repeated a few times; the server refuses a chunk it already holds (its answer got lost)
- * with its size, and then the chunk is done. Returns the offset after the chunk.
+ * Cuts the chunks MediaRecorder hands over into parts of exactly `size` bytes: S3 wants parts of
+ * at least 5 MiB, and R2 wants all of them but the last to be of one size.
  */
-export async function sendChunk(
-	url: string,
-	offset: number,
-	chunk: Blob,
+export class PartCutter {
+	private pending: Blob[] = [];
+	private bytes = 0;
+	constructor(private size: number) {}
+
+	/** Adds a chunk; returns the whole parts that are now complete. */
+	push(chunk: Blob): Blob[] {
+		this.pending.push(chunk);
+		this.bytes += chunk.size;
+		const out: Blob[] = [];
+		while (this.bytes >= this.size) {
+			const all = new Blob(this.pending);
+			out.push(all.slice(0, this.size));
+			this.pending = [all.slice(this.size)];
+			this.bytes -= this.size;
+		}
+		return out;
+	}
+
+	/** What is left when the recording ends: the last part, of any size; null for nothing. */
+	rest(): Blob | null {
+		return this.bytes > 0 ? new Blob(this.pending) : null;
+	}
+}
+
+/** Where a part goes (see `api.recordingPart`). */
+type Address = { url: string; method: string };
+
+/** A status the store gives that no new try would change. */
+const final = (status: number) =>
+	status >= 400 && status < 500 && ![403, 408, 429].includes(status);
+
+/**
+ * Sends one part. Every try asks for a new address, because a signed one runs out; a failed try is
+ * repeated a few times (a part sent again overwrites itself, so a retry is safe).
+ */
+export async function uploadPart(
+	address: () => Promise<Address>,
+	part: Blob,
 	wait: (ms: number) => Promise<unknown> = sleep,
 	tries = 6,
-): Promise<number> {
-	const end = offset + chunk.size;
+): Promise<void> {
 	for (let attempt = 1; ; attempt++) {
 		try {
-			const res = await fetch(`${url}?offset=${offset}`, {
-				method: "PUT",
-				headers: { "Content-Type": "application/octet-stream" },
-				body: chunk,
-			});
-			if (res.ok) return end;
-			if (res.status === 409) {
-				const body = await res.json().catch(() => ({}));
-				if (body.size === end) return end;
-				throw new Refused("Nagranie rozjechało się z serwerem");
-			}
-			if (res.status < 500) throw new Refused(`Błąd ${res.status}`);
+			const { url, method } = await address();
+			const res = await fetch(url, { method, body: part });
+			if (res.ok) return;
+			if (final(res.status)) throw new Refused(`Błąd ${res.status}`);
 		} catch (e) {
 			if (e instanceof Refused) throw e;
+			const status = (e as { status?: number }).status;
+			if (status !== undefined && final(status)) throw new Refused(errMsg(e));
 		}
 		if (attempt >= tries) throw new Refused("Nie udało się wysłać nagrania");
 		await wait(Math.min(500 * 2 ** (attempt - 1), 8000));
 	}
 }
+
+const errMsg = (e: unknown) => (e instanceof Error ? e.message : "Błąd");
 
 /** A recording in progress. */
 export interface Session {
@@ -112,6 +141,7 @@ export async function startScreenRecording(
 	};
 
 	let id: string;
+	let partSize: number;
 	try {
 		const name = new Date().toLocaleString("pl-PL", {
 			day: "2-digit",
@@ -120,26 +150,44 @@ export async function startScreenRecording(
 			hour: "2-digit",
 			minute: "2-digit",
 		});
-		({ id } = await api.startRecording(boardId, `Lekcja ${name}`, mime));
+		({ id, partSize } = await api.startRecording(
+			boardId,
+			`Lekcja ${name}`,
+			mime,
+		));
 	} catch (e) {
 		release();
 		throw e;
 	}
 
-	const url = api.recordingUrl(boardId, id) + "/chunk";
 	const recorder = new MediaRecorder(stream, { mimeType: mime });
 	const startedAt = Date.now();
-	let sent = 0;
+	const cutter = new PartCutter(partSize);
+	let partNo = 0;
 	let failure: Error | undefined;
-	// Chunks go one after another, so the file is in order; a failure ends sending for good.
+	// Parts go one after another; a failure ends sending for good.
 	let sending: Promise<void> = Promise.resolve();
+	const enqueue = (part: Blob) => {
+		const n = ++partNo;
+		sending = sending.then(async () => {
+			if (failure) return;
+			try {
+				await uploadPart(() => api.recordingPart(boardId, id, n), part);
+			} catch (err) {
+				failure = err instanceof Error ? err : new Error("Błąd");
+				void endByItself();
+			}
+		});
+	};
 	let ending: Promise<void> | undefined;
 	const stop = () => {
 		ending ??= (async () => {
 			if (recorder.state !== "inactive") recorder.stop();
 			await stopped;
 			release();
-			await sending; // the last chunk comes right after stop()
+			const tail = cutter.rest(); // the last chunk comes right after stop()
+			if (tail) enqueue(tail);
+			await sending;
 			await api.finishRecording(boardId, id, Date.now() - startedAt);
 			if (failure) throw failure;
 		})();
@@ -153,16 +201,7 @@ export async function startScreenRecording(
 			(e) => onEnd(e instanceof Error ? e.message : "Błąd"),
 		);
 	recorder.ondataavailable = (e) => {
-		if (e.data.size === 0) return;
-		sending = sending.then(async () => {
-			if (failure) return;
-			try {
-				sent = await sendChunk(url, sent, e.data);
-			} catch (err) {
-				failure = err instanceof Error ? err : new Error("Błąd");
-				void endByItself();
-			}
-		});
+		for (const part of cutter.push(e.data)) enqueue(part);
 	};
 	const stopped = new Promise<void>((resolve) => {
 		recorder.onstop = () => resolve();

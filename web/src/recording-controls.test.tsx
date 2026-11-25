@@ -5,8 +5,10 @@ import type { Recording } from "./api";
 import { clock, megabytes, RecordingControls } from "./recording-controls";
 
 const listRecordings = vi.hoisted(() => vi.fn());
+const deleteRecording = vi.hoisted(() => vi.fn());
 vi.mock("./api", () => ({
 	listRecordings,
+	deleteRecording,
 	recordingUrl: (b: string, id: string) => `/api/boards/${b}/recordings/${id}`,
 	errorMessage: (e: unknown) => (e instanceof Error ? e.message : "Błąd"),
 }));
@@ -31,6 +33,7 @@ describe("RecordingControls (R-112)", () => {
 		root = document.createElement("div");
 		document.body.append(root);
 		listRecordings.mockReset().mockResolvedValue([]);
+		deleteRecording.mockReset().mockResolvedValue(undefined);
 	});
 	afterEach(() => {
 		act(() => render(null, root));
@@ -100,11 +103,119 @@ describe("RecordingControls (R-112)", () => {
 		);
 	});
 
+	test("the red dot is switched on while recording and off when it ends", async () => {
+		const onRecording = vi.fn();
+		const stop = vi.fn().mockResolvedValue(undefined);
+		const start = vi.fn().mockResolvedValue({ stop });
+		act(() =>
+			render(
+				<RecordingControls
+					boardId="b"
+					canRecord
+					start={start}
+					onRecording={onRecording}
+				/>,
+				root,
+			),
+		);
+		expect(onRecording).not.toHaveBeenCalled(); // nothing to say before a recording
+		act(() => btn("Nagrywaj").click());
+		await flush();
+		expect(onRecording).toHaveBeenLastCalledWith(true);
+		act(() => btn("Zakończ nagrywanie").click());
+		await flush();
+		expect(onRecording).toHaveBeenLastCalledWith(false);
+	});
+
+	test("warns five minutes before the limit and stops at 1 h 15 min (R-094)", async () => {
+		vi.useFakeTimers();
+		try {
+			const stop = vi.fn().mockResolvedValue(undefined);
+			const start = vi.fn().mockResolvedValue({ stop });
+			act(() =>
+				render(<RecordingControls boardId="b" canRecord start={start} />, root),
+			);
+			await act(async () => {
+				btn("Nagrywaj").click();
+				await vi.advanceTimersByTimeAsync(0);
+			});
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(69 * 60_000 + 59_000);
+			});
+			expect(root.querySelector("[role='status']")).toBeNull();
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(1_000);
+			}); // 70 min
+			expect(root.querySelector("[role='status']")?.textContent).toContain(
+				"5 minut",
+			);
+			expect(stop).not.toHaveBeenCalled();
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(5 * 60_000);
+			}); // 75 min
+			expect(stop).toHaveBeenCalledTimes(1);
+			expect(btn("Nagrywaj")).not.toBeNull();
+			expect(root.querySelector("[role='status']")?.textContent).toContain(
+				"limit",
+			);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	test("only the owner may delete, and only after a second press (R-019)", async () => {
+		listRecordings.mockResolvedValue([rec()]);
+		act(() =>
+			render(<RecordingControls boardId="b" canRecord={false} />, root),
+		);
+		act(() => btn("Nagrania").click());
+		await flush();
+		expect(document.querySelector(".recordings-pop button.danger")).toBeNull();
+		expect(
+			document.querySelector(".recordings-pop [aria-label='Usuń nagranie']"),
+		).toBeNull();
+
+		act(() =>
+			render(
+				<RecordingControls boardId="b" canRecord={false} canDelete />,
+				root,
+			),
+		);
+		await flush();
+		const del = () =>
+			document.querySelector(
+				".recordings-pop [aria-label='Usuń nagranie']",
+			) as HTMLButtonElement;
+		act(() => del().click());
+		expect(deleteRecording).not.toHaveBeenCalled(); // asks first
+		const confirm = document.querySelector(
+			".recordings-pop button.danger",
+		) as HTMLButtonElement;
+		expect(confirm.textContent).toBe("Na pewno usunąć?");
+		listRecordings.mockResolvedValue([]);
+		act(() => confirm.click());
+		await flush();
+		expect(deleteRecording).toHaveBeenCalledWith("b", "r1");
+		expect(document.querySelector(".recordings-pop")?.textContent).toBe(
+			"Brak nagrań",
+		);
+	});
+
+	test("a recording still in progress has no download link", async () => {
+		listRecordings.mockResolvedValue([rec({ finished: false, bytes: 0 })]);
+		act(() =>
+			render(<RecordingControls boardId="b" canRecord={false} />, root),
+		);
+		act(() => btn("Nagrania").click());
+		await flush();
+		expect(document.querySelector(".recordings-pop a")).toBeNull();
+		expect(document.querySelector(".recordings-pop")?.textContent).toContain(
+			"w toku",
+		);
+	});
+
 	test("lists the recordings of the board with a download link each", async () => {
-		listRecordings.mockResolvedValue([
-			rec(),
-			rec({ id: "r2", name: "Druga", finished: false, bytes: 0 }),
-		]);
+		listRecordings.mockResolvedValue([rec(), rec({ id: "r2", name: "Druga" })]);
 		act(() =>
 			render(<RecordingControls boardId="b" canRecord={false} />, root),
 		);
@@ -122,7 +233,6 @@ describe("RecordingControls (R-112)", () => {
 		const text = document.querySelector(".recordings-pop")?.textContent ?? "";
 		expect(text).toContain("1:05");
 		expect(text).toContain("12 MB");
-		expect(text).toContain("w toku");
 	});
 
 	test("says so when there are no recordings", async () => {
