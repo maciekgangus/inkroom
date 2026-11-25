@@ -56,6 +56,8 @@ import { loadPdf } from "./pdf/loader";
 import { PdfProgress } from "./pdf-progress";
 import { hasFinePointer } from "./pointer";
 import { PropertiesPanel } from "./properties-panel";
+import { canRecordScreen } from "./recording";
+import { RecordingControls } from "./recording-controls";
 import { loadSnapShapes } from "./shape-snap";
 import { ShareButton } from "./share-button";
 import { applyToolShortcut, colorForKey, dropsSelection } from "./shortcuts";
@@ -98,6 +100,8 @@ interface Props {
 	onCopy?: () => Promise<{ id: string; name: string }>;
 	/** Saves a new shared background; given only to the board's owner (R-027). */
 	onSetBackground?: (background: Background) => Promise<void>;
+	/** True for a logged-in account, the only kind that records and lists recordings (R-112). */
+	loggedIn?: boolean;
 }
 
 const BACKGROUND_NAMES: Record<Background, string> = {
@@ -126,6 +130,7 @@ export function BoardView({
 	owner,
 	onCopy,
 	onSetBackground,
+	loggedIn,
 }: Props) {
 	const [background, setBackground] = useState<Background>("plain");
 	const committedRef = useRef<HTMLCanvasElement>(null);
@@ -1356,6 +1361,9 @@ export function BoardView({
 					}
 				/>
 				<ShareButton boardId={boardId} title={title} />
+				{loggedIn && (
+					<RecordingControls boardId={boardId} canRecord={canRecordScreen()} />
+				)}
 				<BoardMenuButton onOpen={setBoardMenu} />
 			</div>
 			{menu && (

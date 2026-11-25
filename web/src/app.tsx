@@ -193,6 +193,7 @@ function BoardPage({
 			owner={info.owner}
 			onCopy={info.owner ? () => api.copyBoard(id) : undefined}
 			onSetBackground={info.owner ? (b) => api.setBackground(id, b) : undefined}
+			loggedIn={account !== null}
 		/>
 	);
 }

@@ -366,3 +366,36 @@ export const addUnavailable = (u: {
 
 export const deleteUnavailable = (id: number) =>
 	request<void>("DELETE", `/api/unavailability/${id}`);
+
+/** One recording of a lesson on a board (R-112). */
+export interface Recording {
+	id: string;
+	name: string;
+	createdAt: string;
+	/** 0 until the recording is finished. */
+	durationMs: number;
+	bytes: number;
+	finished: boolean;
+}
+
+export const startRecording = (boardId: string, name: string, mime: string) =>
+	request<{ id: string }>("POST", `/api/boards/${boardId}/recordings`, {
+		name,
+		mime,
+	});
+
+export const finishRecording = (
+	boardId: string,
+	id: string,
+	durationMs: number,
+) =>
+	request<void>("POST", `/api/boards/${boardId}/recordings/${id}/finish`, {
+		durationMs,
+	});
+
+export const listRecordings = (boardId: string) =>
+	request<Recording[]>("GET", `/api/boards/${boardId}/recordings`);
+
+/** The address of a recording; the server answers it as a download. */
+export const recordingUrl = (boardId: string, id: string) =>
+	`/api/boards/${boardId}/recordings/${id}`;
