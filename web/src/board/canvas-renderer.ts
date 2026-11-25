@@ -387,6 +387,24 @@ function drawPlane(
 	ctx.textBaseline = "alphabetic";
 }
 
+/** A filled rectangle with round corners; square where the browser has no roundRect. */
+function roundRect(
+	ctx: CanvasRenderingContext2D,
+	x: number,
+	y: number,
+	w: number,
+	h: number,
+	r: number,
+): void {
+	if (typeof ctx.roundRect !== "function") {
+		ctx.fillRect(x, y, w, h);
+		return;
+	}
+	ctx.beginPath();
+	ctx.roundRect(x, y, w, h, r);
+	ctx.fill();
+}
+
 /**
  * Draws a text element (R-044, R-102): each line of its layout, a run at a time in the run's font.
  * The first line sits where a text field puts it (R-081): the line is centred on its content
@@ -426,13 +444,9 @@ function drawText(
 		const base = top + firstOf(line.fs, line.h);
 		if (line.quote) {
 			ctx.save();
-			ctx.globalAlpha *= 0.5;
-			ctx.fillRect(
-				x + line.fs * 0.25,
-				top,
-				Math.max(2, line.fs * 0.12),
-				line.h,
-			);
+			ctx.globalAlpha *= 0.3;
+			const bw = Math.max(2, line.fs * 0.14);
+			roundRect(ctx, x + line.fs * 0.2, top + 1, bw, line.h - 2, bw / 2);
 			ctx.restore();
 		}
 		if (line.marker) {
@@ -442,17 +456,25 @@ function drawText(
 		for (const run of line.runs) {
 			if (run.code) {
 				ctx.save();
-				ctx.globalAlpha *= 0.14;
-				ctx.fillRect(
-					x + run.x - 2,
-					top + line.h * 0.1,
-					run.w + 4,
-					line.h * 0.8,
+				ctx.globalAlpha *= 0.09;
+				const pad = line.fs * 0.2;
+				roundRect(
+					ctx,
+					x + run.x - pad,
+					top + line.h * 0.12,
+					run.w + 2 * pad,
+					line.h * 0.76,
+					line.fs * 0.2,
 				);
 				ctx.restore();
 			}
 			ctx.font = run.font;
-			ctx.fillText(run.text, x + run.x, base);
+			if (line.quote) {
+				ctx.save();
+				ctx.globalAlpha *= 0.72; // a quote reads quieter than the text around it
+				ctx.fillText(run.text, x + run.x, base);
+				ctx.restore();
+			} else ctx.fillText(run.text, x + run.x, base);
 			if (run.strike) {
 				ctx.fillRect(
 					x + run.x,

@@ -42,6 +42,24 @@ test("the toolbar is on the screen, over the field, with font, size and colour",
 		await expect(page.getByLabel(label)).toBeVisible();
 });
 
+test("the toolbar never wraps a row: one row when it fits, two even rows when not", async ({
+	page,
+}) => {
+	await startArea(page, 160, 360);
+	const view = page.viewportSize() as { width: number; height: number };
+	const rows = page.locator(".text-toolbar .tb-row");
+	const n = await rows.count();
+	expect(n === 1 || n === 2).toBe(true);
+	for (let i = 0; i < n; i++) {
+		const r = (await rows.nth(i).boundingBox()) as NonNullable<
+			Awaited<ReturnType<ReturnType<typeof rows.nth>["boundingBox"]>>
+		>;
+		expect(r.height).toBeLessThanOrEqual(44); // one line of buttons, not wrapped
+		expect(r.x).toBeGreaterThanOrEqual(0);
+		expect(r.x + r.width).toBeLessThanOrEqual(view.width + 0.5);
+	}
+});
+
 test("bold on a selection wraps it in markers and keeps the text being edited", async ({
 	page,
 }) => {
