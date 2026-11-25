@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<title>segmentsvc — jak czytana jest tablica</title>
+<style>
+  :root {
+    --seg1: var(--chart-1, #5b8ff9);
+    --seg2: var(--chart-2, #f6bd16);
+    --seg3: var(--chart-3, #5ad8a6);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 16px;
+    font-family: var(--font-sans, system-ui, sans-serif);
+    color: var(--foreground, #eee);
+    font-size: 14px; line-height: 1.45;
+  }
+  h2 { font-size: 15px; margin: 18px 0 8px; color: var(--foreground); }
+  h2 .step {
+    display: inline-block; min-width: 22px; text-align: center;
+    background: var(--primary, #4c7dff); color: var(--primary-foreground, #fff);
+    border-radius: 6px; font-size: 12px; padding: 2px 6px; margin-right: 8px;
+  }
+  p.note { color: var(--muted, #999); margin: 4px 0 10px; font-size: 12.5px; }
+  .row { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-start; }
+  .card {
+    background: var(--card, #1c1c1e); border: 1px solid var(--border, #333);
+    border-radius: var(--radius, 10px); padding: 12px;
+  }
+  pre {
+    font-family: var(--font-mono, monospace); font-size: 11px;
+    background: var(--code-background, #111); color: var(--foreground);
+    padding: 10px; border-radius: 8px; overflow-x: auto; margin: 0;
+    max-width: 350px; white-space: pre-wrap; word-break: break-word;
+  }
+  canvas.board { background: #fff; border-radius: 8px; display: block; }
+  .segcard { width: 202px; display: flex; flex-direction: column; gap: 6px; flex: 0 0 auto; }
+  .segcard canvas { background: #fff; border-radius: 6px; width: 100%; }
+  .segcard .seghead { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 12.5px; }
+  .dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .arrow { text-align: center; color: var(--muted); font-size: 18px; line-height: 1; }
+  .model {
+    border: 1px dashed var(--warning, #e0a030); border-radius: 8px;
+    padding: 6px 8px; font-size: 11.5px; text-align: center; color: var(--warning-foreground, #e0a030);
+  }
+  .skip {
+    border: 1px dashed var(--success, #3fb27f); border-radius: 8px;
+    padding: 6px 8px; font-size: 11.5px; text-align: center; color: var(--success-foreground, #3fb27f);
+  }
+  .latex {
+    font-family: var(--font-mono, monospace); font-size: 12px;
+    background: var(--code-background, #111); border: 1px solid var(--border, #333);
+    border-radius: 6px; padding: 5px 8px; text-align: center; word-break: break-all;
+  }
+  .tag { font-size: 10.5px; color: var(--muted); text-align: center; }
+</style>
+</head>
+<body>
+
+<h2><span class="step">1</span>Wejście: manifest JSON z przeglądarki (koniec lekcji)</h2>
+<p class="note">Klient serializuje <code>Stroke[]</code> — każda kreska to punkty <code>[x, y, nacisk]</code> + kto pisał (<code>authorId</code>) + kiedy (<code>z</code>). Tekst jest już tekstem.</p>
+<div class="row">
+  <div class="card"><pre id="manifestJson"></pre></div>
+  <div class="card">
+    <div class="tag" style="text-align:left; margin-bottom:6px;">tak to wygląda na tablicy (białe płótno):</div>
+    <canvas id="board" class="board" width="330" height="240"></canvas>
+  </div>
+</div>
+
+<h2><span class="step">2</span>Segmentacja w segmentsvc — kreski blisko siebie = jedna „kupa”</h2>
+<p class="note">Union-find po prostokątach: dwa elementy wpadają do jednego segmentu, gdy ich boxy rozszerzone o <code>gap</code> (tu 24 jednostki) się stykają. Ułamek = licznik + kreska + mianownik → jeden segment. Kolejność w segmencie = po <code>z</code> (kolejność rysowania).</p>
+<div class="card"><canvas id="boardSeg" class="board" width="680" height="250"></canvas></div>
+
+<h2><span class="step">3</span>Każdy segment → osobny obrazek PNG → Uni-MuMER (GPU) → LaTeX</h2>
+<p class="note">Segment czysto tekstowy nie leci do modelu wcale — idzie <b>verbatim</b> z JSON-a (pole <code>verbatim: true</code>), zero ryzyka OCR.</p>
+<div class="row" id="segcards"></div>
+
+<h2><span class="step">4</span>Wyjście: odpowiedź <code>POST /api/analyze</code></h2>
+<div class="card"><pre id="analyzeJson"></pre></div>
+
+<script>
+// Dane 1:1 z examples/manifest.json
+const manifest = {
+  boardId: "demo-board-1",
+  title: "Lekcja demo - rownania kwadratowe",
+  elements: [
+    { id: "e1", kind: "stroke", authorId: "student", color: "#1a1a1a", size: 4, z: 1001,
+      points: [[100,100,0.9],[125,96,0.8],[150,100,0.9],[175,97,0.8]] },
+    { id: "e2", kind: "line", authorId: "student", color: "#1a1a1a", size: 4, z: 1002,
+      points: [[90,116,1],[185,116,1]] },
+    { id: "e3", kind: "stroke", authorId: "student", color: "#1a1a1a", size: 4, z: 1003,
+      points: [[105,132,0.9],[130,128,0.8],[155,133,0.9]] },
+    { id: "e4", kind: "text", authorId: "tutor", color: "#b00020", size: 24, z: 1010,
+      text: "ulamek", points: [[210,100,0]] },
+    { id: "e5", kind: "stroke", authorId: "student", color: "#1a1a1a", size: 4, z: 1004,
+      points: [[400,100,0.9],[415,100,0.9],[428,128,0.8],[445,160,0.9],[460,190,0.8]] },
+    { id: "e6", kind: "stroke", authorId: "student", color: "#1a1a1a", size: 4, z: 1005,
+      points: [[480,100,0.9],[495,102,0.9],[500,130,0.8],[530,160,0.9]] }
+  ]
+};
+// Co model zwróciłby dla każdego segmentu (przykład; prawdziwy Uni-MuMER robi to na GPU)
+const modelAnswers = { "seg-1": "\\frac{x+1}{2}", "seg-3": "x = 5" };
+
+function elementBBox(e) {
+  if (e.points && e.points.length) {
+    let r = { minX: e.points[0][0], minY: e.points[0][1], maxX: e.points[0][0], maxY: e.points[0][1] };
+    for (const p of e.points.slice(1)) {
+      r.minX = Math.min(r.minX, p[0]); r.maxX = Math.max(r.maxX, p[0]);
+      r.minY = Math.min(r.minY, p[1]); r.maxY = Math.max(r.maxY, p[1]);
+    }
+    if (e.points.length === 1 && e.kind === "text") {
+      const size = e.size > 0 ? e.size : 18;
+      r.maxX += size * 0.55 * [...e.text].length; r.maxY += size * 1.25;
+    }
+    return r;
+  }
+  return null;
+}
+function defaultGap(els) {
+  const sizes = els.map(e => e.size > 0 ? e.size : 4).sort((a,b)=>a-b);
+  const gap = 3 * sizes[Math.floor(sizes.length/2)];
+  return Math.min(Math.max(gap, 24), 120);
+}
+function intersects(a, b, gap) {
+  const h = gap/2;
+  return a.minX-h <= b.maxX+h && b.minX-h <= a.maxX+h && a.minY-h <= b.maxY+h && b.minY-h <= a.maxY+h;
+}
+// wierny port SegmentManifest z segment.go
+function segmentize(m) {
+  const els = m.elements, n = els.length;
+  const gap = defaultGap(els);
+  const boxes = els.map(elementBBox);
+  const parent = [...Array(n).keys()];
+  const find = x => { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
+  for (let i = 0; i < n; i++) for (let j = i+1; j < n; j++)
+    if (boxes[i] && boxes[j] && intersects(boxes[i], boxes[j], gap)) parent[find(i)] = find(j);
+  const groups = {};
+  for (let i = 0; i < n; i++) if (boxes[i]) (groups[find(i)] = groups[find(i)] || []).push(i);
+  let segs = Object.values(groups).map(members => {
+    members.sort((a,b) => els[a].z - els[b].z || els[a].id.localeCompare(els[b].id));
+    let bbox = boxes[members[0]];
+    for (const mi of members) bbox = {
+      minX: Math.min(bbox.minX, boxes[mi].minX), minY: Math.min(bbox.minY, boxes[mi].minY),
+      maxX: Math.max(bbox.maxX, boxes[mi].maxX), maxY: Math.max(bbox.maxY, boxes[mi].maxY) };
+    return { elementIds: members.map(mi => els[mi].id), bbox };
+  });
+  segs.sort((a,b) => a.bbox.minY - b.bbox.minY || a.bbox.minX - b.bbox.minX);
+  segs.forEach((s,i) => s.id = "seg-" + (i+1));
+  return segs;
+}
+const segs = segmentize(manifest);
+const segColors = { "seg-1": "var(--seg1)", "seg-2": "var(--seg2)", "seg-3": "var(--seg3)" };
+const segColorHex = { "seg-1": "#5b8ff9", "seg-2": "#f6bd16", "seg-3": "#5ad8a6" };
+
+function drawStroke(ctx, pts, bbox, scale, pad, w, color) {
+  ctx.strokeStyle = color; ctx.lineWidth = Math.max(w, 1); ctx.lineCap = "round"; ctx.lineJoin = "round";
+  ctx.beginPath();
+  pts.forEach((p, i) => {
+    const x = (p[0] - bbox.minX + pad) * scale, y = (p[1] - bbox.minY + pad) * scale;
+    i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  });
+  ctx.stroke();
+}
+function drawElement(ctx, e, bbox, scale, pad) {
+  if (e.kind === "text" || e.kind === "image") return;
+  if (e.points && e.points.length >= 2) drawStroke(ctx, e.points, bbox, scale, pad, e.size*scale, e.color || "#000");
+}
+
+// zwarty formatter: punkty skracane do dwóch + "…", żeby JSON był czytelny
+function fmtManifest(m) {
+  const lines = [`{`, `  "boardId": "${m.boardId}",`, `  "elements": [`];
+  m.elements.forEach((e, i) => {
+    const pts = e.points.length > 2
+      ? JSON.stringify(e.points.slice(0, 2)) .replace(/]$/, ", …]")
+      : JSON.stringify(e.points);
+    const bits = [`"id": "${e.id}"`, `"kind": "${e.kind}"`, `"authorId": "${e.authorId}"`, `"z": ${e.z}`];
+    if (e.text) bits.push(`"text": "${e.text}"`);
+    bits.push(`"points": ${pts}`);
+    lines.push(`    { ${bits.join(", ")} }${i < m.elements.length - 1 ? "," : ""}`);
+  });
+  lines.push(`  ]`, `}`);
+  return lines.join("\n");
+}
+// --- panel 1: surowa tablica + JSON ---
+document.getElementById("manifestJson").textContent = fmtManifest(manifest);
+(function drawBoard() {
+  const c = document.getElementById("board"), ctx = c.getContext("2d");
+  const all = manifest.elements.map(elementBBox).filter(Boolean);
+  const bb = { minX: Math.min(...all.map(b=>b.minX)), minY: Math.min(...all.map(b=>b.minY)),
+               maxX: Math.max(...all.map(b=>b.maxX)), maxY: Math.max(...all.map(b=>b.maxY)) };
+  const pad = 14, scale = Math.min(c.width/(bb.maxX-bb.minX+2*pad), c.height/(bb.maxY-bb.minY+2*pad));
+  ctx.fillStyle = "#fff"; ctx.fillRect(0,0,c.width,c.height);
+  for (const e of manifest.elements) {
+    if (e.kind === "text") {
+      ctx.fillStyle = e.color; ctx.font = (e.size*scale) + "px sans-serif";
+      ctx.fillText(e.text, (e.points[0][0]-bb.minX+pad)*scale, (e.points[0][1]-bb.minY+pad)*scale + e.size*scale*0.8);
+    } else drawElement(ctx, e, bb, scale, pad);
+  }
+})();
+
+// --- panel 2: tablica z zaznaczonymi segmentami ---
+(function drawBoardSeg() {
+  const c = document.getElementById("boardSeg"), ctx = c.getContext("2d");
+  const all = manifest.elements.map(elementBBox).filter(Boolean);
+  const bb = { minX: Math.min(...all.map(b=>b.minX))-10, minY: Math.min(...all.map(b=>b.minY))-10,
+               maxX: Math.max(...all.map(b=>b.maxX))+10, maxY: Math.max(...all.map(b=>b.maxY))+10 };
+  const pad = 14, scale = Math.min(c.width/(bb.maxX-bb.minX+2*pad), c.height/(bb.maxY-bb.minY+2*pad));
+  ctx.fillStyle = "#fff"; ctx.fillRect(0,0,c.width,c.height);
+  const segOf = {}; segs.forEach(s => s.elementIds.forEach(id => segOf[id] = s.id));
+  for (const e of manifest.elements) {
+    if (e.kind === "text") {
+      ctx.fillStyle = e.color; ctx.font = (e.size*scale) + "px sans-serif";
+      ctx.fillText(e.text, (e.points[0][0]-bb.minX+pad)*scale, (e.points[0][1]-bb.minY+pad)*scale + e.size*scale*0.8);
+    } else drawElement(ctx, e, bb, scale, pad);
+  }
+  for (const s of segs) {
+    ctx.strokeStyle = segColorHex[s.id]; ctx.lineWidth = 2; ctx.setLineDash([6,4]);
+    ctx.strokeRect((s.bbox.minX-bb.minX+pad)*scale-4, (s.bbox.minY-bb.minY+pad)*scale-4,
+      (s.bbox.maxX-s.bbox.minX)*scale+8, (s.bbox.maxY-s.bbox.minY)*scale+8);
+    ctx.setLineDash([]);
+    ctx.fillStyle = segColorHex[s.id]; ctx.font = "bold 12px sans-serif";
+    ctx.fillText(s.id + "  [" + s.elementIds.join(", ") + "]", (s.bbox.minX-bb.minX+pad)*scale-4, (s.bbox.minY-bb.minY+pad)*scale-12);
+  }
+})();
+
+// --- panel 3: karty segmentów ---
+(function segCards() {
+  const host = document.getElementById("segcards");
+  const byId = {}; manifest.elements.forEach(e => byId[e.id] = e);
+  for (const s of segs) {
+    const els = s.elementIds.map(id => byId[id]);
+    const isTextOnly = els.every(e => e.kind === "text" || e.kind === "image");
+    const card = document.createElement("div");
+    card.className = "card segcard";
+    let inner = `<div class="seghead"><span class="dot" style="background:${segColorHex[s.id]}"></span>${s.id} — ${s.elementIds.join(", ")}</div>`;
+    if (isTextOnly) {
+      inner += `<div class="skip">⇥ tylko tekst → verbatim z JSON<br>model NIE jest wywoływany</div>`;
+      inner += `<div class="latex">"${els.filter(e=>e.kind==="text").map(e=>e.text).join(" ")}"</div><div class="tag">verbatim: true</div>`;
+    } else {
+      inner += `<canvas width="178" height="112"></canvas><div class="tag">PNG wygenerowany z wektorów (render.go)</div>`;
+      inner += `<div class="arrow">↓</div><div class="model">Uni-MuMER na GPU<br>(5070 Ti / RunPod EU)<br>POST /v1/chat/completions + obrazek</div>`;
+      inner += `<div class="arrow">↓</div><div class="latex">${modelAnswers[s.id] || "..."}</div><div class="tag">latex</div>`;
+    }
+    card.innerHTML = inner;
+    host.appendChild(card);
+    if (!isTextOnly) {
+      const cv = card.querySelector("canvas"), ctx = cv.getContext("2d");
+      const pad = 12;
+      const w = Math.max(s.bbox.maxX - s.bbox.minX, 1), h = Math.max(s.bbox.maxY - s.bbox.minY, 1);
+      const scale = Math.min(cv.width/(w+2*pad), cv.height/(h+2*pad), 8);
+      ctx.fillStyle = "#fff"; ctx.fillRect(0,0,cv.width,cv.height);
+      for (const e of els) drawElement(ctx, e, s.bbox, scale, pad);
+    }
+  }
+})();
+
+// --- panel 4: odpowiedź API ---
+(function fmtAnalyze() {
+  const lines = [`{`, `  "boardId": "${manifest.boardId}",`, `  "model": "phxember/Uni-MuMER-Qwen2.5-VL-3B",`, `  "count": ${segs.length},`, `  "segments": [`];
+  segs.forEach((s, i) => {
+    const els = s.elementIds.map(id => manifest.elements.find(e => e.id === id));
+    const textOnly = els.every(e => e.kind === "text" || e.kind === "image");
+    const b = s.bbox;
+    const bbox = `{"minX": ${b.minX}, "minY": ${b.minY}, "maxX": ${b.maxX}, "maxY": ${b.maxY}}`;
+    const latex = textOnly ? els.filter(e=>e.kind==="text").map(e=>e.text).join(" ") : (modelAnswers[s.id] || "");
+    lines.push(`    { "id": "${s.id}", "elementIds": [${s.elementIds.map(x=>`"${x}"`).join(", ")}],`);
+    lines.push(`      "bbox": ${bbox}, "latex": "${latex}"${textOnly ? ', "verbatim": true' : ''} }${i < segs.length-1 ? "," : ""}`);
+  });
+  lines.push(`  ]`, `}`);
+  document.getElementById("analyzeJson").textContent = lines.join("\n");
+})();
+</script>
+</body>
+</html>
