@@ -114,5 +114,6 @@ test("changing the tool clears the hover at once", async ({ page }) => {
 	await page.mouse.move(450, 400);
 	await expect.poll(() => liveIn(page, ...OVER)).toBeGreaterThan(20);
 	await page.keyboard.press("KeyF"); // pen: the hover belongs to select only
+	await page.mouse.move(451, 401); // any move with another tool keeps the hover off
 	await expect.poll(() => liveIn(page, ...OVER)).toBe(0);
 });
