@@ -273,6 +273,9 @@ export class Controller {
 	private hovered: Stroke | null = null;
 	/** When the object under the cursor was last looked for, in ms. */
 	private lastHoverAt = 0;
+	/** A move swallowed by the throttle, looked for when the window is over (the resting place counts). */
+	private hoverPending: PointerInput | null = null;
+	private hoverTimer: ReturnType<typeof setTimeout> | null = null;
 
 	constructor(
 		private board: Board,
@@ -660,20 +663,43 @@ export class Controller {
 	 */
 	pointerHover(e: PointerInput): void {
 		if (!this.hoverAllowed(e)) {
-			this.setHovered(null);
+			this.clearHover();
 			return;
 		}
-		const now = Date.now();
-		if (now - this.lastHoverAt < HOVER_MS) return; // throttled: the eye does not see 20 Hz
-		this.lastHoverAt = now;
-		const p = this.viewport.toWorld(e.clientX, e.clientY);
-		this.setHovered(this.objectUnder(p));
+		const wait = HOVER_MS - (Date.now() - this.lastHoverAt);
+		if (wait <= 0) {
+			this.lastHoverAt = Date.now();
+			this.lookUnder(e);
+			return;
+		}
+		// Throttled (the eye does not see 20 Hz), but the last move is kept and looked for when
+		// the window is over: where the cursor rests must be the one that glows.
+		this.hoverPending = e;
+		if (!this.hoverTimer)
+			this.hoverTimer = setTimeout(() => {
+				this.hoverTimer = null;
+				const pending = this.hoverPending;
+				this.hoverPending = null;
+				if (pending) {
+					this.lastHoverAt = Date.now();
+					this.lookUnder(pending);
+				}
+			}, wait);
 	}
 
 	/** Clears the hover at once: the pointer left the board, a gesture began, the tool or view changed. */
 	clearHover(): void {
+		if (this.hoverTimer) clearTimeout(this.hoverTimer);
+		this.hoverTimer = null;
+		this.hoverPending = null;
 		this.lastHoverAt = 0;
 		this.setHovered(null);
+	}
+
+	/** Looks for the object under the pointer's position and shows it (at most every HOVER_MS). */
+	private lookUnder(e: PointerInput): void {
+		const p = this.viewport.toWorld(e.clientX, e.clientY);
+		this.setHovered(this.objectUnder(p));
 	}
 
 	/** Whether a hover may be looked for now: only in select, at rest, mouse or hovering pen. */

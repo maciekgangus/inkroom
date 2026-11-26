@@ -222,12 +222,29 @@ describe("Controller hover in the select tool (R-112)", () => {
 	test("the hover check is throttled to ~50 ms while the pointer moves", () => {
 		c.pointerHover(ev(200, 100));
 		expect(renderer.setHover).toHaveBeenCalledTimes(1);
-		c.pointerHover(ev(200, 500)); // within 50 ms: skipped
+		c.pointerHover(ev(200, 500)); // within 50 ms: not checked yet
 		expect(renderer.setHover).toHaveBeenCalledTimes(1);
 		now += 100;
 		c.pointerHover(ev(200, 500));
 		expect(renderer.setHover).toHaveBeenLastCalledWith(null);
 		expect(renderer.setHover).toHaveBeenCalledTimes(2);
+	});
+
+	test("a move swallowed by the throttle is looked for when the window is over: the resting place glows", () => {
+		vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+		try {
+			c.pointerHover(ev(200, 100));
+			expect(renderer.setHover).toHaveBeenLastCalledWith(
+				expect.objectContaining({ id: "l" }),
+			);
+			c.pointerHover(ev(200, 500)); // throttled: kept for later
+			expect(renderer.setHover).toHaveBeenCalledTimes(1);
+			vi.advanceTimersByTime(60); // the window is over
+			expect(renderer.setHover).toHaveBeenLastCalledWith(null);
+			expect(renderer.setHover).toHaveBeenCalledTimes(2);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 
 	test("pointerdown, clearHover and hideFrame clear the hover at once", () => {
