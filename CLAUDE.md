@@ -50,6 +50,7 @@ Praca idzie przez subagentów z `.claude/agents/`: `backend` (`server/`), `front
 - Ręczne, ryzykowne: `/deploy` (`disable-model-invocation`, niczego nie wdraża bez Twojego „tak”).
 - Audyt bezpieczeństwa: wbudowany `/security-review`. Nie instaluj drugiego skilla do tego samego zadania.
 - Źródła: `tdd`, `codebase-design` z mattpocock/skills @ d653911; `frontend-design` z anthropics/skills; `web-design-guidelines` z vercel-labs/agent-skills 1.1.0; `impeccable` z pbakaus/impeccable @ b49177d (4.10.0; `disable-model-invocation: true` dopisane lokalnie, po aktualizacji dopisz znowu). Zrzuty responsywności (375, 768, 1440 px): Playwright z `web/`, bez MCP.
+- Inni agenci (Mistral Vibe, Codex, Gemini CLI) wchodzą przez `AGENTS.md` (oraz `server/AGENTS.md` i `web/AGENTS.md`), skille dostają przez dowiązania w `.agents/skills/`, a Vibe te same hooki przez `.vibe/hooks.toml`. Nowy skill, rola albo hook dopisujesz też tam.
 
 ## Kalendarz zajęć (R-104 do R-109, ADR 0025)
 Kalendarz jest w tej samej bazie SQLite i na tym samym koncie co tablice. Nie ma ról na koncie: prowadzącym jest ten, kto tworzy zajęcie. Moduły są rozdzielone w kodzie, nie w sieci.

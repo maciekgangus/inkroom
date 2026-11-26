@@ -1,0 +1,26 @@
+# Mistral Vibe runs the project's Claude Code hooks (.claude/hooks/) through an adapter that
+# translates their replies. Loaded only when the folder is trusted.
+
+[[hooks]]
+name = "pr-evidence-gate"
+type = "pre_tool"
+match = "re:bash|process_start"
+command = "sh -c 'exec sh \"$(git rev-parse --show-toplevel)/.vibe/hooks/claude-hook.sh\" pr-evidence-gate.sh'"
+timeout = 10.0
+description = "Block gh pr create for a UI change without fresh screenshots in docs/screenshots/<branch>/."
+
+[[hooks]]
+name = "post-edit-checks"
+type = "post_tool"
+match = "re:edit|write_file"
+command = "sh -c 'exec sh \"$(git rev-parse --show-toplevel)/.vibe/hooks/claude-hook.sh\" post-edit.sh'"
+timeout = 300.0
+description = "Format, lint and test the edited Go or TypeScript file."
+
+[[hooks]]
+name = "manual-test-reminder"
+type = "post_tool"
+match = "re:bash|process_start"
+command = "sh -c 'exec sh \"$(git rev-parse --show-toplevel)/.vibe/hooks/claude-hook.sh\" manual-test-reminder.sh'"
+timeout = 10.0
+description = "After gh pr create or starting the test server, remind to walk the feature in a browser."
