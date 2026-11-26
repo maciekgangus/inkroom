@@ -3,6 +3,8 @@ import * as api from "../api";
 import type { Background } from "../board/background";
 import { CanvasRenderer } from "../board/canvas-renderer";
 import { ImageCache } from "../board/image-cache";
+import { fontsChanged, setFontReadyHandler } from "../board/text";
+import { TEXT_FONT_FAMILY, textFont } from "../board/text-wrap";
 import { Viewport } from "../board/viewport";
 import { Cursors } from "../cursors";
 import { EditableName } from "../editable-name";
@@ -14,6 +16,15 @@ import { BG, BOARD, LIVE, type ReplayEngine } from "./engine";
 import { load, type PlayIndex } from "./load";
 
 const RATES = [0.5, 1, 1.5, 2];
+
+function syncLook(canvas: CanvasRenderer, bg: Background): void {
+	canvas.background = bg;
+	const style = getComputedStyle(document.documentElement);
+	canvas.gridColor =
+		style.getPropertyValue("--grid").trim() || canvas.gridColor;
+	canvas.gridClusterColor =
+		style.getPropertyValue("--grid-strong").trim() || canvas.gridClusterColor;
+}
 
 interface Props {
 	boardId: string;
@@ -43,6 +54,7 @@ export function ReplayView({ boardId, recId }: Props) {
 	const committedRef = useRef<HTMLCanvasElement>(null);
 	const liveRef = useRef<HTMLCanvasElement>(null);
 	const audioRef = useRef<HTMLAudioElement>(null);
+	const rendererRef = useRef<CanvasRenderer | null>(null);
 	const viewport = useRef(new Viewport()).current;
 	/** Draws the frame at the time held in `at` (set by the effect below). */
 	const frame = useRef<(force?: boolean) => void>(() => {});
@@ -86,11 +98,30 @@ export function ReplayView({ boardId, recId }: Props) {
 		const audio = audioRef.current;
 		if (!ready || !committed || !live || !audio) return;
 		const { engine } = ready;
+		let gone = false;
 		const images = new ImageCache(boardId, () =>
 			canvas.redraw(engine.board.strokes),
 		);
 		const canvas = new CanvasRenderer(committed, live, viewport, images);
 		canvas.ink = (c) => displayColor(c, currentTheme());
+		canvas.setQuery((rect, all) =>
+			all === engine.board.strokes ? engine.board.queryView(rect) : all,
+		);
+		syncLook(canvas, engine.background);
+		rendererRef.current = canvas;
+		void Promise.all([
+			...["a", "ł"].map((sample) => document.fonts?.load(textFont(16), sample)),
+			document.fonts?.load(`italic 500 16px ${TEXT_FONT_FAMILY}`, "xy"),
+		]).then(() => {
+			if (gone) return;
+			fontsChanged();
+			engine.board.reindexText();
+			canvas.fontsChanged();
+		});
+		setFontReadyHandler(() => {
+			engine.board.reindexText();
+			canvas.fontsChanged();
+		});
 		let raf = 0;
 		let shown = "";
 		let lasersShown = 0;
@@ -102,7 +133,10 @@ export function ReplayView({ boardId, recId }: Props) {
 			const t = playingRef.current ? audio.currentTime * 1000 : at.current;
 			at.current = t;
 			const changed = engine.seek(t);
-			if (changed & BG || force) setBackground(engine.background);
+			if (changed & BG || force) {
+				canvas.background = engine.background;
+				setBackground(engine.background);
+			}
 			if (changed & BOARD || boardDirty) {
 				canvas.redraw(engine.board.strokes);
 				boardDirty = false;
@@ -156,18 +190,22 @@ export function ReplayView({ boardId, recId }: Props) {
 		};
 		audio.addEventListener("ended", ended);
 		return () => {
+			gone = true;
+			rendererRef.current = null;
+			setFontReadyHandler(null);
 			removeEventListener("resize", resize);
 			audio.removeEventListener("ended", ended);
 			cancelAnimationFrame(raf);
 			frame.current = () => {};
 		};
-		// biome-ignore lint/correctness/useExhaustiveDependencies: set up once per recording
 	}, [ready, boardId, viewport, duration]);
 
 	// The grid is drawn on the board canvas: tell it the kind and the theme's colour (as the board does).
 	useEffect(() => {
-		frame.current(true);
-		// biome-ignore lint/correctness/useExhaustiveDependencies: a new theme or backdrop repaints
+		const canvas = rendererRef.current;
+		if (!canvas) return;
+		syncLook(canvas, background);
+		canvas.refresh();
 	}, [background, theme]);
 
 	const seek = (ms: number) => {
@@ -201,6 +239,10 @@ export function ReplayView({ boardId, recId }: Props) {
 	useEffect(() => {
 		const key = (e: KeyboardEvent) => {
 			if (!ready) return;
+			if (e.target instanceof Element) {
+				if (e.target.closest("input, textarea, select")) return;
+				if (e.key === " " && e.target.closest("button, a")) return;
+			}
 			if (e.key === " ") {
 				e.preventDefault();
 				void toggle();
