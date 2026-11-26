@@ -110,6 +110,16 @@ func (s *Store) Recording(boardID, id string) (Recording, error) {
 	return r, notFound(err)
 }
 
+// RecordingExists tells whether a recording with this id exists on any board.
+func (s *Store) RecordingExists(id string) (bool, error) {
+	var n int
+	err := s.db.QueryRow("SELECT 1 FROM recordings WHERE id = ?", id).Scan(&n)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
 // RecordingsOf lists the recordings of a board, newest first.
 func (s *Store) RecordingsOf(boardID string) ([]Recording, error) {
 	return s.listRecordings("SELECT "+recordingCols+" FROM recordings WHERE board_id = ? ORDER BY created_at DESC, id", boardID)

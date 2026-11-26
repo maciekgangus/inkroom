@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/maciekgangus/inkroom/server/internal/logx"
 	"github.com/maciekgangus/inkroom/server/internal/store"
 )
 
@@ -46,8 +47,8 @@ func (a *app) renderHandler() http.Handler {
 
 func (a *app) renderAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-		if a.renderToken == "" || subtle.ConstantTimeCompare([]byte(token), []byte(a.renderToken)) != 1 {
+		token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if !ok || a.renderToken == "" || subtle.ConstantTimeCompare([]byte(token), []byte(a.renderToken)) != 1 {
 			writeError(w, http.StatusUnauthorized, "Brak dostępu")
 			return
 		}
@@ -139,9 +140,18 @@ func (a *app) renderDone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, recID := r.PathValue("id"), r.PathValue("rec")
+	if _, err := a.st.Recording(id, recID); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			if exists, err2 := a.st.RecordingExists(recID); err2 == nil && !exists {
+				a.removeVideoFiles(r.Context(), recID)
+			}
+		}
+		storeFail(w, err, "Nie ma takiego nagrania")
+		return
+	}
 	err := a.st.FinishVideo(recID, max(body.Bytes, 0))
 	if errors.Is(err, store.ErrNotFound) {
-		if _, gone := a.st.Recording(id, recID); errors.Is(gone, store.ErrNotFound) {
+		if exists, err2 := a.st.RecordingExists(recID); err2 == nil && !exists {
 			a.removeVideoFiles(r.Context(), recID)
 		}
 		writeError(w, http.StatusNotFound, "Nie ma takiego nagrania")
@@ -177,6 +187,6 @@ func (a *app) renderFail(w http.ResponseWriter, r *http.Request) {
 		storeFail(w, err, "Nagranie nie jest renderowane")
 		return
 	}
-	slog.Warn("the renderer failed on a recording", "recording", rec.ID, "attempt", rec.VideoAttempts, "reason", body.Reason)
+	slog.Warn("the renderer failed on a recording", "recording", logx.Ref(rec.ID), "attempt", rec.VideoAttempts, "reason", body.Reason)
 	w.WriteHeader(http.StatusNoContent)
 }

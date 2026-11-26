@@ -868,3 +868,34 @@ func TestOnlyTheOwnerRenamesAndTheNameIsChecked(t *testing.T) {
 		t.Errorf("a refused rename changed the name: %v", list[0]["name"])
 	}
 }
+
+func TestRecordingJSONEndpointsRequireContentType(t *testing.T) {
+	srv, _, _ := testApp(t)
+	owner := register(t, srv, "a@example.com")
+	board := createBoard(t, srv, owner, "Matma")
+	rec := startRecording(t, srv, board, &owner, "audio/webm")
+
+	cases := []struct {
+		method, path, body string
+	}{
+		{"POST", "/api/boards/" + board + "/recordings", `{"name":"Lekcja","mime":"audio/webm"}`},
+		{"PATCH", recPath(board, rec, ""), `{"name":"Nowa"}`},
+		{"POST", recPath(board, rec, "/finish"), `{"durationMs":1000}`},
+	}
+	for _, tc := range cases {
+		req, err := http.NewRequest(tc.method, srv.URL+tc.path, strings.NewReader(tc.body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Content-Type", "text/plain")
+		req.AddCookie(owner.cookie)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusUnsupportedMediaType {
+			t.Errorf("%s %s with text/plain = %d, want 415", tc.method, tc.path, resp.StatusCode)
+		}
+	}
+}

@@ -321,3 +321,48 @@ func TestAVideoFinishedAfterTheRecordingWasDeletedIsRemoved(t *testing.T) {
 		t.Errorf("what the renderer sent was left in the bucket: %v", bucket.prefixes)
 	}
 }
+
+func TestRenderAuthRequiresBearerPrefix(t *testing.T) {
+	_, a, _ := testApp(t)
+	r := newRenderer(t, a)
+	req, err := http.NewRequest("POST", r.srv.URL+"/render/claim", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", renderToken)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("raw token without Bearer prefix = %d, want 401", resp.StatusCode)
+	}
+}
+
+func TestRenderDoneRejectsWrongBoardAndKeepsFiles(t *testing.T) {
+	srv, a, _ := testApp(t)
+	r := newRenderer(t, a)
+	owner := register(t, srv, "a@example.com")
+	board1 := createBoard(t, srv, owner, "Matma")
+	board2 := createBoard(t, srv, owner, "Fizyka")
+	rec := finishedWithSound(t, srv, board1, owner)
+
+	if _, ok := r.claim(); !ok {
+		t.Fatal("expected job to claim")
+	}
+	audioFile := filepath.Join(a.recDir(), rec, "audio.webm")
+	if _, err := os.Stat(audioFile); err != nil {
+		t.Fatalf("expected recording audio on disk: %v", err)
+	}
+
+	if code, _ := r.do("POST", "/render/"+board2+"/"+rec+"/done", renderToken, []byte(`{"bytes":7}`)); code != http.StatusNotFound {
+		t.Fatalf("done on wrong board = %d, want 404", code)
+	}
+	if got := videoStateOf(t, srv, board1, rec, &owner)["video"]; got != store.VideoRendering {
+		t.Errorf("video state on real board = %v, want %q", got, store.VideoRendering)
+	}
+	if _, err := os.Stat(audioFile); err != nil {
+		t.Errorf("recording files were deleted after wrong-board done: %v", err)
+	}
+}

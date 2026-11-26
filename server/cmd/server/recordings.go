@@ -13,6 +13,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/maciekgangus/inkroom/server/internal/auth"
 	"github.com/maciekgangus/inkroom/server/internal/logx"
 	"github.com/maciekgangus/inkroom/server/internal/recstore"
 	"github.com/maciekgangus/inkroom/server/internal/store"
@@ -138,7 +139,7 @@ func (a *app) recordingOf(w http.ResponseWriter, boardID, id string) (store.Reco
 
 func (a *app) startRecording(w http.ResponseWriter, r *http.Request) {
 	board, ok := a.ownedBoard(w, r)
-	if !ok {
+	if !ok || !auth.RequireJSON(w, r) {
 		return
 	}
 	u, _ := a.auth.User(r)
@@ -426,7 +427,7 @@ func (a *app) recordingFile(w http.ResponseWriter, r *http.Request) {
 
 func (a *app) finishRecording(w http.ResponseWriter, r *http.Request) {
 	rec, ok := a.ownedRecording(w, r)
-	if !ok {
+	if !ok || !auth.RequireJSON(w, r) {
 		return
 	}
 	var body struct {
@@ -621,7 +622,7 @@ func (a *app) download(w http.ResponseWriter, r *http.Request, rec store.Recordi
 // renameRecording changes the name shown in the list and in the player; only the owner does.
 func (a *app) renameRecording(w http.ResponseWriter, r *http.Request) {
 	rec, ok := a.ownedRecording(w, r)
-	if !ok {
+	if !ok || !auth.RequireJSON(w, r) {
 		return
 	}
 	var body struct {

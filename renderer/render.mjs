@@ -45,7 +45,7 @@ async function renderRecording({ base, board, rec, out, seconds, width, height, 
 	if (!audioRes.ok) throw new Error(`the sound: ${audioRes.status}`);
 	const audio = Buffer.from(await audioRes.arrayBuffer());
 	writeFileSync(path.join(tmp, "audio"), audio);
-	log(`recording "${index.name}", ${(index.durationMs / 1000).toFixed(1)} s, sound ${(audio.length / 1024).toFixed(0)} KB`);
+	log(`recording ${rec.slice(0, 8)}, ${(index.durationMs / 1000).toFixed(1)} s, sound ${(audio.length / 1024).toFixed(0)} KB`);
 
 	const ff = spawn(
 		ffmpeg[0],
@@ -182,9 +182,10 @@ async function worker() {
 			continue;
 		}
 		const where = `/render/${job.board}/${job.rec}`;
+		const ref = String(job.rec).slice(0, 8);
 		const tmp = mkdtempSync(path.join(process.env.RENDER_TMP ?? tmpdir(), "render-"));
 		try {
-			log(`rendering ${job.rec}`);
+			log(`rendering ${ref}`);
 			let last = 0;
 			await renderRecording({
 				...settings(),
@@ -206,9 +207,9 @@ async function worker() {
 			if (status < 200 || status >= 300) throw new Error(`the store refused the video: ${status}`);
 			const done = await api("POST", `${where}/done`, { bytes: statSync(file).size });
 			if (!done.ok) log(`done: ${done.status} (the recording is gone?)`);
-			else log(`${job.rec} is ready`);
+			else log(`${ref} is ready`);
 		} catch (e) {
-			log(`failed on ${job.rec}: ${e.message}`);
+			log(`failed on ${ref}: ${e.message}`);
 			await api("POST", `${where}/fail`, { reason: String(e.message).slice(0, 200) }).catch(() => {});
 		} finally {
 			rmSync(tmp, { recursive: true, force: true });
