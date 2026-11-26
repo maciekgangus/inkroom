@@ -1,5 +1,6 @@
 import type { Stroke } from "./board";
 import { intersects, strokeBounds } from "./bounds";
+import { isPolygonKind } from "./shapes";
 import type { Rect } from "./viewport";
 
 /**
@@ -78,7 +79,14 @@ export class SpatialIndex {
 			maxCy: 0,
 			large: true,
 		};
+		// A point query must return a strict superset of what strokeHit/objectHit can catch, so
+		// only elements whose hit geometry stays inside their box may sit in cells: an ellipse is
+		// hit by a normalised-radius approximation that reaches far beyond its box along the major
+		// axis, and a shape drawn from parts (a cube's back edges) can stick out of the box too.
+		// Those always go to `large`, which every query checks.
 		if (
+			stroke.kind !== "ellipse" &&
+			!isPolygonKind(stroke.kind) &&
 			Number.isFinite(bounds.minX) &&
 			Number.isFinite(bounds.minY) &&
 			Number.isFinite(bounds.maxX) &&
@@ -148,19 +156,22 @@ export class SpatialIndex {
 
 	/**
 	 * The indexed elements whose remembered box intersects `rect`, each once, in no particular
-	 * order (the board sorts what it returns). The `large` bucket is always checked.
+	 * order (the board sorts what it returns). The `large` bucket is always checked; with
+	 * `looseLarge` its elements are returned without the box check — a point query needs a
+	 * superset of what the hit tests can catch, and for elements in `large` the box alone does
+	 * not guarantee that (an ellipse's hit reaches beyond its box).
 	 */
-	query(rect: Rect): Stroke[] {
+	query(rect: Rect, looseLarge = false): Stroke[] {
 		const out: Stroke[] = [];
 		const seen = new Set<string>();
-		const keep = (e: Entry): void => {
+		const keep = (e: Entry, loose = false): void => {
 			if (seen.has(e.stroke.id)) return;
 			seen.add(e.stroke.id);
-			if (intersects(e.bounds, rect)) out.push(e.stroke);
+			if (loose || intersects(e.bounds, rect)) out.push(e.stroke);
 		};
 		for (const s of this.large) {
 			const e = this.entries.get(s.id);
-			if (e) keep(e);
+			if (e) keep(e, looseLarge);
 		}
 		const inRange =
 			Number.isFinite(rect.minX) &&

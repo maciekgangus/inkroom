@@ -426,17 +426,22 @@ export class Board {
 	}
 
 	/**
-	 * The elements whose box intersects `[x ± radius, y ± radius]` (a point query with a reach),
-	 * in drawing order. A strict superset of what `strokeHit`/`objectHit` can hit at (x, y), so
-	 * callers scan the result from the end like they scanned the whole board.
+	 * The candidates for a point query with a reach: a strict superset of what `strokeHit` /
+	 * `objectHit` can hit at (x, y) with `radius`, in drawing order, so callers scan the result
+	 * from the end like they scanned the whole board. On a small board or a very large reach it
+	 * is the whole sorted list, exactly as before.
 	 */
 	queryPoint(x: number, y: number, radius: number): Stroke[] {
-		return this.queryRect({
+		const rect: Rect = {
 			minX: x - radius,
 			minY: y - radius,
 			maxX: x + radius,
 			maxY: y + radius,
-		});
+		};
+		if (!this.indexed(rect)) return this.strokes;
+		const out = this.index.query(rect, true); // large bucket unchecked: its box is not a superset
+		out.sort(byOrder);
+		return out;
 	}
 
 	/**

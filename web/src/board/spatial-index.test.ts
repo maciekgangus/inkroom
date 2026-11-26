@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { Board, type Point, type Stroke } from "./board";
 import { intersects, strokeBounds } from "./bounds";
+import { findHit, findObjectHit, objectHit, strokeHit } from "./hit";
 import { fontsChanged } from "./text";
 import type { Rect } from "./viewport";
 
@@ -156,19 +157,39 @@ describe("property: indexed queries equal a linear scan (R-118)", () => {
 					[x, y, 0.5],
 					[x + d, y + d / 2, 0.5],
 				];
-			} else if (k < 0.7) {
+			} else if (k < 0.68) {
 				s.kind = "circle";
 				const r = rnd() < 0.1 ? 30000 : 200;
 				s.points = [
 					[x, y, 0.5],
 					[x + r, y, 0.5],
 				];
-			} else if (k < 0.85) {
+			} else if (k < 0.76) {
+				// An ellipse: its hit test reaches beyond its box, so it always sits in `large`.
+				s.kind = "ellipse";
+				const w = 20 + rnd() * 400;
+				const h = 4 + rnd() * (w / 20); // thin ones make the hit reach far along the major axis
+				s.points = [
+					[x, y, 0.5],
+					[x + w, y + h, 0.5],
+				];
+				if (rnd() < 0.3) s.rot = rnd() * Math.PI * 2;
+			} else if (k < 0.84) {
+				// A shape drawn from parts (a cube's back edges stick out of its box).
+				s.kind = rnd() < 0.5 ? "cube" : "trapezoid";
+				const w = 20 + rnd() * 600;
+				const h = 20 + rnd() * 400;
+				s.points = [
+					[x, y, 0.5],
+					[x + w, y + h, 0.5],
+				];
+				if (rnd() < 0.3) s.rot = rnd() * Math.PI * 2;
+			} else if (k < 0.92) {
 				s.kind = "text";
 				s.text = rnd() < 0.5 ? "plain line" : "**bold** and _it_";
 				if (rnd() < 0.5) s.width = 100 + rnd() * 500;
 				s.points = [[x, y, 0.5]];
-			} else if (k < 0.95) {
+			} else if (k < 0.97) {
 				s.kind = "image";
 				s.src = "img1";
 				s.points = [
@@ -204,11 +225,24 @@ describe("property: indexed queries equal a linear scan (R-118)", () => {
 				const x = pos(35000);
 				const y = pos(35000);
 				const rad = [10, 300, 4000][q % 3];
-				const r = rect(x - rad, y - rad, 2 * rad, 2 * rad);
+				// A point query must be a superset of everything the hit tests can catch...
+				const cands = board.queryPoint(x, y, rad);
+				const ids = new Set(cands.map((s) => s.id));
+				for (const s of board.strokes) {
+					if (strokeHit(s, x, y, rad) || objectHit(s, x, y, rad))
+						expect(ids.has(s.id), `${label} point ${q} superset ${s.id}`).toBe(
+							true,
+						);
+				}
+				// ...and the topmost hit over the candidates must equal a full scan's.
 				expect(
-					board.queryPoint(x, y, rad).map((s) => s.id),
-					`${label} point ${q}`,
-				).toEqual(scan(board, r));
+					findHit(cands, x, y, rad)?.id ?? null,
+					`${label} point ${q} eraser`,
+				).toBe(findHit(board.strokes, x, y, rad)?.id ?? null);
+				expect(
+					findObjectHit(cands, x, y, rad)?.id ?? null,
+					`${label} point ${q} click`,
+				).toBe(findObjectHit(board.strokes, x, y, rad)?.id ?? null);
 			}
 		};
 
