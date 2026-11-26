@@ -35,10 +35,10 @@ const livePainted = (page: Page) =>
 		return n;
 	});
 
-/** A pen hovering without touching the screen: a pointermove of type pen with no buttons (R-112). */
-const penHover = (page: Page, x: number, y: number) =>
+/** A pen hovering without touching the screen: a pointermove of type pen, pressure 0 (R-112). */
+const penHover = (page: Page, x: number, y: number, buttons = 0) =>
 	page.evaluate(
-		([x, y]) => {
+		([x, y, buttons]) => {
 			const live = document.querySelector("canvas#live") as HTMLCanvasElement;
 			live.dispatchEvent(
 				new PointerEvent("pointermove", {
@@ -50,12 +50,12 @@ const penHover = (page: Page, x: number, y: number) =>
 					clientX: x,
 					clientY: y,
 					pressure: 0,
-					button: 0,
-					buttons: 0,
+					button: -1,
+					buttons,
 				}),
 			);
 		},
-		[x, y],
+		[x, y, buttons],
 	);
 
 /** Draws a horizontal stroke with the mouse and switches to the select tool. */
@@ -99,6 +99,12 @@ test("a hovering pen highlights too, a finger never does", async ({ page }) => {
 	await openBoard(page);
 	await drawLine(page);
 	await penHover(page, 450, 400);
+	await expect.poll(() => liveIn(page, ...OVER)).toBeGreaterThan(20);
+	// A hovering pen can report buttons=1 while the tip is off the glass (pressure 0):
+	// contact is told by pressure, so the hover must still show (R-112).
+	await penHover(page, 450, AWAY);
+	await expect.poll(() => liveIn(page, ...OVER)).toBe(0);
+	await penHover(page, 450, 400, 1);
 	await expect.poll(() => liveIn(page, ...OVER)).toBeGreaterThan(20);
 	await page.waitForTimeout(80);
 	await penHover(page, 450, AWAY);

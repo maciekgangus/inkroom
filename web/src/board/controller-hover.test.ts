@@ -95,11 +95,27 @@ describe("Controller hover in the select tool (R-112)", () => {
 		expect(renderer.setHover).toHaveBeenLastCalledWith(null);
 	});
 
-	test("a hovering pen (no button pressed) highlights too", () => {
-		c.pointerHover(ev(200, 310, { pointerType: "pen" }));
+	test("a hovering pen (tip off the glass, pressure 0) highlights too", () => {
+		c.pointerHover(ev(200, 310, { pointerType: "pen", pressure: 0 }));
 		expect(renderer.setHover).toHaveBeenLastCalledWith(
 			expect.objectContaining({ id: "p" }),
 		);
+	});
+
+	test("a hovering pen that reports buttons=1 still highlights: contact is pressure, not buttons", () => {
+		// A hovering S Pen/Apple Pencil can send pointermove with buttons=1 while the tip is
+		// off the glass; only pressure>0 means a drawing contact.
+		c.pointerHover(
+			ev(200, 310, { pointerType: "pen", pressure: 0, buttons: 1 }),
+		);
+		expect(renderer.setHover).toHaveBeenLastCalledWith(
+			expect.objectContaining({ id: "p" }),
+		);
+		now += 100;
+		c.pointerHover(
+			ev(200, 310, { pointerType: "pen", pressure: 0.5, buttons: 1 }),
+		);
+		expect(renderer.setHover).toHaveBeenLastCalledWith(null);
 	});
 
 	test("hover highlights exactly the object a click grabs: 5 px off a thin line (R-072)", () => {
@@ -151,6 +167,7 @@ describe("Controller hover in the select tool (R-112)", () => {
 	test("no hover for touch, a pressed button, readOnly, another tool or a gesture", () => {
 		c.pointerHover(ev(200, 100, { pointerType: "touch" }));
 		c.pointerHover(ev(200, 100, { buttons: 1 }));
+		c.pointerHover(ev(200, 100, { pointerType: "pen", pressure: 0.5 }));
 		c.readOnly = true;
 		c.pointerHover(ev(200, 100));
 		c.readOnly = false;

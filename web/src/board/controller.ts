@@ -709,7 +709,12 @@ export class Controller {
 	/** Whether a hover may be looked for now: only in select, at rest, mouse or hovering pen. */
 	private hoverAllowed(e: PointerInput): boolean {
 		if (e.pointerType === "touch") return false;
-		if (e.buttons !== undefined && e.buttons !== 0) return false;
+		// A pen tells contact by pressure, not `buttons`: a hovering pen can send pointermove with
+		// buttons=1 while the tip is off the glass, and buttons alone would kill its hover (R-112).
+		// A mouse has no pressure, so for it the buttons decide.
+		const contact =
+			e.pointerType === "pen" ? e.pressure > 0 : (e.buttons ?? 0) !== 0;
+		if (contact) return false;
 		if (this.settings.tool !== "select" || this.readOnly) return false;
 		if (
 			this.activeId !== null ||

@@ -707,6 +707,31 @@ describe("the hover outline on the live layer (R-112, ADR 0027)", () => {
 		r.done();
 	});
 
+	test("every drawable kind gets the same halo plus edge on its contour — a pen stroke is never filled in", () => {
+		const r = setup();
+		const freehand: Stroke = {
+			id: "f",
+			authorId: "a",
+			color: "#111",
+			size: 4,
+			z: 1,
+			points: [
+				[0, 0, 0.5],
+				[50, 10, 0.5],
+				[100, 0, 0.5],
+			],
+		};
+		r.renderer.redraw([freehand]);
+		const painted = r.calls.length;
+		r.renderer.setHover(freehand);
+		// two passes over the same cached contour: the halo and the edge — and no fill at all,
+		// so a pen stroke and a shape read exactly the same under the cursor
+		const hoverCalls = r.calls.slice(painted);
+		expect(hoverCalls.filter((c) => c === "stroke").length).toBe(2);
+		expect(hoverCalls).not.toContain("fill");
+		r.done();
+	});
+
 	test("an image and a text get a thin frame on their edge, not a stroked path", () => {
 		const r = setup();
 		const img: Stroke = {

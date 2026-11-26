@@ -14,7 +14,7 @@ import { PathBudget } from "./path-budget";
 import { pointCount } from "./points";
 import { type Frame, HANDLE_PX, ROT_OFFSET_PX } from "./selection-frame";
 import { LABEL_PX, PLANE_CELL, type PlaneLook, partsOf } from "./shape-parts";
-import { isPolygonKind } from "./shapes";
+import { isBlockKind, isPolygonKind } from "./shapes";
 import { strokeOptions } from "./stroke-style";
 import { isFreehand } from "./style";
 import { layoutOf, textBox } from "./text";
@@ -55,8 +55,6 @@ const HOVER_ALPHA = 0.9;
 const HOVER_WIDTH_PX = 3;
 const HOVER_HALO_ALPHA = 0.16;
 const HOVER_HALO_PX = 11;
-/** A faint tint inside a filled silhouette (a pen stroke, a filled shape). */
-const HOVER_FILL_ALPHA = 0.14;
 
 /**
  * Freehand strokes are filled outlines (the pen's width follows the hand); a dashed or dotted one
@@ -1163,10 +1161,11 @@ export class CanvasRenderer implements Renderer {
 	}
 
 	/**
-	 * The highlight of the element under the cursor (R-112, ADR 0027): the cached path stroked in
-	 * the brand colour twice — a wide, faint halo and a solid edge on top — no shadow blur, so it
-	 * stays clearly lighter than the selection glow (R-058). An image or a coordinate plane gets
-	 * a solid frame on its edge, a text its box.
+	 * The highlight of the element under the cursor (R-112, ADR 0027): its own contour, taken from
+	 * the cached path, stroked in the brand colour — for every drawable kind exactly the same two
+	 * passes, a wide faint halo under a solid edge, no shadow blur, so it stays clearly lighter
+	 * than the selection glow (R-058). An image, a coordinate plane or a text gets a thin frame
+	 * on its edge instead, like the glow (R-084).
 	 */
 	private drawHover(ctx: CanvasRenderingContext2D, s: Stroke): void {
 		const px = 1 / this.viewport.scale;
@@ -1177,63 +1176,55 @@ export class CanvasRenderer implements Renderer {
 		}
 		ctx.save();
 		ctx.strokeStyle = this.hoverColor;
-		ctx.fillStyle = this.hoverColor;
 		ctx.lineCap = "round";
 		ctx.lineJoin = "round";
 		ctx.setLineDash([]);
 		withLook(ctx, s, () => {
 			// withLook applied the element's own opacity; every pass multiplies it.
 			const base = ctx.globalAlpha;
+			let contour: (() => void) | null = null;
 			if (s.kind === "image") {
 				const r = imageRect(s);
-				ctx.globalAlpha = base * HOVER_ALPHA;
-				ctx.lineWidth = HOVER_WIDTH_PX * px;
-				ctx.strokeRect(r.minX, r.minY, r.maxX - r.minX, r.maxY - r.minY);
-				return;
-			}
-			if (s.kind === "plane") {
+				contour = () =>
+					ctx.strokeRect(r.minX, r.minY, r.maxX - r.minX, r.maxY - r.minY);
+			} else if (s.kind === "plane") {
 				// A sheet like a picture: only its edge, like the glow (R-084).
 				const paper = extraPaths(s)?.paper;
-				ctx.globalAlpha = base * HOVER_ALPHA;
-				ctx.lineWidth = HOVER_WIDTH_PX * px;
-				if (paper) ctx.stroke(paper);
+				if (paper) contour = () => ctx.stroke(paper);
 				else {
 					const b = geomBox(s);
-					ctx.strokeRect(b.minX, b.minY, b.maxX - b.minX, b.maxY - b.minY);
+					contour = () =>
+						ctx.strokeRect(b.minX, b.minY, b.maxX - b.minX, b.maxY - b.minY);
 				}
-				return;
-			}
-			if (s.kind === "text") {
+			} else if (s.kind === "text") {
 				const b = textBox(s);
-				ctx.globalAlpha = base * HOVER_ALPHA;
-				ctx.lineWidth = HOVER_WIDTH_PX * px;
-				ctx.strokeRect(b.minX, b.minY, b.maxX - b.minX, b.maxY - b.minY);
-				return;
-			}
-			let path: Path2D | null = null;
-			if (this.ensurePath(s, c) === "poly" && c.poly) {
-				path = new Path2D();
-				path.moveTo(c.poly[0], c.poly[1]);
-				for (let i = 2; i < c.poly.length; i += 2)
-					path.lineTo(c.poly[i], c.poly[i + 1]);
-				path.closePath();
+				contour = () =>
+					ctx.strokeRect(b.minX, b.minY, b.maxX - b.minX, b.maxY - b.minY);
 			} else {
-				path = c.path ?? null;
+				let path: Path2D | null = null;
+				if (this.ensurePath(s, c) === "poly" && c.poly) {
+					path = new Path2D();
+					path.moveTo(c.poly[0], c.poly[1]);
+					for (let i = 2; i < c.poly.length; i += 2)
+						path.lineTo(c.poly[i], c.poly[i + 1]);
+					path.closePath();
+				} else {
+					path = c.path ?? null;
+				}
+				if (path) contour = () => ctx.stroke(path);
 			}
-			if (!path) return;
-			// The halo: wide and faint, so the object reads under the cursor even over its own ink.
-			ctx.globalAlpha = base * HOVER_HALO_ALPHA;
-			ctx.lineWidth = HOVER_HALO_PX * px;
-			ctx.stroke(path);
-			// A faint tint inside a filled silhouette (a pen stroke, a filled shape).
-			if (isFilled(s) || s.fill) {
-				ctx.globalAlpha = base * HOVER_FILL_ALPHA;
-				ctx.fill(extraPaths(s)?.fill ?? path);
+			if (!contour) return;
+			// A block (an image, a plane, a text) is framed thinly, per ADR 0027; a drawable object
+			// gets the halo too, so it reads under the cursor even over its own ink.
+			if (!isBlockKind(s.kind) && s.kind !== "text") {
+				ctx.globalAlpha = base * HOVER_HALO_ALPHA;
+				ctx.lineWidth = HOVER_HALO_PX * px;
+				contour();
 			}
-			// The edge: solid and clearly visible.
+			// The edge: solid, exactly on the contour.
 			ctx.globalAlpha = base * HOVER_ALPHA;
 			ctx.lineWidth = HOVER_WIDTH_PX * px;
-			ctx.stroke(path);
+			contour();
 		});
 		ctx.restore();
 	}
