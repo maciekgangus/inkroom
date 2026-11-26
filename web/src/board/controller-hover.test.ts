@@ -247,6 +247,28 @@ describe("Controller hover in the select tool (R-112)", () => {
 		}
 	});
 
+	test("a fresh check cancels a stale throttled one: the newest position wins, no flicker back", () => {
+		vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+		try {
+			c.pointerHover(ev(200, 100)); // leading: the line
+			expect(renderer.setHover).toHaveBeenLastCalledWith(
+				expect.objectContaining({ id: "l" }),
+			);
+			c.pointerHover(ev(200, 500)); // throttled: empty space kept for later
+			expect(renderer.setHover).toHaveBeenCalledTimes(1);
+			now += 100;
+			c.pointerHover(ev(200, 100)); // leading again, back on the line
+			expect(renderer.setHover).toHaveBeenCalledTimes(1); // still the line, no new call
+			vi.advanceTimersByTime(200); // the stale timer must not clear it
+			expect(renderer.setHover).toHaveBeenCalledTimes(1);
+			expect(renderer.setHover).toHaveBeenLastCalledWith(
+				expect.objectContaining({ id: "l" }),
+			);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
 	test("pointerdown, clearHover and hideFrame clear the hover at once", () => {
 		c.pointerHover(ev(200, 100));
 		c.pointerDown(ev(200, 100));

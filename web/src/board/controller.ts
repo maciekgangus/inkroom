@@ -668,6 +668,10 @@ export class Controller {
 		}
 		const wait = HOVER_MS - (Date.now() - this.lastHoverAt);
 		if (wait <= 0) {
+			// A fresh check supersedes a throttled one still waiting: its position is the newer.
+			if (this.hoverTimer) clearTimeout(this.hoverTimer);
+			this.hoverTimer = null;
+			this.hoverPending = null;
 			this.lastHoverAt = Date.now();
 			this.lookUnder(e);
 			return;
