@@ -651,6 +651,24 @@ export class CanvasRenderer implements Renderer {
 	private adjust: [number, number] | null = null;
 	/** The corners of a selected figure, drawn as dots to drag (R-047). */
 	private vertices: [number, number][] | null = null;
+	/**
+	 * Optional spatial query source (R-118, ADR 0031): picks the elements to consider when the
+	 * committed layer is painted for a view. It gets the view rect and the exact array `redraw`
+	 * was last given, so it can tell whether that array is the board's own (whose index it can
+	 * use) and fall back to the array itself otherwise. Null (the default) paints the given
+	 * list as before.
+	 */
+	private query:
+		| ((rect: Rect, strokes: readonly Stroke[]) => readonly Stroke[])
+		| null = null;
+
+	/** Sets the spatial query source used by paintCommitted (null restores the plain list). */
+	setQuery(
+		fn: ((rect: Rect, strokes: readonly Stroke[]) => readonly Stroke[]) | null,
+	): void {
+		this.query = fn;
+	}
+
 	/** Maps a stored ink colour to the colour painted (dark mode swaps black and white). */
 	ink: (color: string) => string = (c) => c;
 	/** Which grid to draw under the elements (R-027, R-032) and in which colour. */
@@ -967,7 +985,8 @@ export class CanvasRenderer implements Renderer {
 			maxY: from.y + h / scale,
 		};
 		this.frame++;
-		for (const s of this.strokes) {
+		const list = this.query ? this.query(view, this.strokes) : this.strokes;
+		for (const s of list) {
 			if (this.drag?.ids.has(s.id)) continue; // drawn on the live layer while dragged
 			this.drawStroke(ctx, s, view);
 		}
