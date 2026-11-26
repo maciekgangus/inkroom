@@ -485,10 +485,11 @@ export class Board {
 		const i = this.indexOf(old);
 		if (i < 0) return;
 		packStroke(stroke);
-		this.bump();
 		if (old.z === stroke.z) {
 			this.strokes[i] = stroke;
 			this.byId.set(stroke.id, stroke);
+			// After the swap: a listener reads the board as it is now (the hover checks identity).
+			this.bump();
 			return;
 		}
 		// A new z moves the element in the drawing order.

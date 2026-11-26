@@ -597,3 +597,140 @@ describe("function graphs on the canvas (R-092)", () => {
 		expect(r.lineTos[0]).toBeGreaterThan(first);
 	});
 });
+
+describe("the hover outline on the live layer (R-112, ADR 0027)", () => {
+	const setup = () => {
+		vi.stubGlobal("requestAnimationFrame", undefined);
+		vi.stubGlobal(
+			"Path2D",
+			class {
+				moveTo() {}
+				lineTo() {}
+				quadraticCurveTo() {}
+				closePath() {}
+				rect() {}
+				ellipse() {}
+				arc() {}
+				roundRect() {}
+			},
+		);
+		const calls: string[] = [];
+		const props: Record<string, unknown[]> = {};
+		const target: Record<string, unknown> = { globalAlpha: 1, lineWidth: 1 };
+		const ctx = new Proxy(target, {
+			get: (t, k) => {
+				if (k === "canvas") return { width: 100, height: 100 };
+				if (k in t) return t[k as string];
+				return (..._a: unknown[]) => {
+					calls.push(String(k));
+					return ctx;
+				};
+			},
+			set: (t, k, v) => {
+				t[k as string] = v;
+				(props[k as string] ??= []).push(v);
+				return true;
+			},
+		}) as unknown as CanvasRenderingContext2D;
+		const canvas = () =>
+			({
+				getContext: () => ctx,
+				style: {},
+				width: 100,
+				height: 100,
+			}) as unknown as HTMLCanvasElement;
+		const renderer = new CanvasRenderer(canvas(), canvas(), new Viewport());
+		return {
+			renderer,
+			calls,
+			props,
+			done: () => vi.unstubAllGlobals(),
+		};
+	};
+	const ln = (id: string): Stroke => ({
+		id,
+		authorId: "a",
+		color: "#111",
+		size: 4,
+		z: 1,
+		kind: "line",
+		points: [
+			[0, 0, 0.5],
+			[100, 0, 0.5],
+		],
+	});
+
+	test("only a change of the hovered element repaints, and only the live layer", () => {
+		const r = setup();
+		const a = ln("a");
+		const b = ln("b");
+		r.renderer.redraw([a, b]);
+		const clears = () => r.calls.filter((c) => c === "clearRect").length;
+		const at = clears(); // committed and live painted once each
+		r.renderer.setHover(a);
+		expect(clears()).toBe(at + 1); // the live layer only
+		r.renderer.setHover(a);
+		expect(clears()).toBe(at + 1); // unchanged: no repaint at all
+		r.renderer.setHover(b);
+		expect(clears()).toBe(at + 2);
+		r.renderer.setHover(null);
+		expect(clears()).toBe(at + 3);
+		r.done();
+	});
+
+	test("a thin translucent outline in the brand colour, no shadow blur like the glow", () => {
+		const r = setup();
+		const el = ln("a");
+		r.renderer.redraw([el]);
+		r.renderer.setHover(el);
+		expect(r.props.strokeStyle ?? []).toContain("#5b5bf0");
+		expect(r.calls).toContain("stroke");
+		// lighter than the selection glow (R-058): no blurred shadow at all
+		expect((r.props.shadowBlur ?? []).filter((b) => (b as number) > 0)).toEqual(
+			[],
+		);
+		// translucent and a constant thin width on screen
+		expect(
+			(r.props.globalAlpha ?? []).some(
+				(a) => Math.abs((a as number) - 0.55) < 1e-9,
+			),
+		).toBe(true);
+		expect(r.props.lineWidth ?? []).toContain(2);
+		r.done();
+	});
+
+	test("an image and a text get a thin frame on their edge, not a stroked path", () => {
+		const r = setup();
+		const img: Stroke = {
+			id: "i",
+			authorId: "a",
+			color: "#111",
+			size: 4,
+			z: 1,
+			kind: "image",
+			src: "x",
+			points: [
+				[0, 0, 0.5],
+				[50, 80, 0.5],
+			],
+		};
+		r.renderer.redraw([img]);
+		r.renderer.setHover(img);
+		expect(r.calls).toContain("strokeRect");
+		const txt: Stroke = {
+			id: "t",
+			authorId: "a",
+			color: "#111",
+			size: 4,
+			z: 2,
+			kind: "text",
+			text: "hi",
+			points: [[10, 10, 0.5]],
+		};
+		r.renderer.setHover(txt);
+		expect(
+			r.calls.filter((c) => c === "strokeRect").length,
+		).toBeGreaterThanOrEqual(2);
+		r.done();
+	});
+});

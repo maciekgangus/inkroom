@@ -101,4 +101,167 @@ describe("Controller hover in the select tool (R-112)", () => {
 			expect.objectContaining({ id: "p" }),
 		);
 	});
+
+	test("hover highlights exactly the object a click grabs: 5 px off a thin line (R-072)", () => {
+		c.pointerHover(ev(200, 105));
+		expect(renderer.setHover).toHaveBeenLastCalledWith(
+			expect.objectContaining({ id: "l" }),
+		);
+		c.pointerDown(ev(200, 105));
+		c.pointerUp(ev(200, 105));
+		expect(c.selection.map((s) => s.id)).toEqual(["l"]);
+	});
+
+	test("when objects overlap, hover and click both take the topmost one", () => {
+		board.addStroke({
+			...base,
+			id: "top",
+			z: 99,
+			points: [pt(150, 95), pt(250, 105), pt(200, 90)],
+		});
+		c.pointerHover(ev(200, 100));
+		expect(renderer.setHover).toHaveBeenLastCalledWith(
+			expect.objectContaining({ id: "top" }),
+		);
+		c.pointerDown(ev(200, 100));
+		c.pointerUp(ev(200, 100));
+		expect(c.selection.map((s) => s.id)).toEqual(["top"]);
+	});
+
+	test("hover and click agree on a rotated object", () => {
+		board.addStroke({
+			...base,
+			id: "rot",
+			kind: "rect",
+			rot: Math.PI / 4,
+			points: [pt(400, 400), pt(500, 500)],
+		});
+		// The middle of the rect's right edge, turned by 45 degrees around (450, 450).
+		const s = Math.SQRT1_2 * 50;
+		const at = [450 + s, 450 + s] as const;
+		c.pointerHover(ev(at[0], at[1]));
+		expect(renderer.setHover).toHaveBeenLastCalledWith(
+			expect.objectContaining({ id: "rot" }),
+		);
+		c.pointerDown(ev(at[0], at[1]));
+		c.pointerUp(ev(at[0], at[1]));
+		expect(c.selection.map((s2) => s2.id)).toEqual(["rot"]);
+	});
+
+	test("no hover for touch, a pressed button, readOnly, another tool or a gesture", () => {
+		c.pointerHover(ev(200, 100, { pointerType: "touch" }));
+		c.pointerHover(ev(200, 100, { buttons: 1 }));
+		c.readOnly = true;
+		c.pointerHover(ev(200, 100));
+		c.readOnly = false;
+		settings.tool = "pen";
+		c.pointerHover(ev(200, 100));
+		settings.tool = "select";
+		c.pointerDown(ev(200, 100)); // a gesture begins
+		c.pointerHover(ev(200, 100));
+		c.pointerUp(ev(200, 100));
+		expect(renderer.setHover).not.toHaveBeenCalled();
+	});
+
+	test("a selected object gets no second hover (it already glows, R-058)", () => {
+		c.pointerHover(ev(200, 100));
+		expect(renderer.setHover).toHaveBeenLastCalledWith(
+			expect.objectContaining({ id: "l" }),
+		);
+		c.select("l");
+		expect(renderer.setHover).toHaveBeenLastCalledWith(null);
+		now += 100;
+		c.pointerHover(ev(200, 100));
+		expect(renderer.setHover).toHaveBeenCalledTimes(2); // still just: l, then null
+	});
+
+	test("over a handle of the active selection the hover is cleared, the object under it ignored", () => {
+		board.addStroke({
+			...base,
+			id: "under",
+			kind: "rect",
+			points: [pt(600, 200), pt(640, 240)],
+		});
+		c.select("r");
+		const f = renderer.setSelection.mock.lastCall?.[0];
+		const se = [f.cx + f.w / 2, f.cy + f.h / 2] as const;
+		c.pointerHover(ev(se[0], se[1])); // on the corner handle, over "under"
+		expect(renderer.setHover).not.toHaveBeenCalled();
+		now += 100;
+		c.pointerHover(ev(635, 235)); // inside "under", away from every handle
+		expect(renderer.setHover).toHaveBeenLastCalledWith(
+			expect.objectContaining({ id: "under" }),
+		);
+	});
+
+	test("no hover when the selection is very large or the board is huge", () => {
+		const many: Stroke[] = [];
+		for (let i = 0; i < 51; i++)
+			many.push({
+				...base,
+				id: `m${i}`,
+				z: 100 + i,
+				points: [pt(i * 30, 600), pt(i * 30 + 20, 600)],
+			});
+		for (const s of many) board.addStroke(s);
+		c.select(many.map((s) => s.id));
+		c.pointerHover(ev(200, 100));
+		expect(renderer.setHover).not.toHaveBeenCalled();
+		c.select(null);
+		for (let i = 0; i < 5001; i++)
+			board.addStroke({
+				...base,
+				id: `b${i}`,
+				z: 1000 + i,
+				points: [pt(0, 1000 + i * 2), pt(10, 1000 + i * 2)],
+			});
+		c.pointerHover(ev(200, 100));
+		expect(renderer.setHover).not.toHaveBeenCalled();
+	});
+
+	test("the hover check is throttled to ~50 ms while the pointer moves", () => {
+		c.pointerHover(ev(200, 100));
+		expect(renderer.setHover).toHaveBeenCalledTimes(1);
+		c.pointerHover(ev(200, 500)); // within 50 ms: skipped
+		expect(renderer.setHover).toHaveBeenCalledTimes(1);
+		now += 100;
+		c.pointerHover(ev(200, 500));
+		expect(renderer.setHover).toHaveBeenLastCalledWith(null);
+		expect(renderer.setHover).toHaveBeenCalledTimes(2);
+	});
+
+	test("pointerdown, clearHover and hideFrame clear the hover at once", () => {
+		c.pointerHover(ev(200, 100));
+		c.pointerDown(ev(200, 100));
+		expect(renderer.setHover).toHaveBeenLastCalledWith(null);
+		c.pointerUp(ev(200, 100)); // the click grabbed "l"
+		c.select(null);
+		now += 100;
+		c.pointerHover(ev(200, 100));
+		expect(renderer.setHover).toHaveBeenLastCalledWith(
+			expect.objectContaining({ id: "l" }),
+		);
+		c.clearHover();
+		expect(renderer.setHover).toHaveBeenLastCalledWith(null);
+		now += 100;
+		c.pointerHover(ev(200, 100));
+		c.hideFrame(); // the view moves
+		expect(renderer.setHover).toHaveBeenLastCalledWith(null);
+	});
+
+	test("a remote erase or update of the hovered object clears the hover", () => {
+		c.pointerHover(ev(200, 100));
+		expect(renderer.setHover).toHaveBeenLastCalledWith(
+			expect.objectContaining({ id: "l" }),
+		);
+		board.applyRemote({ t: "update", stroke: { ...line("l"), color: "#f00" } });
+		expect(renderer.setHover).toHaveBeenLastCalledWith(null);
+		now += 100;
+		c.pointerHover(ev(200, 100));
+		expect(renderer.setHover).toHaveBeenLastCalledWith(
+			expect.objectContaining({ id: "l" }),
+		);
+		board.applyRemote({ t: "remove", id: "l" });
+		expect(renderer.setHover).toHaveBeenLastCalledWith(null);
+	});
 });
