@@ -7,6 +7,7 @@ import {
 	type Renderer,
 	type Settings,
 } from "./controller";
+import { findHit, findObjectHit } from "./hit";
 import { worldBounds } from "./transform";
 import { Viewport } from "./viewport";
 
@@ -180,8 +181,7 @@ describe("Controller hit paths through the spatial index (R-118)", () => {
 		expect(board.strokes.some((s) => s.id === "far")).toBe(false);
 	});
 
-	test("queries on the big board return the same as a linear scan for the eraser path", () => {
-		// The candidates the index returns must be exactly the linear scan's for a point query.
+	test("queries on the big board return a drawing-order superset and the exact topmost hit", () => {
 		for (const [x, y] of [
 			[100, 100],
 			[50, 50],
@@ -195,10 +195,27 @@ describe("Controller hit paths through the spatial index (R-118)", () => {
 				maxX: x + reach,
 				maxY: y + reach,
 			};
-			expect(board.queryPoint(x, y, reach).map((s) => s.id)).toEqual(
-				board.strokes
-					.filter((s) => intersects(strokeBounds(s), r))
-					.map((s) => s.id),
+			const cands = board.queryPoint(x, y, reach);
+			const ids = cands.map((s) => s.id);
+			const order = new Map(board.strokes.map((s, i) => [s.id, i]));
+			// Preserves exact drawing order (z, id).
+			for (let i = 1; i < ids.length; i++) {
+				expect(order.get(ids[i - 1]) as number).toBeLessThan(
+					order.get(ids[i]) as number,
+				);
+			}
+			// Superset of the unpadded box scan.
+			const idSet = new Set(ids);
+			for (const s of board.strokes.filter((s) =>
+				intersects(strokeBounds(s), r),
+			)) {
+				expect(idSet.has(s.id)).toBe(true);
+			}
+			expect(findHit(cands, x, y, reach)?.id ?? null).toBe(
+				findHit(board.strokes, x, y, reach)?.id ?? null,
+			);
+			expect(findObjectHit(cands, x, y, reach)?.id ?? null).toBe(
+				findObjectHit(board.strokes, x, y, reach)?.id ?? null,
 			);
 		}
 	});

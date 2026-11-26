@@ -432,11 +432,14 @@ export class Board {
 	 * is the whole sorted list, exactly as before.
 	 */
 	queryPoint(x: number, y: number, radius: number): Stroke[] {
+		// Chebyshev box hits (image, plane, filled rect, text) rotated by up to 45° sit up to
+		// radius * sqrt(2) outside strokeBounds(s), so pad by sqrt(2) to stay a strict superset.
+		const pad = Math.max(0, radius) * Math.SQRT2 + 1e-6;
 		const rect: Rect = {
-			minX: x - radius,
-			minY: y - radius,
-			maxX: x + radius,
-			maxY: y + radius,
+			minX: x - pad,
+			minY: y - pad,
+			maxX: x + pad,
+			maxY: y + pad,
 		};
 		if (!this.indexed(rect)) return this.strokes;
 		const out = this.index.query(rect, true); // large bucket unchecked: its box is not a superset
@@ -564,14 +567,15 @@ export class Board {
 		const i = this.indexOf(old);
 		if (i < 0) return;
 		packStroke(stroke);
-		this.bump();
 		if (old.z === stroke.z) {
 			this.strokes[i] = stroke;
 			this.byId.set(stroke.id, stroke);
 			this.index.update(stroke); // out of the old cells, into the new ones
+			// After the swap and reindex: listeners must see the new version (R-118, R-112).
+			this.bump();
 			return;
 		}
-		// A new z moves the element in the drawing order.
+		// A new z moves the element in the drawing order (insert() calls bump()).
 		this.index.remove(old.id); // insert() puts the new version back
 		this.strokes.splice(i, 1);
 		this.byId.delete(stroke.id);

@@ -1,8 +1,11 @@
 import { describe, expect, test } from "vitest";
-import { Board, type Point, type Stroke } from "./board";
+import { Board, type ElementKind, type Point, type Stroke } from "./board";
 import { intersects, strokeBounds } from "./bounds";
 import { findHit, findObjectHit, objectHit, strokeHit } from "./hit";
-import { fontsChanged } from "./text";
+import { isPolygonKind, SHAPES } from "./shapes";
+import { cellSpan } from "./spatial-index";
+import { fontsChanged, textBox } from "./text";
+import { centerOf, rotatePoint } from "./transform";
 import type { Rect } from "./viewport";
 
 /** Deterministic RNG (mulberry32), so the property tests always run the same sequence. */
@@ -116,6 +119,352 @@ describe("Board spatial queries (R-118)", () => {
 			const r = rect(x, y, [100, 3000, 50000][q % 3], 800);
 			expect(board.queryRect(r).map((s) => s.id)).toEqual(scan(board, r));
 		}
+	});
+
+	test("queryPoint catches rotated box-hit corners for image, filled rect, and text", () => {
+		const board = new Board();
+		// Past SMALL_BOARD (200) at far-away coordinates so only the index path runs.
+		for (let i = 0; i < 210; i++) {
+			const x = 10000 + i * 20;
+			board.addStroke({
+				...base(`fill${i}`, i + 1),
+				points: [
+					[x, 10000, 0.5],
+					[x + 5, 10005, 0.5],
+				],
+			});
+		}
+		const rotImage: Stroke = {
+			...base("rot-img", 300),
+			kind: "image",
+			src: "img1",
+			size: 1,
+			rot: Math.PI / 4,
+			points: [
+				[0, 0, 0.5],
+				[100, 100, 0.5],
+			],
+		};
+		const rotRect: Stroke = {
+			...base("rot-rect", 301),
+			kind: "rect",
+			fill: "#fcc",
+			size: 2,
+			rot: Math.PI / 4,
+			points: [
+				[1000, 0, 0.5],
+				[1100, 100, 0.5],
+			],
+		};
+		const rotText: Stroke = {
+			...base("rot-text", 302),
+			kind: "text",
+			text: "hello",
+			fontSize: 16,
+			rot: Math.PI / 4,
+			points: [[2000, 0, 0.5]],
+		};
+		board.addStroke(rotImage);
+		board.addStroke(rotRect);
+		board.addStroke(rotText);
+
+		// Rotated image: local (-9.9, -9.9) is within radius 10 of [0..100, 0..100],
+		// sitting 9.9 * sqrt(2) ≈ 14.0 units above strokeBounds.minY.
+		const imgY = 50 - 59.9 * Math.SQRT2;
+		expect(objectHit(rotImage, 50, imgY, 10)).toBe(true);
+		expect(board.queryPoint(50, imgY, 10).map((s) => s.id)).toContain(
+			"rot-img",
+		);
+		expect(
+			findObjectHit(board.queryPoint(50, imgY, 10), 50, imgY, 10)?.id,
+		).toBe(findObjectHit(board.strokes, 50, imgY, 10)?.id);
+
+		// Rotated filled rect: local (989.1, -10.9) is within reach 10 + size/2 = 11,
+		// sitting 8.9 * sqrt(2) ≈ 12.6 units above strokeBounds.minY.
+		const rectY = 50 - 60.9 * Math.SQRT2;
+		expect(objectHit(rotRect, 1050, rectY, 10)).toBe(true);
+		expect(board.queryPoint(1050, rectY, 10).map((s) => s.id)).toContain(
+			"rot-rect",
+		);
+		expect(
+			findObjectHit(board.queryPoint(1050, rectY, 10), 1050, rectY, 10)?.id,
+		).toBe(findObjectHit(board.strokes, 1050, rectY, 10)?.id);
+
+		// Zoomed-out rotated text (radius = 80 > fontSize = 16): rotated expanded corner sits
+		// (79.5 - 16) * sqrt(2) ≈ 89.8 units outside strokeBounds.
+		const tb = textBox(rotText);
+		const [tx, ty] = rotatePoint(
+			[tb.minX - 79.5, tb.minY - 79.5],
+			centerOf(rotText),
+			rotText.rot ?? 0,
+		);
+		expect(objectHit(rotText, tx, ty, 80)).toBe(true);
+		expect(board.queryPoint(tx, ty, 80).map((s) => s.id)).toContain("rot-text");
+		expect(findObjectHit(board.queryPoint(tx, ty, 80), tx, ty, 80)?.id).toBe(
+			findObjectHit(board.strokes, tx, ty, 80)?.id,
+		);
+	});
+
+	test("regular polygon shapes and coordinate planes sit in grid cells instead of large", () => {
+		const board = new Board();
+		for (let i = 0; i < 210; i++) {
+			const x = i * 30;
+			board.addStroke({
+				...base(`fill${i}`, i + 1),
+				points: [
+					[x, 0, 0.5],
+					[x + 10, 10, 0.5],
+				],
+			});
+		}
+		board.addStroke({
+			...base("far-tri", 300),
+			kind: "triangle",
+			points: [
+				[20000, 20000, 0.5],
+				[20200, 20200, 0.5],
+			],
+		});
+		board.addStroke({
+			...base("far-cube", 301),
+			kind: "cube",
+			points: [
+				[20300, 20000, 0.5],
+				[20500, 20200, 0.5],
+			],
+		});
+		board.addStroke({
+			...base("far-plane", 302),
+			kind: "plane",
+			points: [
+				[20600, 20000, 0.5],
+				[21000, 20400, 0.5],
+			],
+		});
+
+		const nearIds = new Set(board.queryPoint(100, 100, 10).map((s) => s.id));
+		expect(nearIds.has("far-tri")).toBe(false);
+		expect(nearIds.has("far-cube")).toBe(false);
+		expect(nearIds.has("far-plane")).toBe(false);
+	});
+
+	test("all polygon/part kinds satisfy queryPoint superset across rotated, filled, and edge-case variants", () => {
+		const board = new Board();
+		for (let i = 0; i < 210; i++) {
+			const x = 50000 + i * 30;
+			board.addStroke({
+				...base(`fill${i}`, i + 1),
+				points: [
+					[x, 50000, 0.5],
+					[x + 10, 50010, 0.5],
+				],
+			});
+		}
+		const kinds: ElementKind[] = [
+			...SHAPES.map((s) => s.kind).filter((k) => isPolygonKind(k)),
+			"plane",
+		];
+		let z = 300;
+		const placed: {
+			stroke: Stroke;
+			cx: number;
+			cy: number;
+			w: number;
+			h: number;
+		}[] = [];
+		let idx = 0;
+		for (const kind of kinds) {
+			for (const rot of [0, Math.PI / 4]) {
+				for (const fill of [undefined, "#ffcc80"]) {
+					const x = (idx % 16) * 2000;
+					const y = Math.floor(idx / 16) * 2000;
+					const w = 120;
+					const h = 90;
+					const stroke: Stroke = {
+						...base(`p-${kind}-${rot ? "r" : "0"}-${fill ? "f" : "u"}`, ++z),
+						kind,
+						size: 4,
+						...(rot ? { rot } : {}),
+						...(fill ? { fill } : {}),
+						points: [
+							[x, y, 0.5],
+							[x + w, y + h, 0.5],
+						],
+					};
+					board.addStroke(stroke);
+					placed.push({ stroke, cx: x + w / 2, cy: y + h / 2, w, h });
+					idx++;
+				}
+			}
+		}
+		// Tiny axes (< 4 units) whose arrowheads exceed the points box, plus out-of-unit verts.
+		const tinyAxes: Stroke = {
+			...base("tiny-axes", ++z),
+			kind: "axes",
+			size: 2,
+			points: [
+				[-2000, -2000, 0.5],
+				[-1998, -1998, 0.5],
+			],
+		};
+		const outVerts: Stroke = {
+			...base("out-verts", ++z),
+			kind: "triangle",
+			size: 4,
+			verts: [
+				[-0.5, 0],
+				[1.5, 0],
+				[0.5, 1.5],
+			],
+			points: [
+				[-4000, -2000, 0.5],
+				[-3900, -1900, 0.5],
+			],
+		};
+		board.addStroke(tinyAxes);
+		board.addStroke(outVerts);
+		placed.push(
+			{ stroke: tinyAxes, cx: -1999, cy: -1999, w: 2, h: 2 },
+			{ stroke: outVerts, cx: -3950, cy: -1950, w: 100, h: 100 },
+		);
+
+		const radius = 12;
+		for (const { stroke, cx, cy, w, h } of placed) {
+			const probes: [number, number][] = [
+				[cx, cy],
+				[cx - w / 2, cy - h / 2],
+				[cx + w / 2, cy - h / 2],
+				[cx - w / 2, cy + h / 2],
+				[cx + w / 2, cy + h / 2],
+				[cx - w * 0.75, cy - h * 0.75],
+				[cx + w * 0.75, cy + h * 0.75],
+				[cx, cy - h * 0.75],
+				[cx, cy + h * 0.75],
+				[cx - w * 0.6, cy],
+			];
+			for (const [px, py] of probes) {
+				const cands = board.queryPoint(px, py, radius);
+				if (
+					strokeHit(stroke, px, py, radius) ||
+					objectHit(stroke, px, py, radius)
+				) {
+					expect(
+						cands.some((s) => s.id === stroke.id),
+						`missing ${stroke.id} at (${px}, ${py})`,
+					).toBe(true);
+				}
+				expect(findHit(cands, px, py, radius)?.id ?? null).toBe(
+					findHit(board.strokes, px, py, radius)?.id ?? null,
+				);
+				expect(findObjectHit(cands, px, py, radius)?.id ?? null).toBe(
+					findObjectHit(board.strokes, px, py, radius)?.id ?? null,
+				);
+			}
+		}
+	});
+
+	test("onChange listeners see updated strokes and spatial index after updateElement (same z and new z)", () => {
+		const board = new Board();
+		for (let i = 0; i < 210; i++) {
+			const x = 10000 + i * 30;
+			board.addStroke({
+				...base(`fill${i}`, i + 1),
+				points: [
+					[x, 10000, 0.5],
+					[x + 10, 10010, 0.5],
+				],
+			});
+		}
+		const target: Stroke = {
+			...base("target", 300),
+			kind: "rect",
+			points: [
+				[0, 0, 0.5],
+				[50, 50, 0.5],
+			],
+		};
+		board.addStroke(target);
+
+		const observations: {
+			inStrokes: boolean;
+			inNewRect: boolean;
+			inOldRect: boolean;
+		}[] = [];
+		let expected: Stroke = target;
+		let oldBox = rect(0, 0, 50, 50);
+		let newBox = rect(0, 0, 50, 50);
+
+		board.onChange(() => {
+			observations.push({
+				inStrokes: board.strokes.includes(expected),
+				inNewRect: board.queryRect(newBox).some((s) => s.id === "target"),
+				inOldRect: board.queryRect(oldBox).some((s) => s.id === "target"),
+			});
+		});
+
+		// Same z: moved from [0..50] to [3000..3050].
+		const movedSameZ: Stroke = {
+			...target,
+			points: [
+				[3000, 3000, 0.5],
+				[3050, 3050, 0.5],
+			],
+		};
+		expected = movedSameZ;
+		oldBox = rect(0, 0, 50, 50);
+		newBox = rect(3000, 3000, 50, 50);
+		board.updateElement("a", movedSameZ);
+
+		expect(observations).toEqual([
+			{ inStrokes: true, inNewRect: true, inOldRect: false },
+		]);
+
+		// New z: moved from [3000..3050] to [6000..6050].
+		observations.length = 0;
+		const movedNewZ: Stroke = {
+			...movedSameZ,
+			z: 400,
+			points: [
+				[6000, 6000, 0.5],
+				[6050, 6050, 0.5],
+			],
+		};
+		expected = movedNewZ;
+		oldBox = rect(3000, 3000, 50, 50);
+		newBox = rect(6000, 6000, 50, 50);
+		board.updateElement("a", movedNewZ);
+
+		expect(observations).toEqual([
+			{ inStrokes: true, inNewRect: true, inOldRect: false },
+		]);
+	});
+
+	test("cellSpan and queryRect treat inverted rects as empty", () => {
+		const invBoth: Rect = { minX: 10000, minY: 10000, maxX: 0, maxY: 0 };
+		const invX: Rect = { minX: 50000, minY: 0, maxX: 0, maxY: 50000 };
+		expect(cellSpan(invBoth)).toBe(0);
+		expect(cellSpan(invX)).toBe(0);
+
+		const board = new Board();
+		for (let i = 0; i < 210; i++) {
+			board.addStroke({
+				...base(`fill${i}`, i + 1),
+				points: [
+					[i * 30, 0, 0.5],
+					[i * 30 + 10, 10, 0.5],
+				],
+			});
+		}
+		board.addStroke({
+			...base("ell", 300),
+			kind: "ellipse",
+			points: [
+				[100, 100, 0.5],
+				[300, 200, 0.5],
+			],
+		});
+		expect(board.queryRect(invBoth)).toEqual([]);
+		expect(board.queryRect(invX)).toEqual([]);
 	});
 });
 
