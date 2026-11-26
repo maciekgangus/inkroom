@@ -32,4 +32,4 @@ Wyniki wklejasz do opisu PR-a. O merge decyduje zielony job `test` w CI (`gh pr 
 - Zrzuty w 375, 768 i 1440 px jako PNG w `docs/screenshots/<gałąź, w której "/" zamieniasz na "-">/`. Muszą być nowsze niż ostatni commit i trafić do opisu PR-a. Bez nich PR ze zmianą interfejsu nie powstaje (`.claude/hooks/pr-evidence-gate.sh`).
 
 ## Mistral Vibe: zaufanie do folderu
-Vibe wczytuje `AGENTS.md`, `.agents/skills/` i `.vibe/hooks.toml` tylko z zaufanego folderu. Przy pierwszym uruchomieniu w worktree wybierz „Trust full repo” (albo uruchom z `--trust`). Bez tego nie widzisz tych zasad, skilli ani hooków.
+Vibe wczytuje `AGENTS.md`, `.agents/skills/` i `.vibe/hooks.toml` tylko z zaufanego folderu, a zaufanie dziedziczy się po folderze nadrzędnym. Wystarczy raz zaufać `~/.t3/worktrees/ekorepetycje-inkroom` (oraz katalogom własnych worktree obok katalogu głównego), żeby objęło każdy nowy worktree. Jednorazowo działa też `vibe --trust`. Bez tego Vibe nie widzi tych zasad, skilli ani hooków.
