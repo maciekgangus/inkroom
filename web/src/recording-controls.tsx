@@ -103,7 +103,6 @@ export function RecordingControls({
 		if (!open || !preparing) return;
 		const t = setInterval(() => void reload(), VIDEO_REFRESH_MS);
 		return () => clearInterval(t);
-		// biome-ignore lint/correctness/useExhaustiveDependencies: reload follows boardId
 	}, [open, preparing, boardId]);
 	useEffect(
 		() =>

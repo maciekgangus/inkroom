@@ -68,7 +68,11 @@ async function renderRecording({ base, board, rec, out, seconds, width, height, 
 	ffDone.catch(() => {}); // reported where it is awaited
 	ff.stdin.on("error", () => {});
 
+	// channel "chromium" is the new headless mode: the default headless shell ignores the flag that
+	// makes the app's address (http://app:8080 in a container) a secure context, and WebCodecs
+	// needs one.
 	const browser = await chromium.launch({
+		channel: "chromium",
 		args: [
 			`--unsafely-treat-insecure-origin-as-secure=${new URL(base).origin}`,
 			...(process.env.RENDER_NO_SANDBOX ? ["--no-sandbox"] : []),

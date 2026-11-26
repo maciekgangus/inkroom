@@ -22,14 +22,25 @@ CREATE TABLE recordings (
 	duration_ms INTEGER NOT NULL DEFAULT 0,
 	bytes INTEGER NOT NULL DEFAULT 0,
 	finished INTEGER NOT NULL DEFAULT 0,
-	segments INTEGER NOT NULL DEFAULT 0,
-	video_state TEXT NOT NULL DEFAULT '',
-	video_progress INTEGER NOT NULL DEFAULT 0,
-	video_bytes INTEGER NOT NULL DEFAULT 0,
-	video_attempts INTEGER NOT NULL DEFAULT 0,
-	video_at INTEGER NOT NULL DEFAULT 0
+	segments INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX recordings_board ON recordings(board_id, created_at)`
+
+// addRecordingVideo adds what the server knows about the video rendered from a recording (R-115).
+func addRecordingVideo(tx *sql.Tx) error {
+	for _, q := range []string{
+		"ALTER TABLE recordings ADD COLUMN video_state TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE recordings ADD COLUMN video_progress INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE recordings ADD COLUMN video_bytes INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE recordings ADD COLUMN video_attempts INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE recordings ADD COLUMN video_at INTEGER NOT NULL DEFAULT 0",
+	} {
+		if _, err := tx.Exec(q); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 // The states of the video that is rendered from a recording on the server (R-115, ADR 0029).
 const (

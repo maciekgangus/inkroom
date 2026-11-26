@@ -162,6 +162,8 @@ var migrations = []migration{
 	stmt("ALTER TABLE users ADD COLUMN avatar TEXT NOT NULL DEFAULT ''"),
 	// Lesson recordings kept on the app server's disk (R-112).
 	stmt(recordingsSchema),
+	// The video rendered from a recording on the server (R-115, ADR 0029).
+	addRecordingVideo,
 }
 
 func addGoogleSub(tx *sql.Tx) error {

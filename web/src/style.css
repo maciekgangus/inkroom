@@ -3356,16 +3356,18 @@ button.participant {
 	right: 12px;
 	flex-wrap: wrap;
 }
+/* The corner buttons (a note, the theme) take the left edge, so the stage starts right of them. */
 .video-stage {
 	position: absolute;
-	inset: 64px 12px 12px;
+	inset: 64px 12px 12px 72px;
 	display: grid;
+	grid-template: minmax(0, 1fr) / minmax(0, 1fr);
 	place-items: center;
-	min-height: 0;
 }
 .video-player {
-	max-width: 100%;
-	max-height: 100%;
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
 	border-radius: var(--radius-lg);
 	background: #000;
 	box-shadow: var(--shadow);
@@ -3391,8 +3393,9 @@ button.participant {
 @media (max-width: 640px) {
 	.video-page .replay-top {
 		left: 12px;
+		max-width: calc(100vw - 24px);
 	}
 	.video-stage {
-		inset: 112px 8px 8px;
+		inset: 124px 8px 84px; /* the chips of the top bar take two rows */
 	}
 }
