@@ -47,12 +47,16 @@ const MOVE_MAX_MS = 350;
 /** The ink colour of the Inkroom brand, for the handles that edit the selection. */
 const HANDLE_INK = "#5b5bf0";
 /**
- * The hover outline of the object under the cursor (R-112): a thin, translucent line in the brand
- * colour, drawn from the cached path — no shadow blur, so it stays clearly lighter than the
- * selection glow (R-058) and costs the GPU nothing at every frame.
+ * The hover highlight of the object under the cursor (R-112): a wide, faint halo under a solid
+ * edge, both in the brand colour, drawn from the cached path — no shadow blur, so it stays
+ * clearly lighter than the selection glow (R-058) and costs the GPU nothing at every frame.
  */
-const HOVER_ALPHA = 0.55;
-const HOVER_WIDTH_PX = 2;
+const HOVER_ALPHA = 0.9;
+const HOVER_WIDTH_PX = 3;
+const HOVER_HALO_ALPHA = 0.16;
+const HOVER_HALO_PX = 11;
+/** A faint tint inside a filled silhouette (a pen stroke, a filled shape). */
+const HOVER_FILL_ALPHA = 0.14;
 
 /**
  * Freehand strokes are filled outlines (the pen's width follows the hand); a dashed or dotted one
@@ -1159,9 +1163,10 @@ export class CanvasRenderer implements Renderer {
 	}
 
 	/**
-	 * A light outline of the element under the cursor (R-112, ADR 0027): the cached path stroked in
-	 * the brand colour, translucent and thin, no shadow blur — clearly lighter than the selection
-	 * glow. An image or a coordinate plane gets a thin frame on its edge, a text its box.
+	 * The highlight of the element under the cursor (R-112, ADR 0027): the cached path stroked in
+	 * the brand colour twice — a wide, faint halo and a solid edge on top — no shadow blur, so it
+	 * stays clearly lighter than the selection glow (R-058). An image or a coordinate plane gets
+	 * a solid frame on its edge, a text its box.
 	 */
 	private drawHover(ctx: CanvasRenderingContext2D, s: Stroke): void {
 		const px = 1 / this.viewport.scale;
@@ -1172,20 +1177,25 @@ export class CanvasRenderer implements Renderer {
 		}
 		ctx.save();
 		ctx.strokeStyle = this.hoverColor;
-		ctx.lineWidth = HOVER_WIDTH_PX * px;
+		ctx.fillStyle = this.hoverColor;
 		ctx.lineCap = "round";
 		ctx.lineJoin = "round";
 		ctx.setLineDash([]);
 		withLook(ctx, s, () => {
-			ctx.globalAlpha *= HOVER_ALPHA;
+			// withLook applied the element's own opacity; every pass multiplies it.
+			const base = ctx.globalAlpha;
 			if (s.kind === "image") {
 				const r = imageRect(s);
+				ctx.globalAlpha = base * HOVER_ALPHA;
+				ctx.lineWidth = HOVER_WIDTH_PX * px;
 				ctx.strokeRect(r.minX, r.minY, r.maxX - r.minX, r.maxY - r.minY);
 				return;
 			}
 			if (s.kind === "plane") {
 				// A sheet like a picture: only its edge, like the glow (R-084).
 				const paper = extraPaths(s)?.paper;
+				ctx.globalAlpha = base * HOVER_ALPHA;
+				ctx.lineWidth = HOVER_WIDTH_PX * px;
 				if (paper) ctx.stroke(paper);
 				else {
 					const b = geomBox(s);
@@ -1195,19 +1205,35 @@ export class CanvasRenderer implements Renderer {
 			}
 			if (s.kind === "text") {
 				const b = textBox(s);
+				ctx.globalAlpha = base * HOVER_ALPHA;
+				ctx.lineWidth = HOVER_WIDTH_PX * px;
 				ctx.strokeRect(b.minX, b.minY, b.maxX - b.minX, b.maxY - b.minY);
 				return;
 			}
+			let path: Path2D | null = null;
 			if (this.ensurePath(s, c) === "poly" && c.poly) {
-				ctx.beginPath();
-				ctx.moveTo(c.poly[0], c.poly[1]);
+				path = new Path2D();
+				path.moveTo(c.poly[0], c.poly[1]);
 				for (let i = 2; i < c.poly.length; i += 2)
-					ctx.lineTo(c.poly[i], c.poly[i + 1]);
-				ctx.closePath();
-				ctx.stroke();
-				return;
+					path.lineTo(c.poly[i], c.poly[i + 1]);
+				path.closePath();
+			} else {
+				path = c.path ?? null;
 			}
-			if (c.path) ctx.stroke(c.path);
+			if (!path) return;
+			// The halo: wide and faint, so the object reads under the cursor even over its own ink.
+			ctx.globalAlpha = base * HOVER_HALO_ALPHA;
+			ctx.lineWidth = HOVER_HALO_PX * px;
+			ctx.stroke(path);
+			// A faint tint inside a filled silhouette (a pen stroke, a filled shape).
+			if (isFilled(s) || s.fill) {
+				ctx.globalAlpha = base * HOVER_FILL_ALPHA;
+				ctx.fill(extraPaths(s)?.fill ?? path);
+			}
+			// The edge: solid and clearly visible.
+			ctx.globalAlpha = base * HOVER_ALPHA;
+			ctx.lineWidth = HOVER_WIDTH_PX * px;
+			ctx.stroke(path);
 		});
 		ctx.restore();
 	}

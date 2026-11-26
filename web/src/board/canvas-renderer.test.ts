@@ -683,24 +683,27 @@ describe("the hover outline on the live layer (R-112, ADR 0027)", () => {
 		r.done();
 	});
 
-	test("a thin translucent outline in the brand colour, no shadow blur like the glow", () => {
+	test("a visible halo plus a solid edge in the brand colour, no shadow blur like the glow", () => {
 		const r = setup();
 		const el = ln("a");
 		r.renderer.redraw([el]);
 		r.renderer.setHover(el);
 		expect(r.props.strokeStyle ?? []).toContain("#5b5bf0");
-		expect(r.calls).toContain("stroke");
+		// two passes: the wide faint halo and the solid edge
+		expect(r.calls.filter((c) => c === "stroke").length).toBeGreaterThanOrEqual(
+			2,
+		);
 		// lighter than the selection glow (R-058): no blurred shadow at all
 		expect((r.props.shadowBlur ?? []).filter((b) => (b as number) > 0)).toEqual(
 			[],
 		);
-		// translucent and a constant thin width on screen
-		expect(
-			(r.props.globalAlpha ?? []).some(
-				(a) => Math.abs((a as number) - 0.55) < 1e-9,
-			),
-		).toBe(true);
-		expect(r.props.lineWidth ?? []).toContain(2);
+		const alphas = (r.props.globalAlpha ?? []).map((a) => a as number);
+		// the faint halo and the solid edge, both translucent
+		expect(alphas.some((a) => Math.abs(a - 0.16) < 1e-9)).toBe(true);
+		expect(alphas.some((a) => Math.abs(a - 0.9) < 1e-9)).toBe(true);
+		// a constant width on screen, whatever the zoom
+		expect(r.props.lineWidth ?? []).toContain(11);
+		expect(r.props.lineWidth ?? []).toContain(3);
 		r.done();
 	});
 
