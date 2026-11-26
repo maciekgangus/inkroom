@@ -5,8 +5,12 @@ import { EditableName } from "./editable-name";
 import { Icon } from "./icon";
 import { Portal } from "./portal";
 import {
+	listMics,
+	type Mic,
+	micChoice,
 	type RecordingSource,
 	type Session,
+	setMicChoice,
 	startBoardRecording,
 	TOO_SHORT,
 } from "./recording";
@@ -58,6 +62,8 @@ interface Props {
 	onRecording?: (on: boolean) => void;
 	/** Starts a recording; a test hands in a stand-in. */
 	start?: typeof startBoardRecording;
+	/** The microphones to choose from (the browser's list by default). */
+	mics?: typeof listMics;
 }
 
 /**
@@ -72,6 +78,7 @@ export function RecordingControls({
 	canDelete,
 	onRecording,
 	start = startBoardRecording,
+	mics = listMics,
 }: Props) {
 	const [phase, setPhase] = useState<
 		"idle" | "starting" | "recording" | "saving"
@@ -87,6 +94,20 @@ export function RecordingControls({
 	const [list, setList] = useState<api.Recording[] | null>(null);
 	/** The recording asked "Na pewno usunąć?" about. */
 	const [confirming, setConfirming] = useState("");
+	/** The microphones to pick from, listed when the owner opens the list; the one picked. */
+	const [inputs, setInputs] = useState<Mic[]>([]);
+	const [mic, setMic] = useState(micChoice);
+	useEffect(() => {
+		if (!open || !canRecord) return;
+		let current = true;
+		mics().then(
+			(m) => current && setInputs(m),
+			() => {},
+		);
+		return () => {
+			current = false;
+		};
+	}, [open, canRecord, mics]);
 
 	const reload = () =>
 		api
@@ -287,6 +308,26 @@ export function RecordingControls({
 								width: `${at.width}px`,
 							}}
 						>
+							{canRecord && inputs.length > 0 && (
+								<label class="rec-mic">
+									<span>Mikrofon</span>
+									<select
+										value={inputs.some((m) => m.id === mic) ? mic : ""}
+										disabled={phase !== "idle"}
+										onChange={(e) => {
+											setMic(e.currentTarget.value);
+											setMicChoice(e.currentTarget.value);
+										}}
+									>
+										<option value="">Domyślny</option>
+										{inputs.map((m) => (
+											<option key={m.id} value={m.id}>
+												{m.label}
+											</option>
+										))}
+									</select>
+								</label>
+							)}
 							{list === null ? (
 								<p class="muted">Wczytywanie…</p>
 							) : list.length === 0 ? (

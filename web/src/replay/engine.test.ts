@@ -220,28 +220,66 @@ describe("ReplayEngine: the camera", () => {
 
 	test("starts where the recording began", () => {
 		const e = new ReplayEngine(snapshot(), []);
-		expect(e.camera(0)).toEqual({ cx: 400, cy: 300, rw: 800, rh: 600 });
+		const c = e.camera(0);
+		expect([c.cx, c.cy, c.rw, c.rh].map(Math.round)).toEqual([
+			400, 300, 800, 600,
+		]);
 	});
 
-	test("moves smoothly between samples instead of jumping", () => {
+	test("a step glides: it starts after the sample, never overshoots and ends on the target", () => {
 		const e = new ReplayEngine(snapshot(), [view(0, 0), view(1000, 1000)]);
-		const mid = e.camera(500);
-		expect(mid.cx).toBeCloseTo(900, 5);
-		expect(mid.rw).toBeCloseTo(800, 5);
-		expect(e.camera(250).cx).toBeCloseTo(650, 5);
+		let last = e.camera(0).cx;
+		for (let t = 100; t <= 3000; t += 100) {
+			const cx = e.camera(t).cx;
+			expect(cx).toBeGreaterThanOrEqual(last - 1e-9);
+			expect(cx).toBeLessThanOrEqual(1400 + 1e-9);
+			last = cx;
+		}
+		expect(e.camera(600).cx).toBeLessThan(450); // not yet: the step is at 1000 ms
+		const mid = e.camera(1000).cx; // a gliding step, neither at the start nor on the target
+		expect(mid).toBeGreaterThan(450);
+		expect(mid).toBeLessThan(1350);
+		expect(e.camera(3000).cx).toBeCloseTo(1400, 1);
 	});
 
-	test("a zoom is interpolated in its ratio, so it feels even", () => {
+	test("a rest stays a rest: no drift while nothing was sampled", () => {
+		// The view moved at the start and then again 27 s later; in between it did not move.
+		const e = new ReplayEngine(snapshot(), [
+			view(0, 0),
+			view(50, 100),
+			view(27_000, 100),
+			view(27_050, 600),
+		]);
+		expect(e.camera(5000).cx).toBeCloseTo(500, 3);
+		expect(e.camera(20_000).cx).toBeCloseTo(500, 3);
+	});
+
+	test("a seek gives the same camera as playing up to it (nothing depends on the way there)", () => {
+		const log = [view(0, 0), view(50, 40), view(100, 90), view(150, 200)];
+		const a = new ReplayEngine(snapshot(), log);
+		const b = new ReplayEngine(snapshot(), log);
+		for (let t = 0; t < 600; t += 25) a.camera(t);
+		expect(b.camera(300)).toEqual(a.camera(300));
+	});
+
+	test("a zoom eases in its ratio, so it feels even", () => {
 		const e = new ReplayEngine(snapshot(), [
 			view(0, 0, 800),
 			view(1000, 0, 3200),
 		]);
-		expect(e.camera(500).rw).toBeCloseTo(1600, 3); // halfway in the ratio, not 2000
+		const early = e.camera(900).rw;
+		expect(early).toBeGreaterThan(800);
+		expect(early).toBeLessThan(3200);
+		expect(e.camera(4000).rw).toBeCloseTo(3200, 0);
+		// halfway along the ease the ratio is the geometric mean, not the arithmetic one
+		const w = 1 - Math.exp(-0.5);
+		const t = 1000 - 140 + 140 * 0.5; // t + 140 ms ahead is 0.5 time constants after the step
+		expect(e.camera(t).rw).toBeCloseTo(800 * 4 ** w, 3);
 	});
 
-	test("after the last sample the camera stays put; before the first it is at the start", () => {
-		const e = new ReplayEngine(snapshot(), [view(100, 50)]);
-		expect(e.camera(10_000).cx).toBeCloseTo(450, 5);
-		expect(e.camera(0).cx).toBeCloseTo(400, 5);
+	test("after the last sample the camera ends on it; before the first it is at the start", () => {
+		const e = new ReplayEngine(snapshot(), [view(1000, 50)]);
+		expect(e.camera(10_000).cx).toBeCloseTo(450, 3);
+		expect(e.camera(0).cx).toBeCloseTo(400, 1);
 	});
 });

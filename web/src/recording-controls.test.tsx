@@ -110,6 +110,55 @@ describe("RecordingControls (R-117)", () => {
 		);
 	});
 
+	test("the owner picks the microphone from the list, and the choice is remembered", async () => {
+		localStorage.clear();
+		const mics = vi.fn().mockResolvedValue([
+			{ id: "a", label: "Wbudowany mikrofon" },
+			{ id: "b", label: "Słuchawki USB" },
+		]);
+		act(() =>
+			render(
+				<RecordingControls source={source} boardId="b" canRecord mics={mics} />,
+				root,
+			),
+		);
+		act(() => btn("Nagrania").click());
+		await flush();
+		const select = document.querySelector(
+			".rec-mic select",
+		) as HTMLSelectElement;
+		expect([...select.options].map((o) => o.textContent)).toEqual([
+			"Domyślny",
+			"Wbudowany mikrofon",
+			"Słuchawki USB",
+		]);
+		select.value = "b";
+		act(() => {
+			select.dispatchEvent(new Event("change", { bubbles: true }));
+		});
+		expect(localStorage.getItem("inkroom:mic")).toBe("b");
+		localStorage.clear();
+	});
+
+	test("someone who cannot record sees no microphone to pick", async () => {
+		const mics = vi.fn().mockResolvedValue([{ id: "a", label: "Mikrofon" }]);
+		act(() =>
+			render(
+				<RecordingControls
+					source={source}
+					boardId="b"
+					canRecord={false}
+					mics={mics}
+				/>,
+				root,
+			),
+		);
+		act(() => btn("Nagrania").click());
+		await flush();
+		expect(document.querySelector(".rec-mic")).toBeNull();
+		expect(mics).not.toHaveBeenCalled();
+	});
+
 	test("after the stop it says it is saving, until the end of the recording is on the server", async () => {
 		let done: () => void = () => {};
 		const stop = vi.fn().mockReturnValue(new Promise<void>((r) => (done = r)));

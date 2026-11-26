@@ -3085,6 +3085,21 @@ button.participant {
 .recordings-pop .muted {
 	font-size: 12px;
 }
+.recordings-pop .rec-mic {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 4px 0 8px;
+	border-bottom: 1px solid var(--border);
+	font-size: 13px;
+	color: var(--muted);
+}
+.recordings-pop .rec-mic select {
+	flex: 1 1 auto;
+	min-width: 0;
+	min-height: 36px;
+	font: inherit;
+}
 .recordings-pop .rec-name {
 	flex: 1 1 100%;
 	min-width: 0;

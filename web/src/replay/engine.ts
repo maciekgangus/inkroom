@@ -284,36 +284,60 @@ export class ReplayEngine {
 	}
 
 	/**
-	 * Where the person who recorded looked at time `t`: between two samples the centre moves
-	 * evenly and the size changes by an even ratio, so a pan or a zoom is smooth.
+	 * Where the person who recorded looked at time `t`. The log holds a sample of the view every
+	 * 50 ms while it moves and none while it rests, and a wheel or a drag moves it in steps. The
+	 * camera holds each sample until the next and chases it with an exponential ease (centre and
+	 * the logarithm of the size, so a pan and a zoom both feel even): a step becomes a glide and
+	 * a rest stays a rest. The ease is evaluated a little ahead (`SMOOTH_MS`), which cancels its
+	 * delay, so the picture keeps up with the voice. Only the samples of the last few `SMOOTH_MS`
+	 * still matter; older steps have fully arrived, so any `t` is answered without replaying.
 	 */
 	camera(t: number): Camera {
 		const v = this.views;
-		if (t <= v[0].t) return of(v[0]);
-		const last = v[v.length - 1];
-		if (t >= last.t) return of(last);
-		let lo = 0;
-		let hi = v.length - 1;
-		while (hi - lo > 1) {
-			const mid = (lo + hi) >> 1;
-			if (v[mid].t <= t) lo = mid;
-			else hi = mid;
+		const at = t + SMOOTH_MS;
+		// The last sample before the window still has an effect; k1 is the last one up to `at`.
+		const from = at - SMOOTH_WINDOW * SMOOTH_MS;
+		let k0 = lastAtOrBefore(v, from);
+		const k1 = lastAtOrBefore(v, at);
+		if (k0 < 0) k0 = 0;
+		const base = v[k0];
+		let cx = base.cx;
+		let cy = base.cy;
+		let lw = Math.log(base.rw);
+		let aspect = base.rh / base.rw;
+		for (let i = k0 + 1; i <= k1; i++) {
+			const p = v[i - 1];
+			const q = v[i];
+			const w = 1 - Math.exp(-(at - q.t) / SMOOTH_MS);
+			cx += (q.cx - p.cx) * w;
+			cy += (q.cy - p.cy) * w;
+			lw += (Math.log(q.rw) - Math.log(p.rw)) * w;
+			aspect += (q.rh / q.rw - p.rh / p.rw) * w;
 		}
-		const a = v[lo];
-		const b = v[hi];
-		const f = (t - a.t) / (b.t - a.t);
-		const rw = a.rw * (b.rw / a.rw) ** f;
-		const aspect = a.rh / a.rw + (b.rh / b.rw - a.rh / a.rw) * f;
-		return {
-			cx: a.cx + (b.cx - a.cx) * f,
-			cy: a.cy + (b.cy - a.cy) * f,
-			rw,
-			rh: rw * aspect,
-		};
+		const rw = Math.exp(lw);
+		return { cx, cy, rw, rh: rw * aspect };
 	}
 }
 
-const of = (v: View): Camera => ({ cx: v.cx, cy: v.cy, rw: v.rw, rh: v.rh });
+/** How long the camera takes to catch up with a sample (the time constant of the ease), in ms. */
+const SMOOTH_MS = 140;
+/** Steps older than this many time constants are counted as fully arrived (they are 99.97% there). */
+const SMOOTH_WINDOW = 8;
+
+/** The index of the last view sampled at or before `t`, or -1. */
+function lastAtOrBefore(v: View[], t: number): number {
+	let lo = 0;
+	let hi = v.length - 1;
+	let found = -1;
+	while (lo <= hi) {
+		const mid = (lo + hi) >> 1;
+		if (v[mid].t <= t) {
+			found = mid;
+			lo = mid + 1;
+		} else hi = mid - 1;
+	}
+	return found;
+}
 
 function viewOf(t: number, r: Rect): View {
 	const rw = r.maxX - r.minX;

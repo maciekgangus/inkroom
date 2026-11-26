@@ -1,9 +1,13 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import {
 	enhanceVoice,
+	listMics,
+	micChoice,
+	nextGain,
 	PartCutter,
 	type RecordingSource,
 	SEGMENT_MS,
+	setMicChoice,
 	startBoardRecording,
 	TOO_SHORT,
 	uploadPart,
@@ -252,7 +256,7 @@ describe("startBoardRecording (R-113)", () => {
 					channelCount: 1,
 					echoCancellation: true,
 					noiseSuppression: true,
-					autoGainControl: true,
+					autoGainControl: false,
 				},
 			}),
 		});
@@ -356,37 +360,43 @@ describe("enhanceVoice", () => {
 		v.close();
 	});
 
-	test("the voice goes through filters and a limiter, and the context is closed after", () => {
+	test("the voice goes through a filter, an automatic gain and a limiter, and the context is closed after", () => {
+		vi.useFakeTimers();
 		const made: string[] = [];
-		const node = (name: string) => {
-			const n = {
-				connect: (to: unknown) => {
-					made.push(`${name}->${(to as { name: string }).name}`);
-					return to;
-				},
-				name,
-				frequency: { value: 0 },
-				gain: { value: 0 },
-				threshold: { value: 0 },
-				knee: { value: 0 },
-				ratio: { value: 0 },
-				attack: { value: 0 },
-				release: { value: 0 },
-				type: "",
-			};
-			return n;
-		};
+		const param = () => ({
+			value: 0,
+			setTargetAtTime: vi.fn(),
+		});
+		const node = (name: string, extra: object = {}) => ({
+			connect: (to: unknown) => {
+				made.push(`${name}->${(to as { name: string }).name}`);
+				return to;
+			},
+			name,
+			frequency: param(),
+			gain: param(),
+			threshold: param(),
+			knee: param(),
+			ratio: param(),
+			attack: param(),
+			release: param(),
+			type: "",
+			...extra,
+		});
 		let closed = false;
 		const outStream = { id: "processed" };
 		vi.stubGlobal(
 			"AudioContext",
 			class {
-				createMediaStreamDestination = () => ({
-					...node("out"),
-					stream: outStream,
-				});
+				currentTime = 0;
+				createMediaStreamDestination = () => node("out", { stream: outStream });
 				createBiquadFilter = () => node("filter");
 				createGain = () => node("gain");
+				createAnalyser = () =>
+					node("meter", {
+						fftSize: 0,
+						getFloatTimeDomainData: (a: Float32Array) => a.fill(0.05),
+					});
 				createDynamicsCompressor = () => node("limiter");
 				createMediaStreamSource = () => node("source");
 				resume = () => Promise.resolve();
@@ -400,13 +410,15 @@ describe("enhanceVoice", () => {
 		expect(v.stream).toBe(outStream);
 		expect(made).toEqual([
 			"source->filter",
-			"filter->filter",
+			"filter->meter",
 			"filter->gain",
 			"gain->limiter",
 			"limiter->out",
 		]);
+		vi.advanceTimersByTime(200); // the level is looked at without errors
 		v.close();
 		expect(closed).toBe(true);
+		vi.useRealTimers();
 	});
 
 	test("a browser that throws on the context leaves the plain microphone", () => {
@@ -419,5 +431,102 @@ describe("enhanceVoice", () => {
 			},
 		);
 		expect(enhanceVoice(mic).stream).toBe(mic);
+	});
+});
+
+describe("nextGain", () => {
+	test("a quiet voice is lifted slowly", () => {
+		let g = 0;
+		for (let i = 0; i < 20; i++) g = nextGain(g, -45, 50); // one second
+		expect(g).toBeGreaterThan(2);
+		expect(g).toBeLessThan(25 * 0.5);
+		for (let i = 0; i < 400; i++) g = nextGain(g, -45, 50); // and in the end it gets there
+		expect(g).toBeCloseTo(25, 0);
+	});
+
+	test("a loud word brings it down quickly", () => {
+		let g = 20;
+		for (let i = 0; i < 4; i++) g = nextGain(g, -10, 50); // 200 ms of a loud voice
+		expect(g).toBeLessThan(5);
+	});
+
+	test("silence changes nothing, so the hiss between words is not raised", () => {
+		expect(nextGain(12, -70, 50)).toBe(12);
+		expect(nextGain(12, Number.NEGATIVE_INFINITY, 50)).toBe(12);
+	});
+
+	test("the gain stays between nothing and the limit", () => {
+		let g = 0;
+		for (let i = 0; i < 2000; i++) g = nextGain(g, -57, 50);
+		expect(g).toBeLessThanOrEqual(30);
+		expect(nextGain(0, -2, 50)).toBeGreaterThanOrEqual(0);
+	});
+});
+
+describe("choosing a microphone", () => {
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		localStorage.clear();
+	});
+
+	const device = (deviceId: string, label: string, kind = "audioinput") => ({
+		deviceId,
+		label,
+		kind,
+	});
+
+	test("the choice is remembered, and empty means the default one", () => {
+		expect(micChoice()).toBe("");
+		setMicChoice("usb-1");
+		expect(micChoice()).toBe("usb-1");
+		setMicChoice("");
+		expect(micChoice()).toBe("");
+	});
+
+	test("lists microphones by name, without the browser's aliases and without cameras", async () => {
+		vi.stubGlobal("navigator", {
+			mediaDevices: {
+				enumerateDevices: async () => [
+					device("default", "Domyślne"),
+					device("a", "Wbudowany mikrofon"),
+					device("b", "Słuchawki USB"),
+					device("c", "Kamera", "videoinput"),
+				],
+			},
+		});
+		expect(await listMics()).toEqual([
+			{ id: "a", label: "Wbudowany mikrofon" },
+			{ id: "b", label: "Słuchawki USB" },
+		]);
+	});
+
+	test("names hidden until allowed: the microphone is opened and closed once to get them", async () => {
+		let allowed = false;
+		const stopped = vi.fn();
+		vi.stubGlobal("navigator", {
+			mediaDevices: {
+				enumerateDevices: async () => [
+					device("a", allowed ? "Mikrofon A" : ""),
+				],
+				getUserMedia: async () => {
+					allowed = true;
+					return { getTracks: () => [{ stop: stopped }] };
+				},
+			},
+		});
+		expect(await listMics()).toEqual([{ id: "a", label: "Mikrofon A" }]);
+		expect(stopped).toHaveBeenCalledTimes(1);
+	});
+
+	test("a refusal to listen gives an empty list", async () => {
+		vi.stubGlobal("navigator", {
+			mediaDevices: {
+				enumerateDevices: async () => [device("a", "")],
+				getUserMedia: async () => {
+					throw new Error("denied");
+				},
+			},
+		});
+		expect(await listMics()).toEqual([]);
 	});
 });

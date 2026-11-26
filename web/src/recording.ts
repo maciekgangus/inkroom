@@ -15,8 +15,6 @@ const MIME_TYPES = [
 	"audio/webm",
 ];
 const AUDIO_BITS_PER_SECOND = 96_000; // a voice with its consonants: about 43 MB an hour
-/** How much louder than the microphone gives it the voice is recorded (a limiter keeps it from clipping). */
-const VOICE_BOOST = 2.5;
 
 /** How often MediaRecorder hands over a chunk, in ms. */
 const CHUNK_MS = 3000;
@@ -109,11 +107,42 @@ export interface Session {
 /** What the server says about a recording that was shorter than a minute. */
 export const TOO_SHORT = "Nagranie krótsze niż minuta nie zostało zapisane";
 
+/** The level the voice is brought to, in dBFS (RMS): clearly audible, with room for a loud word. */
+const TARGET_DB = -20;
+/** Below this the microphone hears the room, not a voice: the gain is held, so hiss is not raised. */
+const GATE_DB = -58;
+/** The most the voice is lifted, in dB (a very quiet microphone still needs it). */
+const MAX_GAIN_DB = 30;
+/** How fast the gain follows: down quickly (a loud word), up slowly (no pumping between words), in ms. */
+const GAIN_DOWN_MS = 80;
+const GAIN_UP_MS = 2500;
+/** How often the level is looked at, in ms. */
+const LEVEL_TICK_MS = 50;
+
 /**
- * Makes the voice easier to understand than what a laptop or tablet microphone gives: the browser's
- * own noise suppression and echo cancellation, then a high-pass filter (rumble, desk knocks), a
- * low-pass one (hiss above what speech needs), a boost and a limiter so a loud word does not clip.
- * Where the Web Audio API is missing, the plain microphone is recorded.
+ * One step of the automatic gain: from the current gain and the level of the last tick as the
+ * microphone gives it, before the gain (both in dB), to the next gain. Silence (under the gate)
+ * changes nothing.
+ */
+export function nextGain(
+	gainDb: number,
+	levelDb: number,
+	dtMs: number,
+): number {
+	if (!Number.isFinite(levelDb) || levelDb < GATE_DB) return gainDb;
+	// The gain that would bring a voice of this level (before the gain) to the target.
+	const want = Math.min(MAX_GAIN_DB, Math.max(0, TARGET_DB - levelDb));
+	const k = Math.min(1, dtMs / (want < gainDb ? GAIN_DOWN_MS : GAIN_UP_MS));
+	return gainDb + (want - gainDb) * k;
+}
+
+/**
+ * Makes the voice even and loud enough: the browser's noise suppression and echo cancellation do
+ * their part, then a high-pass filter (rumble), an automatic gain that works only while someone
+ * speaks (so a quiet microphone is lifted and the hiss between words is not) and a limiter so a
+ * loud word does not clip. The browser's own gain control is off: on a quiet microphone it raised
+ * the noise and then the noise suppression cut the speech into pieces. Where the Web Audio API is
+ * missing, the plain microphone is recorded.
  */
 export function enhanceVoice(mic: MediaStream): {
 	stream: MediaStream;
@@ -127,31 +156,96 @@ export function enhanceVoice(mic: MediaStream): {
 		const out = ctx.createMediaStreamDestination();
 		const high = ctx.createBiquadFilter();
 		high.type = "highpass";
-		high.frequency.value = 100;
-		const low = ctx.createBiquadFilter();
-		low.type = "lowpass";
-		low.frequency.value = 7500;
-		const boost = ctx.createGain();
-		boost.gain.value = VOICE_BOOST;
+		high.frequency.value = 80;
+		const meter = ctx.createAnalyser();
+		meter.fftSize = 2048;
+		const agc = ctx.createGain();
 		const limiter = ctx.createDynamicsCompressor();
-		limiter.threshold.value = -6;
+		limiter.threshold.value = -2;
 		limiter.knee.value = 0;
 		limiter.ratio.value = 20;
-		limiter.attack.value = 0.003;
-		limiter.release.value = 0.15;
+		limiter.attack.value = 0.002;
+		limiter.release.value = 0.1;
 		ctx.createMediaStreamSource(mic).connect(high);
-		high.connect(low);
-		low.connect(boost);
-		boost.connect(limiter);
+		high.connect(meter);
+		high.connect(agc);
+		agc.connect(limiter);
 		limiter.connect(out);
 		void ctx.resume?.();
+
+		let gainDb = 6;
+		agc.gain.value = 10 ** (gainDb / 20);
+		const samples = new Float32Array(meter.fftSize);
+		const timer = setInterval(() => {
+			meter.getFloatTimeDomainData(samples);
+			let sum = 0;
+			for (const v of samples) sum += v * v;
+			const levelDb = 10 * Math.log10(sum / samples.length + 1e-12);
+			const next = nextGain(gainDb, levelDb, LEVEL_TICK_MS);
+			if (next === gainDb) return;
+			gainDb = next;
+			agc.gain.setTargetAtTime(10 ** (gainDb / 20), ctx.currentTime, 0.03);
+		}, LEVEL_TICK_MS);
 		return {
 			stream: out.stream,
-			close: () => void ctx.close().catch(() => {}),
+			close: () => {
+				clearInterval(timer);
+				void ctx.close().catch(() => {});
+			},
 		};
 	} catch {
 		return plain;
 	}
+}
+
+const MIC_KEY = "inkroom:mic";
+
+/** The microphone the owner chose, or "" for the browser's default one. */
+export function micChoice(): string {
+	try {
+		return localStorage.getItem(MIC_KEY) ?? "";
+	} catch {
+		return "";
+	}
+}
+
+export function setMicChoice(id: string): void {
+	try {
+		if (id) localStorage.setItem(MIC_KEY, id);
+		else localStorage.removeItem(MIC_KEY);
+	} catch {
+		// Not remembered: the default microphone is used next time.
+	}
+}
+
+export interface Mic {
+	id: string;
+	label: string;
+}
+
+/**
+ * The microphones of this computer, by name. Browsers hide the names until the page has been
+ * allowed to listen once, so if they are hidden the microphone is opened and closed right away.
+ * Empty when the browser offers no list.
+ */
+export async function listMics(): Promise<Mic[]> {
+	const media = navigator.mediaDevices;
+	if (typeof media?.enumerateDevices !== "function") return [];
+	const inputs = async () =>
+		(await media.enumerateDevices()).filter((d) => d.kind === "audioinput");
+	let found = await inputs();
+	if (found.length > 0 && found.every((d) => !d.label)) {
+		try {
+			const s = await media.getUserMedia({ audio: true });
+			for (const t of s.getTracks()) t.stop();
+			found = await inputs();
+		} catch {
+			return [];
+		}
+	}
+	return found
+		.filter((d) => d.deviceId !== "default" && d.deviceId !== "communications")
+		.map((d, i) => ({ id: d.deviceId, label: d.label || `Mikrofon ${i + 1}` }));
 }
 
 /** The first object of the log: the state of the board when the recording began. */
@@ -191,14 +285,22 @@ export async function startBoardRecording(
 	if (!mime) throw new Error("Ta przeglądarka nie nagrywa dźwięku");
 	let mic: MediaStream;
 	try {
-		mic = await navigator.mediaDevices.getUserMedia({
-			audio: {
-				channelCount: 1,
-				echoCancellation: true,
-				noiseSuppression: true,
-				autoGainControl: true,
-			},
-		});
+		const chosen = micChoice();
+		const audio: MediaTrackConstraints = {
+			channelCount: 1,
+			echoCancellation: true,
+			noiseSuppression: true,
+			autoGainControl: false, // our own gain follows (enhanceVoice)
+		};
+		try {
+			mic = await navigator.mediaDevices.getUserMedia({
+				audio: chosen ? { ...audio, deviceId: { exact: chosen } } : audio,
+			});
+		} catch (e) {
+			// The chosen microphone is gone (unplugged): the default one will do.
+			if (!chosen) throw e;
+			mic = await navigator.mediaDevices.getUserMedia({ audio });
+		}
 	} catch {
 		throw new Error("Brak dostępu do mikrofonu");
 	}
