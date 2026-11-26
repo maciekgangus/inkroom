@@ -9,11 +9,14 @@ import { ADMIN_NAME, isReservedName } from "./names";
 import { Panel } from "./panel";
 import { RenderPage } from "./replay/render-page";
 import { ReplayView } from "./replay/replay-view";
+import { VideoView } from "./replay/video-view";
 import type { SocketLike } from "./sync/sync";
 import { ThemeToggle } from "./theme";
 import { UpdateBanner } from "./update-banner";
 
 const BOARD_PATH = /^\/b\/([0-9a-f]{32})$/;
+/** The video rendered from a recording (R-115): /b/<board>/v/<recording>. */
+const VIDEO_PATH = /^\/b\/([0-9a-f]{32})\/v\/([0-9a-f]{32})$/;
 /** The player of a recording of a lesson (R-114): /b/<board>/r/<recording>. */
 const REPLAY_PATH = /^\/b\/([0-9a-f]{32})\/r\/([0-9a-f]{32})$/;
 const REGISTER_PATH = "/register";
@@ -58,9 +61,12 @@ export function App({
 }: Props) {
 	const match = BOARD_PATH.exec(path);
 	const replay = REPLAY_PATH.exec(path);
+	const video = VIDEO_PATH.exec(path);
 	return (
 		<>
-			{replay ? (
+			{video ? (
+				<VideoView boardId={video[1]} recId={video[2]} />
+			) : replay ? (
 				new URLSearchParams(search).has("render") ? (
 					<RenderPage boardId={replay[1]} recId={replay[2]} />
 				) : (

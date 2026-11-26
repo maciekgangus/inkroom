@@ -21,6 +21,9 @@ const rec = (over: Partial<Recording> = {}): Recording => ({
 	durationMs: 65_000,
 	bytes: 12 << 20,
 	finished: true,
+	video: "",
+	videoProgress: 0,
+	videoBytes: 0,
 	...over,
 });
 
@@ -318,6 +321,62 @@ describe("RecordingControls (R-112)", () => {
 		const text = document.querySelector(".recordings-pop")?.textContent ?? "";
 		expect(text).toContain("1:05");
 		expect(text).toContain("12 MB");
+	});
+
+	test("links a ready video and says how far an unfinished one is (R-115)", async () => {
+		listRecordings.mockResolvedValue([
+			rec({ id: "r1", video: "ready", videoBytes: 5 << 20 }),
+			rec({ id: "r2", video: "rendering", videoProgress: 40 }),
+			rec({ id: "r3", video: "queued" }),
+			rec({ id: "r4", video: "failed" }),
+			rec({ id: "r5" }),
+		]);
+		act(() =>
+			render(
+				<RecordingControls source={source} boardId="b" canRecord={false} />,
+				root,
+			),
+		);
+		act(() => btn("Nagrania").click());
+		await flush();
+		const hrefs = [
+			...document.querySelectorAll<HTMLAnchorElement>(".recordings-pop a"),
+		].map((a) => a.getAttribute("href"));
+		expect(hrefs.filter((h) => h?.includes("/v/"))).toEqual(["/b/b/v/r1"]);
+		const items = [...document.querySelectorAll(".recordings-pop li")].map(
+			(li) => li.textContent ?? "",
+		);
+		expect(items[1]).toContain("wideo 40%");
+		expect(items[2]).toContain("wideo w kolejce");
+		expect(items[3]).toContain("wideo nie wyszło");
+		expect(items[4]).not.toContain("wideo ");
+		expect(items[0]).not.toContain("wideo ");
+	});
+
+	test("asks again while a video is being prepared and the list is open (R-115)", async () => {
+		vi.useFakeTimers({ shouldAdvanceTime: true });
+		listRecordings.mockResolvedValue([
+			rec({ video: "rendering", videoProgress: 10 }),
+		]);
+		act(() =>
+			render(
+				<RecordingControls source={source} boardId="b" canRecord={false} />,
+				root,
+			),
+		);
+		act(() => btn("Nagrania").click());
+		await flush();
+		const asked = listRecordings.mock.calls.length;
+		listRecordings.mockResolvedValue([rec({ video: "ready" })]);
+		await act(async () => {
+			vi.advanceTimersByTime(10_100);
+		});
+		await flush();
+		expect(listRecordings.mock.calls.length).toBeGreaterThan(asked);
+		expect(
+			document.querySelector('.recordings-pop a[href="/b/b/v/r1"]'),
+		).not.toBeNull();
+		vi.useRealTimers();
 	});
 
 	test("says so when there are no recordings", async () => {

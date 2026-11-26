@@ -11,7 +11,24 @@ import {
 } from "./recording";
 
 /** One recording lasts at most 1 h 15 min; five minutes before, the owner is warned (R-094). */
-export const MAX_RECORDING_MS = 75 * 60_000;
+export /** How often the open list asks again while a video is being prepared. */
+const VIDEO_REFRESH_MS = 10_000;
+
+/** What the list says about a video that is not ready (nothing for one that is, or is not made). */
+function videoNote(r: api.Recording): string {
+	switch (r.video) {
+		case "queued":
+			return " · wideo w kolejce";
+		case "rendering":
+			return ` · wideo ${r.videoProgress}%`;
+		case "failed":
+			return " · wideo nie wyszło";
+		default:
+			return "";
+	}
+}
+
+const MAX_RECORDING_MS = 75 * 60_000;
 export const WARN_BEFORE_MS = 5 * 60_000;
 
 /** The length of a recording as 1:05 or 1:02:05. */
@@ -78,6 +95,16 @@ export function RecordingControls({
 		if (open) void reload();
 		// biome-ignore lint/correctness/useExhaustiveDependencies: reload follows boardId
 	}, [open, boardId]);
+	// A video being prepared (R-115) shows its progress: the open list asks again from time to time.
+	const preparing = !!list?.some(
+		(r) => r.video === "queued" || r.video === "rendering",
+	);
+	useEffect(() => {
+		if (!open || !preparing) return;
+		const t = setInterval(() => void reload(), VIDEO_REFRESH_MS);
+		return () => clearInterval(t);
+		// biome-ignore lint/correctness/useExhaustiveDependencies: reload follows boardId
+	}, [open, preparing, boardId]);
 	useEffect(
 		() =>
 			open
@@ -282,8 +309,12 @@ export function RecordingControls({
 												{" · "}
 												{r.finished ? clock(r.durationMs) : "w toku"}
 												{r.finished && ` · ${megabytes(r.bytes)}`}
+												{r.finished && videoNote(r)}
 											</span>
 											<span class="rec-actions">
+												{r.video === "ready" && (
+													<a href={`/b/${boardId}/v/${r.id}`}>Wideo</a>
+												)}
 												{r.finished && (
 													<a href={`/b/${boardId}/r/${r.id}`}>Odtwórz</a>
 												)}

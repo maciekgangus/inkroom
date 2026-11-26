@@ -376,7 +376,14 @@ export interface Recording {
 	durationMs: number;
 	bytes: number;
 	finished: boolean;
+	/** The video rendered on the server (R-115): "", "queued", "rendering", "ready" or "failed". */
+	video: VideoState;
+	/** A percent while it is rendering. */
+	videoProgress: number;
+	videoBytes: number;
 }
+
+export type VideoState = "" | "queued" | "rendering" | "ready" | "failed";
 
 export const startRecording = (boardId: string, name: string, mime: string) =>
 	request<{ id: string; partSize: number }>(

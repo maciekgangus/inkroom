@@ -246,6 +246,11 @@ export function ReplayView({ boardId, recId }: Props) {
 				) : (
 					<span class="replay-name">Wczytywanie…</span>
 				)}
+				{ready?.index.video && (
+					<a class="replay-back" href={`/b/${boardId}/v/${recId}`}>
+						Wideo
+					</a>
+				)}
 			</div>
 			{ready && (
 				<>

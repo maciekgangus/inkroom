@@ -1,3 +1,4 @@
+import type { VideoState } from "../api";
 import type { LogEvent } from "../recording-log";
 import { ReplayEngine, type Snapshot } from "./engine";
 
@@ -10,7 +11,14 @@ export interface PlayIndex {
 	audio: string;
 	snapshot: string;
 	segments: string[];
+	/** The video rendered on the server (R-115); its address only once it is ready. */
+	videoState: VideoState;
+	videoProgress: number;
+	video?: string;
 }
+
+export const playIndexUrl = (boardId: string, recId: string) =>
+	`/api/boards/${boardId}/recordings/${recId}/play`;
 
 export async function getJSON<T>(url: string): Promise<T> {
 	const res = await fetch(url, { cache: "no-store" });
@@ -28,9 +36,7 @@ export async function getJSON<T>(url: string): Promise<T> {
 
 /** Reads the index, the starting state and every segment of the log (a missing segment is empty). */
 export async function load(boardId: string, recId: string) {
-	const index = await getJSON<PlayIndex>(
-		`/api/boards/${boardId}/recordings/${recId}/play`,
-	);
+	const index = await getJSON<PlayIndex>(playIndexUrl(boardId, recId));
 	const [snapshot, segments] = await Promise.all([
 		getJSON<Snapshot>(index.snapshot),
 		Promise.all(
