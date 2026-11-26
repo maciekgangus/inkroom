@@ -234,160 +234,165 @@ export function RecordingControls({
 
 	const recording = phase === "recording";
 	const saving = phase === "saving";
+	const said = error ? (
+		<span class="share-said rec-note" role="alert">
+			{error}
+		</span>
+	) : (
+		note && (
+			<span class="share-said rec-note" role="status">
+				{note}
+			</span>
+		)
+	);
 	return (
-		<>
-			{canRecord && (
-				<div class="share-wrap">
-					<button
-						type="button"
-						class={`board-menu${recording ? " recording" : ""}${saving ? " saving" : ""}`}
-						aria-label={
-							saving
-								? "Zapisuję nagranie"
-								: recording
-									? "Zakończ nagrywanie"
-									: "Nagrywaj"
-						}
-						title={
-							saving
-								? "Zapisuję nagranie…"
-								: recording
-									? "Zakończ nagrywanie"
-									: "Nagrywaj lekcję"
-						}
-						disabled={phase === "starting" || saving}
-						onClick={toggle}
+		<div class="share-wrap recordings-wrap">
+			<button
+				type="button"
+				class={`board-menu${open ? " active" : ""}${recording ? " recording" : ""}${saving ? " saving" : ""}`}
+				aria-label="Nagrania"
+				title={
+					saving
+						? "Zapisuję nagranie…"
+						: recording
+							? "Trwa nagrywanie"
+							: "Nagrania"
+				}
+				aria-expanded={open}
+				onClick={(e) => {
+					// Outside the top bar, which is transformed and would clip or move it.
+					const r = e.currentTarget.getBoundingClientRect();
+					const width = Math.min(360, innerWidth - 16);
+					const left = Math.max(
+						8,
+						Math.min(r.right - width, innerWidth - width - 8),
+					);
+					setAt({ top: r.bottom + 8, left, width });
+					setConfirming("");
+					setOpen(!open);
+				}}
+			>
+				<Icon name={recording ? "record" : "film"} />
+				{recording && <span class="rec-time">{clock(seconds * 1000)}</span>}
+				{saving && <span class="rec-time">Zapisuję…</span>}
+			</button>
+			{!open && said}
+			{open && (
+				<Portal>
+					<div
+						class="recordings-pop"
+						role="dialog"
+						aria-label="Nagrania"
+						style={{
+							top: `${at.top}px`,
+							left: `${at.left}px`,
+							width: `${at.width}px`,
+						}}
 					>
-						<Icon name="record" />
-						{recording && <span class="rec-time">{clock(seconds * 1000)}</span>}
-						{saving && <span class="rec-time">Zapisuję…</span>}
-					</button>
-					{error && (
-						<span class="share-said rec-note" role="alert">
-							{error}
-						</span>
-					)}
-					{!error && note && (
-						<span class="share-said rec-note" role="status">
-							{note}
-						</span>
-					)}
-				</div>
-			)}
-			<div class="share-wrap recordings-wrap">
-				<button
-					type="button"
-					class={`board-menu${open ? " active" : ""}`}
-					aria-label="Nagrania"
-					title="Nagrania"
-					aria-expanded={open}
-					onClick={(e) => {
-						// Outside the top bar, which is transformed and would clip or move it.
-						const r = e.currentTarget.getBoundingClientRect();
-						const width = Math.min(360, innerWidth - 16);
-						const left = Math.max(
-							8,
-							Math.min(r.right - width, innerWidth - width - 8),
-						);
-						setAt({ top: r.bottom + 8, left, width });
-						setConfirming("");
-						setOpen(!open);
-					}}
-				>
-					<Icon name="film" />
-				</button>
-				{open && (
-					<Portal>
-						<div
-							class="recordings-pop"
-							role="dialog"
-							aria-label="Nagrania"
-							style={{
-								top: `${at.top}px`,
-								left: `${at.left}px`,
-								width: `${at.width}px`,
-							}}
-						>
-							{canRecord && inputs.length > 0 && (
-								<label class="rec-mic">
-									<span>Mikrofon</span>
-									<select
-										value={inputs.some((m) => m.id === mic) ? mic : ""}
-										disabled={phase !== "idle"}
-										onChange={(e) => {
-											setMic(e.currentTarget.value);
-											setMicChoice(e.currentTarget.value);
-										}}
-									>
-										<option value="">Domyślny</option>
-										{inputs.map((m) => (
-											<option key={m.id} value={m.id}>
-												{m.label}
-											</option>
-										))}
-									</select>
-								</label>
-							)}
-							{list === null ? (
-								<p class="muted">Wczytywanie…</p>
-							) : list.length === 0 ? (
-								<p class="muted">Brak nagrań</p>
-							) : (
-								<ul>
-									{list.map((r) => (
-										<li key={r.id}>
-											<EditableName
-												class="rec-name"
-												name={r.name}
-												editable={!!canDelete}
-												onSave={async (name) => {
-													await api.renameRecording(boardId, r.id, name);
-													await reload();
-												}}
-											/>
-											<span class="muted rec-meta">
-												{new Date(r.createdAt).toLocaleDateString("pl-PL")}
-												{" · "}
-												{r.finished ? clock(r.durationMs) : "w toku"}
-												{r.finished && ` · ${megabytes(r.bytes)}`}
-												{r.finished && videoNote(r)}
-											</span>
-											<span class="rec-actions">
-												{r.video === "ready" && (
-													<a href={`/b/${boardId}/v/${r.id}`}>Wideo</a>
-												)}
-												{r.finished && (
-													<a href={`/b/${boardId}/r/${r.id}`}>Odtwórz</a>
-												)}
-												{canDelete &&
-													(confirming === r.id ? (
-														<button
-															type="button"
-															class="danger"
-															onClick={() => remove(r.id)}
-														>
-															Na pewno usunąć?
-														</button>
-													) : (
-														<button
-															type="button"
-															class="rec-delete"
-															aria-label="Usuń nagranie"
-															title="Usuń nagranie"
-															onClick={() => setConfirming(r.id)}
-														>
-															<Icon name="trash" />
-														</button>
-													))}
-											</span>
-										</li>
+						{canRecord && (
+							<div class="rec-start">
+								<button
+									type="button"
+									class={`rec-toggle${recording ? " recording" : ""}`}
+									aria-label={
+										saving
+											? "Zapisuję nagranie"
+											: recording
+												? "Zakończ nagrywanie"
+												: "Nagrywaj"
+									}
+									disabled={phase === "starting" || saving}
+									onClick={toggle}
+								>
+									<Icon name="record" />
+									{saving
+										? "Zapisuję…"
+										: recording
+											? `Zakończ nagrywanie · ${clock(seconds * 1000)}`
+											: "Nagrywaj lekcję"}
+								</button>
+								{said}
+							</div>
+						)}
+						{canRecord && inputs.length > 0 && (
+							<label class="rec-mic">
+								<span>Mikrofon</span>
+								<select
+									value={inputs.some((m) => m.id === mic) ? mic : ""}
+									disabled={phase !== "idle"}
+									onChange={(e) => {
+										setMic(e.currentTarget.value);
+										setMicChoice(e.currentTarget.value);
+									}}
+								>
+									<option value="">Domyślny</option>
+									{inputs.map((m) => (
+										<option key={m.id} value={m.id}>
+											{m.label}
+										</option>
 									))}
-								</ul>
-							)}
-						</div>
-					</Portal>
-				)}
-			</div>
-		</>
+								</select>
+							</label>
+						)}
+						{list === null ? (
+							<p class="muted">Wczytywanie…</p>
+						) : list.length === 0 ? (
+							<p class="muted">Brak nagrań</p>
+						) : (
+							<ul>
+								{list.map((r) => (
+									<li key={r.id}>
+										<EditableName
+											class="rec-name"
+											name={r.name}
+											editable={!!canDelete}
+											onSave={async (name) => {
+												await api.renameRecording(boardId, r.id, name);
+												await reload();
+											}}
+										/>
+										<span class="muted rec-meta">
+											{new Date(r.createdAt).toLocaleDateString("pl-PL")}
+											{" · "}
+											{r.finished ? clock(r.durationMs) : "w toku"}
+											{r.finished && ` · ${megabytes(r.bytes)}`}
+											{r.finished && videoNote(r)}
+										</span>
+										<span class="rec-actions">
+											{r.video === "ready" && (
+												<a href={`/b/${boardId}/v/${r.id}`}>Wideo</a>
+											)}
+											{r.finished && (
+												<a href={`/b/${boardId}/r/${r.id}`}>Odtwórz</a>
+											)}
+											{canDelete &&
+												(confirming === r.id ? (
+													<button
+														type="button"
+														class="danger"
+														onClick={() => remove(r.id)}
+													>
+														Na pewno usunąć?
+													</button>
+												) : (
+													<button
+														type="button"
+														class="rec-delete"
+														aria-label="Usuń nagranie"
+														title="Usuń nagranie"
+														onClick={() => setConfirming(r.id)}
+													>
+														<Icon name="trash" />
+													</button>
+												))}
+										</span>
+									</li>
+								))}
+							</ul>
+						)}
+					</div>
+				</Portal>
+			)}
+		</div>
 	);
 }

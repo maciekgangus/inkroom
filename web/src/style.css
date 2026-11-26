@@ -3085,6 +3085,37 @@ button.participant {
 .recordings-pop .muted {
 	font-size: 12px;
 }
+.recordings-pop .rec-start {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 4px 0 8px;
+	border-bottom: 1px solid var(--border);
+}
+.recordings-pop .rec-toggle {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	min-height: 44px;
+	font-size: 15px;
+}
+.recordings-pop .rec-toggle svg {
+	fill: var(--danger);
+}
+.recordings-pop .rec-toggle.recording {
+	border-color: var(--danger);
+	color: var(--danger);
+}
+.recordings-pop .rec-start .rec-note {
+	position: static;
+	width: auto;
+	box-shadow: none;
+	border: 0;
+	padding: 0;
+	background: transparent;
+	font-size: 13px;
+}
 .recordings-pop .rec-mic {
 	display: flex;
 	align-items: center;

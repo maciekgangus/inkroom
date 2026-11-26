@@ -4,7 +4,7 @@
 //
 // One recording, by hand:
 //   node render.mjs --base http://localhost:8099 --board <id> --rec <id> --out out.mp4
-//        [--seconds 30] [--size 1280x720] [--fps 30] [--bitrate 2000000] [--tmp /some/dir]
+//        [--seconds 30] [--size 1280x720] [--fps 30] [--bitrate 3000000] [--tmp /some/dir]
 //
 // As the worker of the app (takes recordings from its queue, one at a time, and sends each video
 // to the store):
@@ -130,7 +130,7 @@ const settings = () => {
 		width,
 		height,
 		fps: Number(arg("fps", "30")),
-		bitrate: Number(arg("bitrate", "2000000")),
+		bitrate: Number(arg("bitrate", "3000000")),
 		seconds: arg("seconds") ? Number(arg("seconds")) : undefined,
 	};
 };

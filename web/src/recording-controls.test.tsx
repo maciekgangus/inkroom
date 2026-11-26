@@ -30,8 +30,17 @@ const rec = (over: Partial<Recording> = {}): Recording => ({
 describe("RecordingControls (R-117)", () => {
 	let root: HTMLElement;
 	const flush = () => act(() => new Promise((r) => setTimeout(r, 0)));
+	// The menu hangs outside `root` (a portal), so everything is looked for in the whole page.
 	const btn = (label: string) =>
-		root.querySelector(`button[aria-label='${label}']`) as HTMLButtonElement;
+		document.body.querySelector(
+			`button[aria-label='${label}']`,
+		) as HTMLButtonElement;
+	/** Opens the "Nagrania" menu, which holds the record button, the microphone and the list. */
+	const openMenu = async () => {
+		if (document.querySelector(".recordings-pop")) return;
+		act(() => btn("Nagrania").click());
+		await flush();
+	};
 
 	beforeEach(() => {
 		root = document.createElement("div");
@@ -44,18 +53,20 @@ describe("RecordingControls (R-117)", () => {
 		root.remove();
 	});
 
-	test("the record button is only there where the device can record", () => {
+	test("the record button is only there where the device can record", async () => {
 		act(() =>
 			render(
 				<RecordingControls source={source} boardId="b" canRecord={false} />,
 				root,
 			),
 		);
+		await openMenu();
 		expect(btn("Nagrywaj")).toBeNull();
 		expect(btn("Nagrania")).not.toBeNull();
 		act(() =>
 			render(<RecordingControls source={source} boardId="b" canRecord />, root),
 		);
+		await openMenu();
 		expect(btn("Nagrywaj")).not.toBeNull();
 	});
 
@@ -73,6 +84,7 @@ describe("RecordingControls (R-117)", () => {
 				root,
 			),
 		);
+		await openMenu();
 		act(() => btn("Nagrywaj").click());
 		await flush();
 		expect(start).toHaveBeenCalledWith("b", source, expect.any(Function));
@@ -101,11 +113,12 @@ describe("RecordingControls (R-117)", () => {
 				root,
 			),
 		);
+		await openMenu();
 		act(() => btn("Nagrywaj").click());
 		await flush();
 		act(() => btn("Zakończ nagrywanie").click());
 		await flush();
-		expect(root.querySelector(".rec-note")?.textContent).toBe(
+		expect(document.body.querySelector(".rec-note")?.textContent).toBe(
 			"Nagranie krótsze niż minuta nie zostało zapisane",
 		);
 	});
@@ -176,6 +189,7 @@ describe("RecordingControls (R-117)", () => {
 				root,
 			),
 		);
+		await openMenu();
 		act(() => btn("Nagrywaj").click());
 		await flush();
 		act(() => btn("Zakończ nagrywanie").click());
@@ -206,9 +220,10 @@ describe("RecordingControls (R-117)", () => {
 				root,
 			),
 		);
+		await openMenu();
 		act(() => btn("Nagrywaj").click());
 		await flush();
-		expect(root.querySelector("[role='alert']")?.textContent).toBe(
+		expect(document.body.querySelector("[role='alert']")?.textContent).toBe(
 			"Brak dostępu do mikrofonu",
 		);
 		expect(btn("Nagrywaj")).not.toBeNull();
@@ -231,11 +246,12 @@ describe("RecordingControls (R-117)", () => {
 				root,
 			),
 		);
+		await openMenu();
 		act(() => btn("Nagrywaj").click());
 		await flush();
 		act(() => end("Nie udało się wysłać nagrania"));
 		expect(btn("Nagrywaj")).not.toBeNull();
-		expect(root.querySelector("[role='alert']")?.textContent).toBe(
+		expect(document.body.querySelector("[role='alert']")?.textContent).toBe(
 			"Nie udało się wysłać nagrania",
 		);
 	});
@@ -257,6 +273,7 @@ describe("RecordingControls (R-117)", () => {
 			),
 		);
 		expect(onRecording).not.toHaveBeenCalled(); // nothing to say before a recording
+		await openMenu();
 		act(() => btn("Nagrywaj").click());
 		await flush();
 		expect(onRecording).toHaveBeenLastCalledWith(true);
@@ -282,28 +299,32 @@ describe("RecordingControls (R-117)", () => {
 				),
 			);
 			await act(async () => {
+				btn("Nagrania").click();
+				await vi.advanceTimersByTimeAsync(0);
+			});
+			await act(async () => {
 				btn("Nagrywaj").click();
 				await vi.advanceTimersByTimeAsync(0);
 			});
 			await act(async () => {
 				await vi.advanceTimersByTimeAsync(69 * 60_000 + 59_000);
 			});
-			expect(root.querySelector("[role='status']")).toBeNull();
+			expect(document.body.querySelector("[role='status']")).toBeNull();
 			await act(async () => {
 				await vi.advanceTimersByTimeAsync(1_000);
 			}); // 70 min
-			expect(root.querySelector("[role='status']")?.textContent).toContain(
-				"5 minut",
-			);
+			expect(
+				document.body.querySelector("[role='status']")?.textContent,
+			).toContain("5 minut");
 			expect(stop).not.toHaveBeenCalled();
 			await act(async () => {
 				await vi.advanceTimersByTimeAsync(5 * 60_000);
 			}); // 75 min
 			expect(stop).toHaveBeenCalledTimes(1);
 			expect(btn("Nagrywaj")).not.toBeNull();
-			expect(root.querySelector("[role='status']")?.textContent).toContain(
-				"limit",
-			);
+			expect(
+				document.body.querySelector("[role='status']")?.textContent,
+			).toContain("limit");
 		} finally {
 			vi.useRealTimers();
 		}

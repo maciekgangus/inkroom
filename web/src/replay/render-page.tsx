@@ -110,6 +110,9 @@ export function RenderPage({
 					height: o.height,
 					bitrate: o.bitrate,
 					framerate: o.fps,
+					// A picture that mostly stands still: spend bits on sharp thin lines, not on speed.
+					bitrateMode: "variable",
+					latencyMode: "quality",
 					avc: { format: "annexb" },
 				});
 				const keyEvery = keyframeEvery(o.fps);
