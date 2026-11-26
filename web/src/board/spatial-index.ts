@@ -1,7 +1,27 @@
 import type { Stroke } from "./board";
 import { intersects, strokeBounds } from "./bounds";
-import { isPolygonKind } from "./shapes";
 import type { Rect } from "./viewport";
+
+/**
+ * True when the element's hit test can reach beyond its box (plus the queryPoint √2 pad):
+ * - ellipses use a normalised-radius approximation that stretches past the box along the major axis;
+ * - tiny coordinate axes (< 4 units) have minimum-size arrowheads sticking out of their box;
+ * - custom vertices outside [0, 1] can place corners outside the points box.
+ */
+function hitExceedsBounds(stroke: Stroke): boolean {
+	if (stroke.kind === "ellipse" || stroke.kind === "axes") return true;
+	return (
+		stroke.verts?.some(
+			([u, v]) =>
+				!Number.isFinite(u) ||
+				!Number.isFinite(v) ||
+				u < 0 ||
+				u > 1 ||
+				v < 0 ||
+				v > 1,
+		) ?? false
+	);
+}
 
 /**
  * The board's spatial tile index (R-118, ADR 0031): a grid of `CELL_SIZE` × `CELL_SIZE` board
@@ -38,6 +58,7 @@ export function cellSpan(rect: Rect): number {
 		!Number.isFinite(rect.maxY)
 	)
 		return Number.POSITIVE_INFINITY;
+	if (rect.minX > rect.maxX || rect.minY > rect.maxY) return 0;
 	const minCx = Math.floor(rect.minX / CELL_SIZE);
 	const maxCx = Math.floor(rect.maxX / CELL_SIZE);
 	const minCy = Math.floor(rect.minY / CELL_SIZE);
@@ -80,13 +101,10 @@ export class SpatialIndex {
 			large: true,
 		};
 		// A point query must return a strict superset of what strokeHit/objectHit can catch, so
-		// only elements whose hit geometry stays inside their box may sit in cells: an ellipse is
-		// hit by a normalised-radius approximation that reaches far beyond its box along the major
-		// axis, and a shape drawn from parts (a cube's back edges) can stick out of the box too.
-		// Those always go to `large`, which every query checks.
+		// elements whose hit geometry can reach beyond their box always go to `large`, which every
+		// query checks; regular polygon shapes and coordinate planes stay within their box.
 		if (
-			stroke.kind !== "ellipse" &&
-			!isPolygonKind(stroke.kind) &&
+			!hitExceedsBounds(stroke) &&
 			Number.isFinite(bounds.minX) &&
 			Number.isFinite(bounds.minY) &&
 			Number.isFinite(bounds.maxX) &&
@@ -162,6 +180,8 @@ export class SpatialIndex {
 	 * not guarantee that (an ellipse's hit reaches beyond its box).
 	 */
 	query(rect: Rect, looseLarge = false): Stroke[] {
+		const empty = rect.minX > rect.maxX || rect.minY > rect.maxY;
+		if (empty && !looseLarge) return [];
 		const out: Stroke[] = [];
 		const seen = new Set<string>();
 		const keep = (e: Entry, loose = false): void => {
@@ -173,6 +193,7 @@ export class SpatialIndex {
 			const e = this.entries.get(s.id);
 			if (e) keep(e, looseLarge);
 		}
+		if (empty) return out;
 		const inRange =
 			Number.isFinite(rect.minX) &&
 			Number.isFinite(rect.minY) &&
