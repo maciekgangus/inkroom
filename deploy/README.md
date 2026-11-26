@@ -361,7 +361,7 @@ Kolejność ma znaczenie (stos najpierw, żeby agent miał dokąd pisać):
 - Gniazdo Dockera (`/var/run/docker.sock`) jest montowane do agenta, żeby czytać logi kontenerów: kto przejmie ten kontener, ma uprawnienia roota na maszynie aplikacji. Obraz jest przypięty do wersji i nie ma opublikowanego portu (ADR 0023). Stos nie ma gniazda Dockera.
 - Porty 3100 i 9090 stosu nie mają logowania: są otwarte tylko na adresie LAN. Nie przekierowuj ich z routera.
 
-## 12. Nagrania lekcji (R-113 do R-116, ADR 0027 i 0028)
+## 12. Nagrania lekcji (R-113 do R-116, ADR 0030 i 0028)
 
 Prowadzący (twórca tablicy) nagrywa **dźwięk z mikrofonu i oś zdarzeń tablicy** (pociągnięcia, widok,
 kursory), nie wideo. Przeglądarka wysyła to **prosto do bucketu** podpisanymi adresami, więc nie przechodzi

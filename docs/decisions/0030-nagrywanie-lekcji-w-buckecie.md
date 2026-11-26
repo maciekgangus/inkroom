@@ -1,10 +1,10 @@
-# 0027. Nagrywanie lekcji: bucket S3 (R2) i dysk serwera jako zapas
+# 0030. Nagrywanie lekcji: bucket S3 (R2) i dysk serwera jako zapas
 
 - Status: accepted (obiekty zmienione przez ADR 0028: dźwięk i oś zdarzeń zamiast wideo z ekranu; bucket, podpisane adresy, dysk jako zapas i reszta tej decyzji obowiązują)
 - Data: 2026-11-25
 
 ## Kontekst
-R-094: prowadzący nagrywa ekran i mikrofon; wideo ma trafiać do magazynu poza serwerem aplikacji. Cloudflare ogranicza wideo przez swoje proxy (tunel) na darmowym planie, R2 je dopuszcza. R-112 (etap 1) dodał zapis na dysku serwera, żeby dało się nagrywać przed założeniem bucketu i na środowiskach testowych bez R2.
+R-094: prowadzący nagrywa ekran i mikrofon; wideo ma trafiać do magazynu poza serwerem aplikacji. Cloudflare ogranicza wideo przez swoje proxy (tunel) na darmowym planie, R2 je dopuszcza. R-117 (etap 1) dodał zapis na dysku serwera, żeby dało się nagrywać przed założeniem bucketu i na środowiskach testowych bez R2.
 
 ## Rozważane opcje
 1. **Wideo przez serwer aplikacji** (do pliku lub dalej do bucketu). Proste, ale wideo idzie przez tunel i obciąża serwer, czyli to, czego R-094 chce uniknąć.

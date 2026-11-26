@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// Lesson recordings (R-094, R-112): the video is kept in a bucket or on disk (see recstore); the
+// Lesson recordings (R-094, R-117): the video is kept in a bucket or on disk (see recstore); the
 // table only describes it.
 const recordingsSchema = `
 CREATE TABLE recordings (

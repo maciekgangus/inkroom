@@ -160,7 +160,7 @@ var migrations = []migration{
 	stmt(calendarSchema),
 	// The picture an account shows on boards instead of its first letter (R-111); '' for none.
 	stmt("ALTER TABLE users ADD COLUMN avatar TEXT NOT NULL DEFAULT ''"),
-	// Lesson recordings kept on the app server's disk (R-112).
+	// Lesson recordings kept on the app server's disk (R-117).
 	stmt(recordingsSchema),
 	// The video rendered from a recording on the server (R-115, ADR 0029).
 	addRecordingVideo,

@@ -1,4 +1,4 @@
-// Package recstore keeps the video of lesson recordings (R-094, R-112): in an S3-compatible
+// Package recstore keeps the video of lesson recordings (R-094, R-117): in an S3-compatible
 // bucket (Cloudflare R2 by default), where the browser sends the parts straight to the bucket
 // through signed addresses, or, when no bucket is configured, in a directory on the app server.
 package recstore

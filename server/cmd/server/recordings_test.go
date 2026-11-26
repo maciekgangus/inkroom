@@ -20,7 +20,7 @@ import (
 	"github.com/maciekgangus/inkroom/server/internal/store"
 )
 
-// Lesson recording (R-094, R-112): the owner of a board records it; the video goes to a bucket
+// Lesson recording (R-094, R-117): the owner of a board records it; the video goes to a bucket
 // through signed addresses, or, with no bucket, to a file the app writes.
 
 // fakeBucket is a recstore.Backend that only remembers what it was asked.

@@ -18,7 +18,7 @@ import (
 	"github.com/maciekgangus/inkroom/server/internal/store"
 )
 
-// Lesson recording (R-094, R-112). Only the board's owner records. The browser cuts the video into
+// Lesson recording (R-094, R-117). Only the board's owner records. The browser cuts the video into
 // parts of recstore.PartSize and asks for the address of each: with a bucket (R2) that is a signed
 // address of the bucket, so the video never passes through this server; without one it is this
 // server's own address, and the part is written into a file. The list and the download need only

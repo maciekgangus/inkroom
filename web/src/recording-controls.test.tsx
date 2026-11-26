@@ -27,7 +27,7 @@ const rec = (over: Partial<Recording> = {}): Recording => ({
 	...over,
 });
 
-describe("RecordingControls (R-112)", () => {
+describe("RecordingControls (R-117)", () => {
 	let root: HTMLElement;
 	const flush = () => act(() => new Promise((r) => setTimeout(r, 0)));
 	const btn = (label: string) =>

@@ -367,7 +367,7 @@ export const addUnavailable = (u: {
 export const deleteUnavailable = (id: number) =>
 	request<void>("DELETE", `/api/unavailability/${id}`);
 
-/** One recording of a lesson on a board (R-112). */
+/** One recording of a lesson on a board (R-117). */
 export interface Recording {
 	id: string;
 	name: string;
