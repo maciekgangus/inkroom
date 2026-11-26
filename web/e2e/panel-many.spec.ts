@@ -24,21 +24,24 @@ test.describe("a panel with a great many boards", () => {
 	}) => {
 		await page.goto("/");
 		await page.waitForSelector(".boards.tiles .board");
-		const { columns, scrolls, sideways } = await page.evaluate(() => {
-			const tiles = [
-				...document.querySelectorAll<HTMLElement>(".boards.tiles .board"),
-			];
-			const panel = document.querySelector(".panel") as HTMLElement;
-			return {
-				columns: tiles.filter((t) => t.offsetTop === tiles[0].offsetTop).length,
-				scrolls: panel.scrollHeight > panel.clientHeight,
-				sideways: panel.scrollWidth > panel.clientWidth + 1,
-			};
-		});
-		const vw = page.viewportSize()?.width ?? 0;
-		expect(columns).toBeGreaterThanOrEqual(
-			Math.floor((Math.min(vw, 1300) - 64) / 250),
+		const { columns, gridWidth, scrolls, sideways } = await page.evaluate(
+			() => {
+				const tiles = [
+					...document.querySelectorAll<HTMLElement>(".boards.tiles .board"),
+				];
+				const grid = document.querySelector(".boards.tiles") as HTMLElement;
+				const panel = document.querySelector(".panel") as HTMLElement;
+				return {
+					columns: tiles.filter((t) => t.offsetTop === tiles[0].offsetTop)
+						.length,
+					gridWidth: grid.clientWidth,
+					scrolls: panel.scrollHeight > panel.clientHeight,
+					sideways: panel.scrollWidth > panel.clientWidth + 1,
+				};
+			},
 		);
+		const expectedCols = Math.max(2, Math.floor((gridWidth + 16) / 276));
+		expect(columns).toBeGreaterThanOrEqual(expectedCols);
 		expect(scrolls).toBe(true);
 		expect(sideways).toBe(false);
 	});
@@ -77,12 +80,17 @@ test.describe("a panel with a great many boards", () => {
 
 	test("the icons of a tile are big enough to hit", async ({ page }) => {
 		await page.goto("/");
-		await page.waitForSelector(".boards.tiles .board .actions button");
-		const box = await page
-			.locator(".boards.tiles .board .actions button")
+		await page.waitForSelector(".boards.tiles .board .board-controls button");
+		const buttons = page
+			.locator(".boards.tiles .board")
 			.first()
-			.boundingBox();
-		expect(box?.width).toBeGreaterThanOrEqual(40);
-		expect(box?.height).toBeGreaterThanOrEqual(40);
+			.locator(".board-controls button");
+		const count = await buttons.count();
+		expect(count).toBeGreaterThanOrEqual(2);
+		for (let i = 0; i < count; i++) {
+			const box = await buttons.nth(i).boundingBox();
+			expect(box?.width).toBeGreaterThanOrEqual(40);
+			expect(box?.height).toBeGreaterThanOrEqual(40);
+		}
 	});
 });

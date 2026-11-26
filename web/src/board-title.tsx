@@ -121,7 +121,7 @@ function TitleField({ name, editable, onRename }: Omit<Props, "folded">) {
 						onMouseDown={(e) => e.preventDefault()}
 						onClick={() => finish(true)}
 					>
-						✓
+						<Icon name="check" />
 					</button>
 				</>
 			) : (

@@ -138,7 +138,7 @@ func (a *app) adminDeleteUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Wpisz dokładną nazwę użytkownika, żeby potwierdzić")
 		return
 	}
-	boards, err := a.st.BoardsOwnedBy(id)
+	boards, err := a.st.BoardsSolelyOwnedBy(id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Błąd serwera")
 		return
@@ -187,7 +187,11 @@ func (a *app) adminSetOwner(w http.ResponseWriter, r *http.Request) {
 	if !ok || !readBody(w, r, &body) {
 		return
 	}
-	a.adminDone(w, a.st.SetBoardOwner(b.ID, body.UserID))
+	err := a.st.SetBoardOwner(b.ID, body.UserID)
+	if err == nil {
+		a.hub.SetSoleOwner(b.ID, userPerson(body.UserID))
+	}
+	a.adminDone(w, err)
 }
 
 // adminCopyBoard makes a copy of the board for the same owner (R-020).

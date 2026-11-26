@@ -164,6 +164,12 @@ var migrations = []migration{
 	stmt(recordingsSchema),
 	// The video rendered from a recording on the server (R-115, ADR 0029).
 	addRecordingVideo,
+	// Per-user board organization: folders, markers, pins and custom order (R-121).
+	stmt(organizeSchema),
+	// Co-owners and board ownership transfer (R-122).
+	stmt(ownersSchema),
+	// Saved contacts ("Znajomi") for user suggestions (R-123).
+	stmt(contactsSchema),
 }
 
 func addGoogleSub(tx *sql.Tx) error {
@@ -426,6 +432,11 @@ func scanUser(sc interface{ Scan(...any) error }) (User, error) {
 	return u, notFound(err)
 }
 
+// UserByID finds an account by its numeric id.
+func (s *Store) UserByID(id int64) (User, error) {
+	return scanUser(s.db.QueryRow("SELECT "+userCols+" FROM users WHERE id = ?", id))
+}
+
 // UserByEmail finds an account by (normalized) e-mail.
 func (s *Store) UserByEmail(email string) (User, error) {
 	return scanUser(s.db.QueryRow("SELECT "+userCols+" FROM users WHERE email = ?", email))
@@ -483,9 +494,20 @@ func (s *Store) boardBytes(boardID string) (int64, error) {
 // CreateBoard adds a board owned by ownerID.
 func (s *Store) CreateBoard(id string, ownerID int64, name string) (Board, error) {
 	now := time.Now().Truncate(time.Second)
-	_, err := s.db.Exec("INSERT INTO boards (id, owner_id, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-		id, ownerID, name, unix(now), unix(now))
+	tx, err := s.db.Begin()
 	if err != nil {
+		return Board{}, err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec("INSERT INTO boards (id, owner_id, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+		id, ownerID, name, unix(now), unix(now)); err != nil {
+		return Board{}, err
+	}
+	if _, err := tx.Exec("INSERT INTO board_owners (board_id, user_id, added_at) VALUES (?, ?, ?)",
+		id, ownerID, unix(now)); err != nil {
+		return Board{}, err
+	}
+	if err := tx.Commit(); err != nil {
 		return Board{}, err
 	}
 	return Board{ID: id, OwnerID: ownerID, Name: name, Background: DefaultBackground, CreatedAt: now, UpdatedAt: now}, nil
@@ -535,16 +557,20 @@ func (s *Store) DeleteBoard(id string) error {
 	return s.mustAffect(s.db.Exec("DELETE FROM boards WHERE id = ?", id))
 }
 
-// BoardsOwnedBy lists a user's boards, most recently changed first.
+// BoardsOwnedBy lists a user's boards (including co-owned boards), most recently changed first.
 func (s *Store) BoardsOwnedBy(userID int64) ([]Board, error) {
-	return s.listBoards("SELECT "+boardCols+", "+sizeCol+", '' FROM boards b WHERE b.owner_id = ? ORDER BY b.updated_at DESC, b.id", userID)
+	return s.listBoards("SELECT "+boardCols+", "+sizeCol+`, '' FROM board_owners bo
+		JOIN boards b ON b.id = bo.board_id
+		WHERE bo.user_id = ? ORDER BY b.updated_at DESC, b.id`, userID)
 }
 
 // BoardsVisitedBy lists other people's boards the user opened, most recently opened first.
 func (s *Store) BoardsVisitedBy(userID int64) ([]Board, error) {
 	return s.listBoards("SELECT "+boardCols+", "+sizeCol+`, o.username FROM visits v
 		JOIN boards b ON b.id = v.board_id JOIN users o ON o.id = b.owner_id
-		WHERE v.user_id = ? AND b.owner_id != ? ORDER BY v.last_opened DESC, b.id`, userID, userID)
+		WHERE v.user_id = ?
+		  AND NOT EXISTS (SELECT 1 FROM board_owners bo WHERE bo.board_id = b.id AND bo.user_id = ?)
+		ORDER BY v.last_opened DESC, b.id`, userID, userID)
 }
 
 // listBoards runs a query of boardCols, the size and the owner's name for a list of boards.
@@ -574,10 +600,12 @@ func (s *Store) RemoveVisit(userID int64, boardID string) error {
 	return err
 }
 
-// RecordVisit remembers that userID opened boardID (no-op for the owner's own board).
+// RecordVisit remembers that userID opened boardID (no-op for any owner of the board).
 func (s *Store) RecordVisit(userID int64, boardID string, at time.Time) error {
 	_, err := s.db.Exec(`INSERT INTO visits (user_id, board_id, last_opened)
-		SELECT ?, id, ? FROM boards WHERE id = ? AND owner_id != ?
+		SELECT ?, b.id, ? FROM boards b
+		WHERE b.id = ?
+		  AND NOT EXISTS (SELECT 1 FROM board_owners bo WHERE bo.board_id = b.id AND bo.user_id = ?)
 		ON CONFLICT (user_id, board_id) DO UPDATE SET last_opened = excluded.last_opened`,
 		userID, unix(at), boardID, userID)
 	return err
@@ -746,6 +774,10 @@ func (s *Store) CopyBoard(from, id string, ownerID int64, name string, newImageI
 	now := time.Now().Truncate(time.Second)
 	if _, err := tx.Exec("INSERT INTO boards (id, owner_id, name, background, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
 		id, ownerID, name, src.Background, unix(now), unix(now)); err != nil {
+		return Board{}, err
+	}
+	if _, err := tx.Exec("INSERT INTO board_owners (board_id, user_id, added_at) VALUES (?, ?, ?)",
+		id, ownerID, unix(now)); err != nil {
 		return Board{}, err
 	}
 

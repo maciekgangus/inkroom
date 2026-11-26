@@ -24,6 +24,10 @@ export interface Peer {
 	avatar?: string;
 	/** This person records the lesson (R-094). */
 	recording?: boolean;
+	/** Account id when the participant is logged into an Inkroom account (R-123). */
+	userId?: number;
+	/** True when this participant owns or co-owns this board (R-122, R-123). */
+	owner?: boolean;
 }
 
 export interface RemoteCursor {
@@ -268,14 +272,17 @@ export class SyncClient {
 	private setPeers(raw: unknown[]): void {
 		this.peersIn = raw.flatMap((p) => {
 			if (typeof p !== "object" || p === null) return [];
-			const { id, name, muted, follows, avatar, recording } = p as {
-				id?: unknown;
-				name?: unknown;
-				muted?: unknown;
-				follows?: unknown;
-				avatar?: unknown;
-				recording?: unknown;
-			};
+			const { id, name, muted, follows, avatar, recording, userId, owner } =
+				p as {
+					id?: unknown;
+					name?: unknown;
+					muted?: unknown;
+					follows?: unknown;
+					avatar?: unknown;
+					recording?: unknown;
+					userId?: unknown;
+					owner?: unknown;
+				};
 			if (typeof id !== "string" || typeof name !== "string") return [];
 			return [
 				{
@@ -285,6 +292,8 @@ export class SyncClient {
 					...(typeof follows === "string" && follows ? { follows } : {}),
 					...(typeof avatar === "string" && avatar ? { avatar } : {}),
 					...(recording === true ? { recording } : {}),
+					...(typeof userId === "number" && userId > 0 ? { userId } : {}),
+					...(owner === true ? { owner } : {}),
 				},
 			];
 		});

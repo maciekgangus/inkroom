@@ -131,6 +131,24 @@ func (h *Hub) SetAvatar(person, avatar string) {
 	}
 }
 
+// SetOwner updates live ownership for one person on a board room, if active (R-122).
+func (h *Hub) SetOwner(boardID, person string, owner bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if r := h.rooms[boardID]; r != nil {
+		r.SetOwner(person, owner)
+	}
+}
+
+// SetSoleOwner updates live ownership on a board room after a transfer, if active (R-122).
+func (h *Hub) SetSoleOwner(boardID, person string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if r := h.rooms[boardID]; r != nil {
+		r.SetSoleOwner(person)
+	}
+}
+
 // Delete disconnects everyone from the board and discards unsaved changes.
 func (h *Hub) Delete(boardID string) {
 	h.mu.Lock()

@@ -89,7 +89,7 @@ export function Participants({
 										return;
 									}
 									const r = e.currentTarget.getBoundingClientRect();
-									onSelect(p, { x: r.right - 220, y: r.bottom + 8 });
+									onSelect(p, { x: r.right - 264, y: r.bottom + 8 });
 								}}
 							>
 								{face}

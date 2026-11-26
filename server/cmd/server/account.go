@@ -61,7 +61,7 @@ func (a *app) deleteAccount(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Wpisz dokładną nazwę konta, żeby potwierdzić")
 		return
 	}
-	boards, err := a.st.BoardsOwnedBy(u.ID)
+	boards, err := a.st.BoardsSolelyOwnedBy(u.ID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Błąd serwera")
 		return

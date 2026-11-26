@@ -33,6 +33,10 @@ type Client struct {
 	Person string
 	Owner  bool
 
+	// UserID is the account id for a logged-in non-admin participant (0 for guests / admin),
+	// used so other logged-in users can save them to contacts or add them as co-owner (R-123).
+	UserID int64
+
 	// Avatar is the picture of the account behind the connection (R-111), "" for its first letter.
 	Avatar string
 
@@ -239,6 +243,39 @@ func (r *Room) SetAvatar(person, avatar string) {
 	for c := range r.clients {
 		if c.Person == person && c.Name != store.ReservedName {
 			c.Avatar = avatar
+			changed = changed || c.ID != ""
+		}
+	}
+	if changed {
+		r.broadcastLocked(r.peersLocked(), nil)
+	}
+}
+
+// SetOwner updates live ownership rights for a connected person on this board (R-122).
+func (r *Room) SetOwner(person string, owner bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	changed := false
+	for c := range r.clients {
+		if c.Person == person && c.Owner != owner {
+			c.Owner = owner
+			changed = changed || c.ID != ""
+		}
+	}
+	if changed {
+		r.broadcastLocked(r.peersLocked(), nil)
+	}
+}
+
+// SetSoleOwner sets person as the sole live owner on this board after an ownership transfer (R-122).
+func (r *Room) SetSoleOwner(person string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	changed := false
+	for c := range r.clients {
+		want := c.Person == person
+		if c.Owner != want {
+			c.Owner = want
 			changed = changed || c.ID != ""
 		}
 	}
@@ -529,7 +566,9 @@ func (r *Room) peersLocked() []byte {
 		Follows string `json:"follows,omitempty"`
 		Avatar  string `json:"avatar,omitempty"` // R-111
 		// Recording is true while this person records the lesson (R-094).
-		Recording bool `json:"recording,omitempty"`
+		Recording bool  `json:"recording,omitempty"`
+		UserID    int64 `json:"userId,omitempty"` // R-123
+		Owner     bool  `json:"owner,omitempty"`  // R-122, R-123
 	}
 	recording := map[string]bool{} // a person with two tabs records in either
 	for c, p := range r.clients {
@@ -544,7 +583,16 @@ func (r *Room) peersLocked() []byte {
 			continue
 		}
 		seen[c.ID] = true
-		peers = append(peers, peer{ID: c.ID, Name: c.Name, Muted: !r.canDraw(c), Follows: r.followsOfLocked(c.ID), Avatar: c.Avatar, Recording: recording[c.ID]})
+		peers = append(peers, peer{
+			ID:        c.ID,
+			Name:      c.Name,
+			Muted:     !r.canDraw(c),
+			Follows:   r.followsOfLocked(c.ID),
+			Avatar:    c.Avatar,
+			Recording: recording[c.ID],
+			UserID:    c.UserID,
+			Owner:     c.Owner,
+		})
 	}
 	sort.Slice(peers, func(i, j int) bool {
 		if peers[i].Name != peers[j].Name {

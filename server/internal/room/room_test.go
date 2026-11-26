@@ -643,3 +643,45 @@ func TestPingIsAnsweredWithPongToTheSenderOnly(t *testing.T) {
 	}
 	none(t, b)
 }
+
+func TestPeersCarryUserIDAndOwnerUpdatesBroadcast(t *testing.T) {
+	r := New()
+	a := NewClient(16)
+	a.Identify("a1", "maciek")
+	a.SetPerson("u:1", true)
+	a.UserID = 1
+	r.Join(a)
+	recv(t, a) // snapshot
+	peersA := recv(t, a)
+	if peersA["t"] != "peers" {
+		t.Fatalf("expected peers, got %v", peersA)
+	}
+
+	b := NewClient(16)
+	b.Identify("b1", "ania.k")
+	b.SetPerson("u:2", false)
+	b.UserID = 2
+	r.Join(b)
+	recv(t, b) // snapshot
+	recv(t, b) // peers
+	peersMsg := recv(t, a)
+	list := peersMsg["peers"].([]any)
+	if len(list) != 2 {
+		t.Fatalf("expected 2 peers, got %v", list)
+	}
+	ania := list[0].(map[string]any)
+	if ania["name"] != "ania.k" || ania["userId"] != float64(2) || ania["owner"] != nil {
+		t.Fatalf("unexpected peer before promote: %v", ania)
+	}
+
+	// Promoting ania.k to owner broadcasts an updated peers list immediately.
+	r.SetOwner("u:2", true)
+	updated := recv(t, a)
+	if updated["t"] != "peers" {
+		t.Fatalf("expected peers broadcast on SetOwner, got %v", updated)
+	}
+	updatedAnia := updated["peers"].([]any)[0].(map[string]any)
+	if updatedAnia["owner"] != true {
+		t.Fatalf("expected ania.k owner=true after SetOwner, got %v", updatedAnia)
+	}
+}

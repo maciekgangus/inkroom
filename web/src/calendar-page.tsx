@@ -21,7 +21,14 @@ const toIso = (local: string) => new Date(local).toISOString();
 
 export function CalendarPage({ navigate }: { navigate: (to: string) => void }) {
 	const [data, setData] = useState<api.CalendarData | null>(null);
+	const [contacts, setContacts] = useState<api.ContactSuggestion[]>([]);
 	const [error, setError] = useState("");
+	const reloadContacts = useCallback(() => {
+		api
+			.listContacts()
+			.then((r) => setContacts(r.contacts))
+			.catch(() => {});
+	}, []);
 	const reload = useCallback(
 		() =>
 			api
@@ -39,7 +46,20 @@ export function CalendarPage({ navigate }: { navigate: (to: string) => void }) {
 	);
 	useEffect(() => {
 		reload();
-	}, [reload]);
+		reloadContacts();
+	}, [reload, reloadContacts]);
+	const savedFriends = new Set(
+		contacts.filter((c) => c.saved).map((c) => c.username.toLowerCase()),
+	);
+	const addFriend = async (username: string) => {
+		setError("");
+		try {
+			const res = await api.addContact(username);
+			setContacts(res.contacts);
+		} catch (e) {
+			setError(api.errorMessage(e));
+		}
+	};
 	/** Runs a change, then shows the calendar as the server has it (or the error). */
 	const act = async (f: () => Promise<unknown>) => {
 		setError("");
@@ -112,11 +132,17 @@ export function CalendarPage({ navigate }: { navigate: (to: string) => void }) {
 				{data.lessons.length === 0 && <p class="muted">Brak zajęć.</p>}
 				<ul>
 					{data.lessons.map((l) => (
-						<LessonRow key={l.id} lesson={l} act={act} />
+						<LessonRow
+							key={l.id}
+							lesson={l}
+							act={act}
+							savedFriends={savedFriends}
+							onAddFriend={addFriend}
+						/>
 					))}
 				</ul>
 			</section>
-			<NewLesson act={act} />
+			<NewLesson act={act} contacts={contacts} />
 			<Unavailability data={data} act={act} />
 		</main>
 	);
@@ -124,8 +150,20 @@ export function CalendarPage({ navigate }: { navigate: (to: string) => void }) {
 
 type Act = (f: () => Promise<unknown>) => Promise<void>;
 
-function LessonRow({ lesson: l, act }: { lesson: Lesson; act: Act }) {
+function LessonRow({
+	lesson: l,
+	act,
+	savedFriends,
+	onAddFriend,
+}: {
+	lesson: Lesson;
+	act: Act;
+	savedFriends: Set<string>;
+	onAddFriend: (username: string) => Promise<void>;
+}) {
 	const teacher = l.role === "teacher";
+	const otherPerson = teacher ? l.student : l.teacher;
+	const isFriend = savedFriends.has(otherPerson.toLowerCase());
 	const [note, setNote] = useState(l.note);
 	const [homework, setHomework] = useState(l.homework);
 	const [move, setMove] = useState("");
@@ -135,6 +173,18 @@ function LessonRow({ lesson: l, act }: { lesson: Lesson; act: Act }) {
 		<li class={l.status === "cancelled" ? "muted" : ""}>
 			<strong>{fmt(l.start)}</strong> {l.title} (
 			{teacher ? `uczeń: ${l.student}` : `prowadzi: ${l.teacher}`})
+			{otherPerson && !isFriend && (
+				<>
+					{" "}
+					<button
+						type="button"
+						class="org-owner-save"
+						onClick={() => void onAddFriend(otherPerson)}
+					>
+						+ Do znajomych
+					</button>
+				</>
+			)}
 			{l.status !== "scheduled" && ` [${STATUS[l.status]}]`}{" "}
 			{l.boardId ? (
 				<a href={`/b/${l.boardId}`}>Tablica</a>
@@ -236,7 +286,13 @@ function LessonRow({ lesson: l, act }: { lesson: Lesson; act: Act }) {
 	);
 }
 
-function NewLesson({ act }: { act: Act }) {
+function NewLesson({
+	act,
+	contacts,
+}: {
+	act: Act;
+	contacts: api.ContactSuggestion[];
+}) {
 	const [student, setStudent] = useState("");
 	const [title, setTitle] = useState("");
 	const [start, setStart] = useState("");
@@ -280,10 +336,16 @@ function NewLesson({ act }: { act: Act }) {
 			<form class="row" onSubmit={submit}>
 				<input
 					placeholder="Uczeń (nazwa lub e-mail)"
+					list="calendar-contacts"
 					value={student}
 					required
 					onInput={(e) => setStudent(e.currentTarget.value)}
 				/>
+				<datalist id="calendar-contacts">
+					{contacts.map((c) => (
+						<option key={c.id} value={c.username} />
+					))}
+				</datalist>
 				<input
 					placeholder="Tytuł"
 					value={title}

@@ -27,16 +27,39 @@ type boardJSON struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
 	UpdatedAt string `json:"updatedAt"`
-	// Owner is the owner's username, given for boards of other people only (R-051).
+	// Owner is the primary owner's username, given for boards of other people only (R-051).
 	Owner string `json:"owner,omitempty"`
+	// Owners lists all owner usernames when a board has multiple co-owners (R-122).
+	Owners []string `json:"owners,omitempty"`
 	// Bytes is the size of the board's strokes and images (R-091).
 	Bytes int64 `json:"bytes"`
+	// Per-user organization metadata (R-121).
+	FolderID  string   `json:"folderId,omitempty"`
+	Pinned    bool     `json:"pinned,omitempty"`
+	Position  int      `json:"position,omitempty"`
+	MarkerIDs []string `json:"markerIds,omitempty"`
 }
 
-func toJSON(boards []store.Board) []boardJSON {
+func toJSON(boards []store.Board, meta map[string]store.BoardMeta, owners map[string][]string) []boardJSON {
 	out := make([]boardJSON, 0, len(boards))
 	for _, b := range boards {
-		out = append(out, boardJSON{ID: b.ID, Name: b.Name, UpdatedAt: iso(b.UpdatedAt), Owner: b.OwnerName, Bytes: b.Bytes})
+		m := meta[b.ID]
+		var co []string
+		if list := owners[b.ID]; len(list) > 1 {
+			co = list
+		}
+		out = append(out, boardJSON{
+			ID:        b.ID,
+			Name:      b.Name,
+			UpdatedAt: iso(b.UpdatedAt),
+			Owner:     b.OwnerName,
+			Owners:    co,
+			Bytes:     b.Bytes,
+			FolderID:  m.FolderID,
+			Pinned:    m.Pinned,
+			Position:  m.Position,
+			MarkerIDs: m.MarkerIDs,
+		})
 	}
 	return out
 }
@@ -79,16 +102,53 @@ func (a *app) createBoard(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "Zaloguj się, aby utworzyć tablicę")
 		return
 	}
-	name, ok := readName(w, r, true)
-	if !ok {
+	if !auth.RequireJSON(w, r) {
 		return
+	}
+	var body struct {
+		Name     string `json:"name"`
+		FolderID string `json:"folderId"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodyBytes)).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "Nieprawidłowe żądanie")
+		return
+	}
+	name := strings.TrimSpace(body.Name)
+	if name == "" {
+		name = defaultBoardName
+	}
+	if utf8.RuneCountInString(name) > maxBoardName {
+		writeError(w, http.StatusBadRequest, "Nazwa musi mieć od 1 do 100 znaków")
+		return
+	}
+	folderID := strings.TrimSpace(body.FolderID)
+	if folderID != "" {
+		exists, err := a.st.HasFolder(u.ID, folderID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "Błąd serwera")
+			return
+		}
+		if !exists {
+			writeError(w, http.StatusNotFound, "Nie ma takiego folderu")
+			return
+		}
 	}
 	b, err := a.st.CreateBoard(newBoardID(), u.ID, name)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Błąd serwera")
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]string{"id": b.ID, "name": b.Name})
+	if folderID != "" {
+		if err := a.st.UpdateBoardMeta(u.ID, b.ID, store.BoardMetaPatch{FolderID: &folderID}); err != nil {
+			writeError(w, http.StatusInternalServerError, "Błąd serwera")
+			return
+		}
+	}
+	resp := map[string]string{"id": b.ID, "name": b.Name}
+	if folderID != "" {
+		resp["folderId"] = folderID
+	}
+	writeJSON(w, http.StatusCreated, resp)
 }
 
 func (a *app) listBoards(w http.ResponseWriter, r *http.Request) {
@@ -99,11 +159,31 @@ func (a *app) listBoards(w http.ResponseWriter, r *http.Request) {
 	}
 	owned, err1 := a.st.BoardsOwnedBy(u.ID)
 	visited, err2 := a.st.BoardsVisitedBy(u.ID)
-	if err1 != nil || err2 != nil {
+	folders, err3 := a.st.ListFolders(u.ID)
+	markers, err4 := a.st.ListMarkers(u.ID)
+	meta, err5 := a.st.BoardMetaMap(u.ID)
+	if err1 != nil || err2 != nil || err3 != nil || err4 != nil || err5 != nil {
 		writeError(w, http.StatusInternalServerError, "Błąd serwera")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"owned": toJSON(owned), "visited": toJSON(visited)})
+	ids := make([]string, 0, len(owned)+len(visited))
+	for _, b := range owned {
+		ids = append(ids, b.ID)
+	}
+	for _, b := range visited {
+		ids = append(ids, b.ID)
+	}
+	owners, err := a.st.BoardOwnersMap(ids)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Błąd serwera")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"owned":   toJSON(owned, meta, owners),
+		"visited": toJSON(visited, meta, owners),
+		"folders": foldersToJSON(folders),
+		"markers": markersToJSON(markers),
+	})
 }
 
 // getBoard tells whether a board exists and whether the caller owns it (anyone with the link may ask).
@@ -114,7 +194,16 @@ func (a *app) getBoard(w http.ResponseWriter, r *http.Request) {
 	}
 	a.ensureGuestCookie(w, r)
 	u, loggedIn := a.auth.User(r)
-	writeJSON(w, http.StatusOK, map[string]any{"id": b.ID, "name": b.Name, "owner": loggedIn && u.ID == b.OwnerID})
+	isOwner := false
+	if loggedIn {
+		var err error
+		isOwner, err = a.st.IsBoardOwner(b.ID, u.ID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "Błąd serwera")
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"id": b.ID, "name": b.Name, "owner": isOwner})
 }
 
 // boardFromURL loads the board named in the URL; when it cannot, it has already answered (404 or 500).
@@ -127,22 +216,33 @@ func (a *app) boardFromURL(w http.ResponseWriter, r *http.Request) (store.Board,
 	return b, true
 }
 
-// ownedBoard loads the board named in the URL and checks that the caller owns it.
-func (a *app) ownedBoard(w http.ResponseWriter, r *http.Request) (store.Board, bool) {
+// ownedBoardUser loads the board named in the URL and verifies the logged-in caller is one of its owners.
+func (a *app) ownedBoardUser(w http.ResponseWriter, r *http.Request) (store.Board, store.User, bool) {
 	u, ok := a.auth.User(r)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "Nie jesteś zalogowany")
-		return store.Board{}, false
+		return store.Board{}, store.User{}, false
 	}
 	b, ok := a.boardFromURL(w, r)
 	if !ok {
-		return store.Board{}, false
+		return store.Board{}, store.User{}, false
 	}
-	if b.OwnerID != u.ID {
+	isOwner, err := a.st.IsBoardOwner(b.ID, u.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Błąd serwera")
+		return store.Board{}, store.User{}, false
+	}
+	if !isOwner {
 		writeError(w, http.StatusForbidden, "Tylko właściciel może to zrobić")
-		return store.Board{}, false
+		return store.Board{}, store.User{}, false
 	}
-	return b, true
+	return b, u, true
+}
+
+// ownedBoard loads the board named in the URL and checks that the caller owns it.
+func (a *app) ownedBoard(w http.ResponseWriter, r *http.Request) (store.Board, bool) {
+	b, _, ok := a.ownedBoardUser(w, r)
+	return b, ok
 }
 
 func (a *app) renameBoard(w http.ResponseWriter, r *http.Request) {
@@ -214,11 +314,11 @@ func (a *app) copyBoard(w http.ResponseWriter, r *http.Request) {
 	if !auth.RequireJSON(w, r) {
 		return
 	}
-	b, ok := a.ownedBoard(w, r)
+	b, u, ok := a.ownedBoardUser(w, r)
 	if !ok {
 		return
 	}
-	a.copyTo(w, b, b.OwnerID)
+	a.copyTo(w, b, u.ID)
 }
 
 // copyTo copies a board for the given owner and answers with the new board's id and name.
