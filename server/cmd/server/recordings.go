@@ -42,6 +42,14 @@ const (
 	maxEventObject   = 64 << 20
 	// A call to the bucket gives up after this long.
 	bucketTimeout = 30 * time.Second
+	// The video rendered from a recording (R-115): the address to watch it stays valid for hours
+	// (a lesson plus seeking back and forth), the renderer has two hours to upload it, it gets
+	// maxVideoAttempts tries, and a renderer silent for videoStale is given up on.
+	videoTTL         = 6 * time.Hour
+	videoUploadTTL   = 2 * time.Hour
+	maxVideoAttempts = 3
+	videoStale       = 30 * time.Minute
+	maxVideoBytes    = 4 << 30
 )
 
 // recordingTypes are the containers MediaRecorder produces for the sound (R-113), with the
@@ -90,6 +98,9 @@ func recordingType(s string) (typ string, ok bool) {
 
 // All the files of a recording live under "<id>/", so one prefix removes them (ADR 0028).
 func recordingKey(r store.Recording) string { return r.ID + "/audio" + recordingTypes[r.Mime] }
+
+// videoKey is the video rendered from the recording (R-115).
+func videoKey(recID string) string { return recID + "/video.mp4" }
 
 // eventKey is segment n of the event log; 0 is the state of the board when the recording began.
 func eventKey(recID string, n int) string {
@@ -338,16 +349,30 @@ func (a *app) playRecording(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, "Magazyn nagrań jest niedostępny")
 		return
 	}
-	w.Header().Set("Cache-Control", "private, no-store")
-	writeJSON(w, http.StatusOK, map[string]any{
+	index := map[string]any{
 		"v": 1, "name": rec.Name, "durationMs": rec.DurationMs, "mime": rec.Mime,
 		"audio": audio, "snapshot": snapshot, "segments": segments,
-	})
+		"videoState": rec.Video, "videoProgress": rec.VideoProgress,
+	}
+	if rec.Video == store.VideoReady {
+		url, err := backend.GetURL(ctx, videoKey(rec.ID), videoTTL)
+		if err != nil {
+			slog.Error("signing the video address", "err", err)
+			writeError(w, http.StatusBadGateway, "Magazyn nagrań jest niedostępny")
+			return
+		}
+		if url == "" {
+			url = "/api/boards/" + rec.BoardID + "/recordings/" + rec.ID + "/files/video"
+		}
+		index["video"] = url
+	}
+	w.Header().Set("Cache-Control", "private, no-store")
+	writeJSON(w, http.StatusOK, index)
 }
 
 // recordingFileNames are the files of a recording the app serves itself (disk store) and the
 // objects they are.
-var recordingFileName = regexp.MustCompile(`^(audio|snapshot|events/[1-9][0-9]{0,3})$`)
+var recordingFileName = regexp.MustCompile(`^(audio|video|snapshot|events/[1-9][0-9]{0,3})$`)
 
 // recordingFile serves one file of a recording kept on this server's disk. The names are matched
 // strictly, so nothing outside the recording's own files can be asked for.
@@ -367,6 +392,12 @@ func (a *app) recordingFile(w http.ResponseWriter, r *http.Request) {
 	}
 	key, ctype := recordingKey(rec), rec.Mime
 	switch {
+	case name == "video":
+		if rec.Video != store.VideoReady {
+			http.NotFound(w, r)
+			return
+		}
+		key, ctype = videoKey(rec.ID), "video/mp4"
 	case name == "snapshot":
 		key, ctype = eventKey(rec.ID, 0), "application/json"
 	case strings.HasPrefix(name, "events/"):
@@ -434,7 +465,15 @@ func (a *app) complete(ctx context.Context, rec store.Recording, durationMs int6
 		slog.Error("finishing a recording upload", "storage", rec.Storage, "err", err)
 		return err
 	}
-	return a.st.FinishRecording(rec.ID, durationMs, size)
+	if err := a.st.FinishRecording(rec.ID, durationMs, size); err != nil {
+		return err
+	}
+	if a.renderToken != "" {
+		if err := a.st.QueueVideo(rec.ID); err != nil {
+			slog.Warn("queueing the video of a recording", "err", err)
+		}
+	}
+	return nil
 }
 
 type recordingJSON struct {
@@ -445,6 +484,11 @@ type recordingJSON struct {
 	DurationMs int64  `json:"durationMs"`
 	Bytes      int64  `json:"bytes"`
 	Finished   bool   `json:"finished"`
+	// Video is "", "queued", "rendering", "ready" or "failed" (R-115); VideoProgress is a percent
+	// while it renders and VideoBytes the size once it is ready.
+	Video         string `json:"video"`
+	VideoProgress int    `json:"videoProgress"`
+	VideoBytes    int64  `json:"videoBytes"`
 }
 
 func (a *app) listRecordings(w http.ResponseWriter, r *http.Request) {
@@ -460,7 +504,8 @@ func (a *app) listRecordings(w http.ResponseWriter, r *http.Request) {
 	out := make([]recordingJSON, 0, len(recs))
 	for _, rec := range recs {
 		out = append(out, recordingJSON{ID: rec.ID, Name: rec.Name, Mime: rec.Mime, CreatedAt: iso(rec.CreatedAt),
-			DurationMs: rec.DurationMs, Bytes: rec.Bytes, Finished: rec.Finished})
+			DurationMs: rec.DurationMs, Bytes: rec.Bytes, Finished: rec.Finished,
+			Video: rec.Video, VideoProgress: rec.VideoProgress, VideoBytes: rec.VideoBytes})
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -469,27 +514,52 @@ func (a *app) listRecordings(w http.ResponseWriter, r *http.Request) {
 // the video never passes through this server or the tunnel), or, for a recording on this server's
 // disk, sends the file as an attachment (with Range support, so a download can resume).
 func (a *app) downloadRecording(w http.ResponseWriter, r *http.Request) {
-	board, ok := a.boardFromURL(w, r)
+	rec, ok := a.finishedRecording(w, r)
 	if !ok {
 		return
+	}
+	a.download(w, r, rec, recordingKey(rec), fileName(rec.Name)+recordingTypes[rec.Mime], rec.Mime)
+}
+
+// downloadVideo is the same for the video rendered from the recording.
+func (a *app) downloadVideo(w http.ResponseWriter, r *http.Request) {
+	rec, ok := a.finishedRecording(w, r)
+	if !ok {
+		return
+	}
+	if rec.Video != store.VideoReady {
+		writeError(w, http.StatusConflict, "Wideo nie jest jeszcze gotowe")
+		return
+	}
+	a.download(w, r, rec, videoKey(rec.ID), fileName(rec.Name)+".mp4", "video/mp4")
+}
+
+// finishedRecording finds the recording named in the URL on a board the caller may open.
+func (a *app) finishedRecording(w http.ResponseWriter, r *http.Request) (store.Recording, bool) {
+	board, ok := a.boardFromURL(w, r)
+	if !ok {
+		return store.Recording{}, false
 	}
 	rec, ok := a.recordingOf(w, board.ID, r.PathValue("rec"))
 	if !ok {
-		return
+		return rec, false
 	}
 	if !rec.Finished {
 		writeError(w, http.StatusConflict, "Nagranie jeszcze trwa")
-		return
+		return rec, false
 	}
+	return rec, true
+}
+
+func (a *app) download(w http.ResponseWriter, r *http.Request, rec store.Recording, key, filename, mimeType string) {
 	backend, ok := a.backendOf(rec)
 	if !ok {
 		writeError(w, http.StatusInternalServerError, "Błąd serwera")
 		return
 	}
-	filename := fileName(rec.Name) + recordingTypes[rec.Mime]
 	ctx, cancel := context.WithTimeout(r.Context(), bucketTimeout)
 	defer cancel()
-	url, err := backend.DownloadURL(ctx, recordingKey(rec), filename, rec.Mime, downloadTTL)
+	url, err := backend.DownloadURL(ctx, key, filename, mimeType, downloadTTL)
 	if err != nil {
 		slog.Error("signing a download address", "err", err)
 		writeError(w, http.StatusBadGateway, "Magazyn nagrań jest niedostępny")
@@ -501,7 +571,7 @@ func (a *app) downloadRecording(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, url, http.StatusFound)
 		return
 	}
-	f, err := a.recDisk.Open(recordingKey(rec))
+	f, err := a.recDisk.Open(key)
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -512,7 +582,7 @@ func (a *app) downloadRecording(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	h.Set("Content-Type", rec.Mime)
+	h.Set("Content-Type", mimeType)
 	h.Set("X-Content-Type-Options", "nosniff")
 	disposition := mime.FormatMediaType("attachment", map[string]string{"filename": filename})
 	if disposition == "" {
@@ -604,6 +674,13 @@ func (a *app) removeRecordings(recs []store.Recording) {
 // sweepRecordings finishes the recordings that went silent (a closed tab, lost network) with the
 // parts that did arrive, and drops those that never got one.
 func (a *app) sweepRecordings(ctx context.Context, now time.Time) {
+	if a.renderToken != "" {
+		if n, err := a.st.RequeueStaleVideos(now.Add(-videoStale), maxVideoAttempts); err != nil {
+			slog.Warn("looking for stalled renderings", "err", err)
+		} else if n > 0 {
+			slog.Warn("renderings went silent and were queued again", "count", n)
+		}
+	}
 	idle, err := a.st.IdleRecordings(now.Add(-idleRecording))
 	if err != nil {
 		slog.Warn("looking for idle recordings", "err", err)

@@ -47,6 +47,9 @@ type app struct {
 	recNew       string
 	recDisk      *recstore.Disk
 	bucketOrigin string
+	// renderToken is the secret of the renderer, which renders videos of recordings (R-115,
+	// ADR 0029); "" when there is none, and then no video is queued.
+	renderToken string
 }
 
 // newApp wires the services together. Call Close before closing the store.
@@ -132,6 +135,7 @@ func (a *app) Handler() http.Handler {
 	mux.HandleFunc("GET /api/boards/{id}/recordings/{rec}/files/{name...}", a.recordingFile)
 	mux.HandleFunc("POST /api/boards/{id}/recordings/{rec}/finish", a.finishRecording)
 	mux.HandleFunc("GET /api/boards/{id}/recordings/{rec}", a.downloadRecording)
+	mux.HandleFunc("GET /api/boards/{id}/recordings/{rec}/video", a.downloadVideo)
 	mux.HandleFunc("PATCH /api/boards/{id}/recordings/{rec}", a.renameRecording)
 	mux.HandleFunc("DELETE /api/boards/{id}/recordings/{rec}", a.deleteRecording)
 	mux.HandleFunc("GET /api/calendar", a.getCalendar)
@@ -177,6 +181,7 @@ func (a *app) Handler() http.Handler {
 	mux.HandleFunc("GET /register", index)
 	mux.HandleFunc("GET /b/{id}", index)
 	mux.HandleFunc("GET /b/{id}/r/{rec}", index) // the player of a recording (R-114)
+	mux.HandleFunc("GET /b/{id}/v/{rec}", index) // the player of its video (R-115)
 	mux.HandleFunc("GET /calendar", index)
 	mux.Handle("/", http.FileServer(http.Dir(a.staticDir)))
 	return secureHeaders(pageCSP(a.bucketOrigin), logx.Middleware(mux, logx.Options{}))

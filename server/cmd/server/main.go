@@ -60,6 +60,7 @@ func main() {
 		slog.Warn("RECORDINGS_S3_* is not set: lesson recordings are kept on this server's disk")
 	}
 	a.configureRecordings(filepath.Join(dataDir, "recordings"), bucket)
+	a.configureRender(os.Getenv("RENDER_TOKEN"))
 	a.configureCaptcha(os.Getenv("TURNSTILE_SITE_KEY"), os.Getenv("TURNSTILE_SECRET"))
 	if os.Getenv("TURNSTILE_SECRET") == "" {
 		slog.Warn("TURNSTILE_SECRET is not set: registration is closed")
@@ -96,6 +97,7 @@ func main() {
 	defer stop()
 	go a.runRecordingSweeper(ctx)
 	metricsSrv := startMetrics()
+	renderSrv := startRenderPort(a)
 	go func() {
 		<-ctx.Done()
 		shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -103,6 +105,9 @@ func main() {
 		_ = srv.Shutdown(shutdown)
 		if metricsSrv != nil {
 			_ = metricsSrv.Shutdown(shutdown)
+		}
+		if renderSrv != nil {
+			_ = renderSrv.Shutdown(shutdown)
 		}
 	}()
 
@@ -169,6 +174,24 @@ func startMetrics() *http.Server {
 		slog.Info("serving metrics", "addr", addr)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Warn("the metrics endpoint could not start", "addr", addr, "err", err)
+		}
+	}()
+	return srv
+}
+
+// startRenderPort serves the job port of the renderer (R-115) on RENDER_ADDR (default
+// 127.0.0.1:8081) when RENDER_TOKEN is set; without a token there is no renderer and no port.
+func startRenderPort(a *app) *http.Server {
+	if a.renderToken == "" {
+		return nil
+	}
+	addr := getenv("RENDER_ADDR", "127.0.0.1:8081")
+	srv := &http.Server{Addr: addr, Handler: a.renderHandler(), ReadHeaderTimeout: 5 * time.Second}
+	go func() {
+		defer logx.Recover("render-port")
+		slog.Info("serving the renderer's job port", "addr", addr)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			slog.Error("the renderer's job port could not start", "addr", addr, "err", err)
 		}
 	}()
 	return srv

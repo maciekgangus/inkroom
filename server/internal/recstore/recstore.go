@@ -125,23 +125,35 @@ func (d *Disk) PutURL(context.Context, string, time.Duration) (string, error) { 
 
 func (d *Disk) GetURL(context.Context, string, time.Duration) (string, error) { return "", nil }
 
-// WriteObject stores a whole object of at most max bytes, replacing what was there.
+// WriteObject stores a whole object of at most max bytes, replacing what was there. It goes
+// through a temporary file, so a failed or oversized upload leaves the old object untouched.
 func (d *Disk) WriteObject(key string, r io.Reader, max int64) error {
 	p, err := d.path(key)
 	if err != nil {
 		return err
 	}
-	data, err := io.ReadAll(io.LimitReader(r, max+1))
-	if err != nil {
-		return err
-	}
-	if int64(len(data)) > max {
-		return ErrTooBig
-	}
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(p, data, 0o644)
+	f, err := os.CreateTemp(filepath.Dir(p), ".upload-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(f.Name()) // gone already after a rename
+	n, err := io.Copy(f, io.LimitReader(r, max+1))
+	if err == nil && n > max {
+		err = ErrTooBig
+	}
+	if err == nil {
+		err = f.Chmod(0o644)
+	}
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		return err
+	}
+	return os.Rename(f.Name(), p)
 }
 
 // RemoveAll deletes a recording's directory (prefix "<id>/"); what is gone already is fine.

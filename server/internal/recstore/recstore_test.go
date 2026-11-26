@@ -250,3 +250,19 @@ func TestS3(t *testing.T) {
 		t.Errorf("Complete without parts = %v, want ErrNoParts", err)
 	}
 }
+
+func TestAnObjectThatIsTooBigLeavesTheOldOneAndNoLitter(t *testing.T) {
+	d := &Disk{Dir: t.TempDir()}
+	if err := d.WriteObject("r/video.mp4", strings.NewReader("old"), 10); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.WriteObject("r/video.mp4", strings.NewReader("far too big"), 10); !errors.Is(err, ErrTooBig) {
+		t.Fatalf("got %v, want ErrTooBig", err)
+	}
+	if got, _ := os.ReadFile(path.Join(d.Dir, "r/video.mp4")); string(got) != "old" {
+		t.Errorf("the object is %q, want the old one", got)
+	}
+	if entries, _ := os.ReadDir(path.Join(d.Dir, "r")); len(entries) != 1 {
+		t.Errorf("files left: %v", entries)
+	}
+}

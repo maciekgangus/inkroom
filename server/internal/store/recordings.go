@@ -1,6 +1,10 @@
 package store
 
-import "time"
+import (
+	"database/sql"
+	"errors"
+	"time"
+)
 
 // Lesson recordings (R-094, R-112): the video is kept in a bucket or on disk (see recstore); the
 // table only describes it.
@@ -18,9 +22,23 @@ CREATE TABLE recordings (
 	duration_ms INTEGER NOT NULL DEFAULT 0,
 	bytes INTEGER NOT NULL DEFAULT 0,
 	finished INTEGER NOT NULL DEFAULT 0,
-	segments INTEGER NOT NULL DEFAULT 0
+	segments INTEGER NOT NULL DEFAULT 0,
+	video_state TEXT NOT NULL DEFAULT '',
+	video_progress INTEGER NOT NULL DEFAULT 0,
+	video_bytes INTEGER NOT NULL DEFAULT 0,
+	video_attempts INTEGER NOT NULL DEFAULT 0,
+	video_at INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX recordings_board ON recordings(board_id, created_at)`
+
+// The states of the video that is rendered from a recording on the server (R-115, ADR 0029).
+const (
+	VideoNone      = ""          // nobody renders (no renderer is set up) or the recording is not finished
+	VideoQueued    = "queued"    // waits for the renderer
+	VideoRendering = "rendering" // the renderer works on it
+	VideoReady     = "ready"     // <id>/video.mp4 is in the store
+	VideoFailed    = "failed"    // the renderer gave up
+)
 
 // Recording describes one recording of a lesson.
 type Recording struct {
@@ -40,15 +58,23 @@ type Recording struct {
 	Finished   bool
 	// Segments is the highest number of a segment of the event log that was asked for (R-113).
 	Segments int
+	// The video rendered on the server: its state, how far it is (percent), its size once ready,
+	// how many times the renderer took it, and the last sign of life of the renderer.
+	Video         string
+	VideoProgress int
+	VideoBytes    int64
+	VideoAttempts int
+	VideoAt       time.Time
 }
 
-const recordingCols = "id, board_id, COALESCE(user_id, 0), name, mime, storage, upload_id, created_at, updated_at, duration_ms, bytes, finished, segments"
+const recordingCols = "id, board_id, COALESCE(user_id, 0), name, mime, storage, upload_id, created_at, updated_at, duration_ms, bytes, finished, segments, video_state, video_progress, video_bytes, video_attempts, video_at"
 
 func scanRecording(row scanner) (Recording, error) {
 	var r Recording
-	var created, updated int64
-	err := row.Scan(&r.ID, &r.BoardID, &r.UserID, &r.Name, &r.Mime, &r.Storage, &r.UploadID, &created, &updated, &r.DurationMs, &r.Bytes, &r.Finished, &r.Segments)
-	r.CreatedAt, r.UpdatedAt = time.Unix(created, 0), time.Unix(updated, 0)
+	var created, updated, videoAt int64
+	err := row.Scan(&r.ID, &r.BoardID, &r.UserID, &r.Name, &r.Mime, &r.Storage, &r.UploadID, &created, &updated, &r.DurationMs, &r.Bytes, &r.Finished, &r.Segments,
+		&r.Video, &r.VideoProgress, &r.VideoBytes, &r.VideoAttempts, &videoAt)
+	r.CreatedAt, r.UpdatedAt, r.VideoAt = time.Unix(created, 0), time.Unix(updated, 0), time.Unix(videoAt, 0)
 	return r, err
 }
 
@@ -125,4 +151,63 @@ func (s *Store) RenameRecording(id, name string) error {
 // DeleteRecording removes the description of a recording.
 func (s *Store) DeleteRecording(id string) error {
 	return s.mustAffect(s.db.Exec("DELETE FROM recordings WHERE id = ?", id))
+}
+
+// QueueVideo puts the video of a finished recording in the queue of the renderer; a recording
+// that has a video or one in the queue is left alone.
+func (s *Store) QueueVideo(id string) error {
+	_, err := s.db.Exec("UPDATE recordings SET video_state = ? WHERE id = ? AND finished = 1 AND video_state = ?", VideoQueued, id, VideoNone)
+	return err
+}
+
+// ClaimVideo hands the oldest queued recording to a renderer; ok is false when none waits.
+func (s *Store) ClaimVideo(now time.Time) (rec Recording, ok bool, err error) {
+	rec, err = scanRecording(s.db.QueryRow(`UPDATE recordings SET video_state = ?, video_attempts = video_attempts + 1, video_progress = 0, video_at = ?
+		WHERE id = (SELECT id FROM recordings WHERE video_state = ? ORDER BY created_at, id LIMIT 1)
+		RETURNING `+recordingCols, VideoRendering, now.Unix(), VideoQueued))
+	if errors.Is(err, sql.ErrNoRows) {
+		return Recording{}, false, nil
+	}
+	return rec, err == nil, err
+}
+
+// NoteVideoProgress records how far (percent) the renderer is, and that it is alive.
+func (s *Store) NoteVideoProgress(id string, percent int, now time.Time) error {
+	percent = min(max(percent, 0), 100)
+	return s.mustAffect(s.db.Exec("UPDATE recordings SET video_progress = ?, video_at = ? WHERE id = ? AND video_state = ?",
+		percent, now.Unix(), id, VideoRendering))
+}
+
+// FinishVideo marks the video as ready, with its size.
+func (s *Store) FinishVideo(id string, bytes int64) error {
+	return s.mustAffect(s.db.Exec("UPDATE recordings SET video_state = ?, video_progress = 100, video_bytes = ? WHERE id = ? AND video_state = ?",
+		VideoReady, bytes, id, VideoRendering))
+}
+
+// FailVideo returns the recording to the queue, or marks it failed when the renderer already
+// took it maxAttempts times.
+func (s *Store) FailVideo(id string, maxAttempts int) error {
+	return s.mustAffect(s.db.Exec(`UPDATE recordings SET video_state = CASE WHEN video_attempts >= ? THEN ? ELSE ? END
+		WHERE id = ? AND video_state = ?`, maxAttempts, VideoFailed, VideoQueued, id, VideoRendering))
+}
+
+// RequeueStaleVideos treats the renderings nothing was heard of since `before` as failed (the
+// renderer died); it returns how many there were.
+func (s *Store) RequeueStaleVideos(before time.Time, maxAttempts int) (int64, error) {
+	res, err := s.db.Exec(`UPDATE recordings SET video_state = CASE WHEN video_attempts >= ? THEN ? ELSE ? END
+		WHERE video_state = ? AND video_at < ?`, maxAttempts, VideoFailed, VideoQueued, VideoRendering, before.Unix())
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+// QueueMissingVideos queues every finished recording that has no video yet (for the recordings
+// made before a renderer was set up); it returns how many there were.
+func (s *Store) QueueMissingVideos() (int64, error) {
+	res, err := s.db.Exec("UPDATE recordings SET video_state = ? WHERE finished = 1 AND video_state = ?", VideoQueued, VideoNone)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
 }
