@@ -628,7 +628,12 @@ describe("the hover outline on the live layer (R-112, ADR 0027)", () => {
 			},
 			set: (t, k, v) => {
 				t[k as string] = v;
-				(props[k as string] ??= []).push(v);
+				let list = props[k as string];
+				if (!list) {
+					list = [];
+					props[k as string] = list;
+				}
+				list.push(v);
 				return true;
 			},
 		}) as unknown as CanvasRenderingContext2D;
