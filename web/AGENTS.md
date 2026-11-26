@@ -1,6 +1,7 @@
 # Praca w `web/` (Preact, TypeScript)
 
 Uzupełnia główny `AGENTS.md` i `CLAUDE.md`, nie zastępuje ich.
+
 - Role: `.claude/agents/frontend.md` (logika i testy) oraz `.claude/agents/design.md` (wygląd).
 - Skille: `.claude/skills/tdd/SKILL.md` (najpierw test, który pada), `web/.claude/skills/frontend-design/SKILL.md` i `web/.claude/skills/web-design-guidelines/SKILL.md` (przed każdą zmianą wyglądu). `impeccable` uruchamia tylko użytkownik.
 - Priorytety: kreska pojawia się natychmiast lokalnie i u drugiej osoby, wszystko działa na iPadzie z rysikiem i dotykiem.
