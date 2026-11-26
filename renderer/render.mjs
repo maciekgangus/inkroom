@@ -81,6 +81,17 @@ async function renderRecording({ base, board, rec, out, seconds, width, height, 
 	let frames;
 	try {
 		const page = await browser.newPage({ viewport: { width, height } });
+		// The page's origin is the app's internal address, which the bucket's CORS rules (written for
+		// the public one) do not know: what the page reads from elsewhere (the sound, the log) is
+		// fetched here and handed back with the header that lets the page read it.
+		const appOrigin = new URL(base).origin;
+		await page.route(
+			(u) => u.origin !== appOrigin,
+			async (route) => {
+				const res = await route.fetch();
+				await route.fulfill({ response: res, headers: { ...res.headers(), "access-control-allow-origin": "*" } });
+			},
+		);
 		page.on("pageerror", (e) => log(`page error: ${e.message}`));
 		const raw = process.env.KEEP_RAW ? createWriteStream(path.join(tmp, "raw.h264")) : null;
 		await page.exposeFunction("__emit", (b64) => {
@@ -144,10 +155,10 @@ function putFile(url, file, headers) {
 }
 
 async function worker() {
-	const base = arg("base");
-	const jobs = arg("jobs");
+	const base = arg("base", process.env.RENDER_APP_URL);
+	const jobs = arg("jobs", process.env.RENDER_JOBS_URL);
 	const token = process.env.RENDER_TOKEN;
-	if (!base || !jobs || !token) throw new Error("--worker needs --base, --jobs and RENDER_TOKEN");
+	if (!base || !jobs || !token) throw new Error("--worker needs --base (RENDER_APP_URL), --jobs (RENDER_JOBS_URL) and RENDER_TOKEN");
 	const auth = { Authorization: `Bearer ${token}` };
 	const api = (method, url, body) =>
 		fetch(new URL(url, jobs), {
