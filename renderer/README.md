@@ -4,9 +4,20 @@ Renders a recorded lesson to an MP4 in the background: a headless Chromium opens
 page (`/b/<board>/r/<recording>?render=1`), which draws the frames with the replay engine and
 encodes them as H.264 (WebCodecs, in the page); the chunks go to ffmpeg together with the sound.
 
-**This is the prototype** (stage 1 of ADR 0029): one recording from the command line. The job
-protocol with the app, the upload to the bucket, the container and the rendering during the
-recording come in later stages.
+It runs in two ways: on one recording from the command line (below), or as the **worker** of the
+app, which takes recordings from the app's queue one at a time, renders each and sends the video to
+the store (stage 2 of ADR 0029). The container and the rendering during the recording come later.
+
+```sh
+RENDER_TOKEN=<the app's RENDER_TOKEN> node render.mjs --worker \
+     --base http://app:8080 --jobs http://app:8081   # the app's address and its job port (RENDER_ADDR)
+```
+
+The app turns the queue on when it has `RENDER_TOKEN`, and serves the job port on `RENDER_ADDR`
+(default `127.0.0.1:8081`, not published). The worker polls every `RENDER_POLL_SECONDS` (10) and
+keeps its temporary files under `RENDER_TMP`. Chromium runs as `channel: "chromium"` (new headless):
+the default headless shell ignores the flag that makes the app's http address a secure context, and
+WebCodecs needs one.
 
 ```sh
 cd renderer && npm install            # Playwright; its Chromium: npx playwright install chromium
