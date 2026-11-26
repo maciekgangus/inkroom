@@ -3241,7 +3241,7 @@ button.participant {
 	display: flex;
 	align-items: center;
 	gap: 12px;
-	width: min(720px, calc(100vw - 24px));
+	width: min(720px, calc(100vw - 160px));
 	box-sizing: border-box;
 	padding: 8px 14px;
 	border: 1px solid var(--border);
@@ -3323,9 +3323,10 @@ button.participant {
 	font-size: 13px;
 }
 /* On a narrow screen the corner buttons (a note, the theme) take the bottom left: the bar goes above them. */
-@media (max-width: 640px) {
+@media (max-width: 600px) {
 	.replay-bar {
 		bottom: 84px;
+		width: min(720px, calc(100vw - 24px));
 	}
 	.replay-note {
 		bottom: 148px;

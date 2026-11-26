@@ -171,11 +171,22 @@ test("replay view fits viewport, has no errors, and keeps solid cards without bl
 		vp,
 		".replay-top",
 	);
-	assertInViewport(
-		await page.locator(".replay-bar").boundingBox(),
-		vp,
-		".replay-bar",
-	);
+	const barBox = await page.locator(".replay-bar").boundingBox();
+	assertInViewport(barBox, vp, ".replay-bar");
+	const cornerBox = await page.locator(".corner").boundingBox();
+	expect(barBox).not.toBeNull();
+	expect(cornerBox).not.toBeNull();
+	if (barBox && cornerBox) {
+		const overlaps =
+			barBox.x < cornerBox.x + cornerBox.width + 4 &&
+			barBox.x + barBox.width > cornerBox.x - 4 &&
+			barBox.y < cornerBox.y + cornerBox.height + 4 &&
+			barBox.y + barBox.height > cornerBox.y - 4;
+		expect(
+			overlaps,
+			`.replay-bar (${JSON.stringify(barBox)}) overlaps .corner (${JSON.stringify(cornerBox)})`,
+		).toBe(false);
+	}
 
 	const cards = await page.evaluate(() =>
 		[".replay-back", ".replay-name", ".replay-bar"].map((sel) => {
