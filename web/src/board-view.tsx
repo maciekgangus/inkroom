@@ -310,6 +310,11 @@ export function BoardView({
 		const canvas = new CanvasRenderer(committed, live, viewport, images);
 		canvas.ink = (c) => displayColor(c, currentTheme());
 		rendererRef.current = canvas;
+		// View culling through the board's spatial index (R-118): the index is consulted only
+		// when redraw got the board's own array; a foreign list is painted as it always was.
+		canvas.setQuery((rect, all) =>
+			all === board.strokes ? board.queryView(rect) : all,
+		);
 		// The text font is bundled; once it has loaded the texts are measured and drawn again. The
 		// italic face draws the x and y of a coordinate plane (R-084): drawn before it is there,
 		// the letters would be a slanted regular until something else repainted the board.
@@ -318,10 +323,14 @@ export function BoardView({
 			document.fonts?.load(`italic 500 16px ${TEXT_FONT_FAMILY}`, "xy"),
 		]).then(() => {
 			fontsChanged();
+			board.reindexText(); // text boxes changed with the font (R-044, R-101, ADR 0031)
 			canvas.fontsChanged();
 		});
 		// A font a text uses (R-101) is fetched when the first text in it is laid out.
-		setFontReadyHandler(() => canvas.fontsChanged());
+		setFontReadyHandler(() => {
+			board.reindexText();
+			canvas.fontsChanged();
+		});
 		const sync = new SyncClient(board, {
 			createSocket: connect,
 			self: { authorId, name },

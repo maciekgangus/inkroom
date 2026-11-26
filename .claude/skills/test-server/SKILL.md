@@ -65,7 +65,7 @@ Przy `--logs` podaj użytkownikowi także te adresy. Przewodnik testów krok po 
    `test@example.test` / `test-user-1234` (logowanie także samą nazwą `test`). To publiczne konto
    deweloperskie z `CLAUDE.md`, więc można je podać.
 4. Rejestracja na `/register` działa z testową captchą Cloudflare (widżet wymaga internetu).
-5. Na tej VM procesor nie ma AVX, więc `npm run build` (vite, rolldown) kończy się „Illegal instruction” i skrypt staje na budowaniu klienta. Naprawa jest po stronie Proxmoxa (typ procesora `host`); do tego czasu powiedz o tym użytkownikowi zamiast udawać, że serwer działa.
+5. Funkcję przechodzisz w przeglądarce sam: Playwright z `web/` z pełnym Chromium (`chromium.launch({ channel: "chromium" })`, tryb headless) działa na tej VM, tak samo build klienta. Okno przeglądarki (headed) się nie otworzy, bo VM nie ma ekranu. Jeśli build kiedyś skończy się „Illegal instruction” (procesor bez AVX), powiedz o tym użytkownikowi zamiast udawać, że serwer działa.
 6. Na iPadzie po LAN może być potrzebne otwarcie portu: `sudo firewall-cmd --add-port=<port>/tcp`
    (bez `--permanent`); podpowiedz to, ale nie uruchamiaj `sudo` sam.
 7. Nie czytaj ani nie zmieniaj plików `.env`; skrypt ich nie używa.
@@ -74,7 +74,7 @@ Przy `--logs` podaj użytkownikowi także te adresy. Przewodnik testów krok po 
 
 ## Lista kontrolna logów przy każdym teście funkcji
 
-Po ręcznym przejściu przez funkcję (w Claude in Chrome albo przez użytkownika) sprawdź w Grafanie
+Po ręcznym przejściu przez funkcję (Playwright z Chromium albo przez użytkownika) sprawdź w Grafanie
 (Explore, źródło Loki) lub przez API Lokiego (`curl -G http://127.0.0.1:3200/loki/api/v1/query_range --data-urlencode 'query={service="app"}'`; nie używaj do tego proxy Grafany, bo jej własne błędy RBAC trafiają potem do logów jako ERROR i fałszują sprawdzenie):
 
 1. **Zdarzenia funkcji są w logu:** `{service="app"} | json` pokazuje żądania funkcji (`path` to wzorzec

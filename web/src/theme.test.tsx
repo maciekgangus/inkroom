@@ -60,4 +60,36 @@ describe("theme", () => {
 		act(() => button().click());
 		expect(currentTheme()).toBe("light");
 	});
+
+	test("on the board page the theme switches at once: a full-page view transition would snapshot the two full-screen canvases", () => {
+		const doc = document as unknown as {
+			startViewTransition?: (cb: () => Promise<void>) => unknown;
+		};
+		const vt = vi.fn((cb: () => Promise<void>) => {
+			void cb();
+			return {};
+		});
+		doc.startViewTransition = vt;
+		try {
+			const boardCanvas = document.createElement("canvas");
+			boardCanvas.id = "board";
+			document.body.appendChild(boardCanvas);
+			const root = document.createElement("div");
+			act(() => render(<ThemeToggle />, root));
+			const button = () =>
+				root.querySelector('[aria-label="toggle theme"]') as HTMLButtonElement;
+			act(() => button().click());
+			// at once on the board, no transition snapshotting the canvases
+			expect(document.documentElement.dataset.theme).toBe("dark");
+			expect(vt).not.toHaveBeenCalled();
+			boardCanvas.remove();
+			act(() => button().click());
+			// elsewhere the cross-fade stays
+			expect(vt).toHaveBeenCalledTimes(1);
+			expect(currentTheme()).toBe("light");
+		} finally {
+			delete doc.startViewTransition;
+			document.body.innerHTML = "";
+		}
+	});
 });

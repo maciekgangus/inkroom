@@ -80,15 +80,18 @@ type WithTransition = Document & {
 
 /**
  * Switches the theme with a short cross-fade where the browser can (View Transitions), and at
- * once where it cannot or the user asked for less motion. The fade waits two frames, so the
- * board's canvas is already painted in the new colours when it starts.
+ * once where it cannot, the user asked for less motion, or the board page is shown: there the
+ * transition would snapshot the two full-screen canvases, which is the lag felt on a tablet,
+ * and the canvas is repainted in the new colours at once anyway. The fade waits two frames, so
+ * the canvas is already painted when it starts.
  */
 function switchTheme(theme: Theme): void {
 	const doc = document as WithTransition;
 	const calm = globalThis.matchMedia?.(
 		"(prefers-reduced-motion: reduce)",
 	).matches;
-	if (!doc.startViewTransition || calm) {
+	const board = !!document.querySelector("canvas#board");
+	if (!doc.startViewTransition || calm || board) {
 		setTheme(theme);
 		return;
 	}

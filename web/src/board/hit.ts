@@ -207,6 +207,19 @@ export function findHit(
 	return undefined;
 }
 
+/** Topmost (last drawn) element a click at (x, y) grabs, if any (R-072). */
+export function findObjectHit(
+	strokes: Stroke[],
+	x: number,
+	y: number,
+	radius: number,
+): Stroke | undefined {
+	for (let i = strokes.length - 1; i >= 0; i--) {
+		if (objectHit(strokes[i], x, y, radius)) return strokes[i];
+	}
+	return undefined;
+}
+
 /** The most sample points a lasso tests on one object, so a huge shape is not tested for long. */
 const LOOP_SAMPLES = 6000;
 

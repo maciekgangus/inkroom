@@ -1,5 +1,8 @@
+import { intersects, strokeBounds } from "./bounds";
 import type { PlaneFn } from "./functions";
 import { packStroke, pointCount } from "./points";
+import { cellSpan, SpatialIndex } from "./spatial-index";
+import type { Rect } from "./viewport";
 /** A point of a stroke: x, y and pen pressure (0..1). */
 export type Point = [x: number, y: number, pressure: number];
 
@@ -161,6 +164,14 @@ function weigh(action: Action): number {
 const byOrder = (a: Stroke, b: Stroke) =>
 	a.z - b.z || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 
+/**
+ * Below this many elements a query scans the sorted list instead of collecting cells (R-118):
+ * the index would not pay for itself.
+ */
+const SMALL_BOARD = 200;
+/** A query covering more cells than this scans the sorted list, so a zoomed-out pan never regresses. */
+const MAX_QUERY_CELLS = 64;
+
 /** Board state: strokes ordered by (z, id) plus a separate undo/redo history per author. */
 export class Board {
 	strokes: Stroke[] = [];
@@ -187,6 +198,11 @@ export class Board {
 	private histories = new Map<string, History>();
 	/** Every element by id, so lookups do not scan the whole board. */
 	private byId = new Map<string, Stroke>();
+	/**
+	 * The spatial tile index of the elements (R-118, ADR 0031), fed in every mutation below.
+	 * Queries go through `queryRect`/`queryPoint`/`queryView`, never through this directly.
+	 */
+	private index = new SpatialIndex();
 	private limits: HistoryLimits;
 
 	constructor(limits: HistoryLimits = HISTORY_LIMITS) {
@@ -384,7 +400,66 @@ export class Board {
 		for (const s of strokes) packStroke(s);
 		this.strokes = [...strokes].sort(byOrder);
 		this.byId = new Map(this.strokes.map((s) => [s.id, s]));
+		this.index.clear();
+		for (const s of this.strokes) this.index.add(s);
 		this.bump();
+	}
+
+	/** True when a query of `rect` is served by the index rather than a scan of the sorted list. */
+	private indexed(rect: Rect): boolean {
+		return (
+			this.strokes.length >= SMALL_BOARD && cellSpan(rect) <= MAX_QUERY_CELLS
+		);
+	}
+
+	/**
+	 * The elements whose box intersects `rect`, in the exact drawing order `(z, id)` — identical
+	 * to scanning `strokes` linearly (R-118). On a small board or a rect covering many cells the
+	 * scan of the already sorted list is used directly, so a zoomed-out view never regresses.
+	 */
+	queryRect(rect: Rect): Stroke[] {
+		if (!this.indexed(rect))
+			return this.strokes.filter((s) => intersects(strokeBounds(s), rect));
+		const out = this.index.query(rect);
+		out.sort(byOrder);
+		return out;
+	}
+
+	/**
+	 * The candidates for a point query with a reach: a strict superset of what `strokeHit` /
+	 * `objectHit` can hit at (x, y) with `radius`, in drawing order, so callers scan the result
+	 * from the end like they scanned the whole board. On a small board or a very large reach it
+	 * is the whole sorted list, exactly as before.
+	 */
+	queryPoint(x: number, y: number, radius: number): Stroke[] {
+		const rect: Rect = {
+			minX: x - radius,
+			minY: y - radius,
+			maxX: x + radius,
+			maxY: y + radius,
+		};
+		if (!this.indexed(rect)) return this.strokes;
+		const out = this.index.query(rect, true); // large bucket unchecked: its box is not a superset
+		out.sort(byOrder);
+		return out;
+	}
+
+	/**
+	 * The elements to consider when drawing `rect`: from the index, or the board's own sorted
+	 * array itself (no copy, no sort) when the index would not help — the renderer culls each
+	 * element against the view as before.
+	 */
+	queryView(rect: Rect): readonly Stroke[] {
+		if (!this.indexed(rect)) return this.strokes;
+		return this.queryRect(rect);
+	}
+
+	/**
+	 * Puts the text elements back into the index with freshly measured boxes: a font that loaded
+	 * changed their metrics (R-044, R-101). Call after `fontsChanged()`.
+	 */
+	reindexText(): void {
+		for (const s of this.strokes) if (s.kind === "text") this.index.update(s);
 	}
 
 	private record(authorId: string, action: Action): void {
@@ -428,11 +503,12 @@ export class Board {
 
 	private insert(stroke: Stroke): void {
 		if (this.byId.has(stroke.id)) return;
-		packStroke(stroke);
+		packStroke(stroke); // the index reads the packed points (R-100)
 		let i = this.strokes.length;
 		while (i > 0 && byOrder(this.strokes[i - 1], stroke) > 0) i--;
 		this.strokes.splice(i, 0, stroke);
 		this.byId.set(stroke.id, stroke);
+		this.index.add(stroke);
 		this.bump();
 	}
 
@@ -460,7 +536,10 @@ export class Board {
 		// in place: others hold this array
 		this.strokes.length = 0;
 		for (const s of merged) this.strokes.push(s);
-		for (const s of fresh) this.byId.set(s.id, s);
+		for (const s of fresh) {
+			this.byId.set(s.id, s);
+			this.index.add(s);
+		}
 		this.bump();
 	}
 
@@ -489,9 +568,11 @@ export class Board {
 		if (old.z === stroke.z) {
 			this.strokes[i] = stroke;
 			this.byId.set(stroke.id, stroke);
+			this.index.update(stroke); // out of the old cells, into the new ones
 			return;
 		}
 		// A new z moves the element in the drawing order.
+		this.index.remove(old.id); // insert() puts the new version back
 		this.strokes.splice(i, 1);
 		this.byId.delete(stroke.id);
 		this.insert(stroke);
@@ -504,6 +585,7 @@ export class Board {
 		if (i < 0) return;
 		this.strokes.splice(i, 1);
 		this.byId.delete(id);
+		this.index.remove(id);
 		this.bump();
 	}
 
@@ -518,7 +600,10 @@ export class Board {
 			if (!gone.has(s.id)) this.strokes[w++] = s;
 		}
 		this.strokes.length = w;
-		for (const id of gone) this.byId.delete(id);
+		for (const id of gone) {
+			this.byId.delete(id);
+			this.index.remove(id);
+		}
 		this.bump();
 	}
 }
