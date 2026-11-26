@@ -14,7 +14,9 @@ const MIME_TYPES = [
 	"audio/webm;codecs=opus",
 	"audio/webm",
 ];
-const AUDIO_BITS_PER_SECOND = 64_000; // plenty for a voice: about 30 MB an hour
+const AUDIO_BITS_PER_SECOND = 96_000; // a voice with its consonants: about 43 MB an hour
+/** How much louder than the microphone gives it the voice is recorded (a limiter keeps it from clipping). */
+const VOICE_BOOST = 2.5;
 
 /** How often MediaRecorder hands over a chunk, in ms. */
 const CHUNK_MS = 3000;
@@ -97,8 +99,59 @@ const errMsg = (e: unknown) => (e instanceof Error ? e.message : "Błąd");
 
 /** A recording in progress. */
 export interface Session {
-	/** Finishes the recording: what was recorded is on the server when this resolves. */
-	stop(): Promise<void>;
+	/**
+	 * Finishes the recording: what was recorded is on the server when this resolves. `discarded` is
+	 * true when it was too short to keep and the server dropped it.
+	 */
+	stop(): Promise<{ discarded: boolean } | undefined>;
+}
+
+/** What the server says about a recording that was shorter than a minute. */
+export const TOO_SHORT = "Nagranie krótsze niż minuta nie zostało zapisane";
+
+/**
+ * Makes the voice easier to understand than what a laptop or tablet microphone gives: the browser's
+ * own noise suppression and echo cancellation, then a high-pass filter (rumble, desk knocks), a
+ * low-pass one (hiss above what speech needs), a boost and a limiter so a loud word does not clip.
+ * Where the Web Audio API is missing, the plain microphone is recorded.
+ */
+export function enhanceVoice(mic: MediaStream): {
+	stream: MediaStream;
+	close: () => void;
+} {
+	const plain = { stream: mic, close: () => {} };
+	try {
+		const Ctx = globalThis.AudioContext;
+		if (typeof Ctx !== "function") return plain;
+		const ctx = new Ctx();
+		const out = ctx.createMediaStreamDestination();
+		const high = ctx.createBiquadFilter();
+		high.type = "highpass";
+		high.frequency.value = 100;
+		const low = ctx.createBiquadFilter();
+		low.type = "lowpass";
+		low.frequency.value = 7500;
+		const boost = ctx.createGain();
+		boost.gain.value = VOICE_BOOST;
+		const limiter = ctx.createDynamicsCompressor();
+		limiter.threshold.value = -6;
+		limiter.knee.value = 0;
+		limiter.ratio.value = 20;
+		limiter.attack.value = 0.003;
+		limiter.release.value = 0.15;
+		ctx.createMediaStreamSource(mic).connect(high);
+		high.connect(low);
+		low.connect(boost);
+		boost.connect(limiter);
+		limiter.connect(out);
+		void ctx.resume?.();
+		return {
+			stream: out.stream,
+			close: () => void ctx.close().catch(() => {}),
+		};
+	} catch {
+		return plain;
+	}
 }
 
 /** The first object of the log: the state of the board when the recording began. */
@@ -138,12 +191,21 @@ export async function startBoardRecording(
 	if (!mime) throw new Error("Ta przeglądarka nie nagrywa dźwięku");
 	let mic: MediaStream;
 	try {
-		mic = await navigator.mediaDevices.getUserMedia({ audio: true });
+		mic = await navigator.mediaDevices.getUserMedia({
+			audio: {
+				channelCount: 1,
+				echoCancellation: true,
+				noiseSuppression: true,
+				autoGainControl: true,
+			},
+		});
 	} catch {
 		throw new Error("Brak dostępu do mikrofonu");
 	}
+	const voice = enhanceVoice(mic);
 	const release = () => {
 		for (const t of mic.getTracks()) t.stop();
+		voice.close();
 	};
 
 	let id: string;
@@ -166,7 +228,7 @@ export async function startBoardRecording(
 		throw e;
 	}
 
-	const recorder = new MediaRecorder(mic, {
+	const recorder = new MediaRecorder(voice.stream, {
 		mimeType: mime,
 		audioBitsPerSecond: AUDIO_BITS_PER_SECOND,
 	});
@@ -218,7 +280,7 @@ export async function startBoardRecording(
 		recorder.onstop = () => resolve();
 	});
 
-	let ending: Promise<void> | undefined;
+	let ending: Promise<{ discarded: boolean }> | undefined;
 	const stop = () => {
 		ending ??= (async () => {
 			clearInterval(timer);
@@ -230,19 +292,20 @@ export async function startBoardRecording(
 			if (tail) sendPart(tail);
 			sendSegment(++segment, log?.take() ?? []);
 			await sending;
-			await api.finishRecording(
+			const done = await api.finishRecording(
 				boardId,
 				id,
 				Math.round(performance.now() - t0),
 			);
 			if (failure) throw failure;
+			return { discarded: done?.discarded === true };
 		})();
 		return ending;
 	};
 	// The recording ends without the person pressing stop: sending failed, or the microphone left.
 	const endByItself = () =>
 		stop().then(
-			() => onEnd(),
+			(r) => onEnd(r.discarded ? TOO_SHORT : undefined),
 			(e) => onEnd(e instanceof Error ? e.message : "Błąd"),
 		);
 	for (const track of mic.getAudioTracks()) {

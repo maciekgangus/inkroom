@@ -8,6 +8,7 @@ import {
 	type RecordingSource,
 	type Session,
 	startBoardRecording,
+	TOO_SHORT,
 } from "./recording";
 
 /** One recording lasts at most 1 h 15 min; five minutes before, the owner is warned (R-094). */
@@ -175,7 +176,7 @@ export function RecordingControls({
 		setPhase("saving"); // the last part and the end of the log are still to be sent
 		setNote(why ?? "");
 		try {
-			await s?.stop();
+			if ((await s?.stop())?.discarded) setNote(TOO_SHORT);
 		} catch (e) {
 			setNote("");
 			setError(api.errorMessage(e));

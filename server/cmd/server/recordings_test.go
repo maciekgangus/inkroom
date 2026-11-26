@@ -355,6 +355,51 @@ func TestFinishingWithNothingSentLeavesNoRecording(t *testing.T) {
 	}
 }
 
+func TestRecordingShorterThanAMinuteIsNotKept(t *testing.T) {
+	srv, a, _ := testApp(t)
+	a.minRecording = time.Minute
+	u := register(t, srv, "a@example.com")
+	board := createBoard(t, srv, u, "Matma")
+
+	short := startRecording(t, srv, board, &u, "audio/webm")
+	status(putTo(t, srv, partAddress(t, srv, board, short, 1, &u), []byte("abc"), &u))
+	resp := call(t, srv, "POST", recPath(board, short, "/finish"), `{"durationMs":59999}`, &u)
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || !strings.Contains(string(body), `"discarded":true`) {
+		t.Errorf("finish of a short recording = %d %s, want 200 with discarded", resp.StatusCode, body)
+	}
+
+	long := startRecording(t, srv, board, &u, "audio/webm")
+	status(putTo(t, srv, partAddress(t, srv, board, long, 1, &u), []byte("abc"), &u))
+	if got := finishRecording(t, srv, board, long, 60000, &u); got != http.StatusNoContent {
+		t.Errorf("finish of a minute-long recording = %d, want 204", got)
+	}
+
+	list := decodeList(t, call(t, srv, "GET", "/api/boards/"+board+"/recordings", "", &u))
+	if len(list) != 1 || list[0]["id"] != long {
+		t.Errorf("only the long recording is kept: %v", list)
+	}
+	if _, err := a.recDisk.Open(recordingKey(store.Recording{ID: short, Mime: "audio/webm"})); err == nil {
+		t.Error("the file of the short recording is still there")
+	}
+}
+
+func TestSweepDropsAnIdleRecordingShorterThanAMinute(t *testing.T) {
+	srv, a, _ := testApp(t)
+	a.minRecording = time.Minute
+	u := register(t, srv, "a@example.com")
+	board := createBoard(t, srv, u, "Matma")
+	torn := startRecording(t, srv, board, &u, "audio/webm") // closed after a few seconds
+	status(putTo(t, srv, partAddress(t, srv, board, torn, 1, &u), []byte("abc"), &u))
+
+	a.sweepRecordings(context.Background(), time.Now().Add(idleRecording+time.Minute))
+
+	if list := decodeList(t, call(t, srv, "GET", "/api/boards/"+board+"/recordings", "", &u)); len(list) != 0 {
+		t.Errorf("a short torn recording is kept: %v", list)
+	}
+}
+
 func TestUnfinishedRecordingIsListedAsSuch(t *testing.T) {
 	srv, _, _ := testApp(t)
 	u := register(t, srv, "a@example.com")

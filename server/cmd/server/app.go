@@ -50,6 +50,8 @@ type app struct {
 	// renderToken is the secret of the renderer, which renders videos of recordings (R-115,
 	// ADR 0029); "" when there is none, and then no video is queued.
 	renderToken string
+	// minRecording is the shortest recording worth keeping; a shorter one is dropped when it ends.
+	minRecording time.Duration
 }
 
 // newApp wires the services together. Call Close before closing the store.
@@ -60,6 +62,7 @@ func newApp(staticDir string, st *store.Store) *app {
 		hub:           room.NewHub(st, flushEvery),
 		staticDir:     staticDir,
 		version:       "dev",
+		minRecording:  minRecordingLength,
 		adminSecret:   newAdminSecret(),
 		clientLog:     logx.For("client"),
 		clientLimit:   newRateLimiter(time.Now, clientErrorsPerHour, time.Hour, clientLimiterKeys),

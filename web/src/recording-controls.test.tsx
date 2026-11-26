@@ -87,6 +87,29 @@ describe("RecordingControls (R-117)", () => {
 		expect(btn("Nagrywaj")).not.toBeNull();
 	});
 
+	test("a recording the server dropped for being under a minute is said not to be saved", async () => {
+		const stop = vi.fn().mockResolvedValue({ discarded: true });
+		const start = vi.fn().mockResolvedValue({ stop });
+		act(() =>
+			render(
+				<RecordingControls
+					source={source}
+					boardId="b"
+					canRecord
+					start={start}
+				/>,
+				root,
+			),
+		);
+		act(() => btn("Nagrywaj").click());
+		await flush();
+		act(() => btn("Zakończ nagrywanie").click());
+		await flush();
+		expect(root.querySelector(".rec-note")?.textContent).toBe(
+			"Nagranie krótsze niż minuta nie zostało zapisane",
+		);
+	});
+
 	test("after the stop it says it is saving, until the end of the recording is on the server", async () => {
 		let done: () => void = () => {};
 		const stop = vi.fn().mockReturnValue(new Promise<void>((r) => (done = r)));

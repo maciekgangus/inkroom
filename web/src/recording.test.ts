@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import {
+	enhanceVoice,
 	PartCutter,
 	type RecordingSource,
 	SEGMENT_MS,
 	startBoardRecording,
+	TOO_SHORT,
 	uploadPart,
 } from "./recording";
 import type { EventLog } from "./recording-log";
@@ -245,9 +247,33 @@ describe("startBoardRecording (R-113)", () => {
 		expect(f.displayCalls).toEqual([]);
 		expect(f.calls[0]).toEqual({
 			method: "MIC",
-			url: JSON.stringify({ audio: true }),
+			url: JSON.stringify({
+				audio: {
+					channelCount: 1,
+					echoCancellation: true,
+					noiseSuppression: true,
+					autoGainControl: true,
+				},
+			}),
 		});
 		expect(f.recorder().options?.mimeType).toMatch(/^audio\/webm/);
+	});
+
+	test("a recording the server dropped for being too short says so", async () => {
+		const f = fake();
+		const inner = globalThis.fetch;
+		vi.stubGlobal("fetch", async (url: string, init?: RequestInit) =>
+			url.endsWith("/finish")
+				? new Response(JSON.stringify({ discarded: true }), { status: 200 })
+				: inner(url, init),
+		);
+		const ended: (string | undefined)[] = [];
+		const session = await startBoardRecording("b", f.source, (e) =>
+			ended.push(e),
+		);
+		await vi.advanceTimersByTimeAsync(0);
+		await expect(session.stop()).resolves.toEqual({ discarded: true });
+		expect(TOO_SHORT).toMatch(/krótsze niż minuta/);
 	});
 
 	test("sends the starting state, then a segment of the log every few seconds, then the end", async () => {
@@ -315,5 +341,83 @@ describe("startBoardRecording (R-113)", () => {
 			"mikrofonu",
 		);
 		expect(f.calls.some((c) => c.url.endsWith("/recordings"))).toBe(false);
+	});
+});
+
+describe("enhanceVoice", () => {
+	afterEach(() => vi.unstubAllGlobals());
+
+	const mic = { id: "mic" } as unknown as MediaStream;
+
+	test("without the Web Audio API the plain microphone is recorded", () => {
+		vi.stubGlobal("AudioContext", undefined);
+		const v = enhanceVoice(mic);
+		expect(v.stream).toBe(mic);
+		v.close();
+	});
+
+	test("the voice goes through filters and a limiter, and the context is closed after", () => {
+		const made: string[] = [];
+		const node = (name: string) => {
+			const n = {
+				connect: (to: unknown) => {
+					made.push(`${name}->${(to as { name: string }).name}`);
+					return to;
+				},
+				name,
+				frequency: { value: 0 },
+				gain: { value: 0 },
+				threshold: { value: 0 },
+				knee: { value: 0 },
+				ratio: { value: 0 },
+				attack: { value: 0 },
+				release: { value: 0 },
+				type: "",
+			};
+			return n;
+		};
+		let closed = false;
+		const outStream = { id: "processed" };
+		vi.stubGlobal(
+			"AudioContext",
+			class {
+				createMediaStreamDestination = () => ({
+					...node("out"),
+					stream: outStream,
+				});
+				createBiquadFilter = () => node("filter");
+				createGain = () => node("gain");
+				createDynamicsCompressor = () => node("limiter");
+				createMediaStreamSource = () => node("source");
+				resume = () => Promise.resolve();
+				close = () => {
+					closed = true;
+					return Promise.resolve();
+				};
+			},
+		);
+		const v = enhanceVoice(mic);
+		expect(v.stream).toBe(outStream);
+		expect(made).toEqual([
+			"source->filter",
+			"filter->filter",
+			"filter->gain",
+			"gain->limiter",
+			"limiter->out",
+		]);
+		v.close();
+		expect(closed).toBe(true);
+	});
+
+	test("a browser that throws on the context leaves the plain microphone", () => {
+		vi.stubGlobal(
+			"AudioContext",
+			class {
+				constructor() {
+					throw new Error("no");
+				}
+			},
+		);
+		expect(enhanceVoice(mic).stream).toBe(mic);
 	});
 });

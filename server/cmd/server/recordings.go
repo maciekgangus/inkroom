@@ -26,6 +26,8 @@ import (
 
 const (
 	maxRecordingName = 100
+	// minRecordingLength: a recording shorter than this is not kept (nobody learns from 20 seconds).
+	minRecordingLength = time.Minute
 	// partTTL is how long the address of a part stays valid; downloadTTL, the address of a download.
 	partTTL     = 15 * time.Minute
 	downloadTTL = 5 * time.Minute
@@ -440,6 +442,11 @@ func (a *app) finishRecording(w http.ResponseWriter, r *http.Request) {
 	a.finish(r.Context(), w, rec, max(body.DurationMs, 0))
 }
 
+// tooShort tells whether a recording of this length is not worth keeping.
+func (a *app) tooShort(durationMs int64) bool {
+	return time.Duration(durationMs)*time.Millisecond < a.minRecording
+}
+
 // finish joins the parts that arrived and closes the recording; with no part there is nothing to
 // keep and the recording is dropped.
 func (a *app) finish(ctx context.Context, w http.ResponseWriter, rec store.Recording, durationMs int64) {
@@ -447,10 +454,17 @@ func (a *app) finish(ctx context.Context, w http.ResponseWriter, rec store.Recor
 		writeError(w, http.StatusBadGateway, "Magazyn nagrań jest niedostępny")
 		return
 	}
+	if a.tooShort(durationMs) {
+		writeJSON(w, http.StatusOK, map[string]bool{"discarded": true}) // the client says so
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
 func (a *app) complete(ctx context.Context, rec store.Recording, durationMs int64) error {
+	if a.tooShort(durationMs) {
+		return a.discard(ctx, rec)
+	}
 	backend, ok := a.backendOf(rec)
 	if !ok {
 		return errors.New("unknown storage " + rec.Storage)
@@ -472,6 +486,18 @@ func (a *app) complete(ctx context.Context, rec store.Recording, durationMs int6
 		if err := a.st.QueueVideo(rec.ID); err != nil {
 			slog.Warn("queueing the video of a recording", "err", err)
 		}
+	}
+	return nil
+}
+
+// discard drops a recording that is too short to keep: its upload, its files and its row.
+func (a *app) discard(ctx context.Context, rec store.Recording) error {
+	if err := a.removeVideo(ctx, rec); err != nil {
+		slog.Error("dropping a short recording", "err", err)
+		return err
+	}
+	if err := a.st.DeleteRecording(rec.ID); err != nil && !errors.Is(err, store.ErrNotFound) {
+		return err
 	}
 	return nil
 }

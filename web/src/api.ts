@@ -411,9 +411,11 @@ export const finishRecording = (
 	id: string,
 	durationMs: number,
 ) =>
-	request<void>("POST", `/api/boards/${boardId}/recordings/${id}/finish`, {
-		durationMs,
-	});
+	request<{ discarded?: boolean } | undefined>(
+		"POST",
+		`/api/boards/${boardId}/recordings/${id}/finish`,
+		{ durationMs },
+	);
 
 export const renameRecording = (boardId: string, id: string, name: string) =>
 	request<void>("PATCH", `/api/boards/${boardId}/recordings/${id}`, { name });

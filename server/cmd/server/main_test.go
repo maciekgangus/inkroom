@@ -24,6 +24,7 @@ func startApp(t *testing.T, dbPath, staticDir string) (*httptest.Server, *app, s
 	}
 	a := newApp(staticDir, st)
 	a.auth.Captcha = testCaptcha{}
+	a.minRecording = 0 // most tests finish recordings of a few milliseconds
 	a.configureRecordings(t.TempDir(), nil)
 	srv := httptest.NewServer(a.Handler())
 	t.Cleanup(func() {
