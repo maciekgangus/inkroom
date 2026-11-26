@@ -33,6 +33,7 @@ Pozostałe ustalenia (z odpowiedzi użytkownika 2026-11-26):
 - **Odebranie dostępu do tablicy** odbiera dostęp do jej nagrań (źródło 2 przestaje odpowiadać „tak”). Dla tablicy już usuniętej (źródło 3) twórca nagrania może usunąć konkretną osobę z jego listy (do ustalenia przy wdrożeniu, jeśli okaże się potrzebne).
 - **Adresy:** nagranie dostaje adresy niezależne od tablicy: API `/api/recordings` (lista z numerem strony i wyszukiwaniem po nazwie nagrania i tablicy), `/api/recordings/{nagranie}/…` oraz strony `/r/{nagranie}` (odtwarzacz z osi zdarzeń) i `/v/{nagranie}` (wideo). Stare adresy z tablicą (`/b/{tablica}/r|v/{nagranie}`, `/api/boards/{tablica}/recordings/...`) zostają i przekierowują albo działają dalej, bo linki z poprzednich wersji istnieją.
 - **Renderer:** zadania i adresy renderera (`/render/{tablica}/{nagranie}/…`) przechodzą na sam identyfikator nagrania, bo tablicy może nie być.
+- **Konto twórcy usunięte** (przez administratora, R-065, razem z jego tablicami): jego nagrania są **archiwizowane**, nie usuwane. Wiersz dostaje znacznik archiwizacji i migawkę dawnego właściciela (nazwa i e-mail), `owner_id` przestaje wskazywać konto, a wszystkie źródła `mayWatch` przestają odpowiadać „tak”: nagranie znika z bibliotek wszystkich, także osób z listy `recording_viewers`. Zostaje u administratora: zakładka **„Nagrania”** w panelu (R-064, R-065) pokazuje zwykłą listę zarchiwizowanych nagrań z akcjami „Odtwórz”, „Wideo”, „Pobierz” i „Usuń”. Odczyt idzie ścieżką `/api/admin`, za bramką panelu (Cloudflare Access), więc **nie przechodzi przez `mayWatch`**. Pliki zostają w magazynie do chwili ręcznego usunięcia. To odczytanie wypowiedzi użytkownika („niech się archiwizują i przechodzą na panel admina”): jeśli osoby z listy uprawnionych mają jednak nadal oglądać zarchiwizowane nagranie, wystarczy w źródle 3 nie wyłączać listy dla zarchiwizowanych.
 - **Lista na tablicy** (R-094) zostaje: to ta sama reguła dostępu zawężona do jednej tablicy. Wejście do biblioteki jest w panelu (R-009, R-017).
 
 ## Konsekwencje
@@ -42,6 +43,7 @@ Praca do wykonania (kolejność od najmniej ryzykownej):
 3. API i strona biblioteki (lista stronicowana, wyszukiwanie, filtr „z tej tablicy”), wejście z panelu.
 4. Adresy niezależne od tablicy, przekierowania ze starych, zmiana adresów renderera (zgodna wstecz z pracującym rendererem, bo obraz renderera wydaje się osobno).
 5. Kopiowanie obrazów do nagrania i odtwarzanie ich z adresu nagrania (odtwarzacz, renderer).
-6. Doprecyzować przy wdrożeniu: co z nagraniami, gdy **konto twórcy** zostanie usunięte (propozycja: zostają, dopóki mają uprawnionych, albo znikają razem z kontem, jak dane tablicy); limit rozmiaru kopii obrazów.
+6. Archiwum po usunięciu konta twórcy: patrz „Decyzja”. Do doprecyzowania przy wdrożeniu tylko limit rozmiaru kopii obrazów.
+7. Zakładka „Nagrania” w panelu administratora (zwykła lista, bez sortowania i filtrów na start) i jej API pod `/api/admin/recordings` (odczyt listy, plik dźwięku i wideo do odtworzenia i pobrania, usunięcie), za tą samą bramką co reszta panelu (R-064).
 
 Czego nie zmienia: formatu nagrania (ADR 0028), renderowania wideo (ADR 0029), magazynu (ADR 0030) ani zasady, że tylko twórca nagrywa i usuwa nagrania. Opcja A zostaje wystarczająca, gdyby nagranie jednak nie musiało przeżywać tablicy (wtedy punkty 3 i 5 odpadają).
