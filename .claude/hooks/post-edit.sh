@@ -12,7 +12,7 @@ case "$f" in
     cd "$root/server" || exit 0
     gofmt -w "$f"
     out+=$(go vet ./... 2>&1)
-    out+=$(go test ./... 2>&1 | grep -v '^ok' )
+    out+=$(go test ./... 2>&1 | grep -vE '^(ok|\?) ' )
     ;;
   "$root"/web/*.ts|"$root"/web/*.tsx|"$root"/web/*.json)
     cd "$root/web" || exit 0

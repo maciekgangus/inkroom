@@ -1,8 +1,8 @@
 import type { Board, Point, Stroke } from "./board";
-import { contains, intersects, strokeBounds } from "./bounds";
+import { contains, intersects } from "./bounds";
 import type { ClipElement } from "./clipboard";
 import { constrainEnd } from "./draw-aids";
-import { findHit, loopTouches, objectHit } from "./hit";
+import { findHit, findObjectHit, loopTouches } from "./hit";
 import {
 	type Frame,
 	frameOf,
@@ -133,8 +133,6 @@ const HIT_PX = 8;
 const HOVER_MS = 50;
 /** Above this many selected elements the hover is skipped: repainting their glow is the cost (R-112). */
 const HOVER_MAX_SELECTION = 50;
-/** Above this many elements on the board the hover is skipped until there is a spatial index (R-043). */
-const HOVER_MAX_STROKES = 5000;
 /** The smallest a selection can be scaled down to, in screen pixels. */
 const MIN_SELECTION_PX = 24;
 /** The least side a coordinate plane is scaled down to, in board units: four cells (R-084). */
@@ -726,7 +724,6 @@ export class Controller {
 		)
 			return false;
 		if (this.selection.length > HOVER_MAX_SELECTION) return false;
-		if (this.board.strokes.length > HOVER_MAX_STROKES) return false;
 		return true;
 	}
 
@@ -746,26 +743,14 @@ export class Controller {
 	}
 
 	/**
-	 * The topmost element a direct click at (x, y) grabs (R-072): the last in the list whose shape
-	 * is within the reach. The list is walked from its end without copying it, and each element's
-	 * box is tested first, so a big board does not cost a full hit test per element.
+	 * The topmost element a direct click at (x, y) grabs (R-072, R-118): queries the board's
+	 * spatial index around the point and scans only those candidates from the top.
 	 */
 	private pickObject(x: number, y: number): Stroke | null {
 		const reach = HIT_PX / this.viewport.scale;
-		const strokes = this.board.strokes;
-		for (let i = strokes.length - 1; i >= 0; i--) {
-			const s = strokes[i];
-			const b = strokeBounds(s);
-			if (
-				x < b.minX - reach ||
-				x > b.maxX + reach ||
-				y < b.minY - reach ||
-				y > b.maxY + reach
-			)
-				continue;
-			if (objectHit(s, x, y, reach)) return s;
-		}
-		return null;
+		return (
+			findObjectHit(this.board.queryPoint(x, y, reach), x, y, reach) ?? null
+		);
 	}
 
 	/** True when the board point is on any handle of the active selection (R-047, R-041, R-112). */
@@ -1029,9 +1014,9 @@ export class Controller {
 		const group = this.selection;
 		const frame = group.length > 1 ? frameOf(group, this.groupRot) : null;
 		if (frame && pointInFrame(frame, [x, y])) return true;
-		const hit = [...this.board.strokes]
-			.reverse()
-			.find((s) => objectHit(s, x, y, HIT_PX / this.viewport.scale));
+		// The index returns the candidates around the point; the topmost hit wins as before.
+		const reach = HIT_PX / this.viewport.scale;
+		const hit = findObjectHit(this.board.queryPoint(x, y, reach), x, y, reach);
 		if (!hit) {
 			this.select(null);
 			return false;
@@ -1107,9 +1092,10 @@ export class Controller {
 		if (this.readOnly) return;
 		const [x, y] = this.viewport.toWorld(clientX, clientY);
 		const reach = HIT_PX / this.viewport.scale;
-		const hit = [...this.board.strokes]
-			.reverse()
-			.find((s) => s.kind === "text" && objectHit(s, x, y, reach));
+		const texts = this.board
+			.queryPoint(x, y, reach)
+			.filter((s) => s.kind === "text");
+		const hit = findObjectHit(texts, x, y, reach);
 		if (hit) this.onTextEdit?.(hit);
 	}
 
@@ -1510,7 +1496,8 @@ export class Controller {
 			this.renderer.setMarquee?.(null);
 			const r = edit.rect;
 			if (!r) return;
-			const ids = this.board.strokes
+			const ids = this.board
+				.queryRect(r)
 				// Touching is enough, but an image (a PDF page is one) must be wholly inside: it is big
 				// and easily caught by a frame meant for something else (R-072).
 				.filter((s) =>
@@ -1525,7 +1512,17 @@ export class Controller {
 		if (edit.mode === "lasso") {
 			this.renderer.setLasso?.(null);
 			if (edit.path.length < 3) return;
-			const ids = this.board.strokes
+			// Only the elements whose box meets the loop's can be touched by it.
+			const xs = edit.path.map((p) => p[0]);
+			const ys = edit.path.map((p) => p[1]);
+			const loopBox = {
+				minX: Math.min(...xs),
+				minY: Math.min(...ys),
+				maxX: Math.max(...xs),
+				maxY: Math.max(...ys),
+			};
+			const ids = this.board
+				.queryRect(loopBox)
 				.filter((s) => loopTouches(s, edit.path, 1 / this.viewport.scale))
 				.map((s) => s.id);
 			this.select(edit.additive ? [...new Set([...edit.base, ...ids])] : ids);
@@ -1667,13 +1664,10 @@ export class Controller {
 
 	private erase(e: PointerInput): void {
 		const [x, y] = this.viewport.toWorld(e.clientX, e.clientY);
-		// The eraser is a fixed size on screen, whatever the zoom.
-		const hit = findHit(
-			this.board.strokes,
-			x,
-			y,
-			ERASER_RADIUS / this.viewport.scale,
-		);
+		// The eraser is a fixed size on screen, whatever the zoom. The index's candidates are a
+		// superset of what the hit test can catch, so the topmost hit is the same as a full scan.
+		const reach = ERASER_RADIUS / this.viewport.scale;
+		const hit = findHit(this.board.queryPoint(x, y, reach), x, y, reach);
 		this.erasing ??= this.board.eraseBatch(this.authorId);
 		if (hit && this.erasing.erase(hit.id)) {
 			this.renderer.redraw(this.board.strokes);

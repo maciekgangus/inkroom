@@ -211,7 +211,7 @@ describe("Controller hover in the select tool (R-112)", () => {
 		);
 	});
 
-	test("no hover when the selection is very large or the board is huge", () => {
+	test("no hover when the selection is very large, while a huge board still hovers via the spatial index", () => {
 		const many: Stroke[] = [];
 		for (let i = 0; i < 51; i++)
 			many.push({
@@ -232,8 +232,12 @@ describe("Controller hover in the select tool (R-112)", () => {
 				z: 1000 + i,
 				points: [pt(0, 1000 + i * 2), pt(10, 1000 + i * 2)],
 			});
+		const qp = vi.spyOn(board, "queryPoint");
 		c.pointerHover(ev(200, 100));
-		expect(renderer.setHover).not.toHaveBeenCalled();
+		expect(qp).toHaveBeenCalled();
+		expect(renderer.setHover).toHaveBeenLastCalledWith(
+			expect.objectContaining({ id: "l" }),
+		);
 	});
 
 	test("the hover check is throttled to ~50 ms while the pointer moves", () => {

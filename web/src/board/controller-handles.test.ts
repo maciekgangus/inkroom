@@ -73,12 +73,9 @@ describe("edit handles (R-041)", () => {
 			() => "n",
 		);
 		board.addStroke(rect());
-		board.addStroke(line("l"));
-		board.strokes
-			.find((s) => s.id === "l")
-			?.points.forEach((p) => {
-				p[1] += 400; // the line lives below the rectangle: y = 500
-			});
+		// The line lives below the rectangle (y = 500). Elements on the board are immutable
+		// once added, so it is placed there directly, not moved in place.
+		board.addStroke(line("l", { points: [pt(100, 500), pt(300, 500)] }));
 	});
 
 	describe("the sides of a frame stretch one dimension", () => {
