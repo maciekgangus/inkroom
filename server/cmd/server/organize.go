@@ -127,8 +127,9 @@ func (a *app) updateFolder(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) deleteFolder(w http.ResponseWriter, r *http.Request) {
-	u, ok := a.accountUser(w, r)
+	u, ok := a.auth.User(r) // DELETE has no body, so no JSON check (like removeContact)
 	if !ok {
+		writeError(w, http.StatusUnauthorized, "Nie jesteś zalogowany")
 		return
 	}
 	if err := a.st.DeleteFolder(u.ID, r.PathValue("id")); err != nil {
@@ -211,8 +212,9 @@ func (a *app) updateMarker(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) deleteMarker(w http.ResponseWriter, r *http.Request) {
-	u, ok := a.accountUser(w, r)
+	u, ok := a.auth.User(r) // DELETE has no body, so no JSON check (like removeContact)
 	if !ok {
+		writeError(w, http.StatusUnauthorized, "Nie jesteś zalogowany")
 		return
 	}
 	if err := a.st.DeleteMarker(u.ID, r.PathValue("id")); err != nil {

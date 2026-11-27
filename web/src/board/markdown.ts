@@ -51,6 +51,8 @@ function push(out: MdRun[], text: string, flags: Flags): void {
 	out.push(run);
 }
 
+const isWordChar = (c: string | undefined) =>
+	c !== undefined && /[\p{L}\p{N}]/u.test(c);
 const isSpace = (c: string | undefined) => c === undefined || /\s/.test(c);
 
 /** The index where `marker` closes a span opened at `from`, or -1. */
@@ -113,6 +115,14 @@ function inline(src: string, base: Flags, out: MdRun[]): void {
 			let n = 1;
 			while (src[i + n] === c && n < (c === "*" ? 3 : 2)) n++;
 			const marker = c.repeat(n);
+			// A star between two letters or digits (2*3*4, a*b) is a sign, not emphasis (R-102).
+			const inWord =
+				c === "*" && isWordChar(src[i - 1]) && isWordChar(src[i + n]);
+			if (inWord) {
+				buf += marker;
+				i += n;
+				continue;
+			}
 			if (c === "~" ? !isSpace(src[i + 2]) : !isSpace(src[i + n])) {
 				const close = findClose(src, i + n, marker);
 				if (close > i + n) {

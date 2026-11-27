@@ -440,8 +440,9 @@ func (a *app) setBoardPreviewPicture(w http.ResponseWriter, r *http.Request) {
 // forgetBoard takes a board off the caller's list of boards they were invited to (R-051). The
 // board stays as it is, and opening its link again lists it again.
 func (a *app) forgetBoard(w http.ResponseWriter, r *http.Request) {
-	u, ok := a.accountUser(w, r)
+	u, ok := a.auth.User(r) // DELETE has no body, so no JSON check
 	if !ok {
+		writeError(w, http.StatusUnauthorized, "Nie jesteś zalogowany")
 		return
 	}
 	if err := a.st.RemoveVisit(u.ID, r.PathValue("id")); err != nil {

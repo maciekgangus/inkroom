@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isPlain, type MdBlock, parseMarkdown } from "./markdown";
+import { isPlain, type MdBlock, parseMarkdown, plainText } from "./markdown";
 
 const runs = (b: MdBlock) =>
 	b.runs.map((r) => [
@@ -140,5 +140,27 @@ describe("isPlain", () => {
 		expect(isPlain(parseMarkdown("# a"))).toBe(false);
 		expect(isPlain(parseMarkdown("- a"))).toBe(false);
 		expect(isPlain(parseMarkdown("> a"))).toBe(false);
+	});
+});
+
+describe("stars inside words (old math texts)", () => {
+	it("keeps a star between two letters or digits literal", () => {
+		for (const src of ["2*3*4=24", "a*b*c", "x*y"]) {
+			const blocks = parseMarkdown(src);
+			expect(isPlain(blocks)).toBe(true);
+			expect(plainText(blocks)).toBe(src);
+		}
+	});
+
+	it("still styles markers at word boundaries", () => {
+		const it = parseMarkdown("to jest *ważne*")[0].runs;
+		expect(it.find((r) => r.text === "ważne")?.italic).toBe(true);
+		const b = parseMarkdown("**bold**")[0].runs;
+		expect(b[0]).toMatchObject({ text: "bold", bold: true });
+		expect(parseMarkdown("*ważne*")[0].runs[0].italic).toBe(true);
+	});
+
+	it("leaves underscores alone", () => {
+		expect(isPlain(parseMarkdown("x_1_2"))).toBe(true);
 	});
 });
