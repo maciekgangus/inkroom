@@ -951,6 +951,7 @@ export function BoardView({
 		document.addEventListener("touchmove", prevent, { passive: false });
 
 		return () => {
+			controller.clearHover();
 			setFontReadyHandler(null);
 			cancelAnimationFrame(anim.raf);
 			cancelAnimationFrame(followRaf);
@@ -1090,6 +1091,7 @@ export function BoardView({
 		if (!c) return;
 		c.readOnly = readOnly;
 		if (readOnly) {
+			c.clearHover();
 			c.select(null);
 			toolBeforeReadOnly.current ??= settings.tool;
 			settings.tool = "pan";

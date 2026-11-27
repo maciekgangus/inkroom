@@ -797,7 +797,7 @@ export class CanvasRenderer implements Renderer {
 	 * element repaints the live layer, never the pointer's every pixel of movement.
 	 */
 	setHover(el: Stroke | null): void {
-		if ((this.hover?.id ?? null) === (el?.id ?? null)) return;
+		if (this.hover === el) return;
 		this.hover = el;
 		this.schedule(false, true);
 	}
@@ -1221,12 +1221,14 @@ export class CanvasRenderer implements Renderer {
 					ctx.strokeRect(b.minX, b.minY, b.maxX - b.minX, b.maxY - b.minY);
 			} else {
 				let path: Path2D | null = null;
-				if (this.ensurePath(s, c) === "poly" && c.poly) {
-					path = new Path2D();
-					path.moveTo(c.poly[0], c.poly[1]);
-					for (let i = 2; i < c.poly.length; i += 2)
-						path.lineTo(c.poly[i], c.poly[i + 1]);
-					path.closePath();
+				if (this.ensurePath(s, c) === "poly") {
+					if (c.poly && c.poly.length >= 6) {
+						path = new Path2D();
+						path.moveTo(c.poly[0], c.poly[1]);
+						for (let i = 2; i < c.poly.length; i += 2)
+							path.lineTo(c.poly[i], c.poly[i + 1]);
+						path.closePath();
+					}
 				} else {
 					path = c.path ?? null;
 				}

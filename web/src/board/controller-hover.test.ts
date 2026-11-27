@@ -324,4 +324,111 @@ describe("Controller hover in the select tool (R-112)", () => {
 		board.applyRemote({ t: "remove", id: "l" });
 		expect(renderer.setHover).toHaveBeenLastCalledWith(null);
 	});
+
+	test("a remote update that changes z also clears the hover", () => {
+		c.pointerHover(ev(200, 100));
+		expect(renderer.setHover).toHaveBeenLastCalledWith(
+			expect.objectContaining({ id: "l" }),
+		);
+		board.applyRemote({
+			t: "update",
+			stroke: { ...line("l"), z: 999, color: "#090" },
+		});
+		expect(renderer.setHover).toHaveBeenLastCalledWith(null);
+	});
+
+	test("hover and click agree 1:1 on an elongated ellipse beyond its box and a rotated rect on an indexed board", () => {
+		for (let i = 0; i < 220; i++)
+			board.addStroke({
+				...base,
+				id: `pad${i}`,
+				z: 10 + i,
+				points: [pt(2000 + i * 20, 2000), pt(2010 + i * 20, 2000)],
+			});
+		// Elongated ellipse: box reaches x=404 (+8=412), while normalised-radius hit reaches x=450.
+		board.addStroke({
+			...base,
+			id: "ell",
+			kind: "ellipse",
+			z: 500,
+			points: [pt(0, 0), pt(400, 20)],
+		});
+		board.addStroke({
+			...base,
+			id: "rot2",
+			kind: "rect",
+			z: 501,
+			rot: Math.PI / 4,
+			points: [pt(700, 700), pt(800, 800)],
+		});
+		c.pointerHover(ev(450, 10));
+		expect(renderer.setHover).toHaveBeenLastCalledWith(
+			expect.objectContaining({ id: "ell" }),
+		);
+		c.pointerDown(ev(450, 10));
+		c.pointerUp(ev(450, 10));
+		expect(c.selection.map((s) => s.id)).toEqual(["ell"]);
+		c.select(null);
+
+		now += 100;
+		const d = Math.SQRT1_2 * 50;
+		c.pointerHover(ev(750 + d, 750 + d));
+		expect(renderer.setHover).toHaveBeenLastCalledWith(
+			expect.objectContaining({ id: "rot2" }),
+		);
+		c.pointerDown(ev(750 + d, 750 + d));
+		c.pointerUp(ev(750 + d, 750 + d));
+		expect(c.selection.map((s) => s.id)).toEqual(["rot2"]);
+	});
+
+	test("a pending throttled hover is ignored (and any hover cleared) if readOnly, tool or selection > 50 changed before the timer fires", () => {
+		vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+		try {
+			// 1. readOnly becomes true during throttle window
+			c.pointerHover(ev(200, 100));
+			expect(renderer.setHover).toHaveBeenLastCalledWith(
+				expect.objectContaining({ id: "l" }),
+			);
+			c.pointerHover(ev(200, 310)); // throttled over "p"
+			c.readOnly = true;
+			vi.advanceTimersByTime(60);
+			expect(renderer.setHover).toHaveBeenLastCalledWith(null);
+			c.readOnly = false;
+
+			// 2. tool changes away from select during throttle window
+			now += 100;
+			c.pointerHover(ev(200, 100));
+			expect(renderer.setHover).toHaveBeenLastCalledWith(
+				expect.objectContaining({ id: "l" }),
+			);
+			c.pointerHover(ev(200, 310)); // throttled over "p"
+			settings.tool = "pen";
+			vi.advanceTimersByTime(60);
+			expect(renderer.setHover).toHaveBeenLastCalledWith(null);
+			settings.tool = "select";
+
+			// 3. selection grows past 50 during throttle window
+			const manyIds: string[] = [];
+			for (let i = 0; i < 51; i++) {
+				const id = `sel${i}`;
+				manyIds.push(id);
+				board.addStroke({
+					...base,
+					id,
+					z: 200 + i,
+					points: [pt(i * 30, 700), pt(i * 30 + 20, 700)],
+				});
+			}
+			now += 100;
+			c.pointerHover(ev(200, 100));
+			c.pointerHover(ev(200, 310)); // throttled over "p"
+			c.select(manyIds); // clears hover to null
+			const callsAfterSelect = renderer.setHover.mock.calls.length;
+			vi.advanceTimersByTime(60);
+			expect(renderer.setHover).toHaveBeenCalledTimes(callsAfterSelect);
+			expect(renderer.setHover).toHaveBeenLastCalledWith(null);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
 });

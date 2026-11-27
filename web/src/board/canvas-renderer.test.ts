@@ -600,11 +600,14 @@ describe("function graphs on the canvas (R-092)", () => {
 
 describe("the hover outline on the live layer (R-112, ADR 0027)", () => {
 	const setup = () => {
+		const moveTos: [unknown, unknown][] = [];
 		vi.stubGlobal("requestAnimationFrame", undefined);
 		vi.stubGlobal(
 			"Path2D",
 			class {
-				moveTo() {}
+				moveTo(x: unknown, y: unknown) {
+					moveTos.push([x, y]);
+				}
 				lineTo() {}
 				quadraticCurveTo() {}
 				closePath() {}
@@ -644,11 +647,14 @@ describe("the hover outline on the live layer (R-112, ADR 0027)", () => {
 				width: 100,
 				height: 100,
 			}) as unknown as HTMLCanvasElement;
-		const renderer = new CanvasRenderer(canvas(), canvas(), new Viewport());
+		const viewport = new Viewport();
+		const renderer = new CanvasRenderer(canvas(), canvas(), viewport);
 		return {
 			renderer,
+			viewport,
 			calls,
 			props,
+			moveTos,
 			done: () => vi.unstubAllGlobals(),
 		};
 	};
@@ -764,6 +770,48 @@ describe("the hover outline on the live layer (R-112, ADR 0027)", () => {
 		expect(
 			r.calls.filter((c) => c === "strokeRect").length,
 		).toBeGreaterThanOrEqual(2);
+		r.done();
+	});
+
+	test("setHover repaints when given a new version of an element with the same id", () => {
+		const r = setup();
+		const a = ln("a");
+		const aUpdated: Stroke = {
+			...a,
+			points: [
+				[0, 0, 0.5],
+				[200, 0, 0.5],
+			],
+		};
+		r.renderer.redraw([a]);
+		const clears = () => r.calls.filter((c) => c === "clearRect").length;
+		const at = clears();
+		r.renderer.setHover(a);
+		expect(clears()).toBe(at + 1);
+		r.renderer.setHover(a);
+		expect(clears()).toBe(at + 1);
+		r.renderer.setHover(aUpdated);
+		expect(clears()).toBe(at + 2);
+		r.done();
+	});
+
+	test("drawHover skips degenerate poly outlines (< 6 numbers) at small zoom without undefined moveTo", () => {
+		const r = setup();
+		r.viewport.scale = 0.1;
+		const emptyFreehand: Stroke = {
+			id: "empty",
+			authorId: "a",
+			color: "#111",
+			size: 4,
+			z: 1,
+			points: [],
+		};
+		r.renderer.redraw([emptyFreehand]);
+		const beforeMoves = r.moveTos.length;
+		const beforeStrokes = r.calls.filter((c) => c === "stroke").length;
+		r.renderer.setHover(emptyFreehand);
+		expect(r.moveTos.slice(beforeMoves)).toEqual([]);
+		expect(r.calls.filter((c) => c === "stroke").length).toBe(beforeStrokes);
 		r.done();
 	});
 });

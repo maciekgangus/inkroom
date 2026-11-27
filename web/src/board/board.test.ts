@@ -359,3 +359,42 @@ describe("Board.applyRemote reports whether anything changed", () => {
 		expect(b.applyRemote({ t: "remove", id: "r1" })).toBe(true);
 	});
 });
+
+describe("Board.get (O(1) lookup by id)", () => {
+	test("tracks the current element reference through add, update (same and new z), erase, remote ops and setStrokes", () => {
+		const b = new Board();
+		const s1: Stroke = {
+			id: "g1",
+			authorId: "a",
+			color: "#111",
+			size: 2,
+			z: 1,
+			points: [[0, 0, 0.5]],
+		};
+		expect(b.get("g1")).toBeUndefined();
+		b.addStroke(s1);
+		expect(b.get("g1")).toBe(s1);
+
+		const s2: Stroke = { ...s1, color: "#222" };
+		b.updateElement("a", s2);
+		expect(b.get("g1")).toBe(s2);
+
+		const s3: Stroke = { ...s2, z: 50, color: "#333" };
+		b.applyRemote({ t: "update", stroke: s3 });
+		expect(b.get("g1")).toBe(s3);
+
+		expect(b.eraseStroke("a", "g1")).toBe(true);
+		expect(b.get("g1")).toBeUndefined();
+
+		const s4: Stroke = { ...s1, id: "g2", z: 2 };
+		b.applyRemote({ t: "add", stroke: s4 });
+		expect(b.get("g2")).toBe(s4);
+		b.applyRemote({ t: "remove", id: "g2" });
+		expect(b.get("g2")).toBeUndefined();
+
+		const s5: Stroke = { ...s1, id: "g3", z: 3 };
+		b.setStrokes([s5]);
+		expect(b.get("g1")).toBeUndefined();
+		expect(b.get("g3")).toBe(s5);
+	});
+});

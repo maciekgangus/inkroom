@@ -289,7 +289,7 @@ export class Controller {
 			this.selectedCache = null;
 			// The hovered object may be gone, or a new version of it (erased or changed remotely).
 			const h = this.hovered;
-			if (h && !this.board.strokes.some((s) => s === h)) this.setHovered(null);
+			if (h && this.board.get(h.id) !== h) this.setHovered(null);
 		});
 	}
 
@@ -683,6 +683,10 @@ export class Controller {
 				const pending = this.hoverPending;
 				this.hoverPending = null;
 				if (pending) {
+					if (!this.hoverAllowed(pending)) {
+						this.setHovered(null);
+						return;
+					}
 					this.lastHoverAt = Date.now();
 					this.lookUnder(pending);
 				}
@@ -737,7 +741,7 @@ export class Controller {
 
 	/** Sets the hovered object and tells the renderer, but only when it actually changed. */
 	private setHovered(el: Stroke | null): void {
-		if ((this.hovered?.id ?? null) === (el?.id ?? null)) return;
+		if (this.hovered === el) return;
 		this.hovered = el;
 		this.renderer.setHover?.(el);
 	}
