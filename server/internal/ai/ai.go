@@ -109,7 +109,13 @@ func (s *Service) run(id int64, b store.Board) {
 	res, err := s.analyze(ctx, b)
 	if err != nil {
 		s.log.Warn("ai job failed", "board", b.ID, "job", id, "err", err)
-		if err := s.st.FailAIJob(id, err.Error(), time.Now()); err != nil {
+		msg := err.Error()
+		if s.ctx.Err() != nil {
+			msg = "Analiza przerwana zamknięciem serwera"
+		} else if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			msg = "Analiza przekroczyła limit 30 minut"
+		}
+		if err := s.st.FailAIJob(id, msg, time.Now()); err != nil {
 			s.log.Error("record ai job failure", "job", id, "err", err)
 		}
 		return

@@ -200,7 +200,7 @@ func TestCloseCancelsARunningAnalysis(t *testing.T) {
 		t.Fatal("Close did not stop the job")
 	}
 	j, err := f.st.LatestAIJob("b1")
-	if err != nil || j.Status != store.AIFailed {
+	if err != nil || j.Status != store.AIFailed || j.Error != "Analiza przerwana zamknięciem serwera" {
 		t.Fatalf("got %+v %v", j, err)
 	}
 }
