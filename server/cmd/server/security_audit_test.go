@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/maciekgangus/inkroom/server/internal/store"
 )
 
 // Security audit 2026-11: tests for the fixes (headers, rate limits, quotas, dev guards).
@@ -171,5 +172,79 @@ func TestListenAddrGuardsDevSwitches(t *testing.T) {
 		if got := publicBind(addr); got != want {
 			t.Errorf("publicBind(%q) = %v, want %v", addr, got, want)
 		}
+	}
+}
+
+// A board near its quota tells the author of a stroke that does not fit, and keeps the
+// connection: closing it made the client reconnect and send the stroke again, forever.
+func TestFullBoardSendsFullAndKeepsTheConnection(t *testing.T) {
+	old := store.MaxBoardBytes
+	store.MaxBoardBytes = 200 // two 40-byte images + one 78-byte stroke fit, a second stroke does not
+	defer func() { store.MaxBoardBytes = old }()
+	srv, a, _ := testApp(t)
+	id := newBoard(t, srv)
+	upload := func() {
+		t.Helper()
+		resp, err := http.Post(srv.URL+"/api/boards/"+id+"/images", "application/octet-stream", strings.NewReader(string(pngMagic)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusCreated {
+			t.Fatalf("upload = %d", resp.StatusCode)
+		}
+	}
+	upload() // before anyone joins: the room reads it on loading
+	c := dial(t, srv, id)
+	read(t, c) // the snapshot
+	upload()   // while the room is loaded: the room is told
+	write(t, c, stroke)
+	if m := read(t, c); m["t"] != "add" {
+		t.Fatalf("got %v, want the add echoed", m)
+	}
+	write(t, c, strings.Replace(stroke, `"s1"`, `"s2"`, 1))
+	if m := read(t, c); m["t"] != "full" || m["id"] != "s2" {
+		t.Fatalf("got %v, want full for s2", m)
+	}
+	write(t, c, `{"t":"ping"}`)
+	if m := read(t, c); m["t"] != "pong" {
+		t.Fatalf("got %v, want pong on the same connection", m)
+	}
+	a.hub.Flush()
+	strokes, err := a.st.LoadStrokes(id)
+	if err != nil || len(strokes) != 1 {
+		t.Fatalf("saved %d strokes (%v), want s1 only", len(strokes), err)
+	}
+}
+
+// A 144 Hz screen sends a live stroke or the laser every frame plus the cursor: that is normal use
+// and must never be cut off, while a flood still is.
+func TestWSBudgetLetsAFastScreenThroughAndStopsAFlood(t *testing.T) {
+	now := time.Unix(1000, 0)
+	b := newMsgBudget(func() time.Time { return now }, maxWSMessages, wsRateWindow)
+	// 150 messages a second for a minute.
+	for i := 0; i < 150*60; i++ {
+		if !b.allow() {
+			t.Fatalf("message %d at 150/s refused", i)
+		}
+		now = now.Add(time.Second / 150)
+	}
+	// A flood in one window is refused once it passes the limit...
+	now = now.Add(wsRateWindow)
+	for i := 0; i < maxWSMessages; i++ {
+		if !b.allow() {
+			t.Fatalf("message %d of the window refused", i)
+		}
+	}
+	if b.allow() {
+		t.Fatal("a message over the limit was allowed")
+	}
+	// ...and the next window starts afresh.
+	now = now.Add(wsRateWindow)
+	if !b.allow() {
+		t.Fatal("the next window should allow again")
+	}
+	if maxWSMessages < 300*int(wsRateWindow/time.Second) {
+		t.Fatalf("limit %d per %v is too close to a 144 Hz screen's rate", maxWSMessages, wsRateWindow)
 	}
 }

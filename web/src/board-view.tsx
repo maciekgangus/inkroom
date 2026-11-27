@@ -380,6 +380,10 @@ export function BoardView({
 			onUpdate: () => remote.mark(BOARD),
 			onLaser: (id, points, start) => laserBridge.current(id, points, start),
 			onLive: () => remote.mark(LIVE),
+			onFull: () =>
+				showBoardNotice(
+					"Tablica jest pełna, tej zmiany nie zapisano. Usuń część elementów, żeby zrobić miejsce.",
+				),
 			// A server restarted for a release closes the socket: when it is back, ask which release it
 			// runs, at once (the connection is the signal, so the 30 s gap does not apply).
 			onOpen: () => void versionWatch.check({ force: true }),

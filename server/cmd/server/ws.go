@@ -17,9 +17,11 @@ const (
 	maxMessageBytes = 256 << 10
 	sendBuffer      = 256
 	writeTimeout    = 10 * time.Second
-	// One connection may send at most maxWSMessages per wsRateWindow. A person drawing sends well
-	// under a hundred messages a second; a flood sends thousands (security audit 2026-11).
-	maxWSMessages = 1200
+	// One connection may send at most maxWSMessages per wsRateWindow (400 a second on average). A
+	// 120-144 Hz screen sends a live stroke or the laser every frame plus the cursor 30 times a
+	// second, and a paste sends one message per element; a flood sends far more (security audit
+	// 2026-11).
+	maxWSMessages = 4000
 	wsRateWindow  = 10 * time.Second
 )
 
@@ -101,14 +103,14 @@ func (a *app) serveWS(w http.ResponseWriter, r *http.Request) {
 		conn.Close(websocket.StatusGoingAway, "disconnected")
 	}()
 
-	rl := newRateLimiter(time.Now, maxWSMessages, wsRateWindow, 1)
+	budget := newMsgBudget(time.Now, maxWSMessages, wsRateWindow)
 	for {
 		_, msg, err := conn.Read(ctx)
 		if err != nil {
 			conn.Close(websocket.StatusNormalClosure, "")
 			return
 		}
-		if !rl.allow("conn") {
+		if !budget.allow() {
 			conn.Close(websocket.StatusPolicyViolation, "too many messages")
 			return
 		}
@@ -118,4 +120,26 @@ func (a *app) serveWS(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+}
+
+// msgBudget lets one connection send at most max messages in each fixed window. It is on the path
+// of every message, so it is two numbers and no allocation; only its own read loop uses it.
+type msgBudget struct {
+	now    func() time.Time
+	max    int
+	window time.Duration
+	start  time.Time
+	n      int
+}
+
+func newMsgBudget(now func() time.Time, max int, window time.Duration) *msgBudget {
+	return &msgBudget{now: now, max: max, window: window}
+}
+
+func (b *msgBudget) allow() bool {
+	if t := b.now(); t.Sub(b.start) >= b.window {
+		b.start, b.n = t, 0
+	}
+	b.n++
+	return b.n <= b.max
 }

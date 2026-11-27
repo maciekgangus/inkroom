@@ -171,7 +171,7 @@ func TestRevokedRightsAreReportedForSaving(t *testing.T) {
 }
 
 func TestSavedRevocationsApplyFromTheStart(t *testing.T) {
-	r := newPersisted(nil, "plain")
+	r := newPersisted(nil, "plain", 0)
 	r.setRevoked([]string{"g:ann"})
 	owner := person(r, "own", "u:1", true)
 	ann := person(r, "ann", "g:ann", false)

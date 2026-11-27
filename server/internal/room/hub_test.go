@@ -17,10 +17,11 @@ type fakeStore struct {
 	loads       map[string]int
 	backgrounds map[string]string
 	revoked     map[string]map[string]bool
+	images      map[string]int64
 }
 
 func newFake() *fakeStore {
-	return &fakeStore{strokes: map[string][][]byte{}, applied: map[string][]store.Op{}, loads: map[string]int{}, backgrounds: map[string]string{}, revoked: map[string]map[string]bool{}}
+	return &fakeStore{strokes: map[string][][]byte{}, applied: map[string][]store.Op{}, loads: map[string]int{}, backgrounds: map[string]string{}, revoked: map[string]map[string]bool{}, images: map[string]int64{}}
 }
 
 func (f *fakeStore) LoadStrokes(id string) ([][]byte, error) {
@@ -28,6 +29,12 @@ func (f *fakeStore) LoadStrokes(id string) ([][]byte, error) {
 	defer f.mu.Unlock()
 	f.loads[id]++
 	return f.strokes[id], nil
+}
+
+func (f *fakeStore) ImageBytes(id string) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.images[id], nil
 }
 
 func (f *fakeStore) LoadBackground(id string) (string, error) {

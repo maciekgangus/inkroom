@@ -103,8 +103,9 @@ type entry struct {
 type Room struct {
 	mu      sync.Mutex
 	strokes map[string]entry
-	// size is what the strokes take in memory; it bounds a board at store.MaxBoardBytes even
-	// before the next flush (security audit 2026-11).
+	// size is what the strokes take in memory plus the board's images, counted as the store
+	// counts them; it bounds a board at store.MaxBoardBytes even before the next flush (security
+	// audit 2026-11), so a stroke the room accepts also fits when it is saved.
 	size    int64
 	seq     int
 	clients map[*Client]*presence
@@ -149,11 +150,12 @@ func New() *Room {
 }
 
 // newPersisted returns a room holding the saved strokes and background, recording further
-// stroke changes for the store.
-func newPersisted(saved [][]byte, background string) *Room {
+// stroke changes for the store. imageBytes is what the board's images take.
+func newPersisted(saved [][]byte, background string, imageBytes int64) *Room {
 	r := New()
 	r.track = true
 	r.background = background
+	r.size = imageBytes
 	for _, raw := range saved {
 		id, err := strokeID(raw)
 		if err != nil {
@@ -166,9 +168,26 @@ func newPersisted(saved [][]byte, background string) *Room {
 	return r
 }
 
-// errBoardFull means the board reached store.MaxBoardBytes; the caller's connection is closed as
-// misbehaving (security audit 2026-11).
-var errBoardFull = errors.New("board is full")
+// addImageBytes counts an image uploaded to the board while the room is loaded.
+func (r *Room) addImageBytes(n int64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.size += n
+}
+
+// refuseFullLocked tells c that its change did not fit on the board (store.MaxBoardBytes): it is
+// neither kept nor passed on. stroke is the element as the board still has it (nil for an add),
+// so the client can put it back; the others drop the live stroke c was showing for it.
+func (r *Room) refuseFullLocked(c *Client, id string, stroke json.RawMessage) {
+	b, _ := json.Marshal(map[string]any{"t": "full", "id": id, "stroke": stroke})
+	c.trySend(b)
+	if p := r.clients[c]; p != nil {
+		if _, ok := p.live[id]; ok {
+			delete(p.live, id)
+			r.broadcastLocked(dropMessage("live_drop", map[string]struct{}{id: {}}), c)
+		}
+	}
+}
 
 type message struct {
 	T      string          `json:"t"`
@@ -343,7 +362,8 @@ func (r *Room) Handle(c *Client, raw []byte) error {
 		}
 		if _, ok := r.strokes[id]; !ok {
 			if r.size+int64(len(m.Stroke)) > store.MaxBoardBytes {
-				return errBoardFull
+				r.refuseFullLocked(c, id, nil)
+				return nil
 			}
 			r.seq++
 			r.size += int64(len(m.Stroke))
@@ -365,8 +385,9 @@ func (r *Room) Handle(c *Client, raw []byte) error {
 		if !ok {
 			return nil // deleted meanwhile: an update never brings an element back
 		}
-		if delta := int64(len(m.Stroke)) - int64(len(e.raw)); r.size+delta > store.MaxBoardBytes {
-			return errBoardFull
+		if delta := int64(len(m.Stroke)) - int64(len(e.raw)); delta > 0 && r.size+delta > store.MaxBoardBytes {
+			r.refuseFullLocked(c, id, e.raw)
+			return nil
 		}
 		r.size += int64(len(m.Stroke)) - int64(len(e.raw))
 		e.raw = m.Stroke // same place in the snapshot, new content

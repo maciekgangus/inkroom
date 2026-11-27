@@ -483,11 +483,24 @@ func (s *Store) DeleteOtherSessions(userID int64, keepHash string) error {
 	return err
 }
 
+// queryRower is a database or a transaction.
+type queryRower interface {
+	QueryRow(query string, args ...any) *sql.Row
+}
+
 // boardBytes returns what a board's strokes and images take together.
-func (s *Store) boardBytes(boardID string) (int64, error) {
+func (s *Store) boardBytes(q queryRower, boardID string) (int64, error) {
 	var n int64
-	err := s.db.QueryRow(`SELECT (SELECT COALESCE(SUM(LENGTH(data)), 0) FROM strokes WHERE board_id = ?)
+	err := q.QueryRow(`SELECT (SELECT COALESCE(SUM(LENGTH(data)), 0) FROM strokes WHERE board_id = ?)
 		+ (SELECT COALESCE(SUM(LENGTH(data)), 0) FROM images WHERE board_id = ?)`, boardID, boardID).Scan(&n)
+	return n, err
+}
+
+// ImageBytes returns what a board's images take; the room adds it to its strokes so it refuses
+// strokes exactly where Apply would.
+func (s *Store) ImageBytes(boardID string) (int64, error) {
+	var n int64
+	err := s.db.QueryRow("SELECT COALESCE(SUM(LENGTH(data)), 0) FROM images WHERE board_id = ?", boardID).Scan(&n)
 	return n, err
 }
 
@@ -612,38 +625,49 @@ func (s *Store) RecordVisit(userID int64, boardID string, at time.Time) error {
 }
 
 // Apply writes a batch of stroke changes in one transaction and bumps the board's updated_at.
-// It refuses batches that would push the board past MaxBoardBytes (ErrQuota).
+// It refuses a batch that grows the board past MaxBoardBytes (ErrQuota); what the batch replaces
+// or removes is subtracted, so a batch that does not grow the board always fits.
 func (s *Store) Apply(boardID string, ops []Op, at time.Time) error {
-	var incoming int64
-	for _, op := range ops {
-		if op.Add || op.Replace {
-			incoming += int64(len(op.Data))
-		}
-	}
-	if incoming > 0 {
-		used, err := s.boardBytes(boardID)
-		if err != nil {
-			return err
-		}
-		if used+incoming > MaxBoardBytes {
-			return ErrQuota
-		}
-	}
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
+	var growth int64
 	for _, op := range ops {
-		if op.Add {
+		var had int64 // what the element takes now (0 if it is not there)
+		exists := true
+		if err := tx.QueryRow("SELECT LENGTH(data) FROM strokes WHERE board_id = ? AND id = ?", boardID, op.ID).Scan(&had); errors.Is(err, sql.ErrNoRows) {
+			exists = false
+		} else if err != nil {
+			return err
+		}
+		switch {
+		case op.Add:
+			if !exists {
+				growth += int64(len(op.Data))
+			}
 			_, err = tx.Exec("INSERT OR IGNORE INTO strokes (board_id, id, data) VALUES (?, ?, ?)", boardID, op.ID, op.Data)
-		} else if op.Replace {
+		case op.Replace:
+			if exists {
+				growth += int64(len(op.Data)) - had
+			}
 			_, err = tx.Exec("UPDATE strokes SET data = ? WHERE board_id = ? AND id = ?", op.Data, boardID, op.ID)
-		} else {
+		default:
+			growth -= had
 			_, err = tx.Exec("DELETE FROM strokes WHERE board_id = ? AND id = ?", boardID, op.ID)
 		}
 		if err != nil {
 			return err
+		}
+	}
+	if growth > 0 {
+		used, err := s.boardBytes(tx, boardID) // already with the batch
+		if err != nil {
+			return err
+		}
+		if used > MaxBoardBytes {
+			return ErrQuota
 		}
 	}
 	if _, err := tx.Exec("UPDATE boards SET updated_at = ? WHERE id = ?", unix(at), boardID); err != nil {
@@ -673,7 +697,7 @@ func (s *Store) LoadStrokes(boardID string) ([][]byte, error) {
 // SaveImage stores an image's bytes under a board. The board must exist, and the board's quota
 // must have room for the image (ErrQuota).
 func (s *Store) SaveImage(id, boardID, mime string, data []byte) error {
-	used, err := s.boardBytes(boardID)
+	used, err := s.boardBytes(s.db, boardID)
 	if err != nil {
 		return err
 	}
