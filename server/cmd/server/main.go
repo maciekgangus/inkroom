@@ -86,6 +86,7 @@ func main() {
 	if v := os.Getenv("IMAGE_UPLOADS_PER_IP"); v != "" {
 		a.imageIPLimit = newRateLimiter(time.Now, imageUploadLimit(v), imageUploadWindow, clientLimiterKeys)
 	}
+	a.ai.SetURL(getenv("SEGMENTSVC_URL", defaultSegmentsvcURL))
 	seedDevUser(a)
 	a.auth.TrustProxyHeaders = os.Getenv("TRUST_PROXY_HEADERS") == "1"
 	if !a.auth.TrustProxyHeaders {

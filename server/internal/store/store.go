@@ -170,6 +170,8 @@ var migrations = []migration{
 	stmt(ownersSchema),
 	// Saved contacts ("Znajomi") for user suggestions (R-123).
 	stmt(contactsSchema),
+	// AI analysis of a board: the latest job and its recognized segments (R-124, ADR 0034).
+	stmt(aiSchema),
 }
 
 func addGoogleSub(tx *sql.Tx) error {
