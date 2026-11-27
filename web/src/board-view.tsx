@@ -870,6 +870,7 @@ export function BoardView({
 				!e.repeat &&
 				applyToolShortcut(e, settings, () => controller.select(null))
 			) {
+				if (settings.tool !== "select") controller.clearHover();
 				e.preventDefault();
 				bump();
 				return;
@@ -1010,12 +1011,13 @@ export function BoardView({
 	// Whatever changed the tool (a key, the toolbar, adding an image), the cursor follows.
 	useEffect(() => applyCursor.current());
 
-	// The hover (R-112) belongs to the select tool only: clear it as soon as the tool changes.
+	// The hover (R-112) belongs to the select tool only: clear it when leaving select,
+	// never after switching into select (a delayed effect would wipe an immediate move).
 	const toolSeen = useRef(settings.tool);
 	useEffect(() => {
 		if (toolSeen.current === settings.tool) return;
 		toolSeen.current = settings.tool;
-		ctl.current?.clearHover();
+		if (settings.tool !== "select") ctl.current?.clearHover();
 	});
 
 	// The ink colours depend on the theme (black and white swap in dark mode).
@@ -1340,6 +1342,7 @@ export function BoardView({
 						onToolChange={() => {
 							// Choosing a drawing tool lets go of the selection, so colour and width are back.
 							if (dropsSelection(settings.tool)) ctl.current?.select(null);
+							if (settings.tool !== "select") ctl.current?.clearHover();
 							applyCursor.current();
 						}}
 						hasSelection={(ctl.current?.selection.length ?? 0) > 0}
