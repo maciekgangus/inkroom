@@ -267,6 +267,18 @@ func (r *Room) SetOwner(person string, owner bool) {
 	}
 }
 
+// hasUsers reports whether accounts a and b are both connected to this room.
+func (r *Room) hasUsers(a, b int64) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	foundA, foundB := false, false
+	for c := range r.clients {
+		foundA = foundA || c.UserID == a
+		foundB = foundB || c.UserID == b
+	}
+	return foundA && foundB
+}
+
 // SetSoleOwner sets person as the sole live owner on this board after an ownership transfer (R-122).
 func (r *Room) SetSoleOwner(person string) {
 	r.mu.Lock()

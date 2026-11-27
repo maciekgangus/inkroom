@@ -15,6 +15,16 @@ func TestBoardOwnersAndTransferAPI(t *testing.T) {
 	b1 := createBoard(t, srv, alice, "Algebra")
 	b2 := createBoard(t, srv, alice, "Fizyka")
 
+	// Boards go only to people the owner knows (R-122): alice and bob save their friends first.
+	for _, c := range []struct {
+		who   *user
+		login string
+	}{{&alice, "bob-user"}, {&alice, "carol-user"}, {&bob, "carol-user"}} {
+		if got := status(call(t, srv, "POST", "/api/contacts", `{"login":"`+c.login+`"}`, c.who)); got != http.StatusCreated {
+			t.Fatalf("add contact %s = %d", c.login, got)
+		}
+	}
+
 	// Logged out and non-owner cannot view or change owners.
 	if got := status(call(t, srv, "GET", "/api/boards/"+b1+"/owners", "", nil)); got != http.StatusUnauthorized {
 		t.Fatalf("owners logged out = %d", got)

@@ -149,6 +149,19 @@ func (h *Hub) SetSoleOwner(boardID, person string) {
 	}
 }
 
+// SharesRoom reports whether accounts a and b are both connected to the same board right now,
+// so one may act on the other from the person card (R-123).
+func (h *Hub) SharesRoom(a, b int64) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for _, r := range h.rooms {
+		if r.hasUsers(a, b) {
+			return true
+		}
+	}
+	return false
+}
+
 // Delete disconnects everyone from the board and discards unsaved changes.
 func (h *Hub) Delete(boardID string) {
 	h.mu.Lock()

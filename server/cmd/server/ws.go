@@ -53,15 +53,21 @@ func (a *app) serveWS(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	client := room.NewClient(sendBuffer)
+	user, loggedIn := a.auth.User(r)
 	// Who is connecting, so the others can see who is on the board (R-046).
 	// The Administrator is told apart by a ticket the admin panel signed, never by the name given.
 	if t := r.URL.Query().Get("admin"); t != "" && a.validAdminTicket(boardID, t, time.Now()) {
 		client.IdentifyAdmin(r.URL.Query().Get("id"))
 	} else {
-		client.Identify(r.URL.Query().Get("id"), r.URL.Query().Get("name"))
+		name := r.URL.Query().Get("name")
+		if loggedIn {
+			// A logged-in person shows as their account (R-053), so nobody can pose as another
+			// account to an owner who would then grant that account rights (R-123).
+			name = user.Username
+		}
+		client.Identify(r.URL.Query().Get("id"), name)
 	}
 	// Drawing rights belong to the person the server recognises, not to the id the client states.
-	user, loggedIn := a.auth.User(r)
 	isOwner := false
 	if loggedIn {
 		isOwner, _ = a.st.IsBoardOwner(board.ID, user.ID)

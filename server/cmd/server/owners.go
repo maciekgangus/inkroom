@@ -34,6 +34,43 @@ func userPerson(userID int64) string {
 	return "u:" + strconv.FormatInt(userID, 10)
 }
 
+// errRecipient is the one answer for an account that does not exist and one the caller may not
+// hand boards to, so nobody can probe which e-mails have an account (R-122).
+const errRecipient = "Nie możesz wybrać tej osoby. Dodaj ją najpierw do znajomych albo zaproś na swoją tablicę"
+
+// recipient finds the account a caller names (by id, or by username or e-mail) to make a co-owner
+// or hand boards to. Only people the caller is connected to qualify (R-122); it writes the error
+// and reports false otherwise.
+func (a *app) recipient(w http.ResponseWriter, caller store.User, userID int64, login string) (store.User, bool) {
+	login = strings.TrimSpace(login)
+	var target store.User
+	var err error
+	switch {
+	case userID > 0:
+		target, err = a.st.UserByID(userID)
+	case login != "":
+		target, err = a.st.UserByLogin(login)
+	default:
+		writeError(w, http.StatusBadRequest, "Podaj nazwę użytkownika lub adres e-mail")
+		return store.User{}, false
+	}
+	if err == nil && target.ID != caller.ID {
+		var ok bool
+		if ok, err = a.connectedTo(caller.ID, target.ID); err == nil && !ok {
+			err = store.ErrNotFound
+		}
+	}
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, errRecipient)
+		return store.User{}, false
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Błąd serwera")
+		return store.User{}, false
+	}
+	return target, true
+}
+
 func (a *app) listBoardOwners(w http.ResponseWriter, r *http.Request) {
 	b, _, ok := a.ownedBoardUser(w, r)
 	if !ok {
@@ -53,24 +90,15 @@ func (a *app) addBoardOwner(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Login string `json:"login"`
+		Login  string `json:"login"`
+		UserID int64  `json:"userId"` // the person card names the account, not its shown name
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodyBytes)).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, "Nieprawidłowe żądanie")
 		return
 	}
-	login := strings.TrimSpace(body.Login)
-	if login == "" {
-		writeError(w, http.StatusBadRequest, "Podaj nazwę użytkownika lub adres e-mail")
-		return
-	}
-	target, err := a.st.UserByLogin(login)
-	if errors.Is(err, store.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "Nie ma takiego konta")
-		return
-	}
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Błąd serwera")
+	target, ok := a.recipient(w, caller, body.UserID, body.Login)
+	if !ok {
 		return
 	}
 	now := time.Now()
@@ -140,18 +168,8 @@ func (a *app) transferBoard(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Nieprawidłowe żądanie")
 		return
 	}
-	login := strings.TrimSpace(body.Login)
-	if login == "" {
-		writeError(w, http.StatusBadRequest, "Podaj nazwę użytkownika lub adres e-mail")
-		return
-	}
-	target, err := a.st.UserByLogin(login)
-	if errors.Is(err, store.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "Nie ma takiego konta")
-		return
-	}
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Błąd serwera")
+	target, ok := a.recipient(w, caller, 0, body.Login)
+	if !ok {
 		return
 	}
 	now := time.Now()
@@ -193,18 +211,8 @@ func (a *app) bulkTransferBoards(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Wybierz od 1 do 200 tablic")
 		return
 	}
-	login := strings.TrimSpace(body.Login)
-	if login == "" {
-		writeError(w, http.StatusBadRequest, "Podaj nazwę użytkownika lub adres e-mail")
-		return
-	}
-	target, err := a.st.UserByLogin(login)
-	if errors.Is(err, store.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "Nie ma takiego konta")
-		return
-	}
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Błąd serwera")
+	target, ok := a.recipient(w, u, 0, body.Login)
+	if !ok {
 		return
 	}
 	now := time.Now()

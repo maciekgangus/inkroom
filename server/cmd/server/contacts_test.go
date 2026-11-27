@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
+	"time"
 )
 
 func TestContactsAPIAndAutoRemember(t *testing.T) {
@@ -44,7 +45,20 @@ func TestContactsAPIAndAutoRemember(t *testing.T) {
 	}
 
 	// Adding carol as co-owner on a board automatically remembers carol in alice's contacts!
+	// Carol has to be someone alice knows first (R-122): here she opened alice's board.
 	b1 := createBoard(t, srv, alice, "Matma")
+	visit := dialAs(t, srv, b1, &carol)
+	read(t, visit)      // snapshot
+	for i := 0; ; i++ { // the visit is recorded just after the join
+		if len(decode(t, call(t, srv, "GET", "/api/contacts", "", &alice))["contacts"].([]any)) == 2 {
+			break
+		}
+		if i == 100 {
+			t.Fatal("carol's visit not recorded")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	visit.CloseNow()
 	if got := status(call(t, srv, "POST", "/api/boards/"+b1+"/owners", `{"login":"carol-user"}`, &alice)); got != http.StatusOK {
 		t.Fatalf("add carol owner = %d", got)
 	}
@@ -63,10 +77,13 @@ func TestContactsAPIAndAutoRemember(t *testing.T) {
 		t.Fatalf("expected only carol left with relation=coowner, got %v", rem)
 	}
 
-	// Re-adding bob by userId (e.g. from a live whiteboard participant card) works cleanly.
-	reAdd := call(t, srv, "POST", "/api/contacts", fmt.Sprintf(`{"userId":%d}`, bobID), &alice)
-	if reAdd.StatusCode != http.StatusCreated {
-		t.Fatalf("re-add bob by userId = %d", reAdd.StatusCode)
+	// Bob is no longer connected to alice, so his id alone is refused; his username still works
+	// (undoing a removal restores by username).
+	if got := status(call(t, srv, "POST", "/api/contacts", fmt.Sprintf(`{"userId":%d}`, bobID), &alice)); got != http.StatusNotFound {
+		t.Fatalf("re-add unrelated bob by userId = %d", got)
+	}
+	if got := status(call(t, srv, "POST", "/api/contacts", `{"login":"bob-user"}`, &alice)); got != http.StatusCreated {
+		t.Fatalf("re-add bob by username = %d", got)
 	}
 
 	// Also verify bob does not see stranger either.
