@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
@@ -105,5 +106,48 @@ func TestFoldersAndMarkersAPI(t *testing.T) {
 	after := decode(t, call(t, srv, "GET", "/api/boards", "", &u1))
 	if len(after["folders"].([]any)) != 0 || len(after["markers"].([]any)) != 0 {
 		t.Fatalf("after delete = %v", after)
+	}
+}
+
+// callBare sends a request with no body and no Content-Type, as the client does for DELETE.
+func callBare(t *testing.T, srv *httptest.Server, method, path string, u *user) int {
+	t.Helper()
+	req, err := http.NewRequest(method, srv.URL+path, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u != nil {
+		req.AddCookie(u.cookie)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return status(resp)
+}
+
+func TestBodylessDeletesNeedNoContentType(t *testing.T) {
+	srv, _, _ := testApp(t)
+	u1 := register(t, srv, "tutor@example.com")
+	u2 := register(t, srv, "student@example.com")
+
+	folderID := decode(t, call(t, srv, "POST", "/api/folders", `{"name":"Matma"}`, &u1))["id"].(string)
+	markerID := decode(t, call(t, srv, "POST", "/api/markers", `{"name":"Pilne"}`, &u1))["id"].(string)
+	board := createBoard(t, srv, u1, "Funkcje")
+	if got := status(call(t, srv, "GET", "/api/boards/"+board, "", &u2)); got != http.StatusOK {
+		t.Fatalf("visit = %d", got)
+	}
+
+	if got := callBare(t, srv, "DELETE", "/api/folders/"+folderID, nil); got != http.StatusUnauthorized {
+		t.Fatalf("delete folder logged out = %d", got)
+	}
+	if got := callBare(t, srv, "DELETE", "/api/folders/"+folderID, &u1); got != http.StatusNoContent {
+		t.Fatalf("delete folder = %d", got)
+	}
+	if got := callBare(t, srv, "DELETE", "/api/markers/"+markerID, &u1); got != http.StatusNoContent {
+		t.Fatalf("delete marker = %d", got)
+	}
+	if got := callBare(t, srv, "DELETE", "/api/boards/"+board+"/visit", &u2); got != http.StatusNoContent {
+		t.Fatalf("forget board = %d", got)
 	}
 }
