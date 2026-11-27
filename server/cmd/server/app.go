@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/maciekgangus/inkroom/server/internal/ai"
 	"github.com/maciekgangus/inkroom/server/internal/auth"
 	"github.com/maciekgangus/inkroom/server/internal/cfaccess"
 	"github.com/maciekgangus/inkroom/server/internal/logx"
@@ -52,11 +53,16 @@ type app struct {
 	renderToken string
 	// minRecording is the shortest recording worth keeping; a shorter one is dropped when it ends.
 	minRecording time.Duration
+	// ai runs the AI analysis of boards through segmentsvc (R-121, ADR 0034).
+	ai *ai.Service
 }
+
+// defaultSegmentsvcURL is where segmentsvc listens unless SEGMENTSVC_URL says otherwise.
+const defaultSegmentsvcURL = "http://127.0.0.1:8090"
 
 // newApp wires the services together. Call Close before closing the store.
 func newApp(staticDir string, st *store.Store) *app {
-	return &app{
+	a := &app{
 		st:            st,
 		auth:          auth.New(st),
 		hub:           room.NewHub(st, flushEvery),
@@ -69,6 +75,8 @@ func newApp(staticDir string, st *store.Store) *app {
 		clientIPLimit: newRateLimiter(time.Now, clientIPsPerHour, time.Hour, clientLimiterKeys),
 		imageIPLimit:  newRateLimiter(time.Now, maxImageUploadsPerIP, imageUploadWindow, clientLimiterKeys),
 	}
+	a.ai = ai.New(st, defaultSegmentsvcURL, a.ownedBoard)
+	return a
 }
 
 // configureCaptcha turns on the Cloudflare Turnstile check for registration (R-054, ADR 0013).
@@ -92,8 +100,11 @@ func (a *app) configureGoogle(clientID, secret, publicURL string) {
 	a.auth.Google = &auth.Google{ClientID: clientID, ClientSecret: secret, PublicURL: publicURL}
 }
 
-// Close saves pending board changes and disconnects everyone.
-func (a *app) Close() { a.hub.Close() }
+// Close stops running AI analyses, saves pending board changes and disconnects everyone.
+func (a *app) Close() {
+	a.ai.Close()
+	a.hub.Close()
+}
 
 // Handler returns the HTTP handler: health check, accounts, boards, board WebSocket and
 // static files (index.html also serves /b/<id>, the client route), inside the logging and
@@ -143,6 +154,8 @@ func (a *app) Handler() http.Handler {
 	mux.HandleFunc("GET /api/boards/{id}/preview.png", a.boardPreviewPicture)
 	mux.HandleFunc("PUT /api/boards/{id}/preview.png", a.setBoardPreviewPicture)
 	mux.HandleFunc("DELETE /api/boards/{id}", a.deleteBoard)
+	mux.HandleFunc("POST /api/boards/{id}/analyze", a.ai.Start)
+	mux.HandleFunc("GET /api/boards/{id}/analyze", a.ai.Status)
 	mux.HandleFunc("POST /api/boards/{id}/images", a.uploadImage)
 	mux.HandleFunc("GET /api/boards/{id}/images/{image}", a.getImage)
 	mux.HandleFunc("POST /api/boards/{id}/recordings", a.startRecording)

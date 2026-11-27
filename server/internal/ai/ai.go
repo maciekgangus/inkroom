@@ -63,6 +63,9 @@ func New(st *store.Store, segmentsvcURL string, authorize Authorize) *Service {
 	return s
 }
 
+// SetURL points the service at segmentsvc; call it before serving.
+func (s *Service) SetURL(segmentsvcURL string) { s.url = strings.TrimRight(segmentsvcURL, "/") }
+
 // Close cancels running analyses and waits for them to stop.
 func (s *Service) Close() {
 	s.cancel()
