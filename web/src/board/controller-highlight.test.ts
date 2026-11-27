@@ -62,6 +62,7 @@ describe("Controller selection look (R-034)", () => {
 			setAdjust: vi.fn(),
 			setVertices: vi.fn(),
 			setLasso: vi.fn(),
+			setHover: vi.fn(),
 		};
 		settings = { tool: "select", color: "#111", size: 4 };
 		c = new Controller(

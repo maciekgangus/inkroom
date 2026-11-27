@@ -198,6 +198,11 @@ export class Board {
 	private histories = new Map<string, History>();
 	/** Every element by id, so lookups do not scan the whole board. */
 	private byId = new Map<string, Stroke>();
+
+	/** Returns the current element with this id in O(1), or undefined when absent. */
+	get(id: string): Stroke | undefined {
+		return this.byId.get(id);
+	}
 	/**
 	 * The spatial tile index of the elements (R-118, ADR 0031), fed in every mutation below.
 	 * Queries go through `queryRect`/`queryPoint`/`queryView`, never through this directly.

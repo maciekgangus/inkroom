@@ -458,6 +458,7 @@ export function BoardView({
 			setDrag: (drag) => canvas.setDrag(drag),
 			setMarquee: (rect) => canvas.setMarquee(rect),
 			setLasso: (path) => canvas.setLasso(path),
+			setHover: (el) => canvas.setHover(el),
 		};
 		const controller = new Controller(
 			board,
@@ -741,6 +742,7 @@ export function BoardView({
 			lastPointer = [x, y];
 			sync.cursorMove(x, y);
 			controller.pointerMove(e);
+			controller.pointerHover(e); // at rest in the select tool: what a click would grab (R-112)
 			if (controller.panning) {
 				// The hand, the right and the middle button. The cursors of others and the text field are
 				// HTML above the canvas, so they need a render at every step to stay on the content.
@@ -752,7 +754,10 @@ export function BoardView({
 			applyCursor.current(); // a safety net: whichever way the tool changed, it shows
 		};
 		const leave = (e: PointerEvent) => {
-			if (e.pointerType !== "touch") sync.cursorHide();
+			if (e.pointerType !== "touch") {
+				sync.cursorHide();
+				controller.clearHover(); // the cursor left the board: no hover left hanging (R-112)
+			}
 		};
 		const up = (e: PointerEvent) => {
 			penDown = false;
@@ -865,6 +870,7 @@ export function BoardView({
 				!e.repeat &&
 				applyToolShortcut(e, settings, () => controller.select(null))
 			) {
+				if (settings.tool !== "select") controller.clearHover();
 				e.preventDefault();
 				bump();
 				return;
@@ -946,6 +952,7 @@ export function BoardView({
 		document.addEventListener("touchmove", prevent, { passive: false });
 
 		return () => {
+			controller.clearHover();
 			setFontReadyHandler(null);
 			cancelAnimationFrame(anim.raf);
 			cancelAnimationFrame(followRaf);
@@ -993,11 +1000,25 @@ export function BoardView({
 			getComputedStyle(document.documentElement)
 				.getPropertyValue("--grid-strong")
 				.trim() || canvas.gridClusterColor;
+		// The hover outline is the brand accent of the theme: #5b5bf0 light, #8f8fff dark (R-112).
+		canvas.hoverColor =
+			getComputedStyle(document.documentElement)
+				.getPropertyValue("--accent")
+				.trim() || canvas.hoverColor;
 		canvas.refresh();
 	}, [background, theme]);
 
 	// Whatever changed the tool (a key, the toolbar, adding an image), the cursor follows.
 	useEffect(() => applyCursor.current());
+
+	// The hover (R-112) belongs to the select tool only: clear it when leaving select,
+	// never after switching into select (a delayed effect would wipe an immediate move).
+	const toolSeen = useRef(settings.tool);
+	useEffect(() => {
+		if (toolSeen.current === settings.tool) return;
+		toolSeen.current = settings.tool;
+		if (settings.tool !== "select") ctl.current?.clearHover();
+	});
 
 	// The ink colours depend on the theme (black and white swap in dark mode).
 	useEffect(() => {
@@ -1072,6 +1093,7 @@ export function BoardView({
 		if (!c) return;
 		c.readOnly = readOnly;
 		if (readOnly) {
+			c.clearHover();
 			c.select(null);
 			toolBeforeReadOnly.current ??= settings.tool;
 			settings.tool = "pan";
@@ -1320,6 +1342,7 @@ export function BoardView({
 						onToolChange={() => {
 							// Choosing a drawing tool lets go of the selection, so colour and width are back.
 							if (dropsSelection(settings.tool)) ctl.current?.select(null);
+							if (settings.tool !== "select") ctl.current?.clearHover();
 							applyCursor.current();
 						}}
 						hasSelection={(ctl.current?.selection.length ?? 0) > 0}

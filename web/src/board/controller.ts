@@ -49,6 +49,8 @@ export interface PointerInput {
 	pressure: number;
 	/** Which button changed state (0 left, 1 middle, 2 right; missing counts as left). */
 	button?: number;
+	/** Which buttons are down (0 while the pointer only hovers). */
+	buttons?: number;
 	/** Shift held: add to the selection, snap a rotation. */
 	shiftKey?: boolean;
 	/** Ctrl (Cmd on a Mac) held: select with a free-hand loop instead of a rectangle (R-071). */
@@ -89,6 +91,8 @@ export interface Renderer {
 	setMarquee?(rect: Rect | null): void;
 	/** Shows the free-hand loop of a lasso selection being drawn (null hides it). */
 	setLasso?(path: [number, number][] | null): void;
+	/** Shows a light outline of the object under the cursor in the select tool (null clears it, R-112). */
+	setHover?(el: Stroke | null): void;
 }
 
 /** Current tool settings, mutated by the toolbar. */
@@ -125,6 +129,10 @@ export const ERASER_RADIUS = 10;
 const MIN_SHAPE_PX = 2;
 /** How far (px) from an element a direct click still grabs it, so a thin line need not be hit exactly (R-072). */
 const HIT_PX = 8;
+/** How often (ms) the object under a resting cursor is looked for while the pointer moves (R-112). */
+const HOVER_MS = 50;
+/** Above this many selected elements the hover is skipped: repainting their glow is the cost (R-112). */
+const HOVER_MAX_SELECTION = 50;
 /** The smallest a selection can be scaled down to, in screen pixels. */
 const MIN_SELECTION_PX = 24;
 /** The least side a coordinate plane is scaled down to, in board units: four cells (R-084). */
@@ -259,6 +267,13 @@ export class Controller {
 		| null = null;
 	/** Called when the right button is released without moving, so the UI can open its menu. */
 	onRightClick: ((e: PointerInput) => void) | null = null;
+	/** The element under the cursor in the select tool, shown with a light outline (R-112). */
+	private hovered: Stroke | null = null;
+	/** When the object under the cursor was last looked for, in ms. */
+	private lastHoverAt = 0;
+	/** A move swallowed by the throttle, looked for when the window is over (the resting place counts). */
+	private hoverPending: PointerInput | null = null;
+	private hoverTimer: ReturnType<typeof setTimeout> | null = null;
 
 	constructor(
 		private board: Board,
@@ -272,6 +287,9 @@ export class Controller {
 		// or an erased element stays alive in it until the selection is read again (R-100).
 		board.onChange(() => {
 			this.selectedCache = null;
+			// The hovered object may be gone, or a new version of it (erased or changed remotely).
+			const h = this.hovered;
+			if (h && this.board.get(h.id) !== h) this.setHovered(null);
 		});
 	}
 
@@ -348,6 +366,7 @@ export class Controller {
 		if (e.pointerType === "touch" || this.activeId !== null) return;
 		const button = e.button ?? 0;
 		if (button > 2) return; // back, forward and eraser buttons do nothing
+		this.clearHover(); // a gesture begins: the hover must not stay (R-112)
 		this.activeId = e.pointerId;
 		if (button === 2) {
 			// Right button: pan for a moment, whatever the tool; a click opens the menu.
@@ -636,6 +655,139 @@ export class Controller {
 		this.pointerUp(e);
 	}
 
+	/**
+	 * The pointer moved without anything pressed: in the select tool at rest, show which object a
+	 * click would grab (R-112). A touch pointer never hovers — a finger pans the view (R-070).
+	 */
+	pointerHover(e: PointerInput): void {
+		if (!this.hoverAllowed(e)) {
+			this.clearHover();
+			return;
+		}
+		const wait = HOVER_MS - (Date.now() - this.lastHoverAt);
+		if (wait <= 0) {
+			// A fresh check supersedes a throttled one still waiting: its position is the newer.
+			if (this.hoverTimer) clearTimeout(this.hoverTimer);
+			this.hoverTimer = null;
+			this.hoverPending = null;
+			this.lastHoverAt = Date.now();
+			this.lookUnder(e);
+			return;
+		}
+		// Throttled (the eye does not see 20 Hz), but the last move is kept and looked for when
+		// the window is over: where the cursor rests must be the one that glows.
+		this.hoverPending = e;
+		if (!this.hoverTimer)
+			this.hoverTimer = setTimeout(() => {
+				this.hoverTimer = null;
+				const pending = this.hoverPending;
+				this.hoverPending = null;
+				if (pending) {
+					if (!this.hoverAllowed(pending)) {
+						this.setHovered(null);
+						return;
+					}
+					this.lastHoverAt = Date.now();
+					this.lookUnder(pending);
+				}
+			}, wait);
+	}
+
+	/** Clears the hover at once: the pointer left the board, a gesture began, the tool or view changed. */
+	clearHover(): void {
+		if (this.hoverTimer) clearTimeout(this.hoverTimer);
+		this.hoverTimer = null;
+		this.hoverPending = null;
+		this.lastHoverAt = 0;
+		this.setHovered(null);
+	}
+
+	/** Looks for the object under the pointer's position and shows it (at most every HOVER_MS). */
+	private lookUnder(e: PointerInput): void {
+		const p = this.viewport.toWorld(e.clientX, e.clientY);
+		this.setHovered(this.objectUnder(p));
+	}
+
+	/** Whether a hover may be looked for now: only in select, at rest, mouse or hovering pen. */
+	private hoverAllowed(e: PointerInput): boolean {
+		if (e.pointerType === "touch") return false;
+		// A pen tells contact by pressure, not `buttons`: a hovering pen can send pointermove with
+		// buttons=1 while the tip is off the glass, and buttons alone would kill its hover (R-112).
+		// A mouse has no pressure, so for it the buttons decide.
+		const contact =
+			e.pointerType === "pen" ? e.pressure > 0 : (e.buttons ?? 0) !== 0;
+		if (contact) return false;
+		if (this.settings.tool !== "select" || this.readOnly) return false;
+		if (
+			this.activeId !== null ||
+			this.edit ||
+			this.panFrom ||
+			this.current ||
+			this.laserOn ||
+			this.textStart
+		)
+			return false;
+		if (this.selection.length > HOVER_MAX_SELECTION) return false;
+		return true;
+	}
+
+	/** The object a click at `p` would grab, unless it is already selected or a handle is there. */
+	private objectUnder(p: Vec): Stroke | null {
+		if (this.overAnyHandle(p)) return null; // a handle wins: the click would grab it instead
+		const hit = this.pickObject(p[0], p[1]);
+		if (hit && this.selectedIds.includes(hit.id)) return null; // already glowing (R-058)
+		return hit;
+	}
+
+	/** Sets the hovered object and tells the renderer, but only when it actually changed. */
+	private setHovered(el: Stroke | null): void {
+		if (this.hovered === el) return;
+		this.hovered = el;
+		this.renderer.setHover?.(el);
+	}
+
+	/**
+	 * The topmost element a direct click at (x, y) grabs (R-072, R-118): queries the board's
+	 * spatial index around the point and scans only those candidates from the top.
+	 */
+	private pickObject(x: number, y: number): Stroke | null {
+		const reach = HIT_PX / this.viewport.scale;
+		return (
+			findObjectHit(this.board.queryPoint(x, y, reach), x, y, reach) ?? null
+		);
+	}
+
+	/** True when the board point is on any handle of the active selection (R-047, R-041, R-112). */
+	private overAnyHandle(p: Vec): boolean {
+		const sel = this.selection;
+		if (sel.length === 0) return false;
+		const px = 1 / this.viewport.scale;
+		const dots = this.vertexDots(sel);
+		if (
+			dots?.some((d) => Math.hypot(p[0] - d[0], p[1] - d[1]) <= HANDLE_PX * px)
+		)
+			return true;
+		const adjustPoint = this.adjustAt(sel);
+		if (
+			adjustPoint &&
+			Math.hypot(p[0] - adjustPoint[0], p[1] - adjustPoint[1]) <= HANDLE_PX * px
+		)
+			return true;
+		if (sel.length === 1 && sel[0].kind === "line") {
+			if (
+				lineEnds(sel[0]).some(
+					(end) => Math.hypot(p[0] - end[0], p[1] - end[1]) <= HANDLE_PX * px,
+				)
+			)
+				return true;
+		}
+		const frame = this.frameFor(sel, this.groupRot);
+		return (
+			frame !== null &&
+			hitFrameHandle(frame, p, HANDLE_PX * px, ROT_OFFSET_PX * px) !== null
+		);
+	}
+
 	/** The line style and opacity new elements get from the settings, where they fit the tool. */
 	private newLook(tool: Settings["tool"]): { dash?: Dash; opacity?: number } {
 		const style = this.settings.lineStyle;
@@ -778,6 +930,7 @@ export class Controller {
 		this.groupRot = 0; // a new selection starts with an upright frame
 		this.selectedIds =
 			ids === null ? [] : Array.isArray(ids) ? [...ids] : [ids];
+		this.setHovered(null); // what is selected now glows already, no hover on it (R-112)
 		this.showFrame();
 		this.onSelectionChange?.();
 	}
@@ -975,6 +1128,7 @@ export class Controller {
 	 * selection that alone made the scroll crawl.
 	 */
 	hideFrame(): void {
+		this.clearHover(); // the view moves: the hover goes with the frame (R-112)
 		if (this.edit || this.selection.length === 0) return;
 		this.renderer.setHighlight?.([]);
 		this.renderer.setSelection?.(null);
@@ -1127,12 +1281,8 @@ export class Controller {
 				return;
 			}
 		}
-		const hit = findObjectHit(
-			this.board.queryPoint(p[0], p[1], HIT_PX * px),
-			p[0],
-			p[1],
-			HIT_PX * px,
-		);
+		// The same hit test the hover uses, so what glows under the cursor is what a click grabs.
+		const hit = this.pickObject(p[0], p[1]);
 		if (hit && e.shiftKey) {
 			const on = this.selectedIds.includes(hit.id);
 			this.select(
