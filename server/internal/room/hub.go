@@ -1,6 +1,7 @@
 package room
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -15,6 +16,7 @@ import (
 type Persister interface {
 	LoadStrokes(boardID string) ([][]byte, error)
 	LoadBackground(boardID string) (string, error)
+	ImageBytes(boardID string) (int64, error)
 	Apply(boardID string, ops []store.Op, at time.Time) error
 	LoadRevoked(boardID string) ([]string, error)
 	SetRevoked(boardID, person string, revoked bool) error
@@ -78,7 +80,11 @@ func (h *Hub) Join(boardID string, c *Client) (*Room, error) {
 		if err != nil {
 			return nil, err
 		}
-		r = newPersisted(saved, background)
+		imageBytes, err := h.p.ImageBytes(boardID)
+		if err != nil {
+			return nil, err
+		}
+		r = newPersisted(saved, background, imageBytes)
 		r.setRevoked(revoked)
 		r.OnRevoke = func(person string, on bool) {
 			if err := h.p.SetRevoked(boardID, person, on); err != nil {
@@ -101,6 +107,16 @@ func (h *Hub) Leave(boardID string, r *Room, c *Client) {
 		h.flushRoom(boardID, r)
 		delete(h.rooms, boardID)
 		metrics.RoomsActive.Dec()
+	}
+}
+
+// AddImageBytes counts an image just saved to the board in its room, if anyone is in it, so the
+// room refuses strokes where the store would.
+func (h *Hub) AddImageBytes(boardID string, n int64) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if r := h.rooms[boardID]; r != nil {
+		r.addImageBytes(n)
 	}
 }
 
@@ -204,7 +220,14 @@ func (h *Hub) flushRoom(boardID string, r *Room) {
 	if len(ops) == 0 || closed {
 		return
 	}
-	if err := h.apply(boardID, ops); err != nil {
+	err := h.apply(boardID, ops)
+	if errors.Is(err, store.ErrQuota) {
+		// The room and the store count alike, so this is rare (an image uploaded meanwhile). Retrying
+		// the batch would fail forever and keep every later change, deletes too, from being saved:
+		// save it op by op and leave out what does not fit.
+		ops, err = h.applyEach(boardID, ops)
+	}
+	if err != nil {
 		slog.Error("saving board", "board", logx.Ref(boardID), "err", err)
 		r.mu.Lock()
 		if !r.closed {
@@ -212,6 +235,26 @@ func (h *Hub) flushRoom(boardID string, r *Room) {
 		}
 		r.mu.Unlock()
 	}
+}
+
+// applyEach saves ops one at a time, dropping those over the quota. It returns the ops left
+// unsaved by another error, with that error, so they can be retried.
+func (h *Hub) applyEach(boardID string, ops []store.Op) ([]store.Op, error) {
+	dropped := 0
+	for i, op := range ops {
+		err := h.apply(boardID, []store.Op{op})
+		if errors.Is(err, store.ErrQuota) {
+			dropped++
+			continue
+		}
+		if err != nil {
+			return ops[i:], err
+		}
+	}
+	if dropped > 0 {
+		slog.Warn("board over quota: changes not saved", "board", logx.Ref(boardID), "dropped", dropped)
+	}
+	return nil, nil
 }
 
 // apply saves ops. A panic in the persistence code is logged and returned as an error, so the

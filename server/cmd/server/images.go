@@ -74,6 +74,7 @@ func (a *app) uploadImage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Błąd serwera")
 		return
 	}
+	a.hub.AddImageBytes(board.ID, int64(len(data))) // the open room counts it, as the store does
 	writeJSON(w, http.StatusCreated, map[string]string{"id": id})
 }
 

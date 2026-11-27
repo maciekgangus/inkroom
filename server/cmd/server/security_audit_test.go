@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/maciekgangus/inkroom/server/internal/store"
 )
 
 // Security audit 2026-11: tests for the fixes (headers, rate limits, quotas, dev guards).
@@ -171,5 +172,47 @@ func TestListenAddrGuardsDevSwitches(t *testing.T) {
 		if got := publicBind(addr); got != want {
 			t.Errorf("publicBind(%q) = %v, want %v", addr, got, want)
 		}
+	}
+}
+
+// A board near its quota tells the author of a stroke that does not fit, and keeps the
+// connection: closing it made the client reconnect and send the stroke again, forever.
+func TestFullBoardSendsFullAndKeepsTheConnection(t *testing.T) {
+	old := store.MaxBoardBytes
+	store.MaxBoardBytes = 200 // two 40-byte images + one 78-byte stroke fit, a second stroke does not
+	defer func() { store.MaxBoardBytes = old }()
+	srv, a, _ := testApp(t)
+	id := newBoard(t, srv)
+	upload := func() {
+		t.Helper()
+		resp, err := http.Post(srv.URL+"/api/boards/"+id+"/images", "application/octet-stream", strings.NewReader(string(pngMagic)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusCreated {
+			t.Fatalf("upload = %d", resp.StatusCode)
+		}
+	}
+	upload() // before anyone joins: the room reads it on loading
+	c := dial(t, srv, id)
+	read(t, c) // the snapshot
+	upload()   // while the room is loaded: the room is told
+	write(t, c, stroke)
+	if m := read(t, c); m["t"] != "add" {
+		t.Fatalf("got %v, want the add echoed", m)
+	}
+	write(t, c, strings.Replace(stroke, `"s1"`, `"s2"`, 1))
+	if m := read(t, c); m["t"] != "full" || m["id"] != "s2" {
+		t.Fatalf("got %v, want full for s2", m)
+	}
+	write(t, c, `{"t":"ping"}`)
+	if m := read(t, c); m["t"] != "pong" {
+		t.Fatalf("got %v, want pong on the same connection", m)
+	}
+	a.hub.Flush()
+	strokes, err := a.st.LoadStrokes(id)
+	if err != nil || len(strokes) != 1 {
+		t.Fatalf("saved %d strokes (%v), want s1 only", len(strokes), err)
 	}
 }
