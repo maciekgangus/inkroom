@@ -22,6 +22,8 @@ export interface Peer {
 	follows?: string;
 	/** The picture of the person's account (R-111). */
 	avatar?: string;
+	/** This person records the lesson (R-094). */
+	recording?: boolean;
 }
 
 export interface RemoteCursor {
@@ -121,6 +123,11 @@ export class SyncClient {
 		null;
 	private laserScheduled = false;
 	private following = ""; // id of the person whose view we follow (R-093)
+	private recording = false; // we record the lesson (R-094): told again after a reconnect
+	/** Sees every message in and out while a lesson is recorded (R-113); null the rest of the time. */
+	private tap:
+		| ((m: { t: string } & Record<string, unknown>, outgoing: boolean) => void)
+		| null = null;
 	private viewOut: Rect | null = null; // our latest view not yet sent
 	private viewLastSent = Number.NEGATIVE_INFINITY;
 	private viewSent: Rect | null = null; // what we last sent: an unchanged view is not sent again
@@ -261,12 +268,13 @@ export class SyncClient {
 	private setPeers(raw: unknown[]): void {
 		this.peersIn = raw.flatMap((p) => {
 			if (typeof p !== "object" || p === null) return [];
-			const { id, name, muted, follows, avatar } = p as {
+			const { id, name, muted, follows, avatar, recording } = p as {
 				id?: unknown;
 				name?: unknown;
 				muted?: unknown;
 				follows?: unknown;
 				avatar?: unknown;
+				recording?: unknown;
 			};
 			if (typeof id !== "string" || typeof name !== "string") return [];
 			return [
@@ -276,6 +284,7 @@ export class SyncClient {
 					...(muted === true ? { muted } : {}),
 					...(typeof follows === "string" && follows ? { follows } : {}),
 					...(typeof avatar === "string" && avatar ? { avatar } : {}),
+					...(recording === true ? { recording } : {}),
 				},
 			];
 		});
@@ -342,6 +351,27 @@ export class SyncClient {
 			start: p.start,
 			points: p.points,
 		});
+	}
+
+	/**
+	 * Lets `fn` see every message that comes from the server and every one we send, for the event
+	 * log of a recorded lesson (R-113); null stops it. Costs nothing while it is not set.
+	 */
+	setTap(
+		fn:
+			| ((
+					m: { t: string } & Record<string, unknown>,
+					outgoing: boolean,
+			  ) => void)
+			| null,
+	): void {
+		this.tap = fn;
+	}
+
+	/** Tells everyone whether we record the lesson now, for their red dot (R-094). */
+	setRecording(on: boolean): void {
+		this.recording = on;
+		this.send({ t: "recording", on });
 	}
 
 	/** Starts following the view of the person with this id; an empty id stops (R-093). */
@@ -463,7 +493,9 @@ export class SyncClient {
 	}
 
 	private send(msg: object): void {
-		if (this.isOpen && this.socket) this.socket.send(JSON.stringify(msg));
+		if (!this.isOpen || !this.socket) return;
+		this.socket.send(JSON.stringify(msg));
+		this.tap?.(msg as { t: string } & Record<string, unknown>, true);
 	}
 
 	private receive(data: string): void {
@@ -488,6 +520,7 @@ export class SyncClient {
 			return;
 		}
 		this.lastIn = this.now();
+		this.tap?.(m as unknown as { t: string } & Record<string, unknown>, false);
 		switch (m.t) {
 			case "background":
 				if (isBackground(m.value)) this.opts.onBackground?.(m.value);
@@ -504,6 +537,7 @@ export class SyncClient {
 				if (isBackground(m.background)) this.opts.onBackground?.(m.background);
 				this.board.setStrokes(m.strokes ?? []);
 				if (this.following) this.send({ t: "follow", id: this.following });
+				if (this.recording) this.send({ t: "recording", on: true });
 				for (const { op, merged } of this.pending.values()) {
 					this.board.applyRemote(op);
 					if (merged && op.t === "add")

@@ -143,10 +143,16 @@ func (a *app) adminDeleteUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Błąd serwera")
 		return
 	}
+	var recs []store.Recording
 	for _, b := range boards {
 		a.hub.Delete(b.ID) // disconnect everyone and drop unsaved changes first
+		recs = append(recs, a.recordingsOnBoards(b.ID)...)
 	}
-	a.adminDone(w, a.st.DeleteUser(id))
+	err = a.st.DeleteUser(id)
+	if err == nil {
+		a.removeRecordings(recs)
+	}
+	a.adminDone(w, err)
 }
 
 func (a *app) adminRenameBoard(w http.ResponseWriter, r *http.Request) {
@@ -199,7 +205,12 @@ func (a *app) adminDeleteBoard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.hub.Delete(b.ID) // disconnect everyone and drop unsaved changes first
-	a.adminDone(w, a.st.DeleteBoard(b.ID))
+	recs := a.recordingsOnBoards(b.ID)
+	err := a.st.DeleteBoard(b.ID)
+	if err == nil {
+		a.removeRecordings(recs)
+	}
+	a.adminDone(w, err)
 }
 
 // adminEnterBoard gives the address to open the board as the Administrator: the board's own link

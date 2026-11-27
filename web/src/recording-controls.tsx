@@ -1,0 +1,398 @@
+import { useEffect, useRef, useState } from "preact/hooks";
+import * as api from "./api";
+import { closeOnDismiss } from "./dismiss";
+import { EditableName } from "./editable-name";
+import { Icon } from "./icon";
+import { Portal } from "./portal";
+import {
+	listMics,
+	type Mic,
+	micChoice,
+	type RecordingSource,
+	type Session,
+	setMicChoice,
+	startBoardRecording,
+	TOO_SHORT,
+} from "./recording";
+
+/** One recording lasts at most 1 h 15 min; five minutes before, the owner is warned (R-094). */
+export /** How often the open list asks again while a video is being prepared. */
+const VIDEO_REFRESH_MS = 10_000;
+
+/** What the list says about a video that is not ready (nothing for one that is, or is not made). */
+function videoNote(r: api.Recording): string {
+	switch (r.video) {
+		case "queued":
+			return " · wideo w kolejce";
+		case "rendering":
+			return ` · wideo ${r.videoProgress}%`;
+		case "failed":
+			return " · wideo nie wyszło";
+		default:
+			return "";
+	}
+}
+
+const MAX_RECORDING_MS = 75 * 60_000;
+export const WARN_BEFORE_MS = 5 * 60_000;
+
+/** The length of a recording as 1:05 or 1:02:05. */
+export function clock(ms: number): string {
+	const total = Math.max(0, Math.round(ms / 1000));
+	const h = Math.floor(total / 3600);
+	const m = Math.floor((total % 3600) / 60);
+	const s = String(total % 60).padStart(2, "0");
+	return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`;
+}
+
+/** A size as 12 MB (a recording is megabytes at least). */
+export function megabytes(bytes: number): string {
+	return `${Math.max(1, Math.round(bytes / (1 << 20)))} MB`;
+}
+
+interface Props {
+	boardId: string;
+	/** Shows the record button: the owner of the board (R-113). */
+	canRecord: boolean;
+	/** What the recording takes from the board: its state, and its events while it lasts. */
+	source: RecordingSource;
+	/** Shows a delete button on each recording: the owner of the board. */
+	canDelete?: boolean;
+	/** Told when recording starts (true) and ends (false), for everyone's red dot. */
+	onRecording?: (on: boolean) => void;
+	/** Starts a recording; a test hands in a stand-in. */
+	start?: typeof startBoardRecording;
+	/** The microphones to choose from (the browser's list by default). */
+	mics?: typeof listMics;
+}
+
+/**
+ * Recording a lesson (R-113): a "Nagrywaj" button that turns into the red "Zakończ nagrywanie"
+ * with the time, and a "Nagrania" button opening the list of this board's recordings with a
+ * link to the player each, and for the owner a delete button. Anyone with the board sees the list.
+ */
+export function RecordingControls({
+	boardId,
+	canRecord,
+	source,
+	canDelete,
+	onRecording,
+	start = startBoardRecording,
+	mics = listMics,
+}: Props) {
+	const [phase, setPhase] = useState<
+		"idle" | "starting" | "recording" | "saving"
+	>("idle");
+	const [error, setError] = useState("");
+	/** A word that is not a failure: the limit is near, or was reached. */
+	const [note, setNote] = useState("");
+	const [seconds, setSeconds] = useState(0);
+	const session = useRef<Session | undefined>(undefined);
+	const [open, setOpen] = useState(false);
+	/** Where the list hangs (client pixels), taken from its button when it opens. */
+	const [at, setAt] = useState({ top: 0, left: 0, width: 360 });
+	const [list, setList] = useState<api.Recording[] | null>(null);
+	/** The recording asked "Na pewno usunąć?" about. */
+	const [confirming, setConfirming] = useState("");
+	/** The microphones to pick from, listed when the owner opens the list; the one picked. */
+	const [inputs, setInputs] = useState<Mic[]>([]);
+	const [mic, setMic] = useState(micChoice);
+	useEffect(() => {
+		if (!open || !canRecord) return;
+		let current = true;
+		mics().then(
+			(m) => current && setInputs(m),
+			() => {},
+		);
+		return () => {
+			current = false;
+		};
+	}, [open, canRecord, mics]);
+
+	const reload = () =>
+		api
+			.listRecordings(boardId)
+			.then(setList, (e) => setError(api.errorMessage(e)));
+	useEffect(() => {
+		if (open) void reload();
+		// biome-ignore lint/correctness/useExhaustiveDependencies: reload follows boardId
+	}, [open, boardId]);
+	// A video being prepared (R-115) shows its progress: the open list asks again from time to time.
+	const preparing = !!list?.some(
+		(r) => r.video === "queued" || r.video === "rendering",
+	);
+	useEffect(() => {
+		if (!open || !preparing) return;
+		const t = setInterval(() => void reload(), VIDEO_REFRESH_MS);
+		return () => clearInterval(t);
+	}, [open, preparing, boardId]);
+	useEffect(
+		() =>
+			open
+				? closeOnDismiss(".recordings-wrap, .recordings-pop", () =>
+						setOpen(false),
+					)
+				: undefined,
+		[open],
+	);
+
+	// The timer, the limit (a warning, then the end), and a warning before the tab is closed.
+	const stopRef = useRef<(why?: string) => Promise<void>>(async () => {});
+	useEffect(() => {
+		if (phase !== "recording") return;
+		const t0 = Date.now();
+		setSeconds(0);
+		const tick = setInterval(
+			() => setSeconds(Math.floor((Date.now() - t0) / 1000)),
+			1000,
+		);
+		const warn = setTimeout(
+			() =>
+				setNote("Nagranie skończy się samo za 5 minut (limit 1 godz. 15 min)"),
+			MAX_RECORDING_MS - WARN_BEFORE_MS,
+		);
+		const limit = setTimeout(
+			() =>
+				void stopRef.current(
+					"Osiągnięto limit 1 godz. 15 min: nagranie zapisane. Możesz zacząć kolejne.",
+				),
+			MAX_RECORDING_MS,
+		);
+		return () => {
+			clearInterval(tick);
+			clearTimeout(warn);
+			clearTimeout(limit);
+		};
+	}, [phase]);
+	// Closing the tab while recording, or while the end of it is on its way, loses the recording.
+	useEffect(() => {
+		if (phase !== "recording" && phase !== "saving") return;
+		const beforeUnload = (e: BeforeUnloadEvent) => e.preventDefault();
+		addEventListener("beforeunload", beforeUnload);
+		return () => removeEventListener("beforeunload", beforeUnload);
+	}, [phase]);
+	// Everyone's red dot follows the phase; nothing is said before there was a recording.
+	const wasRecording = useRef(false);
+	const tell = useRef(onRecording);
+	tell.current = onRecording; // the latest, without running the effect again for a new function
+	useEffect(() => {
+		const now = phase === "recording";
+		if (now || wasRecording.current) tell.current?.(now);
+		wasRecording.current = now;
+	}, [phase]);
+	// Leaving the board ends the recording (what is recorded is kept).
+	useEffect(() => () => void session.current?.stop().catch(() => {}), []);
+
+	const ended = (why?: string) => {
+		session.current = undefined;
+		setPhase("idle");
+		setNote("");
+		setError(why ?? "");
+		if (open) void reload();
+	};
+	/** Ends the recording on the owner's wish or at the limit, and says `why` if given. */
+	const stop = async (why?: string) => {
+		const s = session.current;
+		session.current = undefined;
+		setPhase("saving"); // the last part and the end of the log are still to be sent
+		setNote(why ?? "");
+		try {
+			if ((await s?.stop())?.discarded) setNote(TOO_SHORT);
+		} catch (e) {
+			setNote("");
+			setError(api.errorMessage(e));
+		}
+		setPhase("idle");
+		if (open) void reload();
+	};
+	stopRef.current = stop;
+
+	const toggle = async () => {
+		if (phase === "starting") return;
+		setError("");
+		setNote("");
+		if (phase === "recording") return stop();
+		setPhase("starting");
+		try {
+			session.current = await start(boardId, source, ended);
+			setPhase("recording");
+		} catch (e) {
+			setPhase("idle");
+			setError(api.errorMessage(e));
+		}
+	};
+
+	const remove = async (id: string) => {
+		setConfirming("");
+		try {
+			await api.deleteRecording(boardId, id);
+			await reload();
+		} catch (e) {
+			setError(api.errorMessage(e));
+		}
+	};
+
+	const recording = phase === "recording";
+	const saving = phase === "saving";
+	const said = error ? (
+		<span class="share-said rec-note" role="alert">
+			{error}
+		</span>
+	) : (
+		note && (
+			<span class="share-said rec-note" role="status">
+				{note}
+			</span>
+		)
+	);
+	return (
+		<div class="share-wrap recordings-wrap">
+			<button
+				type="button"
+				class={`board-menu${open ? " active" : ""}${recording ? " recording" : ""}${saving ? " saving" : ""}`}
+				aria-label="Nagrania"
+				title={
+					saving
+						? "Zapisuję nagranie…"
+						: recording
+							? "Trwa nagrywanie"
+							: "Nagrania"
+				}
+				aria-expanded={open}
+				onClick={(e) => {
+					// Outside the top bar, which is transformed and would clip or move it.
+					const r = e.currentTarget.getBoundingClientRect();
+					const width = Math.min(360, innerWidth - 16);
+					const left = Math.max(
+						8,
+						Math.min(r.right - width, innerWidth - width - 8),
+					);
+					setAt({ top: r.bottom + 8, left, width });
+					setConfirming("");
+					setOpen(!open);
+				}}
+			>
+				<Icon name={recording ? "record" : "film"} />
+				{recording && <span class="rec-time">{clock(seconds * 1000)}</span>}
+				{saving && <span class="rec-time">Zapisuję…</span>}
+			</button>
+			{!open && said}
+			{open && (
+				<Portal>
+					<div
+						class="recordings-pop"
+						role="dialog"
+						aria-label="Nagrania"
+						style={{
+							top: `${at.top}px`,
+							left: `${at.left}px`,
+							width: `${at.width}px`,
+						}}
+					>
+						{canRecord && (
+							<div class="rec-start">
+								<button
+									type="button"
+									class={`rec-toggle${recording ? " recording" : ""}`}
+									aria-label={
+										saving
+											? "Zapisuję nagranie"
+											: recording
+												? "Zakończ nagrywanie"
+												: "Nagrywaj"
+									}
+									disabled={phase === "starting" || saving}
+									onClick={toggle}
+								>
+									<Icon name="record" />
+									{saving
+										? "Zapisuję…"
+										: recording
+											? `Zakończ nagrywanie · ${clock(seconds * 1000)}`
+											: "Nagrywaj lekcję"}
+								</button>
+								{said}
+							</div>
+						)}
+						{canRecord && inputs.length > 0 && (
+							<label class="rec-mic">
+								<span>Mikrofon</span>
+								<select
+									value={inputs.some((m) => m.id === mic) ? mic : ""}
+									disabled={phase !== "idle"}
+									onChange={(e) => {
+										setMic(e.currentTarget.value);
+										setMicChoice(e.currentTarget.value);
+									}}
+								>
+									<option value="">Domyślny</option>
+									{inputs.map((m) => (
+										<option key={m.id} value={m.id}>
+											{m.label}
+										</option>
+									))}
+								</select>
+							</label>
+						)}
+						{list === null ? (
+							<p class="muted">Wczytywanie…</p>
+						) : list.length === 0 ? (
+							<p class="muted">Brak nagrań</p>
+						) : (
+							<ul>
+								{list.map((r) => (
+									<li key={r.id}>
+										<EditableName
+											class="rec-name"
+											name={r.name}
+											editable={!!canDelete}
+											onSave={async (name) => {
+												await api.renameRecording(boardId, r.id, name);
+												await reload();
+											}}
+										/>
+										<span class="muted rec-meta">
+											{new Date(r.createdAt).toLocaleDateString("pl-PL")}
+											{" · "}
+											{r.finished ? clock(r.durationMs) : "w toku"}
+											{r.finished && ` · ${megabytes(r.bytes)}`}
+											{r.finished && videoNote(r)}
+										</span>
+										<span class="rec-actions">
+											{r.video === "ready" && (
+												<a href={`/b/${boardId}/v/${r.id}`}>Wideo</a>
+											)}
+											{r.finished && (
+												<a href={`/b/${boardId}/r/${r.id}`}>Odtwórz</a>
+											)}
+											{canDelete &&
+												(confirming === r.id ? (
+													<button
+														type="button"
+														class="danger"
+														onClick={() => remove(r.id)}
+													>
+														Na pewno usunąć?
+													</button>
+												) : (
+													<button
+														type="button"
+														class="rec-delete"
+														aria-label="Usuń nagranie"
+														title="Usuń nagranie"
+														onClick={() => setConfirming(r.id)}
+													>
+														<Icon name="trash" />
+													</button>
+												))}
+										</span>
+									</li>
+								))}
+							</ul>
+						)}
+					</div>
+				</Portal>
+			)}
+		</div>
+	);
+}

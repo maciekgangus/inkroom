@@ -2426,7 +2426,10 @@ button.participant {
 	:root .update-banner,
 	:root .properties,
 	:root .text-toolbar,
-	:root .panel-tile {
+	:root .panel-tile,
+	:root .replay-back,
+	:root .replay-name,
+	:root .replay-bar {
 		-webkit-backdrop-filter: none;
 		backdrop-filter: none;
 		background: var(--surface);
@@ -3025,5 +3028,427 @@ button.participant {
 		opacity: 0;
 		translate: 0 6px;
 		scale: 0.98;
+	}
+}
+
+/* Recording a lesson (R-117): the red button with the time, and the list of recordings. */
+.board-menu.recording {
+	width: auto;
+	gap: 6px;
+	padding: 0 12px;
+	display: inline-flex;
+	align-items: center;
+	border-color: var(--danger);
+	color: var(--danger);
+}
+.board-menu.saving {
+	width: auto;
+	gap: 6px;
+	padding: 0 12px;
+	display: inline-flex;
+	align-items: center;
+	color: var(--muted);
+}
+.board-menu.recording svg {
+	fill: currentColor;
+}
+.rec-time {
+	font-size: 13px;
+	font-variant-numeric: tabular-nums;
+}
+.recordings-pop {
+	position: fixed;
+	z-index: 4;
+	box-sizing: border-box;
+	max-height: 60vh;
+	overflow: auto;
+	overscroll-behavior: contain;
+	padding: 8px 12px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--surface);
+	box-shadow: var(--shadow);
+	font-size: 14px;
+}
+.recordings-pop ul {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.recordings-pop li {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 2px 12px;
+	padding: 8px 0;
+	border-bottom: 1px solid var(--border);
+}
+.recordings-pop li:last-child {
+	border-bottom: 0;
+}
+.recordings-pop .muted {
+	font-size: 12px;
+}
+.recordings-pop .rec-start {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 4px 0 8px;
+	border-bottom: 1px solid var(--border);
+}
+.recordings-pop .rec-toggle {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	min-height: 44px;
+	font-size: 15px;
+}
+.recordings-pop .rec-toggle svg {
+	fill: var(--danger);
+}
+.recordings-pop .rec-toggle.recording {
+	border-color: var(--danger);
+	color: var(--danger);
+}
+.recordings-pop .rec-start .rec-note {
+	position: static;
+	width: auto;
+	box-shadow: none;
+	border: 0;
+	padding: 0;
+	background: transparent;
+	font-size: 13px;
+}
+.recordings-pop .rec-mic {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 4px 0 8px;
+	border-bottom: 1px solid var(--border);
+	font-size: 13px;
+	color: var(--muted);
+}
+.recordings-pop .rec-mic select {
+	flex: 1 1 auto;
+	min-width: 0;
+	min-height: 36px;
+	background-color: var(--surface);
+	color: var(--text);
+	font: inherit;
+}
+.recordings-pop .rec-name {
+	flex: 1 1 100%;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.recordings-pop .rec-meta {
+	flex: 1 1 auto;
+}
+.recordings-pop p {
+	margin: 4px 0;
+}
+
+/* The red dot of a lesson being recorded, first in the list of people (R-094). */
+.participants .rec-indicator {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	flex: none;
+}
+.rec-dot {
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	background: var(--danger);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 25%, transparent);
+}
+@media (prefers-reduced-motion: no-preference) {
+	.rec-dot {
+		animation: rec-pulse 1.6s ease-in-out infinite;
+	}
+}
+@keyframes rec-pulse {
+	50% {
+		opacity: 0.45;
+	}
+}
+.recordings-pop .rec-actions {
+	margin-left: auto;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.recordings-pop .rec-delete {
+	width: 32px;
+	height: 32px;
+	min-width: 0;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: var(--muted);
+}
+.recordings-pop .danger {
+	min-height: 0;
+	padding: 4px 8px;
+	font-size: 13px;
+}
+.rec-note {
+	white-space: normal;
+	width: 260px;
+}
+
+/* The player of a recorded lesson (R-114): a title and a way back at the top, the controls below. */
+.replay-top {
+	position: fixed;
+	top: 12px;
+	left: 72px;
+	z-index: 1;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	max-width: calc(100vw - 88px);
+}
+.replay-back {
+	flex: none;
+}
+.replay-back,
+.replay-name {
+	padding: 9px 14px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: color-mix(in srgb, var(--surface) 85%, transparent);
+	-webkit-backdrop-filter: blur(12px);
+	backdrop-filter: blur(12px);
+	box-shadow: var(--shadow);
+	font-size: 14px;
+	text-decoration: none;
+	color: var(--text);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.replay-bar {
+	position: fixed;
+	bottom: 16px;
+	left: 50%;
+	z-index: 1;
+	transform: translateX(-50%);
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	width: min(720px, calc(100vw - 160px));
+	box-sizing: border-box;
+	padding: 8px 14px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: color-mix(in srgb, var(--surface) 90%, transparent);
+	-webkit-backdrop-filter: blur(12px);
+	backdrop-filter: blur(12px);
+	box-shadow: var(--shadow);
+}
+.replay-play {
+	flex: none;
+	width: 40px;
+	height: 40px;
+	padding: 0;
+}
+.replay-time {
+	flex: none;
+	font-size: 13px;
+	font-variant-numeric: tabular-nums;
+	color: var(--muted);
+}
+.replay-seek {
+	flex: 1 1 auto;
+	min-width: 0;
+	height: auto;
+	padding: 0;
+	border: 0;
+	accent-color: var(--accent);
+}
+.replay-rate-wrap {
+	position: relative;
+	flex: none;
+	display: inline-flex;
+}
+/* A chevron drawn with borders, so it follows the theme's colours. */
+.replay-rate-wrap::after {
+	content: "";
+	position: absolute;
+	right: 13px;
+	top: 50%;
+	width: 6px;
+	height: 6px;
+	border-right: 2px solid var(--muted);
+	border-bottom: 2px solid var(--muted);
+	transform: translateY(-70%) rotate(45deg);
+	pointer-events: none;
+}
+.replay-rate {
+	height: 40px;
+	min-width: 72px;
+	padding: 0 32px 0 14px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--surface);
+	color: var(--text);
+	font: inherit;
+	font-size: 14px;
+	appearance: none;
+	-webkit-appearance: none;
+	cursor: pointer;
+}
+.replay-rate:hover {
+	background: var(--surface-hover);
+}
+.replay-rate:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+.replay-note {
+	position: fixed;
+	bottom: 80px;
+	left: 50%;
+	transform: translateX(-50%);
+	z-index: 1;
+	padding: 8px 12px;
+	border: 1px solid var(--danger);
+	border-radius: var(--radius-lg);
+	background: var(--surface);
+	font-size: 13px;
+}
+/* On a narrow screen the corner buttons (a note, the theme) take the bottom left: the bar goes above them. */
+@media (max-width: 600px) {
+	.replay-bar {
+		bottom: 84px;
+		width: min(720px, calc(100vw - 24px));
+	}
+	.replay-note {
+		bottom: 148px;
+	}
+}
+
+/* The name of a recording, with a pen for the owner (R-113). */
+.name-view {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+.name-text {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.name-edit {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	min-width: 0;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: var(--muted);
+}
+.name-edit svg {
+	width: 15px;
+	height: 15px;
+}
+.name-field {
+	height: 34px;
+	min-width: 0;
+	width: 100%;
+	box-sizing: border-box;
+	padding: 0 10px;
+	font-size: 14px;
+}
+.name-error {
+	font-size: 12px;
+	color: var(--danger);
+	white-space: nowrap;
+}
+.replay-top .name-field {
+	width: 260px;
+	max-width: calc(100vw - 200px);
+}
+/* The name in the player's top bar is a chip like the "back" link, as high, with the pen inside it. */
+.replay-top .replay-back,
+.replay-top .replay-name {
+	box-sizing: border-box;
+	min-height: 38px;
+	display: inline-flex;
+	align-items: center;
+}
+.replay-top .replay-name {
+	padding-top: 0;
+	padding-bottom: 0;
+}
+.replay-top .replay-name.name-view:has(.name-edit) {
+	padding-right: 6px;
+}
+.recordings-pop .rec-name {
+	flex: 1 1 100%;
+}
+
+/* The video rendered from a recording (R-115): an ordinary player on a plain page. */
+.video-page {
+	position: fixed;
+	inset: 0;
+	background: var(--bg);
+}
+.video-page .replay-top {
+	right: 12px;
+	flex-wrap: wrap;
+}
+/* The corner buttons (a note, the theme) take the left edge, so the stage starts right of them. */
+.video-stage {
+	position: absolute;
+	inset: 64px 12px 12px 72px;
+	display: grid;
+	grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+	place-items: center;
+}
+.video-player {
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+	border-radius: var(--radius-lg);
+	background: #000;
+	box-shadow: var(--shadow);
+}
+.video-note {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 10px;
+	padding: 24px 28px;
+	max-width: 360px;
+	text-align: center;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--surface);
+	box-shadow: var(--shadow);
+}
+.video-note progress {
+	width: 100%;
+	height: 8px;
+	accent-color: var(--accent);
+}
+@media (max-width: 640px) {
+	.video-page .replay-top {
+		left: 12px;
+		max-width: calc(100vw - 24px);
+	}
+	.video-stage {
+		inset: 124px 8px 84px; /* the chips of the top bar take two rows */
 	}
 }

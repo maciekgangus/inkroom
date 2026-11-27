@@ -41,6 +41,17 @@ export function Participants({
 	const rest = ordered.slice(MAX_SHOWN);
 	return (
 		<ul class="participants" aria-label="Uczestnicy">
+			{peers.some((p) => p.recording) && (
+				// Everyone sees that the lesson is recorded (R-094): consent is the owner's to get.
+				<li
+					class="rec-indicator"
+					role="status"
+					aria-label="Trwa nagrywanie"
+					title="Trwa nagrywanie"
+				>
+					<span class="rec-dot" aria-hidden="true" />
+				</li>
+			)}
 			{shown.map((p) => {
 				const label = p.id === selfId ? `${p.name} (Ty)` : p.name;
 				const color = colors?.get(p.id) ?? cursorColor(p.id);

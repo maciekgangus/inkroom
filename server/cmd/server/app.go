@@ -10,6 +10,7 @@ import (
 	"github.com/maciekgangus/inkroom/server/internal/auth"
 	"github.com/maciekgangus/inkroom/server/internal/cfaccess"
 	"github.com/maciekgangus/inkroom/server/internal/logx"
+	"github.com/maciekgangus/inkroom/server/internal/recstore"
 	"github.com/maciekgangus/inkroom/server/internal/room"
 	"github.com/maciekgangus/inkroom/server/internal/store"
 )
@@ -40,6 +41,17 @@ type app struct {
 	clientLimit, clientIPLimit *rateLimiter
 	// imageIPLimit keeps one address from flooding the image upload (security audit 2026-11).
 	imageIPLimit *rateLimiter
+	// The stores of lesson recordings by name, the one that takes new recordings, the disk one in
+	// particular, and the origin of the bucket if there is one (the page's CSP must allow it).
+	recBackends  map[string]recstore.Backend
+	recNew       string
+	recDisk      *recstore.Disk
+	bucketOrigin string
+	// renderToken is the secret of the renderer, which renders videos of recordings (R-115,
+	// ADR 0029); "" when there is none, and then no video is queued.
+	renderToken string
+	// minRecording is the shortest recording worth keeping; a shorter one is dropped when it ends.
+	minRecording time.Duration
 }
 
 // newApp wires the services together. Call Close before closing the store.
@@ -50,6 +62,7 @@ func newApp(staticDir string, st *store.Store) *app {
 		hub:           room.NewHub(st, flushEvery),
 		staticDir:     staticDir,
 		version:       "dev",
+		minRecording:  minRecordingLength,
 		adminSecret:   newAdminSecret(),
 		clientLog:     logx.For("client"),
 		clientLimit:   newRateLimiter(time.Now, clientErrorsPerHour, time.Hour, clientLimiterKeys),
@@ -115,6 +128,19 @@ func (a *app) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/boards/{id}", a.deleteBoard)
 	mux.HandleFunc("POST /api/boards/{id}/images", a.uploadImage)
 	mux.HandleFunc("GET /api/boards/{id}/images/{image}", a.getImage)
+	mux.HandleFunc("POST /api/boards/{id}/recordings", a.startRecording)
+	mux.HandleFunc("GET /api/boards/{id}/recordings", a.listRecordings)
+	mux.HandleFunc("POST /api/boards/{id}/recordings/{rec}/parts/{n}", a.recordingPart)
+	mux.HandleFunc("PUT /api/boards/{id}/recordings/{rec}/parts/{n}", a.putRecordingPart)
+	mux.HandleFunc("POST /api/boards/{id}/recordings/{rec}/events/{n}", a.recordingEvents)
+	mux.HandleFunc("PUT /api/boards/{id}/recordings/{rec}/events/{n}", a.putRecordingEvents)
+	mux.HandleFunc("GET /api/boards/{id}/recordings/{rec}/play", a.playRecording)
+	mux.HandleFunc("GET /api/boards/{id}/recordings/{rec}/files/{name...}", a.recordingFile)
+	mux.HandleFunc("POST /api/boards/{id}/recordings/{rec}/finish", a.finishRecording)
+	mux.HandleFunc("GET /api/boards/{id}/recordings/{rec}", a.downloadRecording)
+	mux.HandleFunc("GET /api/boards/{id}/recordings/{rec}/video", a.downloadVideo)
+	mux.HandleFunc("PATCH /api/boards/{id}/recordings/{rec}", a.renameRecording)
+	mux.HandleFunc("DELETE /api/boards/{id}/recordings/{rec}", a.deleteRecording)
 	mux.HandleFunc("GET /api/calendar", a.getCalendar)
 	mux.HandleFunc("POST /api/lessons", a.createLesson)
 	mux.HandleFunc("PATCH /api/lessons/{id}", a.updateLesson)
@@ -157,9 +183,11 @@ func (a *app) Handler() http.Handler {
 	mux.HandleFunc("GET /terms", a.legalPage("terms"))
 	mux.HandleFunc("GET /register", index)
 	mux.HandleFunc("GET /b/{id}", index)
+	mux.HandleFunc("GET /b/{id}/r/{rec}", index) // the player of a recording (R-114)
+	mux.HandleFunc("GET /b/{id}/v/{rec}", index) // the player of its video (R-115)
 	mux.HandleFunc("GET /calendar", index)
 	mux.Handle("/", http.FileServer(http.Dir(a.staticDir)))
-	return secureHeaders(logx.Middleware(mux, logx.Options{}))
+	return secureHeaders(pageCSP(a.bucketOrigin), logx.Middleware(mux, logx.Options{}))
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

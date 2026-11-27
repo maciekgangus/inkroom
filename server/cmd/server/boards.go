@@ -190,10 +190,12 @@ func (a *app) deleteBoard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.hub.Delete(b.ID) // disconnect everyone and drop unsaved changes first
+	recs := a.recordingsOnBoards(b.ID)
 	if err := a.st.DeleteBoard(b.ID); err != nil && !errors.Is(err, store.ErrNotFound) {
 		writeError(w, http.StatusInternalServerError, "Błąd serwera")
 		return
 	}
+	a.removeRecordings(recs)
 	w.WriteHeader(http.StatusNoContent)
 }
 

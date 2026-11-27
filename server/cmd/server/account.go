@@ -66,13 +66,16 @@ func (a *app) deleteAccount(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Błąd serwera")
 		return
 	}
+	var recs []store.Recording
 	for _, b := range boards {
 		a.hub.Delete(b.ID) // disconnect everyone and drop unsaved changes first
+		recs = append(recs, a.recordingsOnBoards(b.ID)...)
 	}
 	if err := a.st.DeleteUser(u.ID); err != nil {
 		writeError(w, http.StatusInternalServerError, "Błąd serwera")
 		return
 	}
+	a.removeRecordings(recs)
 	a.auth.ClearCookie(w, r)
 	w.WriteHeader(http.StatusNoContent)
 }

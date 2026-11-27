@@ -232,6 +232,71 @@ describe("SyncClient", () => {
 			]);
 		});
 
+		test("peers carry who records the lesson (R-094)", () => {
+			const onPeers = vi.fn();
+			const c = new SyncClient(board, {
+				createSocket: () => {
+					const s = new FakeSocket();
+					sockets.push(s);
+					return s;
+				},
+				onUpdate,
+				onPeers,
+				self: { authorId: "me", name: "Ola" },
+			});
+			c.connect();
+			connectAndJoin();
+			sock().receive({
+				t: "peers",
+				peers: [
+					{ id: "a", name: "A", recording: true },
+					{ id: "b", name: "B", recording: "yes" },
+				],
+			});
+			expect(onPeers).toHaveBeenLastCalledWith([
+				{ id: "a", name: "A", recording: true },
+				{ id: "b", name: "B" },
+			]);
+		});
+
+		test("a tap sees what comes in and what goes out, and only while it is set (R-113)", () => {
+			connectAndJoin();
+			const seen: [string, boolean][] = [];
+			client.setTap((m, outgoing) => seen.push([m.t, outgoing]));
+			sock().receive({ t: "remove", id: "x" });
+			client.liveUpdate({
+				id: "s1",
+				authorId: "me",
+				color: "#111",
+				size: 4,
+				z: 1,
+				points: [[1, 1, 1]],
+			});
+			flush();
+			expect(seen).toEqual([
+				["remove", false],
+				["live", true],
+			]);
+			client.setTap(null);
+			sock().receive({ t: "remove", id: "y" });
+			expect(seen).toHaveLength(2);
+		});
+
+		test("recording is announced and stopped, and announced again after a reconnect", () => {
+			connectAndJoin();
+			client.setRecording(true);
+			expect(sentOf("recording")).toEqual([{ t: "recording", on: true }]);
+			sock().drop();
+			vi.advanceTimersByTime(600);
+			connectAndJoin();
+			expect(sentOf("recording")).toEqual([{ t: "recording", on: true }]);
+			client.setRecording(false);
+			sock().drop();
+			vi.advanceTimersByTime(600);
+			connectAndJoin();
+			expect(sentOf("recording")).toEqual([]); // a stopped recording is not announced again
+		});
+
 		test("a refusal or an end calls back and is not asked for again after a reconnect", () => {
 			const onRefused = vi.fn();
 			const onEnded = vi.fn();

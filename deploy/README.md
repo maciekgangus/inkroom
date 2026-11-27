@@ -361,6 +361,51 @@ Kolejność ma znaczenie (stos najpierw, żeby agent miał dokąd pisać):
 - Gniazdo Dockera (`/var/run/docker.sock`) jest montowane do agenta, żeby czytać logi kontenerów: kto przejmie ten kontener, ma uprawnienia roota na maszynie aplikacji. Obraz jest przypięty do wersji i nie ma opublikowanego portu (ADR 0023). Stos nie ma gniazda Dockera.
 - Porty 3100 i 9090 stosu nie mają logowania: są otwarte tylko na adresie LAN. Nie przekierowuj ich z routera.
 
+## 12. Nagrania lekcji (R-113 do R-116, ADR 0030 i 0028)
+
+Prowadzący (twórca tablicy) nagrywa **dźwięk z mikrofonu i oś zdarzeń tablicy** (pociągnięcia, widok,
+kursory), nie wideo. Przeglądarka wysyła to **prosto do bucketu** podpisanymi adresami, więc nie przechodzi
+przez serwer ani tunel; nagranie odtwarza się w aplikacji (przycisk „Odtwórz” na liście „Nagrania”).
+Godzina nagrania to około 30 MB dźwięku i kilka MB zdarzeń. Bez ustawień bucketu aplikacja zapisuje nagrania
+na dysku serwera (`/data/recordings`): działa tak samo, ale bez limitu miejsca i bez kopii, więc nadaje się
+do prób. Mikrofon wymaga strony po https (albo `localhost`).
+
+**Jednorazowo w Cloudflare** (drugi bucket, nie ten z kopiami bazy):
+1. R2, **Create bucket**, np. `inkroom-recordings`.
+2. R2, **Manage API tokens**: uprawnienie **Object Read & Write**, zakres **tylko ten bucket**.
+3. W buckecie, **Settings**, **CORS Policy** (przeglądarka wysyła porcje spod adresu aplikacji):
+   ```json
+   [{"AllowedOrigins": ["https://inkroom.lesniakmaciek.dev"], "AllowedMethods": ["GET", "PUT"],
+     "AllowedHeaders": ["*"], "MaxAgeSeconds": 3600}]
+   ```
+4. W buckecie, **Settings**, **Object lifecycle rules**: reguła „Abort incomplete multipart uploads” po kilku
+   dniach (porzucone przesyłanie bez końca zajmuje miejsce, dopóki ktoś go nie zakończy; serwer sam kończy
+   te, które ucichły na 15 minut, ale reguła łapie resztę).
+5. W `.env`: `RECORDINGS_S3_ENDPOINT` (`<ACCOUNT_ID>.r2.cloudflarestorage.com`), `RECORDINGS_S3_BUCKET`,
+   `RECORDINGS_S3_ACCESS_KEY`, `RECORDINGS_S3_SECRET_KEY`. Wszystkie cztery albo żadne (przy części aplikacja
+   odmawia startu). `docker compose up -d`.
+
+**Sprawdzenie:** w logu aplikacji nie ma ostrzeżenia „RECORDINGS_S3_* is not set”; na tablicy przycisk
+„Nagrywaj”, kilkanaście sekund mówienia i rysowania, „Zakończ nagrywanie”, na liście „Nagrania” „Odtwórz”
+(dźwięk idzie z bucketu, więc CORS i adres w CSP muszą się zgadzać). Nagrania zrobione wcześniej na dysku zostają dostępne (nagranie pamięta, gdzie leży).
+Zamiana dostawcy (np. Google Cloud Storage przez interfejs S3) to zmiana tych czterech zmiennych.
+
+**Wideo z nagrań (R-115, ADR 0029).** Osobny kontener `renderer` (Chromium bez interfejsu i ffmpeg) bierze z
+kolejki aplikacji każde zakończone nagranie, rysuje je i koduje film MP4 (720p, 30 klatek na sekundę), po czym
+wysyła go do tego samego bucketu. Kontener działa jednym zleceniem naraz, z niskim priorytetem i limitami
+2 rdzeni oraz 3 GB pamięci (gęsta godzina lekcji potrzebuje 1,5 do 2 rdzeni i do około 3 GB, a renderuje się
+w około 40 do 60 minut; typowa lekcja szybciej). Włączanie:
+1. W `.env`: `RENDER_TOKEN=$(openssl rand -hex 32)` i `COMPOSE_PROFILES=render`.
+2. `docker compose pull && docker compose up -d`. W logu aplikacji pojawia się „serving the renderer's job
+   port”, a nagrania zrobione wcześniej wchodzą do kolejki.
+3. Port zleceń (`8081`) nie jest opublikowany i przyjmuje tylko żądania z tokenem. Renderer czyta stronę
+   aplikacji pod `http://app:8080` i sam dopisuje nagłówek CORS do tego, co czyta z bucketu, więc CORS
+   z kroku 3 powyżej go nie dotyczy.
+Bez tych dwóch zmiennych nic się nie zmienia: aplikacja nie kolejkuje wideo, a kontener nie startuje. Obraz
+`inkroom-renderer` budują te same tagi co obraz aplikacji (`.github/workflows/image.yml`), bez skanu Trivy
+(obraz bazowy Playwright niesie przeglądarkę). Wideo idzie do bucketu bez limitu rozmiaru po stronie
+aplikacji (około 300 MB na gęstą godzinę); przy limicie miejsca w R2 pilnuj reguły usuwania.
+
 ## Gdy coś nie działa
 
 | Objaw | Co sprawdzić |

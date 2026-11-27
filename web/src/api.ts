@@ -366,3 +366,62 @@ export const addUnavailable = (u: {
 
 export const deleteUnavailable = (id: number) =>
 	request<void>("DELETE", `/api/unavailability/${id}`);
+
+/** One recording of a lesson on a board (R-117). */
+export interface Recording {
+	id: string;
+	name: string;
+	createdAt: string;
+	/** 0 until the recording is finished. */
+	durationMs: number;
+	bytes: number;
+	finished: boolean;
+	/** The video rendered on the server (R-115): "", "queued", "rendering", "ready" or "failed". */
+	video: VideoState;
+	/** A percent while it is rendering. */
+	videoProgress: number;
+	videoBytes: number;
+}
+
+export type VideoState = "" | "queued" | "rendering" | "ready" | "failed";
+
+export const startRecording = (boardId: string, name: string, mime: string) =>
+	request<{ id: string; partSize: number }>(
+		"POST",
+		`/api/boards/${boardId}/recordings`,
+		{ name, mime },
+	);
+
+/** Where to send part n of a recording: an address of the bucket, or of this server. */
+export const recordingPart = (boardId: string, id: string, n: number) =>
+	request<{ url: string; method: string }>(
+		"POST",
+		`/api/boards/${boardId}/recordings/${id}/parts/${n}`,
+	);
+
+/** Where to send segment n of the event log of a recording; 0 is the starting state (R-113). */
+export const recordingEvents = (boardId: string, id: string, n: number) =>
+	request<{ url: string; method: string }>(
+		"POST",
+		`/api/boards/${boardId}/recordings/${id}/events/${n}`,
+	);
+
+export const finishRecording = (
+	boardId: string,
+	id: string,
+	durationMs: number,
+) =>
+	request<{ discarded?: boolean } | undefined>(
+		"POST",
+		`/api/boards/${boardId}/recordings/${id}/finish`,
+		{ durationMs },
+	);
+
+export const renameRecording = (boardId: string, id: string, name: string) =>
+	request<void>("PATCH", `/api/boards/${boardId}/recordings/${id}`, { name });
+
+export const deleteRecording = (boardId: string, id: string) =>
+	request<void>("DELETE", `/api/boards/${boardId}/recordings/${id}`);
+
+export const listRecordings = (boardId: string) =>
+	request<Recording[]>("GET", `/api/boards/${boardId}/recordings`);

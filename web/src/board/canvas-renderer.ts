@@ -511,6 +511,14 @@ function drawElement(
 		} else if (path && isFilled(s)) {
 			ctx.fillStyle = color;
 			ctx.fill(path);
+			if (s.size < minWidth) {
+				// A pen thinner than the thinnest line asked for: its outline gets that width, so
+				// the line is no thinner (a hairline is lost in a compressed video).
+				ctx.strokeStyle = color;
+				ctx.lineJoin = "round";
+				ctx.lineWidth = minWidth;
+				ctx.stroke(path);
+			}
 		} else if (path) {
 			const extra = extraPaths(s);
 			if (extra?.plane && extra.paper) {
