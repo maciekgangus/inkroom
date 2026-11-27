@@ -500,6 +500,58 @@ describe("SyncClient", () => {
 		);
 	});
 
+	describe("a full board", () => {
+		let onFull: () => void;
+		let c: SyncClient;
+		beforeEach(() => {
+			onFull = vi.fn();
+			board = new Board();
+			c = new SyncClient(board, {
+				createSocket: () => {
+					const s = new FakeSocket();
+					sockets.push(s);
+					return s;
+				},
+				onUpdate,
+				onFull,
+				schedule: () => {},
+			});
+			c.connect();
+			connectAndJoin([stroke("1")]);
+		});
+
+		test("takes back a refused element, reports it and never sends it again", () => {
+			board.addStroke(stroke("2"));
+			sock().receive({ t: "full", id: "2" });
+			expect(board.strokes.map((s) => s.id)).toEqual(["1"]);
+			expect(onFull).toHaveBeenCalledTimes(1);
+			sock().drop();
+			vi.advanceTimersByTime(10_000);
+			sock().open();
+			sock().receive({ t: "snapshot", strokes: [stroke("1")] });
+			expect(sock().sent).toEqual([]); // nothing re-sent, so no loop
+		});
+
+		test("puts back the element as the board has it when an edit is refused", () => {
+			const grown = {
+				...stroke("1"),
+				points: [
+					[0, 0, 0.5],
+					[9, 9, 0.5],
+				],
+			};
+			board.updateElement("me", grown as Stroke);
+			sock().receive({ t: "full", id: "1", stroke: stroke("1") });
+			expect(board.get("1")?.points).toEqual([[0, 0, 0.5]]);
+			expect(onFull).toHaveBeenCalledTimes(1);
+			sock().drop();
+			vi.advanceTimersByTime(10_000);
+			sock().open();
+			sock().receive({ t: "snapshot", strokes: [stroke("1")] });
+			expect(sock().sent).toEqual([]);
+		});
+	});
+
 	test("operations made offline are sent after the next snapshot", () => {
 		connectAndJoin();
 		sock().drop();

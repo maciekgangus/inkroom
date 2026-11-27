@@ -59,6 +59,8 @@ interface Options {
 	onLaser?: (id: string, points: [number, number][], start: boolean) => void;
 	/** Called when only other people's unfinished strokes changed; without it `onUpdate` is called. */
 	onLive?: () => void;
+	/** Called when the server refused one of our changes because the board is full. */
+	onFull?: () => void;
 	/** Runs `fn` on the next frame; used to send live strokes at most once per frame. */
 	schedule?: (fn: () => void) => void;
 }
@@ -571,6 +573,18 @@ export class SyncClient {
 				if (!m.id) return;
 				this.board.applyRemote({ t: "remove", id: m.id });
 				this.acknowledge("remove", m.id);
+				break;
+			case "full":
+				// The board has no room for our change: it is taken back and never sent again
+				// (re-sending it after a reconnect would only be refused again).
+				if (!m.id) return;
+				this.pending.delete(m.id);
+				this.board.applyRemote(
+					m.stroke
+						? { t: "update", stroke: m.stroke }
+						: { t: "remove", id: m.id },
+				);
+				this.opts.onFull?.();
 				break;
 			case "live":
 				this.addLive(m);
