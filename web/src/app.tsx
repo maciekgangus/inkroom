@@ -226,6 +226,9 @@ function BoardPage({
 			onOwnershipLost={() =>
 				setInfo((cur) => (cur ? { ...cur, owner: false } : cur))
 			}
+			onOwnerChange={(owner) =>
+				setInfo((cur) => (cur ? { ...cur, owner } : cur))
+			}
 			onCopy={info.owner ? () => api.copyBoard(id) : undefined}
 			onSetBackground={info.owner ? (b) => api.setBackground(id, b) : undefined}
 		/>

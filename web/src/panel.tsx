@@ -992,7 +992,8 @@ export function Panel({ account, navigate, onLogout, onAccount }: Props) {
 			showToast({
 				message: `Usunięto „${contact.username}” ze znajomych`,
 				onUndo: async () => {
-					const restored = await api.addContact(contact.id);
+					// By id only people still connected qualify; the username always works.
+					const restored = await api.addContact(contact.username);
 					setContacts(restored.contacts);
 				},
 			});

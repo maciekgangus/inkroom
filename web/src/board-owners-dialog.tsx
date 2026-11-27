@@ -277,7 +277,8 @@ export function BoardOwnersDialog({
 				<span class="org-label">Współwłaściciele</span>
 				<p class="muted org-hint">
 					Każdy właściciel ma pełne uprawnienia do tablicy (edycja, tło, prawa
-					rysowania, kopiowanie, usuwanie).
+					rysowania, kopiowanie, usuwanie). Możesz dodać znajomego albo kogoś,
+					kto był na Twojej tablicy.
 				</p>
 
 				{loadError ? (
@@ -453,8 +454,9 @@ export function BoardOwnersDialog({
 			<div class="org-section">
 				<span class="org-label">Przekaż tablicę</span>
 				<p class="muted org-hint">
-					Przekazuje pełną własność jednej osobie. Tablica przejdzie u Ciebie do
-					„Tablice, do których mam dostęp”.
+					Przekazuje pełną własność jednej osobie: znajomemu albo komuś, kto był
+					na Twojej tablicy. Tablica przejdzie u Ciebie do „Tablice, do których
+					mam dostęp”.
 				</p>
 
 				{confirmTransfer ? (
@@ -635,8 +637,9 @@ export function BulkTransferDialog({
 					{rest > 0 ? ` (+${rest})` : ""}
 				</p>
 				<p class="muted org-hint">
-					Wybrane tablice trafią do „Moje tablice” odbiorcy, a u Ciebie przejdą
-					do „Tablice, do których mam dostęp”.
+					Wybrane tablice trafią do „Moje tablice” odbiorcy (znajomego albo
+					kogoś, kto był na Twojej tablicy), a u Ciebie przejdą do „Tablice, do
+					których mam dostęp”.
 				</p>
 
 				{confirm ? (

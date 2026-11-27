@@ -1444,6 +1444,25 @@ describe("App", () => {
 				expect(pick("grid")).toBeNull();
 			});
 
+			test("ownership given or taken live updates the owner tools without a reload (R-122)", async () => {
+				sessionStorage.setItem("inkroom.authorId", "me");
+				const { socket } = await open(false);
+				const peers = (owner: boolean) =>
+					act(async () => {
+						socket.onmessage?.({
+							data: JSON.stringify({
+								t: "peers",
+								peers: [{ id: "me", name: "ola.k", userId: 1, owner }],
+							}),
+						});
+					});
+				expect(pick("grid")).toBeNull();
+				await peers(true);
+				expect(pick("grid")).not.toBeNull();
+				await peers(false);
+				expect(pick("grid")).toBeNull();
+			});
+
 			test("the owner picks a background and it is saved", async () => {
 				const { api } = await open(true);
 				await act(async () => {
@@ -1463,6 +1482,9 @@ describe("App", () => {
 				"GET /api/contacts": { body: { contacts: [] } },
 				[`GET /api/boards/${ID}`]: {
 					body: { id: ID, name: "Matma", owner: true },
+				},
+				[`POST /api/boards/${ID}/owners`]: {
+					body: { added: { id: 7, username: "kasia.w" }, owners: [] },
 				},
 				"POST /api/contacts": {
 					status: 201,
@@ -1528,6 +1550,21 @@ describe("App", () => {
 					"kasia.w",
 				),
 			);
+
+			// The co-owner is added by account id, never by the name the peer shows.
+			await act(async () => kasiaChip.click());
+			const addOwnerBtn = [
+				...root.querySelectorAll('.person-popover button[role="menuitem"]'),
+			].find((b) =>
+				b.textContent?.includes("Dodaj jako współwłaściciela"),
+			) as HTMLButtonElement;
+			await act(async () => addOwnerBtn.click());
+			await vi.waitFor(() =>
+				expect(api.called(`POST /api/boards/${ID}/owners`)).toHaveLength(1),
+			);
+			expect(api.called(`POST /api/boards/${ID}/owners`)[0].body).toEqual({
+				userId: 7,
+			});
 
 			// Clicking a guest's avatar explains they don't have an Inkroom account.
 			const guestChip = root.querySelector(

@@ -104,6 +104,8 @@ interface Props {
 	owner?: boolean;
 	/** Called when the current owner transfers or leaves ownership from inside the board. */
 	onOwnershipLost?: () => void;
+	/** Called when our own ownership changes live, as our peers entry says (R-122). */
+	onOwnerChange?: (owner: boolean) => void;
 	/** Makes a copy of the board and returns it; given only to the board's owner (R-020). */
 	onCopy?: () => Promise<{ id: string; name: string }>;
 	/** Saves a new shared background; given only to the board's owner (R-027). */
@@ -136,6 +138,7 @@ export function BoardView({
 	connect,
 	owner,
 	onOwnershipLost,
+	onOwnerChange,
 	onCopy,
 	onSetBackground,
 }: Props) {
@@ -313,6 +316,17 @@ export function BoardView({
 		[authorId, peers],
 	);
 	const readOnly = peers.some((p) => p.id === authorId && p.muted);
+	// Being made a co-owner or losing ownership while the board is open shows in our own peers
+	// entry; the page acts only when that entry changes, so a stale entry cannot undo a newer
+	// answer from the server (R-122).
+	const self = peers.find((p) => p.id === authorId);
+	const liveOwner = self ? !!self.owner : undefined;
+	const lastLiveOwner = useRef<boolean | undefined>(undefined);
+	useEffect(() => {
+		if (liveOwner === undefined || liveOwner === lastLiveOwner.current) return;
+		lastLiveOwner.current = liveOwner;
+		if (liveOwner !== !!owner) onOwnerChange?.(liveOwner);
+	}, [liveOwner, owner, onOwnerChange]);
 	/** Smooth zoom: eases the view towards a target scale around a screen point (set up below). */
 	const zoomAnim = useRef<{
 		to: (scale: number, sx: number, sy: number) => void;
@@ -1553,6 +1567,7 @@ export function BoardView({
 						}
 					}
 					if (owner && livePeer.userId && !livePeer.owner && !isSelfAccount) {
+						const targetId = livePeer.userId;
 						const targetName = livePeer.name;
 						actions.push({
 							label: "Dodaj jako współwłaściciela",
@@ -1560,7 +1575,8 @@ export function BoardView({
 							sepBefore: !canFriend,
 							onSelect: async () => {
 								try {
-									await api.addBoardOwner(boardId, targetName);
+									// By account id, never by the name the peer shows.
+									await api.addBoardOwner(boardId, targetId);
 									loadContacts();
 									showBoardNotice(
 										`„${targetName}” jest teraz współwłaścicielem tej tablicy`,
