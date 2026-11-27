@@ -6,7 +6,8 @@ import (
 	"time"
 )
 
-// ErrConflict is returned when a lesson or an unavailable period would overlap another one.
+// ErrConflict is returned when a lesson or an unavailable period would overlap another one,
+// and when a board already has an AI analysis running (R-121).
 var ErrConflict = errors.New("time conflict")
 
 // Lesson statuses.
