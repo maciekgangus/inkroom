@@ -53,7 +53,7 @@ type app struct {
 	renderToken string
 	// minRecording is the shortest recording worth keeping; a shorter one is dropped when it ends.
 	minRecording time.Duration
-	// ai runs the AI analysis of boards through segmentsvc (R-121, ADR 0034).
+	// ai runs the AI analysis of boards through segmentsvc (R-124, ADR 0034).
 	ai *ai.Service
 }
 

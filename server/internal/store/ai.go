@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// Status of an AI analysis job (R-121, ADR 0034).
+// Status of an AI analysis job (R-124, ADR 0034).
 const (
 	AIRunning = "running"
 	AIDone    = "done"

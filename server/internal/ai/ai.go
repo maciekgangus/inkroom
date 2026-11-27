@@ -1,4 +1,4 @@
-// Package ai runs the AI analysis of a saved board (R-121, ADR 0034): it sends the board's
+// Package ai runs the AI analysis of a saved board (R-124, ADR 0034): it sends the board's
 // strokes as a manifest to the segmentation service (ai/segmentsvc), which splits the board into
 // segments and recognizes each with Uni-MuMER, and keeps the result in SQLite.
 package ai
