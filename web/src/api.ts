@@ -255,11 +255,14 @@ export const removeContact = (userId: number) =>
 export const listBoardOwners = (id: string) =>
 	request<{ owners: BoardOwner[] }>("GET", `/api/boards/${id}/owners`);
 
-export const addBoardOwner = (id: string, login: string) =>
+/** Adds a co-owner by login, or by account id (the person card: the account the server vouches for). */
+export const addBoardOwner = (id: string, loginOrUserId: string | number) =>
 	request<{ added: BoardOwner; owners: BoardOwner[] }>(
 		"POST",
 		`/api/boards/${id}/owners`,
-		{ login },
+		typeof loginOrUserId === "number"
+			? { userId: loginOrUserId }
+			: { login: loginOrUserId },
 	);
 
 export const removeBoardOwner = (id: string, userId: number) =>

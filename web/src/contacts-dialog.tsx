@@ -114,7 +114,7 @@ export function ContactsDialog({
 			onContactsChange(res.contacts);
 			onNotify(`Usunięto „${c.username}” ze znajomych`, () => {
 				void api
-					.addContact(c.id)
+					.addContact(c.username) // by id only people still connected qualify
 					.then((restored) => onContactsChange(restored.contacts))
 					.catch(() => {});
 			});

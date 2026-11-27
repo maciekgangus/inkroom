@@ -66,7 +66,15 @@ func (a *app) addContact(w http.ResponseWriter, r *http.Request) {
 	var target store.User
 	var err error
 	if body.UserID > 0 {
+		// By id only people the caller already knows, or every account's name would be a loop away
+		// (R-053, R-123); an unrelated id gets the same answer as a missing one.
 		target, err = a.st.UserByID(body.UserID)
+		if err == nil {
+			var ok bool
+			if ok, err = a.connectedTo(u.ID, target.ID); err == nil && !ok {
+				err = store.ErrNotFound
+			}
+		}
 	} else {
 		if login == "" {
 			writeError(w, http.StatusBadRequest, "Podaj nazwę użytkownika lub adres e-mail")
@@ -135,4 +143,22 @@ func (a *app) removeContact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"contacts": contactsToJSON(list)})
+}
+
+// connectedTo reports whether target is someone caller already knows: a saved contact, a
+// collaborator from ListContactSuggestions, or a person on the same live board (R-122, R-123).
+func (a *app) connectedTo(callerID, targetID int64) (bool, error) {
+	if a.hub.SharesRoom(callerID, targetID) {
+		return true, nil
+	}
+	list, err := a.st.ListContactSuggestions(callerID)
+	if err != nil {
+		return false, err
+	}
+	for _, c := range list {
+		if c.UserID == targetID {
+			return true, nil
+		}
+	}
+	return false, nil
 }
