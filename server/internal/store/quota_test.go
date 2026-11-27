@@ -76,3 +76,49 @@ func TestDeleteOtherSessionsKeepsOne(t *testing.T) {
 		}
 	}
 }
+
+func TestApplyCountsOnlyWhatABatchAdds(t *testing.T) {
+	st := openTest(t)
+	old := MaxBoardBytes
+	MaxBoardBytes = 100
+	defer func() { MaxBoardBytes = old }()
+
+	u, err := st.CreateUser("r@example.com", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := st.CreateBoard("b1", u.ID, "R")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Apply(b.ID, []Op{{Add: true, ID: "s1", Data: make([]byte, 60)}}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	// Replacing 60 bytes with 70 grows the board by 10, not 70: 70 <= 100.
+	if err := st.Apply(b.ID, []Op{{Replace: true, ID: "s1", Data: make([]byte, 70)}}, time.Now()); err != nil {
+		t.Fatalf("replace near the quota: %v", err)
+	}
+	// Adding an element that is already there changes nothing.
+	if err := st.Apply(b.ID, []Op{{Add: true, ID: "s1", Data: make([]byte, 70)}}, time.Now()); err != nil {
+		t.Fatalf("repeated add: %v", err)
+	}
+	// A batch that frees as much as it adds fits.
+	ops := []Op{{ID: "s1"}, {Add: true, ID: "s2", Data: make([]byte, 90)}}
+	if err := st.Apply(b.ID, ops, time.Now()); err != nil {
+		t.Fatalf("remove and add in one batch: %v", err)
+	}
+	// Growing past the quota is still refused, and nothing of the batch is kept.
+	if err := st.Apply(b.ID, []Op{{Replace: true, ID: "s2", Data: make([]byte, 101)}}, time.Now()); !errors.Is(err, ErrQuota) {
+		t.Fatalf("replace past the quota: got %v", err)
+	}
+	if n, _ := st.boardBytes(st.db, b.ID); n != 90 {
+		t.Fatalf("board bytes = %d, want 90", n)
+	}
+	// An image counts too: the room reads it on joining.
+	if err := st.SaveImage("i1", b.ID, "image/png", make([]byte, 5)); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := st.ImageBytes(b.ID); err != nil || n != 5 {
+		t.Fatalf("image bytes = %d, %v", n, err)
+	}
+}
