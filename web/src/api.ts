@@ -14,19 +14,54 @@ class ApiError extends Error {
 export const errorMessage = (e: unknown) =>
 	e instanceof Error ? e.message : "Błąd";
 
+/** Allowed folder and marker ink color tokens (R-121). */
+export type OrgColor =
+	| ""
+	| "indigo"
+	| "emerald"
+	| "amber"
+	| "rose"
+	| "sky"
+	| "violet"
+	| "slate";
+
+/** A personal folder a user organizes boards into on their panel (R-121). */
+export interface BoardFolder {
+	id: string;
+	name: string;
+	color?: OrgColor;
+	position: number;
+}
+
+/** A personal colored marker/tag attached to boards on the panel (R-121). */
+export interface BoardMarker {
+	id: string;
+	name: string;
+	color?: OrgColor;
+}
+
 export interface BoardSummary {
 	id: string;
 	name: string;
 	updatedAt: string;
 	/** The owner's username; given for other people's boards only (R-051). */
 	owner?: string;
+	/** All owner usernames when a board has multiple co-owners (R-122). */
+	owners?: string[];
 	/** What the board's strokes and images take, in bytes (R-091). */
 	bytes?: number;
+	/** Per-user folder assignment, pin state, custom order, and markers (R-121). */
+	folderId?: string;
+	pinned?: boolean;
+	position?: number;
+	markerIds?: string[];
 }
 
 export interface BoardList {
 	owned: BoardSummary[];
 	visited: BoardSummary[];
+	folders?: BoardFolder[];
+	markers?: BoardMarker[];
 }
 
 async function request<T>(
@@ -126,8 +161,126 @@ export const logout = () => request<void>("POST", "/api/logout", {});
 
 export const listBoards = () => request<BoardList>("GET", "/api/boards");
 
-export const createBoard = (name: string) =>
-	request<{ id: string; name: string }>("POST", "/api/boards", { name });
+export const createBoard = (name: string, folderId?: string) =>
+	request<{ id: string; name: string; folderId?: string }>(
+		"POST",
+		"/api/boards",
+		folderId ? { name, folderId } : { name },
+	);
+
+export const createFolder = (name: string, color: OrgColor = "") =>
+	request<BoardFolder>("POST", "/api/folders", { name, color });
+
+export const updateFolder = (
+	id: string,
+	patch: { name?: string; color?: OrgColor; position?: number },
+) => request<BoardFolder>("PATCH", `/api/folders/${id}`, patch);
+
+export const deleteFolder = (id: string) =>
+	request<void>("DELETE", `/api/folders/${id}`);
+
+export const createMarker = (name: string, color: OrgColor = "") =>
+	request<BoardMarker>("POST", "/api/markers", { name, color });
+
+export const updateMarker = (
+	id: string,
+	patch: { name?: string; color?: OrgColor },
+) => request<BoardMarker>("PATCH", `/api/markers/${id}`, patch);
+
+export const deleteMarker = (id: string) =>
+	request<void>("DELETE", `/api/markers/${id}`);
+
+export const updateBoardMeta = (
+	id: string,
+	patch: {
+		folderId?: string;
+		pinned?: boolean;
+		position?: number;
+		markerIds?: string[];
+	},
+) => request<void>("PATCH", `/api/boards/${id}/meta`, patch);
+
+export const bulkOrganizeBoards = (patch: {
+	boardIds: string[];
+	folderId?: string;
+	pinned?: boolean;
+	addMarkerIds?: string[];
+	removeMarkerIds?: string[];
+}) => request<void>("POST", "/api/boards/organize", patch);
+
+export const setBoardOrder = (boardIds: string[]) =>
+	request<void>("PUT", "/api/boards/order", { boardIds });
+
+export interface BoardOwner {
+	id: number;
+	username: string;
+	avatar?: string;
+}
+
+export type ContactSource =
+	| "contact"
+	| "coowner"
+	| "lesson"
+	| "visitor"
+	| "shared";
+
+export interface ContactSuggestion {
+	id: number;
+	username: string;
+	avatar?: string;
+	saved: boolean;
+	source: ContactSource;
+	/** Best underlying collaboration relationship, even when saved as a contact. */
+	relation?: ContactSource;
+}
+
+export const listContacts = () =>
+	request<{ contacts: ContactSuggestion[] }>("GET", "/api/contacts");
+
+export const addContact = (loginOrUserId: string | number) =>
+	request<{ contact: ContactSuggestion; contacts: ContactSuggestion[] }>(
+		"POST",
+		"/api/contacts",
+		typeof loginOrUserId === "number"
+			? { userId: loginOrUserId }
+			: { login: loginOrUserId },
+	);
+
+export const removeContact = (userId: number) =>
+	request<{ contacts: ContactSuggestion[] }>(
+		"DELETE",
+		`/api/contacts/${userId}`,
+	);
+
+export const listBoardOwners = (id: string) =>
+	request<{ owners: BoardOwner[] }>("GET", `/api/boards/${id}/owners`);
+
+export const addBoardOwner = (id: string, login: string) =>
+	request<{ added: BoardOwner; owners: BoardOwner[] }>(
+		"POST",
+		`/api/boards/${id}/owners`,
+		{ login },
+	);
+
+export const removeBoardOwner = (id: string, userId: number) =>
+	request<{ owners: BoardOwner[]; selfRemoved: boolean }>(
+		"DELETE",
+		`/api/boards/${id}/owners/${userId}`,
+	);
+
+export const transferBoard = (id: string, login: string) =>
+	request<{ owner: string; owners: BoardOwner[] }>(
+		"POST",
+		`/api/boards/${id}/transfer`,
+		{ login },
+	);
+
+export const bulkTransferBoards = (boardIds: string[], login: string) =>
+	request<{ owner: string; transferred: number }>(
+		"POST",
+		"/api/boards/transfer",
+		{ boardIds, login },
+	);
 
 export const renameBoard = (id: string, name: string) =>
 	request<void>("PATCH", `/api/boards/${id}`, { name });

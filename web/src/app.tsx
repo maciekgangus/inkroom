@@ -62,6 +62,12 @@ export function App({
 	const match = BOARD_PATH.exec(path);
 	const replay = REPLAY_PATH.exec(path);
 	const video = VIDEO_PATH.exec(path);
+	const isHome =
+		!video &&
+		!replay &&
+		!match &&
+		path !== REGISTER_PATH &&
+		path !== CALENDAR_PATH;
 	return (
 		<>
 			{video ? (
@@ -85,10 +91,12 @@ export function App({
 			) : (
 				<Home navigate={navigate} search={search} />
 			)}
-			<div class="corner">
-				<FeedbackButton />
-				<ThemeToggle />
-			</div>
+			{!isHome && (
+				<div class="corner">
+					<FeedbackButton />
+					<ThemeToggle />
+				</div>
+			)}
 			<UpdateBanner />
 		</>
 	);
@@ -126,7 +134,13 @@ function Home({
 	if (account === undefined) return null;
 	if (account === null)
 		return (
-			<AuthForms onAuth={setAccount} navigate={navigate} search={search} />
+			<>
+				<AuthForms onAuth={setAccount} navigate={navigate} search={search} />
+				<div class="corner">
+					<FeedbackButton />
+					<ThemeToggle />
+				</div>
+			</>
 		);
 	return (
 		<Panel
@@ -204,10 +218,14 @@ function BoardPage({
 			boardId={id}
 			authorId={authorId}
 			name={name}
+			account={account}
 			connect={connect}
 			boardName={info.name}
 			onRename={info.owner ? (n) => api.renameBoard(id, n) : undefined}
 			owner={info.owner}
+			onOwnershipLost={() =>
+				setInfo((cur) => (cur ? { ...cur, owner: false } : cur))
+			}
 			onCopy={info.owner ? () => api.copyBoard(id) : undefined}
 			onSetBackground={info.owner ? (b) => api.setBackground(id, b) : undefined}
 		/>

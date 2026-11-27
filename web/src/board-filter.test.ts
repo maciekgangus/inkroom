@@ -4,7 +4,9 @@ import {
 	DEFAULT_FILTER,
 	filterBoards,
 	formatSize,
+	hasPopoverFilters,
 	isFiltering,
+	sortDirectionLabel,
 } from "./board-filter";
 
 const at = (iso: string) => new Date(iso).toISOString();
@@ -102,11 +104,34 @@ describe("filterBoards (R-091)", () => {
 		expect(boards).toEqual(copy);
 	});
 
-	test("isFiltering is true for any change from the default", () => {
+	test("isFiltering tracks active search/filter criteria without counting folder navigation", () => {
 		expect(isFiltering(f({ query: "a" }))).toBe(true);
 		expect(isFiltering(f({ scope: "mine" }))).toBe(true);
 		expect(isFiltering(f({ range: "7" }))).toBe(true);
 		expect(isFiltering(f({ sort: "name" }))).toBe(true);
+		expect(isFiltering(f({ markerIds: ["m1"] }))).toBe(true);
+		expect(isFiltering(f({ groupBy: "folder" }))).toBe(true);
+		expect(isFiltering(f({ folder: "f1" }))).toBe(false);
+		expect(isFiltering(f({ pinnedOnly: true }))).toBe(false);
+	});
+
+	test("hasPopoverFilters tracks only the folded filter/sort/group controls", () => {
+		expect(hasPopoverFilters(DEFAULT_FILTER)).toBe(false);
+		expect(hasPopoverFilters(f({ query: "matma" }))).toBe(false);
+		expect(hasPopoverFilters(f({ folder: "f1" }))).toBe(false);
+		expect(hasPopoverFilters(f({ range: "7" }))).toBe(true);
+		expect(hasPopoverFilters(f({ sort: "name" }))).toBe(true);
+		expect(hasPopoverFilters(f({ reversed: true }))).toBe(true);
+		expect(hasPopoverFilters(f({ groupBy: "folder" }))).toBe(true);
+	});
+
+	test("sortDirectionLabel describes each sort order in Polish", () => {
+		expect(sortDirectionLabel("changed", false)).toBe("Od najnowszych");
+		expect(sortDirectionLabel("changed", true)).toBe("Od najstarszych");
+		expect(sortDirectionLabel("name", false)).toBe("A–Z");
+		expect(sortDirectionLabel("name", true)).toBe("Z–A");
+		expect(sortDirectionLabel("size", false)).toBe("Od największych");
+		expect(sortDirectionLabel("size", true)).toBe("Od najmniejszych");
 	});
 });
 
@@ -132,5 +157,93 @@ describe("size of a board (R-091)", () => {
 			"a",
 			"c",
 		]);
+	});
+});
+
+describe("folders, markers, pins, direction and custom order (R-121)", () => {
+	const organized: BoardSummary[] = [
+		{
+			id: "1",
+			name: "Algebra",
+			updatedAt: at("2026-11-16T10:00:00"),
+			folderId: "f1",
+			markerIds: ["m1"],
+			position: 2,
+		},
+		{
+			id: "2",
+			name: "Geometria",
+			updatedAt: at("2026-11-18T10:00:00"),
+			folderId: "f1",
+			pinned: true,
+			markerIds: ["m1", "m2"],
+			position: 1,
+		},
+		{
+			id: "3",
+			name: "Fizyka",
+			updatedAt: at("2026-11-17T10:00:00"),
+			position: 3,
+		},
+	];
+
+	test("pinned boards float to the top of standard sorts", () => {
+		expect(ids(filterBoards(organized, f({ sort: "name" }), NOW))).toEqual([
+			"2",
+			"1",
+			"3",
+		]);
+	});
+
+	test("filters by folder, unfiled, pinnedOnly and markers", () => {
+		expect(ids(filterBoards(organized, f({ folder: "f1" }), NOW))).toEqual([
+			"2",
+			"1",
+		]);
+		expect(ids(filterBoards(organized, f({ folder: "unfiled" }), NOW))).toEqual(
+			["3"],
+		);
+		expect(ids(filterBoards(organized, f({ pinnedOnly: true }), NOW))).toEqual([
+			"2",
+		]);
+		expect(
+			ids(filterBoards(organized, f({ markerIds: ["m1", "m2"] }), NOW)),
+		).toEqual(["2"]);
+	});
+
+	test("searches folder, marker and co-owner names when present", () => {
+		const lookup = {
+			folders: [{ id: "f1", name: "Matematyka", position: 0 }],
+			markers: [{ id: "m2", name: "Pilne" }],
+		};
+		const withCoOwners: BoardSummary[] = [
+			...organized,
+			{
+				id: "4",
+				name: "Wspólna tablica",
+				updatedAt: at("2026-11-18T11:00:00"),
+				owners: ["maciek", "kasia.k"],
+			},
+		];
+		expect(
+			ids(filterBoards(organized, f({ query: "pilne" }), NOW, lookup)),
+		).toEqual(["2"]);
+		expect(
+			ids(filterBoards(organized, f({ query: "matematyka" }), NOW, lookup)),
+		).toEqual(["2", "1"]);
+		expect(
+			ids(filterBoards(withCoOwners, f({ query: "kasia" }), NOW, lookup)),
+		).toEqual(["4"]);
+	});
+
+	test("supports reversed sort direction and custom manual order", () => {
+		expect(ids(filterBoards(organized, f({ sort: "custom" }), NOW))).toEqual([
+			"2",
+			"1",
+			"3",
+		]);
+		expect(
+			ids(filterBoards(organized, f({ sort: "custom", reversed: true }), NOW)),
+		).toEqual(["3", "1", "2"]);
 	});
 });

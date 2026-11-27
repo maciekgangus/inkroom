@@ -20,17 +20,21 @@ describe("board menu (R-014)", () => {
 		});
 	});
 
-	test("the owner also gets a copy of the board", () => {
+	test("the owner also gets a copy and board owners entry when supplied (R-020, R-122)", () => {
 		const onCopy = vi.fn();
-		const items = boardMenuItems(vi.fn(), onCopy);
+		const onOwners = vi.fn();
+		const items = boardMenuItems(vi.fn(), onCopy, undefined, onOwners);
 		expect(items.map((i) => i.label)).toEqual([
 			"PNG: widok",
 			"PNG: cała tablica",
 			"PDF: cała tablica",
 			"Utwórz kopię",
+			"Właściciele tablicy…",
 		]);
 		items[3].onSelect();
 		expect(onCopy).toHaveBeenCalledOnce();
+		items[4].onSelect();
+		expect(onOwners).toHaveBeenCalledOnce();
 	});
 
 	test("has no PDF entry: loading a PDF is a button of the toolbar, next to the image (R-056)", () => {

@@ -37,3 +37,36 @@ for (const view of ["list", "tiles"]) {
 		expect(look.linkColor).toBe(look.body);
 	});
 }
+
+test("clicking anywhere on a list row opens the board, while row controls stay interactive", async ({
+	page,
+}, testInfo) => {
+	const name = `Klik wiersza ${testInfo.parallelIndex}-${Date.now().toString(36)}`;
+	const req = page.context().request;
+	await req.post("/api/login", { data: E2E_LOGIN });
+	const res = await req.post("/api/boards", { data: { name } });
+	const created = (await res.json()) as { id: string };
+	await page.addInitScript(() =>
+		localStorage.setItem("inkroom.boardView", "list"),
+	);
+	await page.goto("/");
+	const row = page
+		.locator(`.boards:not(.tiles) .board:has(a[href="/b/${created.id}"])`)
+		.first();
+	await expect(row).toBeVisible();
+
+	// Clicking an action control on the row must not navigate away.
+	await row.getByRole("button", { name: "Więcej akcji" }).click();
+	await expect(row.locator(".action-popover")).toBeVisible();
+	expect(page.url()).not.toContain(`/b/${created.id}`);
+	await page.keyboard.press("Escape");
+
+	// Clicking the empty area to the right of the board title opens the board.
+	const mainBox = await row.locator(".board-list-main").boundingBox();
+	const linkBox = await row.locator("a.open-link").boundingBox();
+	const hitX = (mainBox?.x ?? 0) + (mainBox?.width ?? 0) - 16;
+	const hitY = (mainBox?.y ?? 0) + (mainBox?.height ?? 0) / 2;
+	expect(hitX).toBeGreaterThan((linkBox?.x ?? 0) + (linkBox?.width ?? 0) + 12);
+	await page.mouse.click(hitX, hitY);
+	await expect(page).toHaveURL(new RegExp(`/b/${created.id}$`));
+});

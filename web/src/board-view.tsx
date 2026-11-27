@@ -1,10 +1,12 @@
 import {
+	useCallback,
 	useEffect,
 	useLayoutEffect,
 	useMemo,
 	useRef,
 	useState,
 } from "preact/hooks";
+import * as api from "./api";
 import { loadView, saveView } from "./api";
 import { BACKGROUNDS, type Background } from "./board/background";
 import type { Stroke } from "./board/board";
@@ -38,6 +40,7 @@ import { createViewSaver } from "./board/view-saver";
 import { clampScale, type Rect, Viewport } from "./board/viewport";
 import { stepZoom, wheelZoomFactor } from "./board/zoom";
 import { BoardMenuButton, boardMenuItems, type MenuAt } from "./board-menu";
+import { BoardOwnersDialog } from "./board-owners-dialog";
 import { BoardTitle } from "./board-title";
 import { BrandLink } from "./brand-link";
 import { ContextMenu, type MenuItem } from "./context-menu";
@@ -54,6 +57,7 @@ import { startPoint } from "./pdf/layout";
 import { summarize } from "./pdf/limits";
 import { loadPdf } from "./pdf/loader";
 import { PdfProgress } from "./pdf-progress";
+import { PersonPopover, type PersonPopoverAction } from "./person-popover";
 import { hasFinePointer } from "./pointer";
 import { PropertiesPanel } from "./properties-panel";
 import type { RecordingSource } from "./recording";
@@ -88,6 +92,8 @@ interface Props {
 	authorId: string;
 	/** Shown next to our cursor on other people's screens. */
 	name: string;
+	/** Logged-in account when present; enables contextual friend & co-owner actions (R-123). */
+	account?: api.Account | null;
 	/** Opens the board's websocket. */
 	connect: () => SocketLike;
 	/** The board's name, shown at the top left (R-045). */
@@ -96,6 +102,8 @@ interface Props {
 	onRename?: (name: string) => Promise<void>;
 	/** True for the board's owner, who may give and take away other people's drawing (R-016). */
 	owner?: boolean;
+	/** Called when the current owner transfers or leaves ownership from inside the board. */
+	onOwnershipLost?: () => void;
 	/** Makes a copy of the board and returns it; given only to the board's owner (R-020). */
 	onCopy?: () => Promise<{ id: string; name: string }>;
 	/** Saves a new shared background; given only to the board's owner (R-027). */
@@ -122,10 +130,12 @@ export function BoardView({
 	boardId,
 	authorId,
 	name,
+	account,
 	boardName,
 	onRename,
 	connect,
 	owner,
+	onOwnershipLost,
 	onCopy,
 	onSetBackground,
 }: Props) {
@@ -233,6 +243,31 @@ export function BoardView({
 	const imagesRef = useRef<ImageCache | null>(null);
 	const [boardMenu, setBoardMenu] = useState<MenuAt | null>(null);
 	const [shortcutsOpen, setShortcutsOpen] = useState(false);
+	const [ownersOpen, setOwnersOpen] = useState(false);
+	const [contacts, setContacts] = useState<api.ContactSuggestion[]>([]);
+	const [boardNotice, setBoardNotice] = useState<{
+		message: string;
+		undo?: () => void;
+	} | null>(null);
+	const noticeTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+	const showBoardNotice = useCallback((message: string, undo?: () => void) => {
+		clearTimeout(noticeTimer.current);
+		setBoardNotice({ message, undo });
+		noticeTimer.current = setTimeout(() => setBoardNotice(null), 4500);
+	}, []);
+	useEffect(() => () => clearTimeout(noticeTimer.current), []);
+
+	const loadContacts = useCallback(() => {
+		if (!account) return;
+		api
+			.listContacts()
+			.then((res) => setContacts(res.contacts))
+			.catch(() => {});
+	}, [account]);
+	useEffect(() => {
+		loadContacts();
+	}, [loadContacts]);
+
 	const [copied, setCopied] = useState<{ id: string; name: string } | null>(
 		null,
 	);
@@ -1392,7 +1427,7 @@ export function BoardView({
 					selfId={authorId}
 					colors={colors}
 					onSelect={
-						owner
+						owner || account
 							? (peer, at) => setPeerMenu({ peer, x: at.x, y: at.y })
 							: undefined
 					}
@@ -1433,36 +1468,140 @@ export function BoardView({
 					onClose={() => setMenu(null)}
 				/>
 			)}
-			{peerMenu && (
-				<ContextMenu
-					x={peerMenu.x}
-					y={peerMenu.y}
-					items={[
-						peerMenu.peer.muted
-							? {
-									label: "Pozwól rysować",
-									icon: "pen",
-									onSelect: () =>
-										syncRef.current?.setDrawing(peerMenu.peer.id, true),
-								}
-							: {
-									label: "Zabierz możliwość rysowania",
-									icon: "pen",
-									onSelect: () =>
-										syncRef.current?.setDrawing(peerMenu.peer.id, false),
-								},
+			{peerMenu &&
+				(() => {
+					const livePeer =
+						peers.find((p) => p.id === peerMenu.peer.id) ?? peerMenu.peer;
+					const savedFriend =
+						livePeer.userId !== undefined
+							? contacts.find((c) => c.id === livePeer.userId && c.saved)
+							: undefined;
+					const isSelfAccount =
+						!!account &&
+						livePeer.name.toLowerCase() === account.username.toLowerCase();
+					const canFriend =
+						!!account && livePeer.userId !== undefined && !isSelfAccount;
+					const actions: PersonPopoverAction[] = [
 						{
 							label:
-								followRef.current?.following === peerMenu.peer.id
+								followRef.current?.following === livePeer.id
 									? "Przestań śledzić widok"
 									: "Śledź widok",
 							icon: "eye",
-							onSelect: () => act((f) => f.toggle(peerMenu.peer.id)),
+							onSelect: () => act((f) => f.toggle(livePeer.id)),
 						},
-					]}
-					onClose={() => setPeerMenu(null)}
-				/>
-			)}
+					];
+					if (owner) {
+						actions.push(
+							livePeer.muted
+								? {
+										label: "Pozwól rysować",
+										icon: "pen",
+										onSelect: () =>
+											syncRef.current?.setDrawing(livePeer.id, true),
+									}
+								: {
+										label: "Zabierz możliwość rysowania",
+										icon: "pen",
+										onSelect: () =>
+											syncRef.current?.setDrawing(livePeer.id, false),
+									},
+						);
+					}
+					if (canFriend && livePeer.userId) {
+						const targetId = livePeer.userId;
+						const targetName = livePeer.name;
+						if (savedFriend) {
+							actions.push({
+								label: "Usuń ze znajomych",
+								icon: "user-minus",
+								sepBefore: true,
+								onSelect: async () => {
+									try {
+										const res = await api.removeContact(targetId);
+										setContacts(res.contacts);
+										showBoardNotice(
+											`Usunięto „${targetName}” ze znajomych`,
+											() => {
+												void api
+													.addContact(targetId)
+													.then((r) => setContacts(r.contacts))
+													.catch(() => {});
+											},
+										);
+									} catch (e) {
+										setImageError(api.errorMessage(e));
+									}
+								},
+							});
+						} else {
+							actions.push({
+								label: "Dodaj do znajomych",
+								icon: "user-plus",
+								tone: "accent",
+								sepBefore: true,
+								onSelect: async () => {
+									try {
+										const res = await api.addContact(targetId);
+										setContacts(res.contacts);
+										showBoardNotice(`Dodano „${targetName}” do znajomych`);
+									} catch (e) {
+										setImageError(api.errorMessage(e));
+									}
+								},
+							});
+						}
+					}
+					if (owner && livePeer.userId && !livePeer.owner && !isSelfAccount) {
+						const targetName = livePeer.name;
+						actions.push({
+							label: "Dodaj jako współwłaściciela",
+							icon: "users",
+							sepBefore: !canFriend,
+							onSelect: async () => {
+								try {
+									await api.addBoardOwner(boardId, targetName);
+									loadContacts();
+									showBoardNotice(
+										`„${targetName}” jest teraz współwłaścicielem tej tablicy`,
+									);
+								} catch (e) {
+									setImageError(api.errorMessage(e));
+								}
+							},
+						});
+					}
+					const subtitleParts: string[] = [];
+					if (livePeer.owner) {
+						subtitleParts.push(
+							owner ? "Współwłaściciel" : "Właściciel tablicy",
+						);
+					} else if (livePeer.userId) {
+						subtitleParts.push("Konto Inkroom");
+					} else {
+						subtitleParts.push("Gość na tej tablicy");
+					}
+					if (livePeer.muted) subtitleParts.push("bez rysowania");
+
+					return (
+						<PersonPopover
+							x={peerMenu.x}
+							y={peerMenu.y}
+							username={livePeer.name}
+							avatar={livePeer.avatar}
+							ringColor={colors.get(livePeer.id)}
+							subtitle={subtitleParts.join(" · ")}
+							isFriend={Boolean(savedFriend)}
+							note={
+								account && !livePeer.userId
+									? "Gość bez konta — zalogowanych użytkowników możesz dodać do znajomych."
+									: undefined
+							}
+							actions={actions}
+							onClose={() => setPeerMenu(null)}
+						/>
+					);
+				})()}
 			{boardMenu && (
 				<ContextMenu
 					x={boardMenu.x}
@@ -1485,8 +1624,32 @@ export function BoardView({
 									)
 							: undefined,
 						() => setShortcutsOpen(true),
+						owner && account
+							? () => {
+									loadContacts();
+									setOwnersOpen(true);
+								}
+							: undefined,
 					)}
 					onClose={() => setBoardMenu(null)}
+				/>
+			)}
+			{ownersOpen && owner && account && (
+				<BoardOwnersDialog
+					board={{
+						id: boardId,
+						name: title,
+						updatedAt: new Date().toISOString(),
+					}}
+					currentUsername={account.username}
+					contacts={contacts}
+					onContactsRefresh={loadContacts}
+					onClose={() => setOwnersOpen(false)}
+					onOwnersChanged={(_owners, message) => showBoardNotice(message)}
+					onSelfLostOwnership={(_newOwner, message) => {
+						onOwnershipLost?.();
+						showBoardNotice(message);
+					}}
 				/>
 			)}
 			{shortcutsOpen && (
@@ -1518,6 +1681,32 @@ export function BoardView({
 					</a>{" "}
 					<button type="button" onClick={() => setCopied(null)}>
 						Zamknij
+					</button>
+				</div>
+			)}
+			{boardNotice && (
+				<div class="toast notice" role="status" aria-live="polite">
+					<span>{boardNotice.message}</span>
+					{boardNotice.undo && (
+						<button
+							type="button"
+							class="toast-undo"
+							onClick={() => {
+								const fn = boardNotice.undo;
+								setBoardNotice(null);
+								fn?.();
+							}}
+						>
+							Cofnij
+						</button>
+					)}
+					<button
+						type="button"
+						class="toast-close"
+						aria-label="Zamknij powiadomienie"
+						onClick={() => setBoardNotice(null)}
+					>
+						<Icon name="close" />
 					</button>
 				</div>
 			)}

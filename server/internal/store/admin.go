@@ -129,9 +129,24 @@ func (s *Store) SetPassword(id int64, hash string) error {
 	return s.mustAffect(s.db.Exec("UPDATE users SET hash = ? WHERE id = ?", hash, id))
 }
 
-// DeleteUser removes an account with its sessions, visits and boards (and what is on them).
+// DeleteUser removes an account with its sessions, visits and solely-owned boards.
+// Co-owned boards survive and pass boards.owner_id to a remaining co-owner (R-122).
 func (s *Store) DeleteUser(id int64) error {
-	return s.mustAffect(s.db.Exec("DELETE FROM users WHERE id = ?", id))
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`UPDATE boards
+		SET owner_id = (SELECT user_id FROM board_owners WHERE board_id = boards.id AND user_id != ? ORDER BY added_at ASC, user_id ASC LIMIT 1)
+		WHERE owner_id = ?
+		  AND EXISTS (SELECT 1 FROM board_owners WHERE board_id = boards.id AND user_id != ?)`, id, id, id); err != nil {
+		return err
+	}
+	if err := s.mustAffect(tx.Exec("DELETE FROM users WHERE id = ?", id)); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // DeleteUserSessions logs an account out everywhere.
@@ -140,13 +155,32 @@ func (s *Store) DeleteUserSessions(id int64) error {
 	return err
 }
 
-// SetBoardOwner hands a board to another account. ErrNotFound when the board or the account is missing.
+// SetBoardOwner hands a board to another account (replacing co-owners). ErrNotFound when the board
+// or the account is missing.
 func (s *Store) SetBoardOwner(boardID string, userID int64) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
 	var one int
-	if err := s.db.QueryRow("SELECT 1 FROM users WHERE id = ?", userID).Scan(&one); errors.Is(err, sql.ErrNoRows) {
+	if err := tx.QueryRow("SELECT 1 FROM users WHERE id = ?", userID).Scan(&one); errors.Is(err, sql.ErrNoRows) {
 		return ErrNotFound
 	} else if err != nil {
 		return err
 	}
-	return s.mustAffect(s.db.Exec("UPDATE boards SET owner_id = ? WHERE id = ?", userID, boardID))
+	if err := s.mustAffect(tx.Exec("UPDATE boards SET owner_id = ? WHERE id = ?", userID, boardID)); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM board_owners WHERE board_id = ?", boardID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("INSERT INTO board_owners (board_id, user_id, added_at) VALUES (?, ?, ?)",
+		boardID, userID, unix(time.Now().Truncate(time.Second))); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM visits WHERE user_id = ? AND board_id = ?", userID, boardID); err != nil {
+		return err
+	}
+	return tx.Commit()
 }

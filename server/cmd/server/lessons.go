@@ -338,7 +338,7 @@ func (a *app) linkBoard(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		id = b.ID
-	} else if b, err := a.st.Board(id); err != nil || b.OwnerID != u.ID {
+	} else if isOwner, err := a.st.IsBoardOwner(id, u.ID); err != nil || !isOwner {
 		writeError(w, http.StatusNotFound, "Nie ma takiej tablicy")
 		return
 	}

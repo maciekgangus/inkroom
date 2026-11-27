@@ -15,6 +15,7 @@ export function boardMenuItems(
 	onPick: (a: BoardAction) => void,
 	onCopy?: () => void,
 	onShortcuts?: () => void,
+	onOwners?: () => void,
 ): MenuItem[] {
 	return [
 		{ label: "PNG: widok", icon: "image", onSelect: () => onPick("png-view") },
@@ -30,6 +31,15 @@ export function boardMenuItems(
 		},
 		...(onCopy
 			? [{ label: "Utwórz kopię", icon: "copy" as const, onSelect: onCopy }]
+			: []),
+		...(onOwners
+			? [
+					{
+						label: "Właściciele tablicy…",
+						icon: "users" as const,
+						onSelect: onOwners,
+					},
+				]
 			: []),
 		...(onShortcuts
 			? [

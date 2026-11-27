@@ -386,6 +386,27 @@ describe("App", () => {
 			],
 		};
 
+		const boardItem = (name: string) =>
+			[...root.querySelectorAll(".boards .board")].find((r) =>
+				r.textContent?.includes(name),
+			) as HTMLElement;
+		const openCardMenu = async (name: string) => {
+			const more = boardItem(name).querySelector(
+				'button[aria-label="Więcej akcji"]',
+			) as HTMLButtonElement;
+			await act(async () => {
+				more.click();
+			});
+		};
+		const clickMenu = async (label: string) => {
+			const item = [...root.querySelectorAll(".action-popover button")].find(
+				(b) => b.textContent?.includes(label),
+			) as HTMLButtonElement;
+			await act(async () => {
+				item.click();
+			});
+		};
+
 		test("lists my boards and boards I have access to", async () => {
 			mockApi({
 				"GET /api/me": LOGGED_IN,
@@ -406,16 +427,16 @@ describe("App", () => {
 			});
 			const navigate = vi.fn();
 			await mount({ path: "/", navigate });
-			await waitText("Nowa tablica");
+			await waitText("Utwórz tablicę");
 			fill("name", "Fizyka");
-			await click("Utwórz");
+			await click("Utwórz tablicę");
 			await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith(`/b/${ID}`));
 			expect(api.called("POST /api/boards")[0].body).toEqual({
 				name: "Fizyka",
 			});
 		});
 
-		test("copies a board's link", async () => {
+		test("copies a board's link via the card overflow menu", async () => {
 			mockApi({
 				"GET /api/me": LOGGED_IN,
 				"GET /api/boards": { body: boards },
@@ -424,7 +445,8 @@ describe("App", () => {
 			vi.stubGlobal("navigator", { clipboard: { writeText } });
 			await mount({ path: "/" });
 			await waitText("Matma");
-			await click("Kopiuj link");
+			await openCardMenu("Matma");
+			await clickMenu("Kopiuj link");
 			expect(writeText).toHaveBeenCalledWith(`${location.origin}/b/${ID}`);
 		});
 
@@ -436,15 +458,16 @@ describe("App", () => {
 			});
 			await mount({ path: "/" });
 			await waitText("Matma");
-			await click("Usuń");
+			await openCardMenu("Matma");
+			await clickMenu("Usuń");
 			expect(api.called(`DELETE /api/boards/${ID}`)).toHaveLength(0);
 			expect(text()).toContain("Na pewno");
-			await click("Na pewno");
-			await vi.waitFor(() => expect(text()).not.toContain("Matma"));
+			await clickMenu("Na pewno");
+			await vi.waitFor(() => expect(boardItem("Matma")).toBeUndefined());
 			expect(api.called(`DELETE /api/boards/${ID}`)).toHaveLength(1);
 		});
 
-		test("renames a board", async () => {
+		test("renames a board via menu and via double-click on the title", async () => {
 			const api = mockApi({
 				"GET /api/me": LOGGED_IN,
 				"GET /api/boards": { body: boards },
@@ -452,13 +475,43 @@ describe("App", () => {
 			});
 			await mount({ path: "/" });
 			await waitText("Matma");
-			await click("Zmień nazwę");
-			fill("rename", "Algebra");
+			await openCardMenu("Matma");
+			await clickMenu("Zmień nazwę");
+			const renameForm = root.querySelector(".rename-form");
+			const renameSaveBtn = renameForm?.querySelector(
+				'button[aria-label="Zapisz"]',
+			);
+			const renameCancelBtn = renameForm?.querySelector(
+				'button[aria-label="Anuluj"]',
+			);
+			expect(renameSaveBtn?.textContent?.trim()).toBe("");
+			expect(renameSaveBtn?.querySelector("svg")).not.toBeNull();
+			expect(renameCancelBtn?.textContent?.trim()).toBe("");
+			expect(renameCancelBtn?.querySelector("svg")).not.toBeNull();
+			await act(async () => {
+				const el = root.querySelector(
+					'input[name="rename"]',
+				) as HTMLInputElement;
+				el.value = "Algebra";
+				el.dispatchEvent(new Event("input", { bubbles: true }));
+			});
 			await submit("rename");
 			await waitText("Algebra");
 			expect(api.called(`PATCH /api/boards/${ID}`)[0].body).toEqual({
 				name: "Algebra",
 			});
+
+			// Double-clicking an owned board's title also enters inline rename.
+			await act(async () => {
+				boardItem("Algebra")
+					.querySelector(".name-editable")
+					?.dispatchEvent(
+						new MouseEvent("dblclick", { bubbles: true, cancelable: true }),
+					);
+			});
+			expect(root.querySelector('input[name="rename"]')).not.toBeNull();
+			await click("Anuluj");
+			expect(root.querySelector('input[name="rename"]')).toBeNull();
 		});
 
 		test("copies a board and shows the copy at the top of my boards", async () => {
@@ -472,7 +525,8 @@ describe("App", () => {
 			});
 			await mount({ path: "/" });
 			await waitText("Matma");
-			await click("Utwórz kopię");
+			await openCardMenu("Matma");
+			await clickMenu("Utwórz kopię");
 			await waitText("Matma (kopia)");
 			expect(api.called(`POST /api/boards/${ID}/copy`)).toHaveLength(1);
 			const names = [...root.querySelectorAll(".boards .name")].map(
@@ -599,8 +653,9 @@ describe("App", () => {
 			});
 			await mount({ path: "/", navigate: vi.fn() });
 			await waitText("Cudza");
-			await click("Usuń z listy");
-			await vi.waitFor(() => expect(text()).not.toContain("Cudza"));
+			await openCardMenu("Cudza");
+			await clickMenu("Usuń z listy");
+			await vi.waitFor(() => expect(boardItem("Cudza")).toBeUndefined());
 			expect(api.called(`DELETE /api/boards/${FID}/visit`)).toHaveLength(1);
 			expect(text()).toContain("Matma"); // my own board is still there
 			expect(api.called(`DELETE /api/boards/${ID}`)).toHaveLength(0);
@@ -613,8 +668,12 @@ describe("App", () => {
 			});
 			await mount({ path: "/" });
 			await waitText("Matma");
-			expect(button("Usuń z listy")).toBeUndefined();
-			expect(button("Usuń")).toBeDefined();
+			await openCardMenu("Matma");
+			const items = [...root.querySelectorAll(".action-popover button")].map(
+				(b) => b.textContent?.trim(),
+			);
+			expect(items).not.toContain("Usuń z listy");
+			expect(items).toContain("Usuń");
 		});
 
 		describe("search and filter of the boards (R-091)", () => {
@@ -635,19 +694,23 @@ describe("App", () => {
 					el.dispatchEvent(new Event("input", { bubbles: true }));
 				});
 			};
+			const filterBtn = (label: string) =>
+				[...root.querySelectorAll(".filter-menu button")].find((b) =>
+					b.textContent?.includes(label),
+				) as HTMLButtonElement;
 
-			test("the menu is folded until the filter button opens it", async () => {
+			test("search is always visible while advanced filters stay folded until opened", async () => {
 				await open();
-				expect(root.querySelector('input[name="search"]')).toBeNull();
-				await click("Filtr");
 				expect(root.querySelector('input[name="search"]')).not.toBeNull();
+				expect(root.querySelector(".filter-menu")).toBeNull();
 				await click("Filtr");
-				expect(root.querySelector('input[name="search"]')).toBeNull();
+				expect(root.querySelector(".filter-menu")).not.toBeNull();
+				await click("Filtr");
+				expect(root.querySelector(".filter-menu")).toBeNull();
 			});
 
 			test("searching by owner leaves only that person's boards, and a name search the matching one", async () => {
 				await open();
-				await click("Filtr");
 				await search("anna");
 				expect(text()).toContain("Cudza");
 				expect(text()).not.toContain("Matma");
@@ -666,7 +729,6 @@ describe("App", () => {
 
 			test("a date typed as 08.11 finds the board changed that day", async () => {
 				await open();
-				await click("Filtr");
 				await search("08.11");
 				expect(text()).toContain("Cudza");
 				expect(text()).not.toContain("Matma");
@@ -674,7 +736,6 @@ describe("App", () => {
 
 			test("says so when nothing matches, and Wyczyść brings everything back", async () => {
 				await open();
-				await click("Filtr");
 				await search("zzz");
 				expect(text()).toContain("Żadna tablica nie pasuje");
 				await click("Wyczyść");
@@ -686,28 +747,36 @@ describe("App", () => {
 			test("'Udostępnione' hides my own boards and shows as the pressed pill", async () => {
 				await open();
 				await click("Filtr");
-				await click("Udostępnione");
+				await act(async () => {
+					filterBtn("Udostępnione").click();
+				});
 				expect(text()).toContain("Cudza");
 				expect(text()).not.toContain("Matma");
-				expect(button("Udostępnione").getAttribute("aria-pressed")).toBe(
+				expect(filterBtn("Udostępnione").getAttribute("aria-pressed")).toBe(
 					"true",
 				);
-				expect(button("Wszystkie").getAttribute("aria-pressed")).toBe("false");
+				expect(filterBtn("Wszystkie").getAttribute("aria-pressed")).toBe(
+					"false",
+				);
 				expect(root.querySelector("select")).toBeNull();
 			});
 
-			test("the pills are labelled groups: who, when, order", async () => {
+			test("the pills are labelled groups: who, when, order, group", async () => {
 				await open();
 				await click("Filtr");
 				const groups = [...root.querySelectorAll(".filter-menu fieldset")].map(
 					(g) => g.getAttribute("aria-label"),
 				);
-				expect(groups).toEqual(["Czyje", "Zmieniona", "Kolejność"]);
+				expect(groups).toEqual([
+					"Czyje",
+					"Zmieniona",
+					"Kolejność",
+					"Grupowanie",
+				]);
 			});
 
 			test("the cross in the search field clears the text and only shows when there is some", async () => {
 				await open();
-				await click("Filtr");
 				expect(button("Skasuj tekst")).toBeUndefined();
 				await search("zzz");
 				expect(text()).toContain("Żadna tablica nie pasuje");
@@ -720,12 +789,14 @@ describe("App", () => {
 				expect(button("Skasuj tekst")).toBeUndefined();
 			});
 
-			test("a time range pill narrows the lists and the magnifier shows that a filter is on", async () => {
+			test("a time range pill narrows the lists and the filter button shows that a filter is on", async () => {
 				await open();
 				await click("Filtr");
 				expect(button("Filtr").getAttribute("aria-pressed")).toBe("false");
-				await click("Dziś");
-				expect(button("Dziś").getAttribute("aria-pressed")).toBe("true");
+				await act(async () => {
+					filterBtn("Dziś").click();
+				});
+				expect(filterBtn("Dziś").getAttribute("aria-pressed")).toBe("true");
 				expect(text()).not.toContain("Cudza");
 				expect(button("Filtr").getAttribute("aria-pressed")).toBe("true");
 			});
@@ -813,7 +884,7 @@ describe("App", () => {
 				expect(api.called(`GET /api/boards/${FID}/preview`)).toHaveLength(1);
 			});
 
-			test("a tile keeps the name, the date, the owner and the buttons", async () => {
+			test("a tile keeps the name, the date, the owner and the quiet controls", async () => {
 				await openPanel();
 				await click("Kafelki");
 				const tile = [...root.querySelectorAll(".boards .board")].find((r) =>
@@ -821,7 +892,7 @@ describe("App", () => {
 				);
 				expect(tile?.textContent).toContain("Tablica: pani.anna");
 				expect(
-					tile?.querySelector('[aria-label="Usuń z listy"]'),
+					tile?.querySelector('button[aria-label="Więcej akcji"]'),
 				).not.toBeNull();
 				expect(tile?.querySelector("a.open-link")).not.toBeNull();
 			});
@@ -871,7 +942,7 @@ describe("App", () => {
 					"a.open-link",
 				) as HTMLAnchorElement;
 				expect(link.getAttribute("href")).toBe(`/b/${ID}`);
-				expect(link.textContent).toContain("Matma"); // the picture and the name are the link
+				expect(link.getAttribute("aria-label")).toBe("Matma");
 				await act(async () => {
 					link
 						.querySelector(".preview-box")
@@ -901,26 +972,45 @@ describe("App", () => {
 				expect(e.defaultPrevented).toBe(false);
 			});
 
-			test("the buttons of a tile are icons, each with a label", async () => {
+			test("a tile keeps only pin and an overflow menu with labelled actions", async () => {
 				await openPanel();
 				await click("Kafelki");
 				const buttons = [
-					...tileOf("Matma").querySelectorAll(".actions button"),
+					...tileOf("Matma").querySelectorAll(
+						".board-controls .card-quiet-btn",
+					),
 				];
 				expect(buttons.map((b) => b.getAttribute("aria-label"))).toEqual([
-					"Kopiuj link",
-					"Utwórz kopię",
-					"Zmień nazwę",
-					"Usuń",
+					"Przypnij",
+					"Więcej akcji",
 				]);
 				for (const b of buttons) {
 					expect(b.textContent?.trim()).toBe("");
 					expect(b.querySelector("svg")).not.toBeNull();
 					expect(b.getAttribute("title")).toBe(b.getAttribute("aria-label"));
 				}
-				const theirs = [...tileOf("Cudza").querySelectorAll(".actions button")];
-				expect(theirs.map((b) => b.getAttribute("aria-label"))).toEqual([
+				await openCardMenu("Matma");
+				const mineItems = [
+					...tileOf("Matma").querySelectorAll(".action-popover button"),
+				].map((b) => b.textContent?.trim());
+				expect(mineItems).toEqual([
 					"Kopiuj link",
+					"Organizuj…",
+					"Właściciele…",
+					"Przypnij na górze",
+					"Zmień nazwę",
+					"Utwórz kopię",
+					"Usuń",
+				]);
+				await openCardMenu("Cudza");
+				const theirItems = [
+					...tileOf("Cudza").querySelectorAll(".action-popover button"),
+				].map((b) => b.textContent?.trim());
+				expect(theirItems).toEqual([
+					"Kopiuj link",
+					"Organizuj…",
+					"Dodaj „pani.anna” do znajomych",
+					"Przypnij na górze",
 					"Usuń z listy",
 				]);
 			});
@@ -930,28 +1020,27 @@ describe("App", () => {
 					[`DELETE /api/boards/${ID}`]: { status: 204 },
 				});
 				await click("Kafelki");
-				const del = tileOf("Matma").querySelector(
-					'.actions button[aria-label="Usuń"]',
-				) as HTMLButtonElement;
-				await act(async () => del.click());
+				await openCardMenu("Matma");
+				await clickMenu("Usuń");
 				expect(api.called(`DELETE /api/boards/${ID}`)).toHaveLength(0);
 				expect(tileOf("Matma").textContent).toContain("Na pewno");
-				await click("Na pewno");
-				await vi.waitFor(() => expect(text()).not.toContain("Matma"));
+				await clickMenu("Na pewno");
+				await vi.waitFor(() => expect(boardItem("Matma")).toBeUndefined());
 				expect(api.called(`DELETE /api/boards/${ID}`)).toHaveLength(1);
 			});
 
-			test("the list too has icons, and the name opens the board", async () => {
+			test("the list uses the same quiet controls, and the name opens the board", async () => {
 				const navigate = vi.fn();
 				await openPanel({}, navigate);
+				await click("Lista");
 				expect(button("Otwórz")).toBeUndefined();
 				const row = tileOf("Matma");
-				const buttons = [...row.querySelectorAll(".actions button")];
+				const buttons = [
+					...row.querySelectorAll(".board-controls .card-quiet-btn"),
+				];
 				expect(buttons.map((b) => b.getAttribute("aria-label"))).toEqual([
-					"Kopiuj link",
-					"Utwórz kopię",
-					"Zmień nazwę",
-					"Usuń",
+					"Przypnij",
+					"Więcej akcji",
 				]);
 				for (const b of buttons) {
 					expect(b.textContent?.trim()).toBe("");
@@ -1027,9 +1116,114 @@ describe("App", () => {
 			});
 			await mount({ path: "/" });
 			await waitText("Cudza");
+			await openCardMenu("Cudza");
 			expect(
-				root.querySelectorAll('button[aria-label="Utwórz kopię"]'),
-			).toHaveLength(1); // only the one under "Moje tablice"
+				[...boardItem("Cudza").querySelectorAll(".action-popover button")].some(
+					(b) => b.textContent?.includes("Utwórz kopię"),
+				),
+			).toBe(false);
+			await openCardMenu("Matma");
+			expect(
+				[...boardItem("Matma").querySelectorAll(".action-popover button")].some(
+					(b) => b.textContent?.includes("Utwórz kopię"),
+				),
+			).toBe(true);
+		});
+
+		test("manages co-owners via contact suggestions and transfers a board (R-122, R-123)", async () => {
+			const api = mockApi({
+				"GET /api/me": LOGGED_IN,
+				"GET /api/boards": { body: boards },
+				"GET /api/contacts": {
+					body: {
+						contacts: [
+							{ id: 2, username: "ania", saved: true, source: "contact" },
+							{ id: 3, username: "tomek", saved: false, source: "visitor" },
+						],
+					},
+				},
+				"POST /api/contacts": {
+					status: 201,
+					body: {
+						contact: {
+							id: 3,
+							username: "tomek",
+							saved: true,
+							source: "contact",
+						},
+						contacts: [
+							{ id: 2, username: "ania", saved: true, source: "contact" },
+							{ id: 3, username: "tomek", saved: true, source: "contact" },
+						],
+					},
+				},
+				[`GET /api/boards/${ID}/owners`]: {
+					body: { owners: [{ id: 1, username: "ola.k" }] },
+				},
+				[`POST /api/boards/${ID}/owners`]: {
+					body: {
+						added: { id: 2, username: "ania" },
+						owners: [
+							{ id: 1, username: "ola.k" },
+							{ id: 2, username: "ania" },
+						],
+					},
+				},
+				[`POST /api/boards/${ID}/transfer`]: {
+					body: {
+						owner: "tomek",
+						owners: [{ id: 3, username: "tomek" }],
+					},
+				},
+			});
+			await mount({ path: "/" });
+			await waitText("Matma");
+
+			// Open "Znajomi" from sidebar and save recent collaborator "tomek".
+			await click("Znajomi");
+			await waitText("Z ostatniej współpracy");
+			await click("Zapisz");
+			await waitText("Dodano „tomek” do znajomych");
+			await click("Zamknij");
+
+			// Open "Właściciele…" and add "ania" with 1 click on her suggestion chip (without typing!).
+			await openCardMenu("Matma");
+			await clickMenu("Właściciele…");
+			await waitText("Współwłaściciele");
+			const aniaChip = [...root.querySelectorAll(".org-suggest-chip")].find(
+				(b) => b.textContent?.includes("ania"),
+			) as HTMLButtonElement;
+			await act(async () => {
+				aniaChip.click();
+			});
+			await waitText("Dodano współwłaściciela");
+			expect(api.called(`POST /api/boards/${ID}/owners`)[0].body).toEqual({
+				login: "ania",
+			});
+			expect(boardItem("Matma").querySelector(".coowners")?.textContent).toBe(
+				"ania",
+			);
+
+			// Pick "tomek" from transfer suggestions and confirm transfer -> moves to visited list.
+			const transferChips = [
+				...root.querySelectorAll(
+					'section[aria-label="Podpowiedzi odbiorcy"] .org-suggest-chip',
+				),
+			];
+			const tomekChip = transferChips.find((b) =>
+				b.textContent?.includes("tomek"),
+			) as HTMLButtonElement;
+			await act(async () => {
+				tomekChip.click();
+			});
+			await click("Przekaż…");
+			await waitText("Na pewno przekazać?");
+			await click("Na pewno przekazać?");
+			await waitText("Przekazano tablicę osobie");
+			expect(api.called(`POST /api/boards/${ID}/transfer`)[0].body).toEqual({
+				login: "tomek",
+			});
+			expect(boardItem("Matma").textContent).toContain("Tablica: tomek");
 		});
 
 		test("logging out returns to the login forms", async () => {
@@ -1040,6 +1234,14 @@ describe("App", () => {
 			});
 			await mount({ path: "/" });
 			await waitText("Matma");
+			const calendar = root.querySelector(
+				'a[href="/calendar"]',
+			) as HTMLAnchorElement;
+			expect(calendar?.getAttribute("aria-label")).toBe("Kalendarz");
+			expect(calendar?.querySelector("svg")).not.toBeNull();
+			const logoutBtn = button("Wyloguj");
+			expect(logoutBtn.getAttribute("aria-label")).toBe("Wyloguj");
+			expect(logoutBtn.querySelector("svg")).not.toBeNull();
 			await click("Wyloguj");
 			await waitText("Zaloguj");
 			expect(api.called("POST /api/logout")).toHaveLength(1);
@@ -1157,8 +1359,10 @@ describe("App", () => {
 					root.querySelectorAll('canvas:not([aria-label="board map"])'),
 				).toHaveLength(2),
 			);
-			expect(createSocket).toHaveBeenCalledWith(
-				expect.stringContaining(`/ws/${ID}`),
+			await vi.waitFor(() =>
+				expect(createSocket).toHaveBeenCalledWith(
+					expect.stringContaining(`/ws/${ID}`),
+				),
 			);
 		});
 
@@ -1188,7 +1392,7 @@ describe("App", () => {
 				).toHaveLength(2),
 			);
 			expect(root.querySelector('input[name="name"]')).toBeNull();
-			expect(createSocket).toHaveBeenCalledOnce();
+			await vi.waitFor(() => expect(createSocket).toHaveBeenCalledOnce());
 		});
 
 		describe("background", () => {
@@ -1251,6 +1455,88 @@ describe("App", () => {
 					background: "dots",
 				});
 			});
+		});
+
+		test("clicking a logged-in participant on the live board lets you add them as friend or co-owner (R-123)", async () => {
+			const api = mockApi({
+				"GET /api/me": LOGGED_IN,
+				"GET /api/contacts": { body: { contacts: [] } },
+				[`GET /api/boards/${ID}`]: {
+					body: { id: ID, name: "Matma", owner: true },
+				},
+				"POST /api/contacts": {
+					status: 201,
+					body: {
+						contact: {
+							id: 7,
+							username: "kasia.w",
+							saved: true,
+							source: "contact",
+						},
+						contacts: [
+							{ id: 7, username: "kasia.w", saved: true, source: "contact" },
+						],
+					},
+				},
+			});
+			const socket = fakeSocket();
+			await mount({ path: `/b/${ID}`, createSocket: () => socket });
+			await vi.waitFor(() =>
+				expect(
+					root.querySelectorAll('canvas:not([aria-label="board map"])'),
+				).toHaveLength(2),
+			);
+
+			await act(async () => {
+				socket.onmessage?.({
+					data: JSON.stringify({
+						t: "peers",
+						peers: [
+							{ id: "self", name: "ola.k", userId: 1, owner: true },
+							{ id: "peer-kasia", name: "kasia.w", userId: 7 },
+							{ id: "peer-guest", name: "Gość" },
+						],
+					}),
+				});
+			});
+
+			// Click kasia.w's avatar chip -> PersonPopover opens with friend & co-owner actions!
+			const kasiaChip = root.querySelector(
+				'button.participant[data-name="kasia.w"]',
+			) as HTMLButtonElement;
+			expect(kasiaChip).not.toBeNull();
+			await act(async () => kasiaChip.click());
+
+			const pop = root.querySelector(".person-popover");
+			expect(pop?.textContent).toContain("kasia.w");
+			expect(pop?.textContent).toContain("Dodaj do znajomych");
+			expect(pop?.textContent).toContain("Dodaj jako współwłaściciela");
+
+			const addFriendBtn = [
+				...root.querySelectorAll('.person-popover button[role="menuitem"]'),
+			].find((b) =>
+				b.textContent?.includes("Dodaj do znajomych"),
+			) as HTMLButtonElement;
+			await act(async () => addFriendBtn.click());
+
+			await vi.waitFor(() =>
+				expect(api.called("POST /api/contacts")).toHaveLength(1),
+			);
+			expect(api.called("POST /api/contacts")[0].body).toEqual({ userId: 7 });
+			await vi.waitFor(() =>
+				expect(root.querySelector(".toast.notice")?.textContent).toContain(
+					"kasia.w",
+				),
+			);
+
+			// Clicking a guest's avatar explains they don't have an Inkroom account.
+			const guestChip = root.querySelector(
+				'button.participant[data-name="Gość"]',
+			) as HTMLButtonElement;
+			await act(async () => guestChip.click());
+			expect(root.querySelector(".person-popover-note")?.textContent).toContain(
+				"Gość bez konta",
+			);
 		});
 	});
 });
