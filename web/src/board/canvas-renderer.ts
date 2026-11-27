@@ -14,12 +14,12 @@ import { PathBudget } from "./path-budget";
 import { pointCount } from "./points";
 import { type Frame, HANDLE_PX, ROT_OFFSET_PX } from "./selection-frame";
 import { LABEL_PX, PLANE_CELL, type PlaneLook, partsOf } from "./shape-parts";
-import { isPolygonKind } from "./shapes";
+import { isBlockKind, isPolygonKind } from "./shapes";
 import { strokeOptions } from "./stroke-style";
 import { isFreehand } from "./style";
-import { layoutOf } from "./text";
+import { layoutOf, textBox } from "./text";
 import { fontKeyOf, TEXT_FONT_FAMILY, textFont } from "./text-wrap";
-import { centerOf } from "./transform";
+import { centerOf, geomBox } from "./transform";
 import type { Rect, Viewport } from "./viewport";
 
 /** The selection glow (R-058), tuned by eye: a violet close to the nib of the logo. */
@@ -46,6 +46,15 @@ const MAX_STRETCH = 2;
 const MOVE_MAX_MS = 350;
 /** The ink colour of the Inkroom brand, for the handles that edit the selection. */
 const HANDLE_INK = "#5b5bf0";
+/**
+ * The hover highlight of the object under the cursor (R-112): a wide, faint halo under a solid
+ * edge, both in the brand colour, drawn from the cached path — no shadow blur, so it stays
+ * clearly lighter than the selection glow (R-058) and costs the GPU nothing at every frame.
+ */
+const HOVER_ALPHA = 0.9;
+const HOVER_WIDTH_PX = 3;
+const HOVER_HALO_ALPHA = 0.16;
+const HOVER_HALO_PX = 11;
 
 /**
  * Freehand strokes are filled outlines (the pen's width follows the hand); a dashed or dotted one
@@ -643,6 +652,8 @@ export class CanvasRenderer implements Renderer {
 	/** The overdraw the board layer was sized with at the last resize, in CSS px. */
 	private margin = { mx: 0, my: 0 };
 	private highlight: Stroke[] = [];
+	/** The element under the cursor in the select tool, outlined on the live layer (R-112). */
+	private hover: Stroke | null = null;
 	private lasers: LaserLine[] = [];
 	/** Elements being dragged: drawn on the live layer, left out of the committed one (performance). */
 	private drag: {
@@ -679,6 +690,8 @@ export class CanvasRenderer implements Renderer {
 
 	/** Maps a stored ink colour to the colour painted (dark mode swaps black and white). */
 	ink: (color: string) => string = (c) => c;
+	/** The colour of the hover outline: the brand accent of the current theme (`--accent`). */
+	hoverColor = HANDLE_INK;
 	/** Which grid to draw under the elements (R-027, R-032) and in which colour. */
 	background: Background = "plain";
 	gridColor = "#dcdee8";
@@ -784,6 +797,16 @@ export class CanvasRenderer implements Renderer {
 	/** Shows the free-hand loop of a lasso selection being drawn (null hides it). */
 	setLasso(path: [number, number][] | null): void {
 		this.lasso = path;
+		this.schedule(false, true);
+	}
+
+	/**
+	 * Shows a light outline of the object under the cursor (R-112). Only a change of the hovered
+	 * element repaints the live layer, never the pointer's every pixel of movement.
+	 */
+	setHover(el: Stroke | null): void {
+		if (this.hover === el) return;
+		this.hover = el;
 		this.schedule(false, true);
 	}
 
@@ -1164,6 +1187,77 @@ export class CanvasRenderer implements Renderer {
 		ctx.restore();
 	}
 
+	/**
+	 * The highlight of the element under the cursor (R-112, ADR 0027): its own contour, taken from
+	 * the cached path, stroked in the brand colour — for every drawable kind exactly the same two
+	 * passes, a wide faint halo under a solid edge, no shadow blur, so it stays clearly lighter
+	 * than the selection glow (R-058). An image, a coordinate plane or a text gets a thin frame
+	 * on its edge instead, like the glow (R-084).
+	 */
+	private drawHover(ctx: CanvasRenderingContext2D, s: Stroke): void {
+		const px = 1 / this.viewport.scale;
+		let c = this.cache.get(s);
+		if (!c) {
+			c = { bounds: strokeBounds(s), cost: 0, used: 0 };
+			this.cache.set(s, c);
+		}
+		ctx.save();
+		ctx.strokeStyle = this.hoverColor;
+		ctx.lineCap = "round";
+		ctx.lineJoin = "round";
+		ctx.setLineDash([]);
+		withLook(ctx, s, () => {
+			// withLook applied the element's own opacity; every pass multiplies it.
+			const base = ctx.globalAlpha;
+			let contour: (() => void) | null = null;
+			if (s.kind === "image") {
+				const r = imageRect(s);
+				contour = () =>
+					ctx.strokeRect(r.minX, r.minY, r.maxX - r.minX, r.maxY - r.minY);
+			} else if (s.kind === "plane") {
+				// A sheet like a picture: only its edge, like the glow (R-084).
+				const paper = extraPaths(s)?.paper;
+				if (paper) contour = () => ctx.stroke(paper);
+				else {
+					const b = geomBox(s);
+					contour = () =>
+						ctx.strokeRect(b.minX, b.minY, b.maxX - b.minX, b.maxY - b.minY);
+				}
+			} else if (s.kind === "text") {
+				const b = textBox(s);
+				contour = () =>
+					ctx.strokeRect(b.minX, b.minY, b.maxX - b.minX, b.maxY - b.minY);
+			} else {
+				let path: Path2D | null = null;
+				if (this.ensurePath(s, c) === "poly") {
+					if (c.poly && c.poly.length >= 6) {
+						path = new Path2D();
+						path.moveTo(c.poly[0], c.poly[1]);
+						for (let i = 2; i < c.poly.length; i += 2)
+							path.lineTo(c.poly[i], c.poly[i + 1]);
+						path.closePath();
+					}
+				} else {
+					path = c.path ?? null;
+				}
+				if (path) contour = () => ctx.stroke(path);
+			}
+			if (!contour) return;
+			// A block (an image, a plane, a text) is framed thinly, per ADR 0027; a drawable object
+			// gets the halo too, so it reads under the cursor even over its own ink.
+			if (!isBlockKind(s.kind) && s.kind !== "text") {
+				ctx.globalAlpha = base * HOVER_HALO_ALPHA;
+				ctx.lineWidth = HOVER_HALO_PX * px;
+				contour();
+			}
+			// The edge: solid, exactly on the contour.
+			ctx.globalAlpha = base * HOVER_ALPHA;
+			ctx.lineWidth = HOVER_WIDTH_PX * px;
+			contour();
+		});
+		ctx.restore();
+	}
+
 	/** A neon glow along the element itself: its shape drawn with a bright, blurred shadow. */
 	private drawGlow(ctx: CanvasRenderingContext2D, s: Stroke): void {
 		const dpr = window.devicePixelRatio || 1;
@@ -1289,6 +1383,7 @@ export class CanvasRenderer implements Renderer {
 			for (const s of this.drag.elements) this.drawStroke(ctx, s, view, dx, dy);
 			ctx.restore();
 		}
+		if (this.hover) this.drawHover(ctx, this.hover);
 		// A glow is a blurred shadow, which is costly while dragging: not then. The bottleneck of a
 		// big selection is the network, not the drawing, so every selected element glows.
 		if (!this.drag) for (const s of this.highlight) this.drawGlow(ctx, s);
