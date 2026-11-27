@@ -216,3 +216,35 @@ func TestFullBoardSendsFullAndKeepsTheConnection(t *testing.T) {
 		t.Fatalf("saved %d strokes (%v), want s1 only", len(strokes), err)
 	}
 }
+
+// A 144 Hz screen sends a live stroke or the laser every frame plus the cursor: that is normal use
+// and must never be cut off, while a flood still is.
+func TestWSBudgetLetsAFastScreenThroughAndStopsAFlood(t *testing.T) {
+	now := time.Unix(1000, 0)
+	b := newMsgBudget(func() time.Time { return now }, maxWSMessages, wsRateWindow)
+	// 150 messages a second for a minute.
+	for i := 0; i < 150*60; i++ {
+		if !b.allow() {
+			t.Fatalf("message %d at 150/s refused", i)
+		}
+		now = now.Add(time.Second / 150)
+	}
+	// A flood in one window is refused once it passes the limit...
+	now = now.Add(wsRateWindow)
+	for i := 0; i < maxWSMessages; i++ {
+		if !b.allow() {
+			t.Fatalf("message %d of the window refused", i)
+		}
+	}
+	if b.allow() {
+		t.Fatal("a message over the limit was allowed")
+	}
+	// ...and the next window starts afresh.
+	now = now.Add(wsRateWindow)
+	if !b.allow() {
+		t.Fatal("the next window should allow again")
+	}
+	if maxWSMessages < 300*int(wsRateWindow/time.Second) {
+		t.Fatalf("limit %d per %v is too close to a 144 Hz screen's rate", maxWSMessages, wsRateWindow)
+	}
+}
