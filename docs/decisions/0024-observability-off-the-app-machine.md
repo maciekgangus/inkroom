@@ -1,6 +1,6 @@
 # 0024. Stos logów na osobnej maszynie, na VM aplikacji tylko agent
 
-- Status: proposed (czeka na akceptację właściciela; zastępuje część ADR 0023: miejsce uruchomienia)
+- Status: proposed (czeka na akceptację właściciela; zastępuje część ADR 0023: miejsce uruchomienia; konfigurację stosu przeniósł do repo homelab-setup ADR 0034)
 - Data: 2026-11-23
 
 ## Kontekst
